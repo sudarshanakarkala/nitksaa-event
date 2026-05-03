@@ -1,10 +1,10 @@
 # Event Management Platform — Requirement & Design Document
 
-**Version:** 1.0
-**Status:** Draft for Engineering & Product Review
-**Target Production Release:** October 2026
-**Team Size:** 3
-**Timeline:** 6 months
+- **Version:** 1.0
+- **Status:** Draft for Engineering & Product Review
+- **Target Production Release:** October 2026
+- **Team Size:** 3
+- **Timeline:** 6 months
 
 ---
 
@@ -206,7 +206,7 @@ If `force_remote_config = true`, the app blocks until Remote Config is fetched (
 ## 11. Localization Requirements
 
 - **Default language:** English (`en`).
-- **Architecture-ready** for: Kannada (`kn`), Hindi (`hi`), and any future locale.
+- **Architecture-ready** for: Hindi (`hi`), and any future locale.
 - All user-visible strings sourced from a `strings.<lang>.json` map served via Remote Config and cached locally.
 - App-level language switcher in Profile → Settings.
 - Date, time, and currency formatted using device locale unless overridden by config.
