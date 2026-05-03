@@ -1,8 +1,8 @@
 # Event Management Platform — Pre-Kickoff Readiness Document
 
-**Status:** Required before Sprint 1 (May 3, 2026)
-**Owner:** Engineer A (tech lead) with sign-off from all three engineers
-**Companion docs:** `EVENT_MANAGEMENT_REQUIREMENT_AND_DESIGN.md`, `SPRINT_RELEASE_PLAN.md`
+- **Status:** Required before Sprint 1 (May 5, 2026)
+- **Owner:** Engineer A (tech lead) with sign-off from all three engineers
+- **Companion docs:** `event_management_requirement_and_design.md`, `sprint_release_plan.md`
 
 ---
 
@@ -10,7 +10,7 @@
 
 This is the single document that must be **read, agreed, and signed off by all three engineers before Sprint 1 begins.** It contains:
 
-- **Section 1** — operational items that must be *done* (KYC, accounts, infra) before May 3.
+- **Section 1** — operational items that must be *done* (KYC, accounts, infra) before May 5.
 - **Sections 2–11** — standards and norms that must be *agreed* before any code is written.
 - **Section 12** — a sign-off checklist confirming everyone has read and accepted it.
 
@@ -20,7 +20,7 @@ Treat sections 2–11 as a living handbook — update them as the team learns, b
 
 ## 1. Pre-Kickoff Operational Checklist
 
-These tasks must be **complete or in motion** before May 3. Items with lead time are flagged.
+These tasks must be **complete or in motion** before May 5. Items with lead time are flagged.
 
 ### 1.1 Business & Legal
 
