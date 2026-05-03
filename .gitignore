@@ -1,0 +1,138 @@
+# =========================
+# GENERAL
+# =========================
+.DS_Store
+Thumbs.db
+*.log
+*.tmp
+*.swp
+*.swo
+*.bak
+*.cache
+
+# =========================
+# ENV / SECRETS
+# =========================
+.env
+.env.*
+*.env
+*.pem
+*.key
+*.p12
+*.jks
+*.keystore
+
+# Firebase / GCP credentials
+serviceAccountKey.json
+google-services.json
+GoogleService-Info.plist
+
+# =========================
+# IDE / EDITOR
+# =========================
+.vscode/
+.idea/
+*.iml
+*.ipr
+*.iws
+
+# =========================
+# FLUTTER / DART
+# =========================
+# Build
+build/
+.dart_tool/
+.flutter-plugins
+.flutter-plugins-dependencies
+.packages
+.pub-cache/
+.pub/
+
+# Generated files
+*.lock
+
+# Coverage
+coverage/
+
+# iOS
+ios/Pods/
+ios/.symlinks/
+ios/Flutter/Flutter.framework
+ios/Flutter/Flutter.podspec
+ios/Runner.xcworkspace
+ios/DerivedData/
+
+# Android
+android/.gradle/
+android/app/build/
+android/local.properties
+android/key.properties
+
+# MacOS
+macos/Pods/
+macos/Flutter/ephemeral/
+
+# Windows
+windows/flutter/ephemeral/
+
+# Linux
+linux/flutter/ephemeral/
+
+# Web
+web/build/
+
+# =========================
+# NODE / REACT (Admin Portal)
+# =========================
+node_modules/
+dist/
+build/
+.npm/
+.cache/
+.next/
+out/
+
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# =========================
+# PYTHON / FASTAPI (Backend)
+# =========================
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+*.sqlite3
+
+# Virtual environments
+venv/
+env/
+.venv/
+
+# =========================
+# DATABASE / LOCAL FILES
+# =========================
+*.db
+*.sqlite
+*.sqlite3
+
+# =========================
+# TEST / REPORTS
+# =========================
+test-output/
+reports/
+
+# =========================
+# CONFIG OVERRIDES
+# =========================
+# Local config overrides (keep templates only)
+config/local.json
+config/*.local.json
+
+# =========================
+# MISC
+# =========================
+*.orig
+*.rej
