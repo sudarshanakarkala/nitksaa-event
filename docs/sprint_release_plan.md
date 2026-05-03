@@ -1,10 +1,10 @@
 # Event Management Platform — Sprint Release Plan
 
-**Cadence:** 2-week sprints
-**Start:** Sunday, May 3, 2026
-**Production GA:** October 31, 2026
-**Total sprints:** 13
-**Team:** Engineer A (Backend/Platform), Engineer B (Mobile / Event App), Engineer C (Admin Portal / Frontend)
+- **Cadence:** 2-week sprints
+- **Start:** Sunday, May 3, 2026
+- **Production GA:** October 31, 2026
+- **Total sprints:** 13
+- **Team:** Engineer A (Backend/Platform), Engineer B (Mobile / Event App), Engineer C (Admin Portal / Frontend)
 
 ---
 
