@@ -48,16 +48,28 @@
 
 | Sprint Dates | Sprint | App | Title | Features | Developer | Status | Review | Comments |
 |---|---|---|---|---|---|---|---|---|
-| May 3 – May 16 | Sprint 1 | Backend | Project bootstrap | FastAPI skeleton, Poetry, Docker, repo + branching strategy, pre-commit hooks | Engineer A | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Backend | GCP infrastructure | Cloud Run service, Cloud SQL Postgres 16 instance, Secret Manager, Terraform base | Engineer A | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Backend | CI/CD pipeline | GitHub Actions → Cloud Build, dev/staging/prod environments, automated migrations | Engineer A | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Backend | Firebase project setup | Firebase project, Auth providers (email/Google), Admin SDK keys in Secret Manager | Engineer A | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Event App | Flutter project bootstrap | Flutter create, folder structure, Riverpod, GoRouter, Dio, Hive setup | Engineer B | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Event App | Design tokens | Color palette (dark/light), typography, spacing, theme provider | Engineer B | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Event App | Splash + login screen UI | Splash screen, login screen layout (no logic yet) | Engineer B | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Admin Portal | React project bootstrap | Vite + TS + Tailwind + shadcn/ui, ESLint, Prettier, folder structure | Engineer C | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Admin Portal | Design system foundation | Tailwind theme tokens, base components (Button, Input, Card, Table) | Engineer C | Not Started | | |
-| May 3 – May 16 | Sprint 1 | Admin Portal | Login screen UI | Login screen layout, app shell skeleton | Engineer C | Not Started | | |
+| M 03 | S1 | Backend | Project bootstrap | FastAPI skeleton, Poetry, Docker, repo + branching strategy, pre-commit hooks | Engineer A | In Progress / Nearly Done | | Bundle IDs/theme/router/logger/Hive still pending |
+| M X | S1 | Backend | GCP infrastructure | Cloud Run service, Cloud SQL Postgres 16 instance, Secret Manager, Terraform base | Engineer A | Not Started | | |
+| M X | S1 | Backend | CI/CD pipeline | GitHub Actions → Cloud Build, dev/staging/prod environments, automated migrations | Engineer A | Not Started | | |
+| M 12 | S1 | Backend | Firebase project setup | Firebase project, Auth providers (email/Google), Admin SDK keys in Secret Manager | Engineer A | In Progress | |Firebase project selected, Android/iOS Firebase apps created, Firebase Core initialized successfully |
+| M 12 | S1 | Event App | Flutter project bootstrap | Flutter create, folder structure, Riverpod, GoRouter, Dio, Hive setup | Engineer B | In Progress (Major foundation completed) | |Flutter app created, Firebase connected, folder structure created, Riverpod/GoRouter/Dio/Hive/Logger packages added |
+| M 12 | S1 | Event App | Design tokens | Color palette (dark/light), typography, spacing, theme provider | Engineer B | In Progress | | Theme direction finalized, implementation pending |
+| M 12 | S1 | Event App | Splash + login screen UI | Splash screen, login screen layout (no logic yet) | Engineer B | Planned | | Architecture discussed, implementation not started |
+| M X | S1 | Admin Portal | React project bootstrap | Vite + TS + Tailwind + shadcn/ui, ESLint, Prettier, folder structure | Engineer C | Not Started | | |
+| M X | S1 | Admin Portal | Design system foundation | Tailwind theme tokens, base components (Button, Input, Card, Table) | Engineer C | Not Started | | |
+| M 16 | S1 | Admin Portal | Login screen UI | Login screen layout, app shell skeleton | Engineer C | Not Started | | |
+
+** 12 May 20226 **
+- GitHub repository initialized
+- Firebase project connected successfully
+- Android Firebase app configured
+- iOS Firebase app configured
+- Firebase initialization verified in Flutter
+- Foundational packages added
+- Production-grade .gitignore created
+- Initial scalable folder architecture created
+- Architecture review process established
+- Controlled AI-assisted development workflow established
 
 ---
 
