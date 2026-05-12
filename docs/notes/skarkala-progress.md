@@ -5,8 +5,8 @@
 | Item | Value |
 |---|---|
 | Project name | NITKSAA Alumni Database |
-| Project ID | `project-d22bed42-f302-4e23-8dc` |
-| Project number | `246773894709` |
+| Project ID |  |
+| Project number |  |
 | Web app | Alumni Portal Web |
 | Environment | Unspecified |
 | Plan | Blaze |
@@ -31,13 +31,7 @@
 
 ## Firebase App IDs
 
-| Platform | Firebase App ID |
-|---|---|
-| Web | `1:246773894709:web:c4d4d005ec66432a33ab7c` |
-| Android | `1:246773894709:android:45059af885cd128b33ab7c` |
-| iOS | `1:246773894709:ios:f4ac285fc1d20c3f33ab7c` |
-| macOS | `1:246773894709:ios:f4ac285fc1d20c3f33ab7c` |
-| Windows | `1:246773894709:web:346987865cd7f33933ab7c` |
+
 
 ## Flutter Run Command
 
