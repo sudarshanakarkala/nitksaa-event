@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
@@ -109,6 +110,16 @@ class DeveloperDiagnosticsScreen extends ConsumerWidget {
                   label: 'Logger',
                   value: 'Active',
                   status: _Status.ok,
+                ),
+                _divider,
+                _DiagRow(
+                  label: 'Auth Status',
+                  value: FirebaseAuth.instance.currentUser != null
+                      ? 'Logged In'
+                      : 'Logged Out',
+                  status: FirebaseAuth.instance.currentUser != null
+                      ? _Status.ok
+                      : null,
                 ),
               ],
             ),
