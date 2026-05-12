@@ -51,7 +51,7 @@ class DefaultFirebaseOptions {
 
   static const FirebaseOptions android = FirebaseOptions(
     apiKey: 'AIzaSyBUkgBCw9cDyZReIU02mb07Lc9Qkzx8-PI',
-    appId: '1:246773894709:android:45059af885cd128b33ab7c',
+    appId: '1:246773894709:android:51f0e5997ef9635b33ab7c',
     messagingSenderId: '246773894709',
     projectId: 'project-d22bed42-f302-4e23-8dc',
     storageBucket: 'project-d22bed42-f302-4e23-8dc.firebasestorage.app',
@@ -64,7 +64,7 @@ class DefaultFirebaseOptions {
     projectId: 'project-d22bed42-f302-4e23-8dc',
     storageBucket: 'project-d22bed42-f302-4e23-8dc.firebasestorage.app',
     iosClientId: '246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q.apps.googleusercontent.com',
-    iosBundleId: 'com.example.eventApp',
+    iosBundleId: 'org.nitksaa.event',
   );
 
   static const FirebaseOptions macos = FirebaseOptions(
@@ -74,7 +74,7 @@ class DefaultFirebaseOptions {
     projectId: 'project-d22bed42-f302-4e23-8dc',
     storageBucket: 'project-d22bed42-f302-4e23-8dc.firebasestorage.app',
     iosClientId: '246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q.apps.googleusercontent.com',
-    iosBundleId: 'com.example.eventApp',
+    iosBundleId: 'org.nitksaa.event',
   );
 
   static const FirebaseOptions windows = FirebaseOptions(

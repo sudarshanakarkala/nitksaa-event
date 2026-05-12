@@ -1,4 +1,4 @@
-package com.example.event_app
+package org.nitksaa.event
 
 import io.flutter.embedding.android.FlutterActivity
 
