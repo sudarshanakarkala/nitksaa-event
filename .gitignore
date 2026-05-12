@@ -1,6 +1,7 @@
-# =========================
+# =========================================================
 # GENERAL
-# =========================
+# =========================================================
+
 .DS_Store
 Thumbs.db
 *.log
@@ -9,37 +10,57 @@ Thumbs.db
 *.swo
 *.bak
 *.cache
+*.orig
+*.rej
 
-# =========================
+# =========================================================
 # ENV / SECRETS
-# =========================
+# =========================================================
+
 .env
 .env.*
 *.env
+
+# Certificates / Keys
 *.pem
 *.key
 *.p12
 *.jks
 *.keystore
+*.mobileprovision
 
-# Firebase / GCP credentials
+# Firebase / GCP Credentials
 serviceAccountKey.json
 google-services.json
 GoogleService-Info.plist
+firebase_app_id_file.json
 
-# =========================
+# =========================================================
+# FIREBASE
+# =========================================================
+
+.firebase/
+firebase-debug.log
+
+# =========================================================
 # IDE / EDITOR
-# =========================
+# =========================================================
+
 .vscode/
 .idea/
 *.iml
 *.ipr
 *.iws
 
-# =========================
+# Claude / AI tooling
+.claude/
+.cursor/
+
+# =========================================================
 # FLUTTER / DART
-# =========================
-# Build
+# =========================================================
+
+# Build / Generated
 build/
 .dart_tool/
 .flutter-plugins
@@ -48,29 +69,34 @@ build/
 .pub-cache/
 .pub/
 
-# Generated files
-*.lock
+# Flutter generated
+generated_plugin_registrant.dart
 
 # Coverage
 coverage/
+lcov.info
+
+# =========================================================
+# FLUTTER PLATFORM FILES
+# =========================================================
 
 # iOS
 ios/Pods/
 ios/.symlinks/
 ios/Flutter/Flutter.framework
 ios/Flutter/Flutter.podspec
-ios/Runner.xcworkspace
+ios/Flutter/ephemeral/
 ios/DerivedData/
+
+# macOS
+macos/Pods/
+macos/Flutter/ephemeral/
 
 # Android
 android/.gradle/
 android/app/build/
 android/local.properties
 android/key.properties
-
-# MacOS
-macos/Pods/
-macos/Flutter/ephemeral/
 
 # Windows
 windows/flutter/ephemeral/
@@ -81,12 +107,12 @@ linux/flutter/ephemeral/
 # Web
 web/build/
 
-# =========================
+# =========================================================
 # NODE / REACT (Admin Portal)
-# =========================
+# =========================================================
+
 node_modules/
 dist/
-build/
 .npm/
 .cache/
 .next/
@@ -97,9 +123,10 @@ npm-debug.log*
 yarn-debug.log*
 yarn-error.log*
 
-# =========================
+# =========================================================
 # PYTHON / FASTAPI (Backend)
-# =========================
+# =========================================================
+
 __pycache__/
 *.pyc
 *.pyo
@@ -111,28 +138,52 @@ venv/
 env/
 .venv/
 
-# =========================
+# =========================================================
 # DATABASE / LOCAL FILES
-# =========================
+# =========================================================
+
 *.db
 *.sqlite
 *.sqlite3
 
-# =========================
+# =========================================================
 # TEST / REPORTS
-# =========================
+# =========================================================
+
 test-output/
 reports/
 
-# =========================
+# =========================================================
 # CONFIG OVERRIDES
-# =========================
-# Local config overrides (keep templates only)
+# =========================================================
+
+# Local config overrides
 config/local.json
 config/*.local.json
 
-# =========================
-# MISC
-# =========================
-*.orig
-*.rej
+# =========================================================
+# TERRAFORM / INFRA
+# =========================================================
+
+.terraform/
+*.tfstate
+*.tfstate.*
+crash.log
+override.tf
+override.tf.json
+
+# =========================================================
+# SENTRY / MONITORING
+# =========================================================
+
+sentry-debug.log
+
+# =========================================================
+# IMPORTANT FILES TO KEEP IN GIT
+# =========================================================
+
+# DO NOT IGNORE:
+# pubspec.lock
+# package-lock.json
+# poetry.lock
+# firebase_options.dart
