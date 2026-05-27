@@ -17,9 +17,23 @@ Thumbs.db
 # ENV / SECRETS
 # =========================================================
 
+# Environment files
 .env
-.env.*
-*.env
+.env.local
+.env.development
+.env.production
+.env.test
+
+# Ignore nested env files
+**/.env
+**/.env.local
+**/.env.development
+**/.env.production
+**/.env.test
+
+# Keep example env templates
+!.env.example
+!backend/.env.example
 
 # Certificates / Keys
 *.pem
@@ -138,6 +152,19 @@ venv/
 env/
 .venv/
 
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# =========================================================
+# BACKEND
+# =========================================================
+
+backend/.env
+backend/.venv/
+backend/test-output/
+backend/reports/
+
 # =========================================================
 # DATABASE / LOCAL FILES
 # =========================================================
@@ -187,3 +214,12 @@ sentry-debug.log
 # package-lock.json
 # poetry.lock
 # firebase_options.dart
+
+
+# =========================================================
+# Generated AI validation reports
+# =========================================================
+*_validation_report.txt
+*_implementation_report.txt
+*_review_report.txt
+*_action_items.txt
