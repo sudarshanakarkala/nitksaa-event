@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
+import '../../services/firebase_auth_service.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -15,6 +16,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   bool _obscurePassword = true;
+  bool _isLoading = false;
 
   @override
   void dispose() {
@@ -28,9 +30,39 @@ class _LoginScreenState extends State<LoginScreen> {
     // TODO: Implement email/password sign-in via FirebaseAuthService
   }
 
-  void _handleGoogleSignIn() {
+  Future<void> _handleGoogleSignIn() async {
     AppLogger.info('Google Sign-In tapped');
-    // TODO: Implement Google Sign-In via FirebaseAuthService
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final user = await FirebaseAuthService.signInWithGoogle();
+      if (user != null) {
+        AppLogger.info('Google Sign-In successful. User: ${user.email}');
+        if (mounted) {
+          context.go(AppRoutes.home);
+        }
+      } else {
+        AppLogger.info('Google Sign-In completed with no user (cancelled)');
+      }
+    } catch (e) {
+      AppLogger.error('Error during Google Sign-In: $e');
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to sign in with Google: $e'),
+            backgroundColor: Theme.of(context).colorScheme.error,
+          ),
+        );
+      }
+    } finally {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+      }
+    }
   }
 
   @override
@@ -101,8 +133,8 @@ class _LoginScreenState extends State<LoginScreen> {
                     ),
                   ),
                   const SizedBox(height: 24),
-                  FilledButton(
-                    onPressed: _handleEmailLogin,
+                   FilledButton(
+                    onPressed: _isLoading ? null : _handleEmailLogin,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
@@ -126,11 +158,19 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
-                    onPressed: _handleGoogleSignIn,
+                    onPressed: _isLoading ? null : _handleGoogleSignIn,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    icon: const Icon(Icons.g_mobiledata, size: 22),
+                    icon: _isLoading
+                        ? const SizedBox(
+                            width: 20,
+                            height: 20,
+                            child: CircularProgressIndicator(
+                              strokeWidth: 2,
+                            ),
+                          )
+                        : const Icon(Icons.g_mobiledata, size: 22),
                     label: const Text('Continue with Google'),
                   ),
                   const SizedBox(height: 40),
