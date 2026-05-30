@@ -1,0 +1,85 @@
+NITKSAA Event Backend
+Migration 003 Event Users and Event Members Report
+Date: 2026-05-30
+
+File created
+------------
+backend/migrations/events_db/003_event_users_and_event_members.sql
+
+Schema source
+-------------
+Product Owner document:
+docs/notes/may2026/nitksaa-event-app-integration-note_pw.md
+
+Task schema:
+Migration 003 — event_users and event_members
+
+Tables created
+--------------
+- event_users
+- event_members
+
+Columns included
+----------------
+event_users:
+- firebase_uid
+- email
+- fullname
+- user_type
+- ref_id
+- graduation_year
+- is_suspended
+- created_at
+- last_login
+
+event_members:
+- event_id
+- firebase_uid
+- role
+- status
+- joined_at
+
+Indexes included
+----------------
+event_users:
+- idx_event_users_email ON event_users(email)
+- idx_event_users_ref_id ON event_users(ref_id)
+- idx_event_users_type ON event_users(user_type)
+
+event_members:
+- idx_event_members_event_id ON event_members(event_id)
+- idx_event_members_firebase_uid ON event_members(firebase_uid)
+- idx_event_members_role ON event_members(role)
+
+Foreign keys included
+---------------------
+- event_members.event_id REFERENCES events(event_id) ON DELETE CASCADE
+- event_members.firebase_uid REFERENCES event_users(firebase_uid) ON DELETE CASCADE
+
+Deviations
+----------
+None
+
+Commands to run manually
+------------------------
+psql -d events_db -f backend/migrations/events_db/003_event_users_and_event_members.sql
+
+psql -d events_db -c "\\dt"
+
+psql -d events_db -c "\\d event_users"
+
+psql -d events_db -c "\\d event_members"
+
+psql -d events_db -c "\\di"
+
+Risks
+-----
+- This migration depends on Migration 001 having already created events(event_id).
+- event_users.email and event_users.fullname are NOT NULL, so future auth/user creation code must provide both values.
+- event_members requires a matching event_users row before membership rows can be inserted.
+- No role/status CHECK constraints are included because they were not part of the provided schema.
+- Current backend/app Alpha code has not been modified to use event_users or event_members.
+
+Next migration
+--------------
+004_registrations_and_check_ins.sql

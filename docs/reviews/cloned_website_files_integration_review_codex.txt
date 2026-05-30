@@ -1,0 +1,605 @@
+NITKSAA Event Backend
+Cloned Website Files Integration Review
+Date: 2026-05-30
+Scope: Static review only. No backend/app code was modified or rewired.
+
+Executive summary
+-----------------
+The five cloned Website files are useful integration references, but they are not ready to be imported or wired directly into the current Alpha backend.
+
+Current Alpha backend under backend/app is a working async FastAPI slice backed by events_db through asyncpg. It has validated event CRUD, registration, QR verification, check-in, and check-in attempt logging using X-Dev-User development auth.
+
+The cloned backend/src files assume the Website backend layout, synchronous psycopg2 pools, website_db and alumni_db, Website table names such as website_users and website_audit_log, Firebase Admin credentials, internal JWTs, and notification tables that do not exist in the Alpha events_db schema.
+
+Recommendation: keep asyncpg for the Event backend for now, adapt the cloned patterns into backend/app modules incrementally, and add production auth behind a compatibility layer that preserves current Alpha validation.
+
+
+1. Files reviewed
+-----------------
+Cloned Website files:
+- backend/src/config/settings.py
+- backend/src/middleware/firebase.py
+- backend/src/services/db.py
+- backend/src/services/alumni.py
+- backend/src/services/notify.py
+
+Current Alpha backend files reviewed:
+- backend/app/config.py
+- backend/app/database.py
+- backend/app/main.py
+- backend/app/middleware/dev_auth.py
+- backend/app/api/events.py
+- backend/app/api/admin_events.py
+- backend/app/services/registration_service.py
+- backend/app/repositories/registration_repository.py
+- backend/migrations/events_db/001_create_events_alpha_schema.sql
+- backend/requirements.txt
+- backend/.env.example
+- backend/tests/conftest.py
+- backend/tests/test_event_flow.py
+- backend/README.md
+
+Relevant project guidance reviewed:
+- docs/notes/may2026/nitksaa-event-app-integration-note_pw.md
+
+
+2. Purpose of each cloned file
+------------------------------
+backend/src/config/settings.py
+- Website-style Pydantic settings module.
+- Reads backend/.env through pydantic-settings.
+- Defines DB_HOST, DB_PORT, DB_NAME, ALUMNI_DB_NAME, DB_USER, DB_PASSWORD, DB_SSLMODE, SECRET_KEY, ACCESS_TOKEN_EXPIRE_MINUTES, APP_ENV, ALLOWED_ORIGINS, APP_BASE_URL, GMAIL_APP_PASSWORD, NOTIFY_WEBHOOK_URL, and FIREBASE_PROJECT_ID.
+- Builds psycopg2-compatible postgresql URLs for website_db and alumni_db.
+- Has production Cloud SQL Unix socket handling hard-coded for the Website Cloud SQL instance.
+
+backend/src/middleware/firebase.py
+- Verifies Firebase ID tokens using firebase_admin.
+- Mints an internal HS256 JWT using python-jose.
+- Provides get_current_user dependency that validates the internal JWT locally.
+- On each request, queries website_users for suspension and live Website role flags.
+- Exposes require_user_type and require_alumni helpers.
+
+backend/src/services/db.py
+- Provides synchronous psycopg2 ThreadedConnectionPool instances.
+- get_db() targets website_db.
+- get_alumni_db() targets alumni_db.
+- Yields RealDictCursor and commits/rolls back on context manager exit.
+
+backend/src/services/alumni.py
+- Provides fetch_alumni_info(firebase_uids).
+- Uses get_alumni_db() to batch fetch alumni profile fields from alumni_db.alumni.
+- Caches results with cachetools.TTLCache for 30 minutes.
+- Returns alumni_id, fullname, graduationyear, and branch keyed by firebase_uid.
+
+backend/src/services/notify.py
+- Provides emit(event_type, actor_uid, recipient_uid, entity_type, entity_id, context).
+- Writes audit rows to website_audit_log.
+- Writes in-app notifications to notifications.
+- Optionally sends Gmail SMTP email in a background thread.
+- Checks notification_preferences and website_users.email.
+- Contains many Website feature event templates, but no Event Alpha templates yet.
+
+
+3. Dependencies missing from current backend/requirements.txt
+-------------------------------------------------------------
+Current requirements.txt includes:
+- fastapi
+- uvicorn[standard]
+- asyncpg
+- pydantic
+- pydantic-settings
+- python-dotenv
+- httpx
+- pytest
+- pytest-asyncio
+
+Missing dependencies required by cloned files:
+- firebase-admin
+  Used by backend/src/middleware/firebase.py.
+- python-jose or python-jose[cryptography]
+  Used by backend/src/middleware/firebase.py as jose.jwt and jose.JWTError.
+- psycopg2-binary or psycopg2
+  Used by backend/src/services/db.py.
+- cachetools
+  Used by backend/src/services/alumni.py.
+
+Standard library dependencies already available:
+- smtplib
+- threading
+- email.mime
+- logging
+- contextlib
+- pathlib
+- datetime
+
+Dependency recommendation:
+- Do not add psycopg2 just to wire these files if backend/app stays asyncpg.
+- Add firebase-admin, python-jose[cryptography], and cachetools only when implementing the auth/alumni phase.
+- If a temporary psycopg2 adapter is chosen, isolate it from current async request handlers and do not mix blocking DB calls into hot async paths without thread offloading.
+
+
+4. Import path conflicts
+------------------------
+The cloned files use Website import roots:
+- from config.settings import settings
+- from config.tenant_config import TenantConfig
+- from services.db import get_db
+- from services.db import get_alumni_db
+
+The current Event backend uses:
+- from app.config import get_settings
+- from app.database import get_pool
+- from app.middleware.dev_auth import get_current_user
+
+Conflicts and breakages if wired directly:
+- backend/src/middleware/firebase.py imports config.tenant_config, which does not exist in this Event repo.
+- backend/src modules are not under the current app package, and backend/tests explicitly put backend/ on sys.path for imports like app.main. Imports like config.settings and services.db will not resolve unless sys.path/package layout changes are made.
+- A top-level package named services would conflict conceptually with app.services.
+- firebase.py defines get_current_user with the same role as app.middleware.dev_auth.get_current_user but with incompatible auth headers and behavior.
+- settings.py defines a global settings object and env aliases that differ from app.config.get_settings().
+- db.py defines get_db() as a synchronous cursor context manager, while current repositories/services expect asyncpg.Connection and awaitable calls.
+
+Recommendation:
+- Do not import backend/src directly from backend/app.
+- Move/adapt selected code into app-owned modules when wiring starts, for example app/middleware/auth.py, app/services/alumni_service.py, app/services/notify_service.py, and app/config.py.
+- Preserve the current app package root and avoid adding a second active source root.
+
+
+5. Settings/env variable gaps
+-----------------------------
+Current Alpha .env.example:
+- APP_ENV
+- APP_NAME
+- APP_VERSION
+- EVENTS_DB_URL
+
+Cloned settings.py expects:
+- DB_HOST
+- DB_PORT
+- DB_NAME
+- ALUMNI_DB_NAME
+- DB_USER
+- DB_PASSWORD
+- DB_SSLMODE
+- SECRET_KEY
+- ACCESS_TOKEN_EXPIRE_MINUTES
+- ALLOWED_ORIGINS
+- APP_BASE_URL
+- GMAIL_APP_PASSWORD
+- NOTIFY_WEBHOOK_URL
+- FIREBASE_PROJECT_ID
+
+Gaps before wiring:
+- SECRET_KEY is required by cloned settings and has no default. Importing settings without it will fail.
+- DB_PASSWORD is required by cloned settings and has no default. Importing settings without it will fail.
+- EVENTS_DB_URL exists today, but cloned settings.py does not read it.
+- DB_NAME defaults to website_db, not events_db.
+- ALUMNI_DB_NAME defaults to alumni_db, but Alpha has no alumni_db access configured.
+- FIREBASE_PROJECT_ID has a Website default that should be confirmed against the Event app Firebase project/source of truth.
+- ALLOWED_ORIGINS and APP_BASE_URL are absent from Alpha config.
+- Gmail SMTP config is absent and should remain optional.
+- Cloud SQL socket path is hard-coded to the Website instance name and database assumptions.
+
+Recommendation:
+- Extend app.config rather than replace it.
+- Keep EVENTS_DB_URL as the primary Event DB setting for local/dev compatibility.
+- Add JWT_SECRET or SECRET_KEY with a clear Secret Manager mapping.
+- Add FIREBASE_PROJECT_ID only when Firebase exchange is implemented.
+- Add ALUMNI_DB_URL or ALUMNI_DB_* only when alumni lookup is implemented.
+- Add APP_BASE_URL and notification settings only when notification delivery is enabled.
+
+
+6. Database connection differences
+----------------------------------
+Current backend/app:
+- Uses asyncpg.
+- Creates one async connection pool in app.database.get_pool().
+- Services and repositories accept asyncpg.Connection.
+- SQL placeholders use $1, $2, etc.
+- Fits FastAPI async route handlers.
+
+Cloned backend/src:
+- Uses psycopg2 ThreadedConnectionPool.
+- Provides blocking context managers yielding RealDictCursor.
+- SQL placeholders use %s.
+- Assumes website_db and alumni_db pools.
+- Commits on every successful context manager exit.
+
+Special focus: keep asyncpg or move to psycopg2?
+- Recommendation: keep asyncpg.
+- Reasons:
+  - Current Alpha backend is already fully async and validated around asyncpg.
+  - Existing repositories, services, health checks, tests, and SQL placeholder style all expect asyncpg.
+  - Moving to psycopg2 would require a broad rewrite and risks breaking the validated Event API slice.
+  - Blocking psycopg2 calls inside async route handlers can degrade concurrency unless carefully isolated.
+  - The product requirement is to clone/review before continuing, not to standardize drivers immediately.
+
+How to adapt:
+- Keep app.database.get_pool() for events_db.
+- Create async helpers for event_users, event_members, auth exchange, notifications, and audit using asyncpg.
+- For alumni_db, either:
+  - add a second asyncpg pool for alumni_db, or
+  - introduce a narrow sync adapter only for alumni lookup, called through threadpool boundaries.
+- Prefer a second asyncpg pool to keep operational behavior consistent.
+
+
+7. Auth differences
+-------------------
+Current Alpha auth:
+- Dependency-based dev auth in backend/app/middleware/dev_auth.py.
+- Only active when APP_ENV=development.
+- Uses X-Dev-User header.
+- Built-in users:
+  - admin: is_admin=True, permissions include event:create, event:update, event:checkin, event:export.
+  - attendee: is_admin=False, permissions include event:register.
+- Current routes depend directly on get_current_user or get_admin_user from dev_auth.
+- Tests depend on X-Dev-User and APP_ENV=development.
+
+Target cloned auth:
+- Client sends Firebase ID token to an exchange endpoint.
+- Backend verifies Firebase token using firebase_admin.
+- Backend mints an internal HS256 JWT.
+- Subsequent requests use Authorization: Bearer <internal JWT>.
+- get_current_user decodes internal JWT locally.
+- It performs a DB lookup on every request for suspension/live roles.
+- Current clone checks website_users.status and Website role flags, not event_users/event_members.
+
+Special focus: how to add POST /api/v1/auth/firebase safely
+- Add a new router, e.g. app/api/auth.py, without changing existing event routes first.
+- Endpoint shape:
+  - POST /api/v1/auth/firebase
+  - request: { "firebase_token": "..." }
+  - response: { "token": "<internal JWT>", "user": {...} }
+- In the endpoint:
+  - Verify Firebase ID token once.
+  - Extract firebase_uid, email, and display name.
+  - Look up alumni_db by firebase_uid and/or email according to agreed identity rules.
+  - Upsert event_users in events_db.
+  - Do not overwrite existing user_type/ref_id with weaker/null values.
+  - Mint JWT with stable claims: firebase_uid, user_type, ref_id, graduation_year, exp.
+- Add tests that call route dependency overrides or mock token verification; do not require live Google calls in CI.
+- Keep X-Dev-User dependencies in place until Bearer auth has separate test coverage.
+
+Auth compatibility recommendation:
+- Introduce a new auth dependency facade, for example app/middleware/auth.py:
+  - In development, optionally accept X-Dev-User for existing tests.
+  - Accept Bearer JWT for new production-style flows.
+  - Export get_current_user, get_admin_user, and role helpers from one place.
+- Migrate routes to the facade only after tests prove X-Dev-User behavior remains unchanged.
+
+
+8. Notification/audit differences
+---------------------------------
+Current Alpha:
+- No general notification service.
+- No event_audit_log, notifications, or notification_preferences tables in the active migration.
+- Check-in scan attempts are audited in check_in_attempts.
+- Admin/event changes are not written to a general audit table.
+- No email or push delivery.
+
+Cloned notify.py:
+- Writes audit rows to website_audit_log.
+- Writes in-app notification rows to notifications.
+- Reads notification_preferences.
+- Reads website_users.email.
+- Sends Gmail SMTP mail in background threads when configured.
+- Contains Website event types, not Event Alpha event types.
+
+Required adaptations:
+- Rename audit target from website_audit_log to event_audit_log or another Event-owned audit table.
+- Decide whether existing check_in_attempts remains separate from general audit. Recommendation: keep it for scan telemetry, and add event_audit_log for business/audit events.
+- Ensure notifications table schema includes title and message if using cloned notify.py as-is. The integration note's sample notifications table omits title and message, while cloned notify.py inserts both.
+- Replace website_users email lookup with event_users email lookup.
+- Add Event templates, at minimum:
+  - registration_confirmed
+  - registration_cancelled
+  - checkin_completed
+  - event_published
+  - event_cancelled
+  - volunteer_assigned
+- Make emit non-raising. It must not turn a successful registration/check-in into a user-visible 500 because email or notification write failed.
+- If backend remains asyncpg, implement async DB writes or schedule notification side effects carefully after primary transaction success.
+
+
+9. Alumni lookup differences
+----------------------------
+Current Alpha:
+- Stores ref_id and firebase_uid on registrations and attendees as plain text.
+- Does not query alumni_db.
+- Registration body can provide ref_id; otherwise it falls back to user.ref_id from X-Dev-User.
+- Duplicate prevention is by event+email and event+ref_id at service level.
+
+Cloned alumni.py:
+- Looks up alumni profile fields from alumni_db.alumni by firebase_uid.
+- Uses directory_visible = true.
+- Returns alumni_id, fullname, graduationyear, branch.
+- Does not use ref_id as input despite the integration note saying fetch_alumni_info should be by ref_id in prose.
+
+Gap:
+- The active Alpha schema and service use ref_id heavily.
+- The cloned alumni.py API is keyed by firebase_uid.
+- Product guidance says ref_id points to alumni_db.alumni.alumni_id and should be treated as a read-only pointer.
+
+Recommendation:
+- Clarify and standardize lookup API before wiring.
+- Prefer two explicit functions:
+  - fetch_alumni_info_by_firebase_uids(firebase_uids: list[str])
+  - fetch_alumni_info_by_ref_ids(ref_ids: list[str])
+- Use alumni_db as source of truth for fullname, branch, and graduation year in read responses where needed.
+- Do not store alumni profile fields in registrations/event_users except narrowly needed snapshots such as badge_name/email supplied for the event.
+
+
+10. Exact changes needed before wiring
+--------------------------------------
+Do these before any cloned file is imported from active backend/app routes:
+
+Package/import preparation:
+- Decide final active module locations under backend/app.
+- Remove Website import roots from adapted copies:
+  - config.settings -> app.config
+  - services.db -> app.database or app.services database helpers
+  - config.tenant_config -> remove or replace with Event settings
+- Do not add backend/src to runtime sys.path as an active package root.
+
+Dependencies:
+- Add firebase-admin for Firebase verification.
+- Add python-jose[cryptography] for internal JWTs.
+- Add cachetools if alumni lookup caching is retained.
+- Add psycopg2 only if a deliberate sync compatibility adapter is introduced.
+
+Settings:
+- Add SECRET_KEY or JWT_SECRET.
+- Add FIREBASE_PROJECT_ID.
+- Add ALLOWED_ORIGINS only when CORS is wired.
+- Add APP_BASE_URL only when notification links are wired.
+- Add alumni DB connection settings.
+- Keep EVENTS_DB_URL for current asyncpg pool.
+
+Schema/migrations:
+- Add event_users.
+- Add event_members.
+- Add event_audit_log.
+- Add notifications.
+- Add notification_preferences.
+- Add DB-level uniqueness for registration identity if product confirms:
+  - likely UNIQUE(event_id, firebase_uid) for authenticated users.
+  - preserve existing duplicate behavior by email/ref_id during transition.
+- Add indexes for event_members and notification lookup.
+
+Auth:
+- Add POST /api/v1/auth/firebase.
+- Add Bearer JWT decoder dependency.
+- Add event_users upsert.
+- Add suspension check against event_users.is_suspended or equivalent.
+- Add event role checks against event_members.
+- Keep X-Dev-User path active in development until replacement is validated.
+
+Services:
+- Adapt alumni lookup to asyncpg or isolate sync calls.
+- Adapt notify emit to Event table names and schema.
+- Add Event-specific templates.
+- Ensure notification side effects do not run inside fragile primary transactions unless intentionally atomic.
+
+Tests:
+- Preserve all existing backend/tests/test_event_flow.py tests.
+- Add auth exchange unit tests with Firebase verification mocked.
+- Add route tests proving old X-Dev-User Alpha flow still passes in development.
+- Add event_users/event_members migration tests or smoke checks.
+
+
+11. What should be copied/adapted
+---------------------------------
+Good candidates to adapt:
+- Firebase token verification flow from firebase.py.
+- Internal JWT claim names and local JWT verification pattern.
+- require_user_type idea, but event authorization should be event_members-based.
+- emit() public interface from notify.py.
+- Non-raising notification/audit behavior from notify.py.
+- Gmail delivery as optional later behavior, not Alpha-critical behavior.
+- Alumni lookup caching idea from alumni.py.
+- Cross-db no-join pattern: query events_db, then batch lookup alumni_db and merge in Python.
+- Settings structure as inspiration for named env vars, not as a direct replacement.
+
+
+12. What should NOT be copied directly
+--------------------------------------
+Do not copy directly:
+- psycopg2 db.py into active async backend/app.
+- Website table names:
+  - website_users
+  - website_audit_log
+- Website-specific role flags:
+  - is_content_editor
+  - is_innovation_reviewer
+  - is_giving_reviewer
+  - is_community_admin
+- config.tenant_config dependency.
+- Hard-coded production Cloud SQL socket path.
+- DB_NAME default of website_db for Event runtime.
+- notify.py Website templates as the only template set.
+- firebase.py fail-open DB role lookup behavior without review. For events, role/suspension failures should have explicit policy.
+- Any route rewiring that removes X-Dev-User before production auth tests exist.
+
+
+13. Risk areas
+--------------
+High risk:
+- Breaking validated Alpha routes by swapping asyncpg for psycopg2.
+- Import path collisions between backend/src and backend/app.
+- Import-time settings failure because SECRET_KEY or DB_PASSWORD is missing.
+- Auth route changes that invalidate existing tests and curl flows.
+- Blocking DB calls in async handlers.
+- Writing to non-existent Website tables.
+- Mismatched notifications table schema: cloned notify.py inserts title/message but sample Event migration does not include them.
+- Inconsistent alumni identity lookup by firebase_uid vs ref_id.
+
+Medium risk:
+- JWT secret naming and rotation differences between Website and Event app.
+- Firebase project/source-of-truth drift between Flutter app config and backend FIREBASE_PROJECT_ID.
+- Duplicate prevention changing from email/ref_id to firebase_uid too abruptly.
+- Event coordinator/volunteer authorization becoming global instead of event-scoped.
+- Email thread side effects during tests if Gmail config is accidentally present.
+
+Lower risk:
+- Adding dormant dependencies before code uses them.
+- Keeping backend/src as untracked reference files if not imported.
+
+
+14. Recommended phased migration plan
+-------------------------------------
+Phase 0: Freeze current Alpha behavior
+- Keep backend/app logic unchanged.
+- Run and preserve current backend validation.
+- Treat backend/src as reference only.
+
+Phase 1: Schema foundation
+- Add event_users and event_members in a new migration.
+- Add event_audit_log, notifications, and notification_preferences in a separate migration.
+- Keep existing tables and columns intact.
+- Add new constraints carefully, avoiding immediate changes that reject current Alpha test data.
+
+Phase 2: Auth exchange without route migration
+- Add app/api/auth.py with POST /api/v1/auth/firebase.
+- Mock Firebase verification in tests.
+- Upsert event_users.
+- Mint internal JWT with agreed claims.
+- Do not change existing event/admin route dependencies yet.
+
+Phase 3: Auth dependency facade
+- Create a single app-owned auth dependency module.
+- In APP_ENV=development, keep X-Dev-User support.
+- Add Bearer JWT support.
+- Update a small route group or tests first.
+- Verify all existing Alpha tests still pass.
+
+Phase 4: Event membership authorization
+- Populate event_members when:
+  - a coordinator creates an event,
+  - an attendee registers,
+  - a volunteer is assigned.
+- Add event-scoped role checks for coordinator/volunteer actions.
+- Avoid global is_volunteer/is_admin expansion unless product explicitly requires platform admin behavior.
+
+Phase 5: Alumni lookup
+- Add alumni DB async pool or isolated adapter.
+- Implement explicit lookup by firebase_uid and/or ref_id.
+- Enrich read responses where needed without storing stale alumni profile fields.
+- Keep registration write path resilient if alumni lookup is temporarily unavailable, based on product policy.
+
+Phase 6: Notification/audit
+- Adapt emit() to event_audit_log and event_users.
+- Add Event templates.
+- Start with audit-only calls in critical write paths.
+- Then enable in-app notifications.
+- Enable Gmail/email last and only with explicit config.
+
+Phase 7: Cleanup
+- Remove or archive backend/src reference files only after adapted app modules are in place and tests pass.
+- Update backend README and .env.example.
+- Add migration/runbook docs for production deployment.
+
+
+15. Validation commands to run later
+------------------------------------
+Do not run these until implementation begins.
+
+Baseline validation:
+- cd backend && pytest tests/test_event_flow.py -v
+- cd backend && python -m pytest tests -v
+- cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+- curl http://localhost:8000/healthz
+- curl http://localhost:8000/api/v1/health
+
+Migration validation:
+- psql -d events_db -f migrations/events_db/001_create_events_alpha_schema.sql
+- psql -d events_db -c "\dt"
+- psql -d events_db -c "\d event_users"
+- psql -d events_db -c "\d event_members"
+- psql -d events_db -c "\d event_audit_log"
+
+Auth validation after implementation:
+- cd backend && pytest tests -k auth -v
+- curl -X POST http://localhost:8000/api/v1/auth/firebase -H "Content-Type: application/json" -d '{"firebase_token":"<test-token>"}'
+- curl http://localhost:8000/api/v1/events -H "Authorization: Bearer <internal-jwt>"
+- curl http://localhost:8000/api/v1/events -H "X-Dev-User: attendee"
+
+Dependency/security validation:
+- cd backend && python -m pip check
+- cd backend && python -m compileall app
+
+
+Special focus answers
+---------------------
+Do we keep asyncpg or move to psycopg2?
+- Keep asyncpg. The current Alpha backend is async, validated, and consistently built around asyncpg. Move Website patterns, not the Website DB driver, unless there is a later platform-wide decision to standardize on psycopg2.
+
+How to add POST /api/v1/auth/firebase safely?
+- Add it as a new route first.
+- Mock Firebase verification in tests.
+- Upsert event_users without touching current event routes.
+- Mint the internal JWT with shared claim names.
+- Keep current X-Dev-User flow in development until all existing validation passes with the new auth facade.
+
+How to create event_users and event_members without breaking current Alpha flow?
+- Add them in additive migrations.
+- Do not add required foreign keys from existing registrations/attendees immediately.
+- Backfill event_users from distinct current firebase_uid values where possible.
+- Populate event_members for new registrations after the migration.
+- Keep existing registrations.ref_id/firebase_uid nullable until production auth is mandatory.
+- Add stricter NOT NULL/foreign key constraints only in a later migration after data is clean.
+
+How to preserve existing validated event APIs?
+- Do not rename existing endpoints or response fields.
+- Do not change backend/app repositories/services in the auth exchange phase.
+- Keep X-Dev-User tests passing.
+- Add new behavior behind new modules and facade dependencies.
+- Run the existing event flow tests after every phase.
+
+How to keep current backend validation passing during migration?
+- Additive migrations only.
+- Keep APP_ENV=development behavior.
+- Keep EVENTS_DB_URL.
+- Do not import backend/src settings at app startup.
+- Do not require SECRET_KEY, DB_PASSWORD, Firebase credentials, or alumni_db for current test collection.
+- Mock external auth calls.
+- Ensure notification/email config defaults to disabled.
+
+
+Recommended next implementation prompt
+--------------------------------------
+You are working in nitksaa-event.
+
+Implement Phase 1 only from docs/reviews/cloned_website_files_integration_review.txt.
+
+Constraints:
+- Do not wire backend/src cloned files.
+- Do not replace asyncpg.
+- Do not modify existing route behavior.
+- Preserve all current backend Alpha tests.
+
+Task:
+1. Add a new additive migration under backend/migrations/events_db for:
+   - event_users
+   - event_members
+   - event_audit_log
+   - notifications
+   - notification_preferences
+2. Keep existing tables unchanged.
+3. Make schemas compatible with later asyncpg Event auth and notify integration.
+4. Update backend/.env.example only if strictly needed, but do not require new env vars for existing tests.
+5. Add minimal documentation notes for applying the new migration.
+6. Run current backend tests if the local DB is available; otherwise report that tests were skipped because DB was unavailable.
+
+Do not commit code.
+
+
+Readiness score for wiring cloned files
+---------------------------------------
+Readiness score: 4/10.
+
+Rationale:
+- The cloned files are valuable as design references and interface seeds.
+- The current Alpha backend is healthy and should be preserved.
+- Direct wiring would currently fail due to missing dependencies, missing env vars, missing config.tenant_config, incompatible imports, incompatible DB driver style, Website table names, and missing Event auth/notification schema.
+- Readiness rises to about 7/10 after additive event_users/event_members/audit/notification migrations and a tested auth exchange endpoint exist.
+- Readiness reaches 8-9/10 only after an app-owned async adaptation of auth, alumni lookup, and notify is in place while current Alpha validation still passes.

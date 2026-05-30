@@ -1,0 +1,58 @@
+NITKSAA Event Backend
+Migration 002 Sessions Report
+Date: 2026-05-30
+
+File created
+------------
+backend/migrations/events_db/002_sessions.sql
+
+Schema source
+-------------
+Product Owner document:
+docs/notes/may2026/nitksaa-event-app-integration-note_pw.md
+
+Section:
+Migration 002 — sessions
+
+Columns included
+----------------
+- session_id
+- event_id
+- track
+- title
+- description
+- start_datetime
+- end_datetime
+- location_text
+- speaker_name
+- speaker_bio
+- speaker_photo_url
+- sort_order
+- created_at
+
+Indexes included
+----------------
+- idx_sessions_event_id ON sessions(event_id)
+- idx_sessions_sort ON sessions(event_id, sort_order)
+
+Deviations
+----------
+None
+
+Commands to run manually
+------------------------
+psql -d events_db -f backend/migrations/events_db/002_sessions.sql
+psql -d events_db -c "\\dt"
+psql -d events_db -c "\\d sessions"
+psql -d events_db -c "\\di"
+
+Risks
+-----
+- This migration depends on Migration 001 having already created events(event_id).
+- The Product Owner schema uses start_datetime and end_datetime. Current backend/app Alpha code still uses the older starts_at and ends_at naming, so API code must not be pointed at this schema until later migration work updates it intentionally.
+- The sessions table intentionally does not include track_name, capacity, status, or updated_at.
+- Applying the old Alpha migration and Product Owner migrations in the same database remains incompatible because both define event/session schemas differently.
+
+Next migration
+--------------
+003_event_users_and_event_members.sql

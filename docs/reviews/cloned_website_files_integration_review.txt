@@ -1,0 +1,904 @@
+================================================================================
+NITKSAA EVENT BACKEND
+Cloned Website Files — Integration Review
+================================================================================
+Date:       2026-05-30
+Reviewer:   Claude Code (claude-sonnet-4-6)
+Status:     READ-ONLY analysis. No code modified. No commits made.
+================================================================================
+
+
+────────────────────────────────────────────────────────────────────────────────
+1. FILES REVIEWED
+────────────────────────────────────────────────────────────────────────────────
+
+CLONED (from Website backend, now in backend/src):
+  backend/src/config/settings.py
+  backend/src/middleware/firebase.py
+  backend/src/services/db.py
+  backend/src/services/alumni.py
+  backend/src/services/notify.py
+
+CURRENT ALPHA (backend/app):
+  backend/app/config.py
+  backend/app/database.py
+  backend/app/middleware/dev_auth.py
+  backend/app/main.py
+  backend/app/api/events.py
+  backend/app/api/admin_events.py
+  backend/app/services/event_service.py
+  backend/app/services/registration_service.py
+  backend/app/services/checkin_service.py
+  backend/app/utils/token_utils.py
+  backend/tests/test_event_flow.py
+  backend/tests/conftest.py
+  backend/requirements.txt
+
+
+────────────────────────────────────────────────────────────────────────────────
+2. PURPOSE OF EACH CLONED FILE
+────────────────────────────────────────────────────────────────────────────────
+
+backend/src/config/settings.py
+  Purpose: Pydantic-settings config for the Website backend.
+  Manages dual-DB connections (website_db + alumni_db), JWT signing key,
+  Firebase project ID, CORS allowed origins, email/SMTP config, and Cloud SQL
+  socket path resolution for production (Google Cloud Run). Exposes db_url,
+  alumni_db_url, and origins_list as computed properties.
+
+backend/src/middleware/firebase.py
+  Purpose: Two-step authentication for the Website platform.
+  Step 1 — firebase exchange: verify_firebase_token() validates a Firebase ID
+  token against a specific Firebase project and returns decoded claims.
+  Step 2 — JWT issuance: make_jwt() signs an internal 8-hour HS256 JWT.
+  Per-request: get_current_user() FastAPI dependency decodes the JWT on each
+  request and performs a live DB role-flag read (suspension check, is_admin,
+  is_content_editor, etc.) from website_users table.
+  Also exposes: require_user_type() dependency factory, require_alumni() inline
+  guard.
+
+backend/src/services/db.py
+  Purpose: Synchronous psycopg2 connection pool manager.
+  Maintains two ThreadedConnectionPools (lazily initialised):
+    get_db()        → website_db  (reads + writes, platform features)
+    get_alumni_db() → alumni_db   (read-only by convention, alumni identity)
+  Uses RealDictCursor so rows are returned as plain dicts.
+  Context managers handle commit-on-success and rollback-on-error.
+
+backend/src/services/alumni.py
+  Purpose: Cached alumni identity lookup.
+  fetch_alumni_info(firebase_uids) queries alumni_db for fullname,
+  graduationyear, and branch for a list of firebase_uids. Results are stored
+  in a TTLCache (TTL=30 min, maxsize=5000) to avoid hammering alumni_db on
+  every request. Cross-DB merge happens in Python — no SQL joins across DBs.
+
+backend/src/services/notify.py
+  Purpose: Three-layer notification and audit plumbing.
+  Layer 1 (_write_audit)  — always fires; inserts into website_audit_log.
+  Layer 2 (_write_in_app) — fires when recipient_uid set; inserts into
+                            notifications table.
+  Layer 3 (_dispatch_push)— fires in background thread; sends Gmail SMTP
+                            email if gmail_app_password configured and user
+                            not muted (notification_preferences table).
+  Contains 25+ Website-specific event type templates (connections, mentorship,
+  stories, communities, jobs, giving projects, etc.).
+  Public API: emit(event_type, actor_uid, recipient_uid, entity_type,
+                   entity_id, context).
+
+
+────────────────────────────────────────────────────────────────────────────────
+3. DEPENDENCIES MISSING FROM CURRENT backend/requirements.txt
+────────────────────────────────────────────────────────────────────────────────
+
+Current requirements.txt:
+  fastapi==0.111.0
+  uvicorn[standard]==0.29.0
+  asyncpg==0.29.0
+  pydantic==2.7.1
+  pydantic-settings==2.2.1
+  python-dotenv==1.0.1
+  httpx==0.27.0
+  pytest==8.2.0
+  pytest-asyncio==0.23.6
+
+MISSING — required by cloned files:
+
+  psycopg2-binary>=2.9.9
+    Required by: backend/src/services/db.py (import psycopg2, psycopg2.pool,
+                 psycopg2.extras.RealDictCursor)
+    Note: psycopg2-binary (not psycopg2) avoids needing libpq-dev at build time.
+
+  firebase-admin>=6.5.0
+    Required by: backend/src/middleware/firebase.py
+                 (import firebase_admin, firebase_admin.auth, credentials)
+    Note: firebase-admin pulls in google-auth, google-cloud-firestore and
+    related GCP SDK packages. It is a large dependency (~80 MB installed).
+
+  python-jose[cryptography]>=3.3.0
+    Required by: backend/src/middleware/firebase.py
+                 (from jose import JWTError, jwt)
+    Note: The [cryptography] extra is required for HS256 signing support.
+
+  cachetools>=5.3.0
+    Required by: backend/src/services/alumni.py (from cachetools import TTLCache)
+
+
+────────────────────────────────────────────────────────────────────────────────
+4. IMPORT PATH CONFLICTS
+────────────────────────────────────────────────────────────────────────────────
+
+BLOCKER 1 — Missing module: config.tenant_config
+  File:    backend/src/middleware/firebase.py, line 16
+  Import:  from config.tenant_config import TenantConfig
+  Status:  backend/src/config/tenant_config.py does NOT exist.
+           This will raise ImportError at module load time if firebase.py
+           is imported. This is the single biggest blocker for wiring.
+  Fix:     Either (a) create a minimal TenantConfig with firebase_project
+           attribute, or (b) refactor firebase.py to remove TenantConfig
+           entirely and read settings.firebase_project_id directly. Option (b)
+           is cleaner for a single-tenant Event app.
+
+BLOCKER 2 — sys.path mismatch for bare src imports
+  All cloned files use bare module imports:
+    from config.settings import settings       (db.py, notify.py, firebase.py)
+    from services.db import get_db             (firebase.py, notify.py)
+    from services.db import get_alumni_db      (alumni.py)
+  These expect backend/src to be on sys.path.
+  Current conftest.py only adds backend/ to sys.path (for backend/app pattern).
+  Backend/src has NO __init__.py files in any of its three directories.
+  Fix: Add backend/src to sys.path in conftest.py, or add __init__.py files
+       and use package-qualified imports (src.config.settings, src.services.db).
+
+CONFLICT 3 — Deferred import inside get_current_user()
+  File:    backend/src/middleware/firebase.py, line 93
+  Import:  from services.db import get_db   (inside async function body)
+  Risk:    Works if sys.path is correct, but the deferred import pattern hides
+           the missing-module error until the first authenticated request hits.
+           Should be top-level once path conflicts are resolved.
+
+CONFLICT 4 — Namespace collision risk
+  backend/app/services/ and backend/src/services/ both exist under backend/.
+  If backend/ is on sys.path, `from services.db import get_db` is ambiguous:
+  it would NOT find backend/src/services/db.py (which is what firebase.py
+  expects). It would silently fail or import nothing.
+  Fix: sys.path must explicitly include backend/src, not just backend/.
+
+
+────────────────────────────────────────────────────────────────────────────────
+5. SETTINGS / ENV VARIABLE GAPS
+────────────────────────────────────────────────────────────────────────────────
+
+Alpha currently uses only:
+  APP_ENV          (default "development")
+  EVENTS_DB_URL    (default "postgresql://postgres:postgres@localhost:5432/events_db")
+  APP_NAME, APP_VERSION (hardcoded defaults, not read from .env)
+
+New variables required when wiring src files:
+
+  SECRET_KEY                    REQUIRED (no default) — JWT signing
+  DB_HOST                       default 127.0.0.1
+  DB_PORT                       default 5432
+  DB_NAME                       default "website_db" → MUST override to "events_db"
+  ALUMNI_DB_NAME                default "alumni_db"
+  DB_USER                       default "app_user"
+  DB_PASSWORD                   REQUIRED (no default)
+  DB_SSLMODE                    default "require" → set "disable" for local dev
+  ACCESS_TOKEN_EXPIRE_MINUTES   default 480 (8 hours)
+  ALLOWED_ORIGINS               default "http://localhost:5173"
+  APP_BASE_URL                  default "http://localhost:5173"
+  GMAIL_APP_PASSWORD            optional (email disabled if empty)
+  NOTIFY_WEBHOOK_URL            optional (None)
+  FIREBASE_PROJECT_ID           default "project-d22bed42-f302-4e23-8dc"
+                                → should be set explicitly, not rely on hardcoded default
+
+  Critical gaps (will crash without them):
+    SECRET_KEY    — settings.py declares Field(...) with no default
+    DB_PASSWORD   — settings.py declares Field(...) with no default
+
+  Note: settings.py db_url property hardcodes a Cloud SQL socket path for
+  production that contains the Website project ID. For the Event app, the
+  Cloud SQL instance name will be different. This property must be adapted
+  before any production deployment of the Event backend.
+
+
+────────────────────────────────────────────────────────────────────────────────
+6. DATABASE CONNECTION DIFFERENCES
+────────────────────────────────────────────────────────────────────────────────
+
+                    ALPHA (backend/app)          WEBSITE SRC (backend/src)
+                    ─────────────────────────    ─────────────────────────────
+Driver              asyncpg 0.29.0               psycopg2 (sync)
+Async               Yes — all await              No — blocking sync
+Pool type           asyncpg.Pool                 psycopg2.pool.ThreadedConnectionPool
+Pool init           await asyncpg.create_pool()  pool.ThreadedConnectionPool(1, 10, ...)
+Connection acquire  async with pool.acquire()    context manager (getconn/putconn)
+Cursor/Row type     asyncpg.Record               dict (RealDictCursor)
+SQL param style     $1, $2, $3 (positional)      %s (psycopg format)
+Database(s)         events_db (1 database)        website_db + alumni_db (2 databases)
+Tables in scope     events, sessions,             website_users, website_audit_log,
+                    registrations, attendees,     notifications,
+                    check_ins, check_in_attempts  notification_preferences,
+                                                  alumni (in alumni_db)
+Lifespan            app lifespan (get_pool /      Process-scoped globals
+                    close_pool)                   (_website_pool, _alumni_pool)
+Connection reuse    await pool.acquire()          getconn() from thread pool
+Error handling      async context manager         try/except + rollback in context manager
+
+KEY INCOMPATIBILITY:
+The entire Alpha backend/app is async FastAPI. asyncpg is native async.
+psycopg2 is synchronous blocking. Running psycopg2 operations directly in an
+async FastAPI route handler will block the event loop and cause request
+starvation under any meaningful concurrent load.
+
+Mixing the two is possible only by wrapping sync psycopg2 calls in
+asyncio.to_thread() or fastapi.BackgroundTasks, but this complicates the code.
+
+RECOMMENDATION: Keep asyncpg for all events_db operations (current Alpha).
+For auth (firebase.py) the DB interaction (event_users table) should be done
+via asyncpg, not psycopg2. If alumni_db is needed, wrap get_alumni_db() calls
+in asyncio.to_thread(). Notify audit writes can use BackgroundTasks.
+
+DO NOT move the Alpha event/registration/check-in repositories to psycopg2.
+
+
+────────────────────────────────────────────────────────────────────────────────
+7. AUTH DIFFERENCES
+────────────────────────────────────────────────────────────────────────────────
+
+                    CURRENT (backend/app)         TARGET (backend/src)
+                    ─────────────────────────     ─────────────────────────────
+Mechanism           X-Dev-User header             Firebase ID token → internal JWT
+Header/Token        X-Dev-User: admin/attendee    Authorization: Bearer <jwt>
+Verified in         dev_auth.py                   firebase.py
+Token lifetime      N/A (no token)                8 hours (HS256 JWT)
+User source         Hardcoded dict in code         Live DB query (event_users table)
+DB table queried    None                           website_users (→ must be event_users)
+Suspension check    No                            row["status"] == "suspended"
+Role flags returned is_admin (bool),              is_admin (bool),
+                    permissions (list)            is_content_editor, is_innovation_reviewer,
+                                                  is_giving_reviewer, is_community_admin
+User dict returned  {firebase_uid, ref_id,        {firebase_uid, email, fullname,
+                     email, user_type,             user_type, ref_id, is_admin,
+                     is_admin, permissions}        is_content_editor, ...}
+Admin gate          get_admin_user() checks        require_user_type() or is_admin check
+                    is_admin flag
+New endpoint        Not needed (header auth)       POST /api/v1/auth/firebase required
+
+CURRENT AUTH FLOW (Alpha):
+  Client sends X-Dev-User: admin → dev_auth.get_current_user() returns
+  hardcoded dict → route handler receives user dict.
+  Only works in development. Hard-blocks production use.
+
+TARGET AUTH FLOW (from Website src):
+  Step 1: Client calls POST /api/v1/auth/firebase with {id_token: <firebase_token>}
+  Step 2: firebase.verify_firebase_token() validates token against Firebase project
+  Step 3: Server looks up or creates user in event_users table
+  Step 4: firebase.make_jwt() issues signed internal JWT (HS256, 8-hour expiry)
+  Step 5: Client stores JWT, sends Authorization: Bearer <jwt> on each request
+  Step 6: firebase.get_current_user() (FastAPI dependency) decodes JWT,
+          performs live event_users DB lookup for suspension + role flags.
+
+TRANSITION CONCERN:
+  The current test suite (test_event_flow.py) is entirely built on X-Dev-User
+  headers. If dev_auth.py is removed, all 7 existing test scenarios will fail.
+  The X-Dev-User mechanism must be kept in parallel with Firebase JWT during
+  the migration, gated on APP_ENV=development.
+
+
+────────────────────────────────────────────────────────────────────────────────
+8. NOTIFICATION / AUDIT DIFFERENCES
+────────────────────────────────────────────────────────────────────────────────
+
+CURRENT ALPHA:
+  No notification system. No audit log. No email.
+  Registration and check-in events are recorded only in their own tables
+  (registrations, check_ins, check_in_attempts). No audit trail beyond that.
+
+WEBSITE SRC (notify.py):
+  Three-layer model: audit → in-app notification → email push.
+  Tables used:
+    website_audit_log        (event_type, actor_uid, entity_type, entity_id)
+    notifications            (firebase_uid, event_type, entity_type, entity_id,
+                              title, message, is_read)
+    notification_preferences (firebase_uid, event_type, push_enabled)
+    website_users            (email — for _get_email())
+
+  These tables belong to website_db. They do NOT exist in events_db.
+
+GAPS FOR EVENT APP:
+  1. Tables: website_audit_log, notifications, notification_preferences, and
+     the website_users email lookup do NOT exist in events_db.
+  2. Templates: All 25+ templates in notify.py are Website-specific (connections,
+     mentorship, communities, jobs, startups, etc.). None are event-relevant.
+  3. Driver: notify.py uses get_db() (psycopg2 sync). Must be wrapped in
+     asyncio.to_thread() or converted to asyncpg for Event app use.
+  4. Email: threading.Thread for SMTP is safe for sync but in an async context
+     should use fastapi.BackgroundTasks for cleaner lifecycle management.
+
+WHAT IS NEEDED FOR EVENT APP:
+  New event_audit_log table in events_db.
+  New event-specific templates (event_registered, event_checked_in,
+  event_registration_cancelled, etc.).
+  Adapted emit() using asyncpg or async wrappers.
+  In-app notifications are optional for Alpha/Beta; audit log is essential.
+
+DO NOT WIRE notify.py directly. It will attempt to write to website_audit_log
+and notifications — tables that do not exist in events_db. This will cause
+runtime errors on every audited operation.
+
+
+────────────────────────────────────────────────────────────────────────────────
+9. ALUMNI LOOKUP DIFFERENCES
+────────────────────────────────────────────────────────────────────────────────
+
+CURRENT ALPHA:
+  ref_id comes from the X-Dev-User auth dict (ALUMNI-DEV-001, ALUMNI-DEV-ADMIN).
+  No actual alumni lookup is performed. Alumni name is taken from registration
+  form input (full_name field). No year/branch enrichment.
+
+WEBSITE SRC (alumni.py):
+  fetch_alumni_info(firebase_uids) queries alumni_db directly.
+  SELECT firebase_uid, alumni_id, fullname, graduationyear, branch
+  FROM alumni WHERE firebase_uid = ANY(%s) AND directory_visible = true
+  Returns per-uid dict with fullname, graduationyear, branch, alumni_id.
+  Cached (TTLCache, 30-min TTL, maxsize=5000).
+
+GAPS FOR EVENT APP:
+  1. alumni_db is a separate PostgreSQL instance (or schema). It is part of
+     the Website infrastructure. It is NOT available in a standalone Event app
+     dev environment without also running the Website backend.
+  2. alumni.py uses psycopg2 (sync). Must be wrapped in asyncio.to_thread().
+  3. The directory_visible=true filter means alumni who have set their profile
+     to hidden will not appear — acceptable for display, but their event
+     registrations must still work without enriched data.
+  4. Event app currently has no event_members table. alumni_id → firebase_uid
+     mapping must be established when a user authenticates via Firebase.
+
+RECOMMENDED APPROACH:
+  Phase A: Create event_users table (firebase_uid, email, user_type, ref_id,
+           fullname, status). Populate on first Firebase login.
+  Phase B: Create event_members table (event_user_id → alumni_id, year, branch)
+           populated from alumni_db lookup at login time (not per-request).
+  Phase C: Use event_members for display enrichment (attendee lists, check-in
+           summary). alumni.py can be adapted to query event_members locally
+           rather than alumni_db directly, removing the alumni_db dependency
+           from the event app runtime.
+
+
+────────────────────────────────────────────────────────────────────────────────
+10. EXACT CHANGES NEEDED BEFORE WIRING
+────────────────────────────────────────────────────────────────────────────────
+
+These are the minimum changes to make the cloned files importable and runnable
+in the event app context. No changes to backend/app. No changes to existing APIs.
+
+STEP 1 — Package dependencies
+  Add to requirements.txt:
+    psycopg2-binary>=2.9.9
+    firebase-admin>=6.5.0
+    python-jose[cryptography]>=3.3.0
+    cachetools>=5.3.0
+
+STEP 2 — Package structure
+  Create empty __init__.py in:
+    backend/src/__init__.py
+    backend/src/config/__init__.py
+    backend/src/middleware/__init__.py
+    backend/src/services/__init__.py
+
+STEP 3 — Resolve TenantConfig (BLOCKER)
+  Create backend/src/config/tenant_config.py with a minimal stub:
+    class TenantConfig:
+        firebase_project: str
+  OR: Edit firebase.py to remove TenantConfig import entirely and use
+  settings.firebase_project_id directly. This is the preferred option for a
+  single-tenant Event app.
+
+STEP 4 — Adapt settings.py for Event app
+  Create a new backend/src/config/event_settings.py (do not modify the cloned
+  settings.py) that:
+    - Replaces db_name default from "website_db" to "events_db"
+    - Removes alumni_db_name and alumni_db_url (or makes them optional)
+    - Updates Cloud SQL socket path to the Event app's Cloud SQL instance
+    - Keeps SECRET_KEY, FIREBASE_PROJECT_ID, ALLOWED_ORIGINS, APP_BASE_URL
+
+STEP 5 — New env vars
+  Add to backend/.env (local dev) and .env.example:
+    SECRET_KEY=<32-char random string>
+    DB_PASSWORD=<events_db password>
+    DB_NAME=events_db
+    DB_SSLMODE=disable
+    FIREBASE_PROJECT_ID=<nitksaa-event-firebase-project>
+    ALLOWED_ORIGINS=http://localhost:5173
+    APP_BASE_URL=http://localhost:5173
+
+STEP 6 — Create event_users table
+  New SQL migration in migrations/events_db/:
+    CREATE TABLE event_users (
+        id          SERIAL PRIMARY KEY,
+        firebase_uid VARCHAR(128) UNIQUE NOT NULL,
+        email       TEXT NOT NULL,
+        user_type   VARCHAR(32) NOT NULL DEFAULT 'alumni',
+        ref_id      VARCHAR(128),
+        fullname    TEXT,
+        status      VARCHAR(32) NOT NULL DEFAULT 'active',
+        is_admin    BOOLEAN NOT NULL DEFAULT FALSE,
+        created_at  TIMESTAMPTZ DEFAULT NOW(),
+        updated_at  TIMESTAMPTZ DEFAULT NOW()
+    );
+
+STEP 7 — Adapt firebase.py get_current_user() for asyncpg
+  The current Website get_current_user() uses sync get_db() (psycopg2).
+  For the Event app it must use asyncpg (pool.acquire()) and query
+  event_users instead of website_users.
+  The role flags is_content_editor, is_innovation_reviewer, etc. are
+  Website-specific and should be dropped in the Event app version.
+  Keep: firebase_uid, email, fullname, user_type, ref_id, is_admin, status.
+
+STEP 8 — Add POST /api/v1/auth/firebase endpoint
+  New file: backend/app/api/auth.py
+  New route: POST /api/v1/auth/firebase
+  Body: {id_token: str}
+  Logic: verify_firebase_token() → upsert event_users → make_jwt() → return JWT
+  Register in backend/app/main.py alongside existing routers.
+
+STEP 9 — Keep X-Dev-User in parallel during migration
+  dev_auth.py must remain functional for APP_ENV=development so the existing
+  pytest test suite continues to pass throughout the migration.
+
+
+────────────────────────────────────────────────────────────────────────────────
+11. WHAT SHOULD BE COPIED / ADAPTED
+────────────────────────────────────────────────────────────────────────────────
+
+  FILE                          ACTION          NOTES
+  ─────────────────────────     ───────────     ────────────────────────────────
+  src/config/settings.py        ADAPT           Create event_settings.py variant.
+                                                Change DB_NAME default, remove
+                                                alumni_db, update Cloud SQL path.
+                                                Structure and pattern are sound.
+
+  src/middleware/firebase.py    ADAPT           Excellent auth pattern. Adapt by:
+  — verify_firebase_token()     COPY            Core Firebase verification — copy as-is.
+  — make_jwt()                  COPY            JWT issuance — copy as-is.
+  — get_current_user()          ADAPT           Replace psycopg2 with asyncpg,
+                                                query event_users, remove website-
+                                                specific role flags.
+  — TenantConfig usage          REMOVE          Replace with settings.firebase_project_id.
+  — require_user_type()         COPY            Useful generic guard.
+  — require_alumni()            COPY            Directly applicable.
+
+  src/services/db.py            DO NOT COPY     Sync psycopg2 is incompatible with
+                                                async Alpha. See Section 6.
+                                                alumni_db pool may be needed later
+                                                via asyncio.to_thread().
+
+  src/services/alumni.py        ADAPT LATER     Wrap get_alumni_db() calls in
+                                                asyncio.to_thread(). Needed for
+                                                attendee enrichment (Phase 3).
+                                                Not needed for Alpha auth wiring.
+
+  src/services/notify.py        ADAPT LATER     Copy emit() structure and layers.
+                                                Replace table names (website_audit_log
+                                                → event_audit_log). Replace all
+                                                Website templates with event templates.
+                                                Wrap DB calls in asyncio.to_thread()
+                                                or convert to asyncpg.
+                                                Do NOT copy Website templates.
+
+
+────────────────────────────────────────────────────────────────────────────────
+12. WHAT SHOULD NOT BE COPIED DIRECTLY
+────────────────────────────────────────────────────────────────────────────────
+
+  1. src/services/db.py (entire file as-is)
+     Reason: psycopg2 sync in async FastAPI event loop = blocking. asyncpg is
+     already in use and working. Do not introduce a second driver.
+
+  2. notify.py — all 25+ Website event templates
+     Reason: contact_request_received, mentorship_request_accepted, story_submitted,
+     startup_published, etc. are entirely irrelevant to the Event app. They carry
+     Website-specific context keys (sender_branch, sender_year, story_title,
+     community_name, etc.) that the Event app will never populate.
+
+  3. notify.py — table names (website_audit_log, notifications)
+     Reason: These tables do not exist in events_db. Writing to them will raise
+     runtime exceptions. Event app needs event_audit_log.
+
+  4. settings.py — db_url / alumni_db_url Cloud SQL socket paths
+     Reason: The Cloud SQL instance name is hardcoded for the Website project.
+     The Event app will deploy to a different Cloud Run instance with a different
+     Cloud SQL connection string.
+
+  5. firebase.py — website_users table reference in get_current_user()
+     Reason: website_users does not exist in events_db. Copying the function
+     without adapting it will cause a silent DB error swallowed by the
+     try/except (fail-open pattern) — meaning the role check silently fails
+     and returns a bare user dict without proper validation.
+
+  6. firebase.py — TenantConfig import
+     Reason: Multi-tenant abstraction from Website that is unnecessary for a
+     single-tenant Event app. Import will crash immediately.
+
+  7. firebase.py — role flags is_content_editor, is_innovation_reviewer,
+     is_giving_reviewer, is_community_admin
+     Reason: Website-specific roles. Event app only needs is_admin and user_type.
+
+
+────────────────────────────────────────────────────────────────────────────────
+13. RISK AREAS
+────────────────────────────────────────────────────────────────────────────────
+
+RISK 1 — TenantConfig ImportError (SEVERITY: CRITICAL)
+  If firebase.py is imported before config/tenant_config.py exists, the entire
+  backend will fail to start with an ImportError.
+  Impact: Total startup failure.
+  Mitigation: Fix BEFORE any wiring attempt.
+
+RISK 2 — psycopg2 blocking the async event loop (SEVERITY: HIGH)
+  Any psycopg2 db.py call made directly inside an async route handler will
+  block the FastAPI event loop for the duration of the DB round-trip.
+  Under load: all concurrent requests stall waiting for the blocking call.
+  Impact: Performance degradation, request timeouts, asyncpg pool starvation.
+  Mitigation: Wrap all psycopg2 calls in asyncio.to_thread(). Or better:
+  convert auth and alumni DB ops to asyncpg.
+
+RISK 3 — DB param style mismatch (SEVERITY: HIGH)
+  asyncpg uses $1, $2 positional params.
+  psycopg2 uses %s format params.
+  Copying SQL queries from db.py into asyncpg code (or vice versa) without
+  changing param style will cause runtime errors on first DB hit.
+  Impact: Silent 500 errors on affected endpoints.
+  Mitigation: All queries adapted for asyncpg must use $1/$2/$3 style.
+
+RISK 4 — Firebase Admin SDK credential setup (SEVERITY: HIGH)
+  firebase-admin requires Google Application Default Credentials (ADC) or a
+  service account JSON file. Neither is configured in the current environment.
+  In development: requires either `gcloud auth application-default login`
+  (for the correct GCP project) or a downloaded service account JSON file.
+  In production (Cloud Run): requires the Cloud Run service account to have
+  the Firebase Authentication Viewer IAM role.
+  Impact: verify_firebase_token() will raise 401 on every request until
+  credentials are configured.
+  Mitigation: Document credential setup. Provide GOOGLE_APPLICATION_CREDENTIALS
+  env var pointing to service account JSON for local dev.
+
+RISK 5 — SECRET_KEY missing from .env (SEVERITY: HIGH)
+  settings.py declares SECRET_KEY = Field(...) with no default.
+  Pydantic-settings will raise a ValidationError on startup if SECRET_KEY is
+  not set. This will crash the Event app before serving any request.
+  Impact: Total startup failure if SECRET_KEY is absent.
+  Mitigation: Generate and add SECRET_KEY before wiring.
+
+RISK 6 — event_users table does not exist (SEVERITY: HIGH)
+  firebase.py's get_current_user() queries website_users (must be adapted to
+  event_users). If event_users does not exist, the live role-check query fails.
+  The current implementation has a fail-open except clause — it swallows the
+  exception and returns a bare user dict. This means:
+  - User can authenticate (good)
+  - But is_admin and other flags are all False (bad — admins lose admin access)
+  Impact: Admin endpoints become inaccessible to real Firebase users.
+  Mitigation: Create event_users migration BEFORE wiring firebase.py.
+
+RISK 7 — alumni_db unavailable in dev (SEVERITY: MEDIUM)
+  alumni.py connects to a separate alumni_db PostgreSQL instance. This is part
+  of the Website infrastructure and may not be available in a standalone Event
+  app development environment.
+  Impact: Any code path that calls fetch_alumni_info() will raise a
+  OperationalError / connection refused.
+  Mitigation: Make alumni_db usage optional (feature flag or try/except with
+  graceful degradation). Do not wire alumni.py until alumni_db is accessible.
+
+RISK 8 — Test suite regression (SEVERITY: MEDIUM)
+  All 7 test scenarios in test_event_flow.py use X-Dev-User headers and
+  "dev-admin-firebase-uid" / "dev-attendee-firebase-uid" hardcoded UIDs.
+  Any change to the auth layer that removes or gates dev_auth.py will break
+  all tests.
+  Mitigation: Keep dev_auth.py active for APP_ENV=development. Add separate
+  Firebase auth tests in a new test file.
+
+RISK 9 — notify.py silent errors against non-existent tables (SEVERITY: MEDIUM)
+  notify.py swallows all exceptions in _write_audit, _write_in_app, _dispatch_push.
+  If wired against events_db where website_audit_log and notifications do not
+  exist, errors will be silently suppressed (logged only). This means audits
+  appear to succeed but produce no records.
+  Mitigation: Do not wire notify.py until event_audit_log migration is applied.
+
+RISK 10 — Hardcoded Cloud SQL instance in settings.py (SEVERITY: LOW for dev)
+  db_url property hardcodes the Website project's Cloud SQL socket path. This
+  will fail in any production Cloud Run deployment of the Event app.
+  Mitigation: Override with event-app-specific Cloud SQL instance name before
+  any production deployment.
+
+
+────────────────────────────────────────────────────────────────────────────────
+14. RECOMMENDED PHASED MIGRATION PLAN
+────────────────────────────────────────────────────────────────────────────────
+
+PHASE 0 — Preparation (1 day, no code changes to backend/app)
+  Goal: Make cloned files importable. Add dependencies. Fix env.
+  Actions:
+    [ ] Add psycopg2-binary, firebase-admin, python-jose[cryptography],
+        cachetools to requirements.txt
+    [ ] Create backend/src/__init__.py, backend/src/config/__init__.py,
+        backend/src/middleware/__init__.py, backend/src/services/__init__.py
+    [ ] Create stub backend/src/config/tenant_config.py (single class TenantConfig)
+    [ ] Generate SECRET_KEY: python -c "import secrets; print(secrets.token_hex(32))"
+    [ ] Add SECRET_KEY, DB_PASSWORD, DB_NAME=events_db, DB_SSLMODE=disable
+        to backend/.env
+    [ ] Create .env.example documenting all required variables
+    [ ] Confirm: python -c "from src.config.settings import settings; print('ok')"
+    [ ] Confirm: python -c "from src.middleware.firebase import make_jwt; print('ok')"
+    Validation: all cloned files import without error.
+
+PHASE 1 — Firebase Auth Endpoint (2 days)
+  Goal: Add POST /api/v1/auth/firebase. Keep X-Dev-User working in parallel.
+  Actions:
+    [ ] Write migration: events_db 002_create_event_users.sql
+    [ ] Run migration on local events_db
+    [ ] Create backend/app/api/auth.py with POST /api/v1/auth/firebase
+        - Accept {id_token: str}
+        - Call verify_firebase_token() (adapted, no TenantConfig)
+        - Upsert into event_users via asyncpg
+        - Call make_jwt() with {firebase_uid, email, user_type, ref_id, is_admin}
+        - Return {access_token, token_type: "bearer", expires_in: 28800}
+    [ ] Create backend/app/middleware/jwt_auth.py
+        - get_current_user() FastAPI dependency for JWT Bearer tokens
+        - Uses asyncpg to query event_users for suspension + is_admin
+        - Compatible with existing user dict shape {firebase_uid, email,
+          user_type, ref_id, is_admin}
+    [ ] Register auth.router in main.py
+    [ ] Configure Firebase Admin credentials in local .env
+        (GOOGLE_APPLICATION_CREDENTIALS=path/to/service-account.json)
+    Validation:
+        pytest tests/test_event_flow.py -v          # all existing tests pass
+        curl -X POST /api/v1/auth/firebase -d ...   # returns JWT
+
+PHASE 2 — Switch Protected Endpoints to JWT (1 day)
+  Goal: Replace X-Dev-User on actual protected routes; keep dev_auth.py for tests.
+  Actions:
+    [ ] Add APP_ENV guard: jwt_auth.get_current_user() falls through to
+        dev_auth.get_current_user() when APP_ENV=development and
+        Authorization header is absent (backward compat for test suite)
+    [ ] Optionally update events.py and admin_events.py to use jwt_auth dependency
+        while keeping dev auth as fallback in dev mode
+    Validation:
+        pytest tests/test_event_flow.py -v          # still pass
+        Test with real Firebase token via curl
+
+PHASE 3 — Alumni Enrichment (1-2 days, requires alumni_db access)
+  Goal: Enrich attendee display with year/branch from alumni_db.
+  Prerequisite: alumni_db reachable in development environment.
+  Actions:
+    [ ] Write migration: events_db 003_create_event_members.sql
+        (event_user_id FK, alumni_id, graduationyear, branch, populated at login)
+    [ ] Wrap alumni.py fetch_alumni_info() in asyncio.to_thread() for async use
+    [ ] Populate event_members at Firebase auth time (on upsert in Phase 1)
+    [ ] Update attendee list / registration list to join event_members for display
+    Validation:
+        Attendee list returns fullname + year + branch for alumni users
+
+PHASE 4 — Audit Log (1 day)
+  Goal: Wire event-specific audit trail for registration and check-in events.
+  Actions:
+    [ ] Write migration: events_db 004_create_event_audit_log.sql
+    [ ] Create backend/app/services/event_notify.py (adapted from notify.py)
+        - Keep emit() interface
+        - Replace psycopg2 get_db() with asyncpg
+        - Replace table names: event_audit_log
+        - Add event-specific templates: event_registered, event_checked_in,
+          event_registration_cancelled
+        - Remove all Website-specific templates
+    [ ] Call emit() in registration_service.register() and checkin_service.check_in()
+    Validation:
+        After registration: SELECT * FROM event_audit_log WHERE event_type='event_registered'
+        After check-in:     SELECT * FROM event_audit_log WHERE event_type='event_checked_in'
+
+PHASE 5 — Production Readiness (1 day)
+  Goal: Update Cloud SQL connection string, validate against staging environment.
+  Actions:
+    [ ] Update settings.py db_url Cloud SQL socket path to Event app instance
+    [ ] Set DB_SSLMODE=require for staging/production
+    [ ] Configure production Firebase credentials via GCP IAM
+    [ ] Run full pytest suite against staging database
+    [ ] Remove X-Dev-User fallback in production (APP_ENV=production gate exists)
+
+
+────────────────────────────────────────────────────────────────────────────────
+15. VALIDATION COMMANDS TO RUN LATER
+────────────────────────────────────────────────────────────────────────────────
+
+After Phase 0 (import check):
+  cd backend
+  python -c "from src.config.settings import settings; print(settings.app_env)"
+  python -c "from src.middleware.firebase import make_jwt, verify_firebase_token; print('ok')"
+  python -c "from src.services.db import get_db; print('ok')"
+  python -c "from src.services.alumni import fetch_alumni_info; print('ok')"
+  python -c "from src.services.notify import emit; print('ok')"
+
+After Phase 0 (dependency install):
+  pip install -r requirements.txt
+  python -c "import psycopg2; print(psycopg2.__version__)"
+  python -c "import firebase_admin; print(firebase_admin.__version__)"
+  python -c "from jose import jwt; print('jose ok')"
+  python -c "from cachetools import TTLCache; print('cachetools ok')"
+
+After Phase 1 (existing tests must still pass):
+  pytest backend/tests/test_event_flow.py -v
+  # Expected: all 7 test functions PASS
+  # Key: test_health_endpoints, test_event_create_publish_and_public_visibility,
+  #      test_attendee_registration_and_duplicates,
+  #      test_qr_verify_checkin_and_duplicate_attempts,
+  #      test_closed_event_blocks_registration, test_access_control,
+  #      test_admin_listings_and_sessions
+
+After Phase 1 (Firebase auth endpoint):
+  curl -s -X POST http://localhost:8000/api/v1/auth/firebase \
+    -H "Content-Type: application/json" \
+    -d '{"id_token": "<valid-firebase-id-token>"}' | python -m json.tool
+  # Expected: {"access_token": "<jwt>", "token_type": "bearer", "expires_in": 28800}
+
+After Phase 1 (JWT-authenticated event endpoint):
+  JWT=$(curl -s -X POST http://localhost:8000/api/v1/auth/firebase \
+    -H "Content-Type: application/json" \
+    -d '{"id_token": "<valid-firebase-id-token>"}' | python -c "import sys,json; print(json.load(sys.stdin)['access_token'])")
+  curl -s http://localhost:8000/api/v1/events \
+    -H "Authorization: Bearer $JWT" | python -m json.tool
+
+After Phase 4 (audit log):
+  psql -d events_db -c "SELECT * FROM event_audit_log ORDER BY id DESC LIMIT 10;"
+  # Must contain rows with event_type IN ('event_registered', 'event_checked_in')
+
+Full regression before any production deploy:
+  pytest backend/tests/ -v --tb=short
+  # All tests must PASS before any PR is merged targeting production
+
+
+────────────────────────────────────────────────────────────────────────────────
+SPECIAL FOCUS ANSWERS
+────────────────────────────────────────────────────────────────────────────────
+
+Q: Do we keep asyncpg or move to psycopg2?
+A: KEEP asyncpg. Do not migrate the event/registration/check-in data layer to
+   psycopg2. The Alpha is async throughout and asyncpg performs better under
+   the async FastAPI model. When we need psycopg2 functionality from the cloned
+   files (notify.py, alumni.py), wrap those specific calls in asyncio.to_thread()
+   rather than converting the entire app. For the new auth endpoint (event_users
+   table), write it directly in asyncpg.
+
+Q: How to add POST /api/v1/auth/firebase safely?
+A: Create backend/app/api/auth.py as a NEW file. Do NOT modify any existing
+   api files. Register the router in main.py alongside the existing routers.
+   The endpoint:
+     1. Accepts {id_token: str}
+     2. Calls verify_firebase_token() from the adapted firebase.py
+        (no TenantConfig; uses settings.firebase_project_id)
+     3. Queries/upserts event_users via asyncpg (same pool used by event APIs)
+     4. Issues JWT with make_jwt()
+     5. Returns {access_token, token_type, expires_in}
+   This adds a new route prefix that does not conflict with /api/v1/events or
+   /api/v1/admin. Existing tests are untouched.
+
+Q: How to create event_users and event_members without breaking Alpha flow?
+A: New SQL migration files only — no changes to existing tables.
+   event_users: brand new table, no FK references from existing tables.
+   event_members: new table, FK to event_users only.
+   The existing tables (events, registrations, attendees, check_ins,
+   check_in_attempts) do NOT reference event_users or event_members.
+   Migrations are additive. Rolling back = DROP TABLE (no data loss on existing).
+
+Q: How to preserve existing validated event APIs?
+A: The existing API files (events.py, admin_events.py) and all their underlying
+   services and repositories are NOT touched during migration phases 0-2.
+   The X-Dev-User auth dependency remains in dev_auth.py.
+   JWT auth is introduced as an ALTERNATIVE dependency in a new jwt_auth.py
+   module. Only in Phase 2 (or later) do we optionally update route handlers
+   to prefer JWT, with fallback to X-Dev-User in development.
+   The test suite will catch any regression immediately.
+
+Q: How to keep current backend validation passing during migration?
+A: The conftest.py require_db fixture skips all tests if DB is unreachable.
+   The client fixture uses APP_ENV=development, which keeps X-Dev-User active.
+   As long as:
+     (a) dev_auth.py is not removed or gated out in development mode
+     (b) No existing table schemas are altered
+     (c) No existing route paths are changed
+     (d) The asyncpg pool lifecycle in main.py is preserved
+   all 7 existing test scenarios will continue to pass throughout the migration.
+
+
+────────────────────────────────────────────────────────────────────────────────
+RECOMMENDED NEXT IMPLEMENTATION PROMPT
+────────────────────────────────────────────────────────────────────────────────
+
+Title: Phase 0+1 — Firebase Auth Wiring for Event Backend
+
+Context:
+  We have reviewed the cloned Website backend files (backend/src/).
+  The review is documented in docs/reviews/cloned_website_files_integration_review.txt.
+  The current Alpha backend (backend/app/) uses X-Dev-User dev auth and asyncpg.
+  All 7 test scenarios in backend/tests/test_event_flow.py must continue to pass.
+
+Scope of this prompt (do not exceed):
+  1. Update requirements.txt: add psycopg2-binary, firebase-admin,
+     python-jose[cryptography], cachetools.
+  2. Create __init__.py in backend/src/, backend/src/config/,
+     backend/src/middleware/, backend/src/services/.
+  3. Create backend/src/config/tenant_config.py stub (class TenantConfig
+     with firebase_project: str attribute only).
+  4. Create backend/app/api/auth.py with POST /api/v1/auth/firebase:
+     - Accepts {id_token: str}
+     - Verifies token using firebase-admin with settings.firebase_project_id
+       (no TenantConfig, no multi-tenant logic)
+     - Upserts into event_users table via asyncpg (same pool as app)
+     - Issues JWT using python-jose HS256, signed with settings.secret_key
+     - Returns {access_token, token_type: "bearer", expires_in: 28800}
+  5. Create backend/app/middleware/jwt_auth.py with get_current_user() FastAPI
+     dependency that decodes JWT, queries event_users via asyncpg, returns same
+     user dict shape as dev_auth.py.
+  6. Register auth.router in backend/app/main.py.
+  7. Write migration SQL: backend/migrations/events_db/002_create_event_users.sql
+  8. Do NOT modify any existing backend/app/ files (config.py, database.py,
+     dev_auth.py, events.py, admin_events.py, any services or repositories).
+  9. Confirm pytest backend/tests/test_event_flow.py -v all pass after changes.
+
+Environment notes:
+  - Python 3.10, FastAPI 0.111.0, asyncpg 0.29.0
+  - events_db is a local PostgreSQL instance
+  - Firebase Admin SDK credentials via GOOGLE_APPLICATION_CREDENTIALS env var
+  - New env vars needed: SECRET_KEY, FIREBASE_PROJECT_ID
+
+Do not add email, alumni lookup, or notification wiring in this prompt.
+Those are Phase 3-4 and will follow separately.
+
+
+────────────────────────────────────────────────────────────────────────────────
+READINESS SCORE FOR WIRING CLONED FILES
+────────────────────────────────────────────────────────────────────────────────
+
+Overall readiness: 3 / 10
+
+Breakdown:
+
+  Infrastructure & dependencies
+    4 packages missing from requirements.txt             NOT READY
+    No __init__.py in backend/src directories            NOT READY
+    SECRET_KEY and DB_PASSWORD not in .env               NOT READY
+    Firebase Admin credentials not configured            NOT READY
+
+  Import resolution
+    TenantConfig module missing (hard crash on import)   BLOCKED
+    sys.path not set for src.* imports                   NOT READY
+    Bare module imports incompatible with app structure  NOT READY
+
+  Database alignment
+    event_users table does not exist                     NOT READY
+    psycopg2 vs asyncpg driver mismatch                  DESIGN GAP
+    website_users/website_audit_log not in events_db     NOT APPLICABLE
+
+  Code adaption required
+    firebase.py: TenantConfig removal                    REQUIRED
+    firebase.py: get_current_user asyncpg rewrite        REQUIRED
+    db.py: entire file cannot be used as-is              REPLACE
+    notify.py: table names, templates, driver            SIGNIFICANT REWORK
+    alumni.py: asyncio.to_thread wrapper                 MINOR REWORK
+
+  What IS ready (score justification):
+    [+] Architecture pattern is correct and proven
+    [+] verify_firebase_token() and make_jwt() functions copy cleanly
+    [+] settings.py structure is well-designed and adaptable
+    [+] alumni.py caching strategy is directly usable after wrapping
+    [+] notify.py emit() interface is clean and event-app-compatible
+    [+] Alpha test suite provides full regression safety net
+    [+] All blockers are known and have clear resolution paths
+    [+] No blocker requires architectural redesign of the Alpha
+
+Estimated effort to reach readiness (10/10): 4-5 working days
+  Phase 0: 1 day (prep, dependencies, stubs)
+  Phase 1: 2 days (auth endpoint, event_users, JWT middleware)
+  Phase 2: 0.5 days (switch protected routes to JWT)
+  Integration testing: 0.5 days
+
+================================================================================
+END OF REVIEW
+================================================================================
