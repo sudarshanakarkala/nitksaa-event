@@ -585,3 +585,164 @@ Include:
 11. Final readiness status
 
 Do not commit code.
+
+________________________________________________________________
+
+USECASES FOR TESTING 
+
+1. Health API returns OK
+2. Create event as admin
+3. Public list hides draft event
+4. Publish event
+5. Public list shows published event
+6. Register attendee
+7. Duplicate registration by email blocked
+8. Duplicate registration by ref_id blocked
+9. QR verify before check-in
+10. Successful check-in
+11. Duplicate check-in blocked
+12. Invalid QR blocked
+13. QR verify after check-in
+14. Check-in attempt logged
+15. Register on closed event blocked
+16. Attendee cannot access admin APIs
+17. Public APIs work without auth
+18. Registration without auth blocked
+
+PROMPT 3 
+
+Please improve backend test coverage for the NITKSAA Event Platform Alpha backend.
+
+Do NOT add new product features.
+Do NOT change API behavior unless a test reveals a real bug.
+Do NOT implement Firebase auth.
+Do NOT implement Flutter/React UI.
+
+Goal:
+Add automated tests covering all validated backend Alpha use cases.
+
+Test scope:
+- Health APIs
+- Event lifecycle
+- Registration lifecycle
+- QR verification
+- QR check-in
+- Duplicate prevention
+- Check-in attempt logging
+- Access control
+
+Use existing backend structure.
+
+Current backend path:
+backend/
+
+Current validation:
+Manual curl flow already passed 20/20.
+
+Now convert those use cases into automated pytest tests.
+
+Required test file:
+backend/tests/test_event_flow.py
+
+If needed, add helper fixtures in:
+backend/tests/conftest.py
+
+Requirements:
+
+1. Tests should run with:
+pytest backend/tests -v
+
+2. Tests should use the local events_db database.
+
+3. Tests must clean up their own data or use unique slugs/emails per run.
+
+4. Do not depend on fixed event_id = 1.
+
+5. Use unique values:
+- slug with timestamp/random suffix
+- email with timestamp/random suffix
+- ref_id with timestamp/random suffix
+
+6. Use dev auth headers:
+Admin:
+X-Dev-User: admin
+
+Attendee:
+X-Dev-User: attendee
+
+7. Test public endpoints without auth.
+
+8. Test access-control failures:
+- attendee accessing admin API should return 403
+- missing auth for registration should return 401
+- public event list should return 200 without auth
+
+9. Verify check-in attempt logs include:
+- success
+- duplicate
+- invalid
+
+10. Verify registration status changes from:
+registered → checked_in
+
+11. Verify closed event blocks registration.
+
+12. Verify draft event is not shown publicly.
+
+Test cases to implement:
+
+A. test_health_endpoints
+- GET /healthz returns 200
+- GET /api/v1/health returns 200 and db=ok
+
+B. test_event_create_publish_and_public_visibility
+- create draft event
+- verify public list does not show draft
+- publish event
+- verify public list shows event
+- get detail returns event
+
+C. test_attendee_registration_and_duplicates
+- create + publish event
+- register attendee
+- assert qr_token starts with nitksaa_evt_
+- duplicate same email returns 409
+- duplicate same ref_id returns 409
+
+D. test_qr_verify_checkin_and_duplicate_attempts
+- create + publish event
+- register attendee
+- verify QR before check-in
+- check in attendee
+- verify registration status checked_in
+- duplicate check-in returns 409
+- invalid QR returns 404
+- check-in attempts contain success, duplicate, invalid
+
+E. test_closed_event_blocks_registration
+- create + publish event
+- close event
+- registration returns 400
+
+F. test_access_control
+- attendee calling admin event create returns 403
+- missing auth registration returns 401
+- public list without auth returns 200
+
+Also run:
+python -m compileall backend/app backend/tests
+pytest backend/tests -v
+
+Generate:
+backend_test_validation_report.txt
+
+Report must include:
+1. Tests added
+2. Commands executed
+3. Test results
+4. Bugs found
+5. Files modified
+6. Coverage gaps
+7. Whether ready to commit
+
+Do not commit code.

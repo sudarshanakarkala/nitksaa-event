@@ -1,0 +1,257 @@
+
+cd /Users/ananth/iTelematics/NITK_Project/NITK_Alumni/nitksaa-event/backend
+
+rm -rf .venv
+/opt/homebrew/bin/python3 -m venv .venv
+
+source .venv/bin/activate
+
+unalias python 2>/dev/null
+unalias pip 2>/dev/null
+unalias python3 2>/dev/null
+unalias pip3 2>/dev/null
+
+which python
+which pip
+python --version
+
+python -m pip install --upgrade pip
+python -m pip install -r requirements.txt
+
+brew services start postgresql@18
+brew services list
+pg_isready
+
+createdb events_db
+
+psql -d events_db -f migrations/events_db/001_create_events_alpha_schema.sql
+
+psql -d events_db -c "select current_user, current_database();"
+
+cp .env.example .env
+
+_________________________________________________________________
+
+Then update .env:
+
+APP_ENV=development
+EVENTS_DB_URL=postgresql://ananth@localhost:5432/events_db
+
+Start backend:
+
+uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+
+In another terminal:
+
+curl http://localhost:8000/healthz
+curl http://localhost:8000/api/v1/health
+
+____________________________________________________________________
+
+NITKSAA Event Platform — Daily Status Report
+Date: 27 May 2026
+
+==================================================
+TODAY'S MAJOR ACHIEVEMENT
+=========================
+
+Backend Alpha Vertical Slice:
+IMPLEMENTED + VALIDATED + DOCUMENTED
+
+A complete backend-only proof-of-flow for the NITKSAA Event Platform Alpha is now working successfully using FastAPI + PostgreSQL.
+
+All critical backend event lifecycle APIs were validated successfully using curl/Postman flows.
+
+Validation Result:
+20/20 API validation steps PASSED
+
+==================================================
+INFRASTRUCTURE
+==============
+
+[COMPLETED]
+
+✓ PostgreSQL local setup completed
+✓ PostgreSQL service running successfully
+✓ events_db created successfully
+✓ DB migration executed successfully
+✓ FastAPI backend bootstrapped
+✓ asyncpg connection pool working
+✓ Local Python virtual environment isolated correctly
+✓ Uvicorn server startup validated
+✓ Health APIs validated
+✓ Database connectivity validated
+
+==================================================
+BACKEND ARCHITECTURE
+====================
+
+[COMPLETED]
+
+✓ Layered architecture implemented
+✓ Repository layer implemented
+✓ Service layer implemented
+✓ Schema layer implemented
+✓ API routing structure implemented
+✓ Dev auth middleware implemented
+✓ Business rule enforcement implemented
+✓ Environment configuration implemented
+✓ Migration structure implemented
+✓ Token utility layer implemented
+
+Architecture Pattern:
+
+app/
+├── api/
+├── repositories/
+├── services/
+├── schemas/
+├── middleware/
+├── utils/
+└── database.py
+
+==================================================
+EVENT PLATFORM APIS
+===================
+
+[COMPLETED]
+
+✓ Create Event API
+✓ Publish Event API
+✓ Public Event Listing API
+✓ Public Event Detail API
+✓ Attendee Registration API
+✓ Duplicate Registration Prevention
+✓ QR Token Generation
+✓ QR Verification API
+✓ QR Check-In API
+✓ Duplicate Check-In Prevention
+✓ Check-In Attempt Logging
+✓ Event Close API
+✓ Admin Event APIs
+✓ Session APIs
+✓ Attendee Listing APIs
+
+==================================================
+BUSINESS RULES VALIDATED
+========================
+
+✓ Only published events visible publicly
+✓ Registration blocked for closed events
+✓ Duplicate registration blocked
+✓ Duplicate check-in blocked
+✓ Invalid QR handling validated
+✓ Admin access control validated
+✓ Audit logging validated
+✓ QR token lifecycle validated
+
+==================================================
+ENGINEERING DISCIPLINE
+======================
+
+[COMPLETED]
+
+✓ Validation-first workflow followed
+✓ .gitignore hardened
+✓ Secrets protected properly
+✓ backend/.env ignored correctly
+✓ backend/.venv ignored correctly
+✓ .env.example preserved correctly
+✓ Docs versioned
+✓ Prompts versioned
+✓ Architecture documented
+✓ Backend validation report saved
+✓ Backend milestone ready for Git commit
+
+==================================================
+BUGS FOUND & FIXED
+==================
+
+Issue:
+JSONB metadata fields from asyncpg caused Pydantic validation failures.
+
+Fix:
+Implemented field_validator(..., mode="before")
+inside:
+
+* registrations.py
+* checkins.py
+
+Result:
+All validation APIs now pass successfully.
+
+==================================================
+CURRENT PROJECT STATUS
+======================
+
+Flutter Foundation:
+COMPLETED
+
+Backend Alpha Vertical Slice:
+COMPLETED
+
+API Validation:
+COMPLETED
+
+Ready For Next Phase:
+Flutter API Integration
+
+==================================================
+NEXT RECOMMENDED PHASE
+======================
+
+1. Commit backend milestone
+2. Push Git tag
+3. Build Flutter API client layer
+4. Event listing screen integration
+5. Public event detail screen
+6. Registration API integration
+7. Authentication integration
+
+==================================================
+RECOMMENDED GIT TAG
+===================
+
+backend-alpha-v1
+
+==================================================
+OVERALL STATUS
+==============
+
+Project Status:
+ON TRACK
+
+Architecture Stability:
+GOOD
+
+Backend Foundation:
+STABLE
+
+Engineering Discipline:
+STRONG
+
+Readiness for Flutter Integration:
+READY
+
+________________________________________________________________
+
+USECASES FOR TESTING 
+
+1. Health API returns OK
+2. Create event as admin
+3. Public list hides draft event
+4. Publish event
+5. Public list shows published event
+6. Register attendee
+7. Duplicate registration by email blocked
+8. Duplicate registration by ref_id blocked
+9. QR verify before check-in
+10. Successful check-in
+11. Duplicate check-in blocked
+12. Invalid QR blocked
+13. QR verify after check-in
+14. Check-in attempt logged
+15. Register on closed event blocked
+16. Attendee cannot access admin APIs
+17. Public APIs work without auth
+18. Registration without auth blocked
