@@ -509,7 +509,7 @@ Reference:
 
 > Auth done end-to-end. Backend and DB standing.
 
-Status: **~80% Complete**
+Status: **~70% Complete**
 
 ---
 
@@ -767,6 +767,6 @@ Session Persistence            ⏳ Pending
 Request Logging                ⏳ Pending
 React Admin Portal             ❌ Not Started
 
-Week 1 Progress: ~80%
+Week 1 Progress: ~70%
 Ready to close Week 1 after remaining validation items.
 ```
