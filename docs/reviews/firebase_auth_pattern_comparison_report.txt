@@ -1,0 +1,207 @@
+Firebase auth pattern comparison report
+Date: 2026-05-30
+
+Scope
+- Read-only comparison of:
+  - ../nitksaa-website
+  - ../nitksaa-portal-v2
+  - current repo ../nitksaa-event
+- No code, schema, migration, commit, or sibling-repo changes were made.
+- No private keys were copied.
+
+Files inspected
+
+nitksaa-website:
+- backend/src/middleware/firebase.py
+- backend/src/api/auth.py
+- backend/src/config/settings.py
+- backend/src/config/tenants.yaml
+- frontend/src/firebase.js
+- frontend/src/api.js
+- Dockerfile
+
+nitksaa-portal-v2:
+- webapp/backend/main.py
+- webapp/backend/routers/auth_v1.py
+- webapp/backend/config.py
+- webapp/frontend/src/firebase.js
+- webapp/frontend/src/api.js
+- DESIGN_DOC.md
+
+nitksaa-event:
+- backend/app/middleware/auth.py
+- backend/app/api/auth.py
+- backend/app/config.py
+- backend/.env
+
+Summary conclusion
+
+The exact backend credential pattern to reuse is Application Default Credentials (ADC), not explicit service account JSON loading.
+
+Both existing products rely on Firebase Admin SDK verification of a Firebase ID token during login/token exchange, then issue their own application JWT for subsequent API calls. The Admin SDK obtains credentials through credentials.ApplicationDefault(). In local development, portal documents the intended ADC source as gcloud auth application-default login. In Cloud Run, ADC is provided by the service account attached to the Cloud Run service.
+
+nitksaa-event already matches the backend Admin SDK credential pattern in code:
+- backend/app/middleware/auth.py initializes Firebase Admin with credentials.ApplicationDefault()
+- backend/app/api/auth.py implements POST /api/v1/auth/firebase and exchanges a Firebase token for an internal JWT
+
+The missing piece is local setup/configuration, not a service-account-JSON code path.
+
+Answers
+
+1. Does website use credentials.ApplicationDefault()?
+
+Yes.
+
+Evidence:
+- ../nitksaa-website/backend/src/middleware/firebase.py imports firebase_admin credentials.
+- _get_firebase_app(firebase_project) calls firebase_admin.initialize_app with:
+  - credential=credentials.ApplicationDefault()
+  - name=firebase_project
+  - options={"projectId": firebase_project}
+- verify_firebase_token(id_token, tenant) calls fb_auth.verify_id_token(id_token, app=app).
+
+Website uses a tenant-aware wrapper:
+- tenant.firebase_project comes from backend/src/config/tenants.yaml.
+- Both tenant entries currently point to project-d22bed42-f302-4e23-8dc.
+
+2. Does portal use credentials.ApplicationDefault()?
+
+Yes.
+
+Evidence:
+- ../nitksaa-portal-v2/webapp/backend/main.py defines _init_firebase().
+- _init_firebase() calls:
+  - cred = credentials.ApplicationDefault()
+  - firebase_admin.initialize_app(cred, {"projectId": settings.firebase_project_id})
+- The same file explicitly comments:
+  - Locally: gcloud auth application-default login
+  - Cloud Run: automatic, using the attached service account
+
+Portal initializes Firebase once at app startup, then login handlers call firebase_admin.auth.verify_id_token(...) without passing a named app.
+
+3. Do they use service account JSON?
+
+No explicit service-account JSON loading was found in either existing product.
+
+No inspected backend code calls:
+- credentials.Certificate(...)
+- firebase_admin.initialize_app(credentials.Certificate(...))
+- json.load(...) for Firebase Admin credentials
+
+The credential source is ADC. ADC can resolve to a local user ADC file, a local service account file if GOOGLE_APPLICATION_CREDENTIALS is set outside the app, or Cloud Run metadata credentials. The app code itself does not load or require a committed service account JSON file.
+
+4. Do they use GOOGLE_APPLICATION_CREDENTIALS?
+
+No app-level use was found.
+
+Neither existing backend reads GOOGLE_APPLICATION_CREDENTIALS directly, and the inspected env/config code does not define a GOOGLE_APPLICATION_CREDENTIALS setting.
+
+Important nuance:
+- GOOGLE_APPLICATION_CREDENTIALS is one possible ADC source outside the app.
+- The existing repos do not make it the standard pattern.
+- The documented local pattern in portal is gcloud auth application-default login.
+
+5. Do they rely on Cloud Run service account ADC?
+
+Yes for deployed Cloud Run.
+
+Evidence:
+- ../nitksaa-portal-v2/webapp/backend/main.py says Cloud Run is automatic and uses the service account attached to the instance.
+- Existing event reference docs in nitksaa-event also state the same deployed pattern: backend should use ADC and Cloud Run service account credentials.
+
+For website, the code uses ApplicationDefault() and the deployment target is Cloud Run, so the inferred deployed credential source is also Cloud Run service account ADC.
+
+6. What is missing in nitksaa-event local setup?
+
+The event backend code already uses ADC, but backend/.env does not document or configure the local ADC prerequisite.
+
+Observed backend/.env contents are limited to:
+- APP_ENV
+- APP_NAME
+- APP_VERSION
+- EVENTS_DB_URL
+
+Missing local setup/config items:
+- No FIREBASE_PROJECT_ID entry in backend/.env, although backend/app/config.py has the correct default project-d22bed42-f302-4e23-8dc.
+- No GOOGLE_APPLICATION_CREDENTIALS entry. This is acceptable if using gcloud user ADC, but it means the developer machine must already have ADC configured outside the repo.
+- No local-development note equivalent to portal's "gcloud auth application-default login" instruction.
+- No explicit local ADC/quota-project setup captured for the event backend.
+
+Most likely local failure mode:
+- POST /api/v1/auth/firebase reaches verify_firebase_token().
+- Firebase Admin calls credentials.ApplicationDefault().
+- If the machine has no ADC, token verification fails with a default-credentials error.
+
+7. What exact fix should we apply to nitksaa-event?
+
+Apply the same ADC pattern as portal/website. Do not add service-account JSON loading to code.
+
+Exact local fix:
+
+1. On the developer machine, configure ADC once:
+   gcloud auth application-default login
+
+2. Ensure ADC is associated with the shared Firebase/GCP project:
+   gcloud config set project project-d22bed42-f302-4e23-8dc
+   gcloud auth application-default set-quota-project project-d22bed42-f302-4e23-8dc
+
+3. Add or document this non-secret backend/.env value for clarity:
+   FIREBASE_PROJECT_ID=project-d22bed42-f302-4e23-8dc
+
+4. Keep nitksaa-event backend code using:
+   credentials.ApplicationDefault()
+   firebase_admin.initialize_app(..., options={"projectId": settings.firebase_project_id})
+   fb_auth.verify_id_token(id_token, app=app)
+
+5. For Cloud Run deployment:
+   - Do not set GOOGLE_APPLICATION_CREDENTIALS.
+   - Do not deploy private key JSON.
+   - Let Firebase Admin SDK use Cloud Run service account ADC.
+   - Ensure the Cloud Run service account belongs to or has access to project-d22bed42-f302-4e23-8dc.
+
+Credential/auth pattern to reuse
+
+Backend:
+- Firebase ID token is accepted only at the login exchange endpoint.
+- Backend verifies it with Firebase Admin SDK.
+- Backend maps claims to app identity:
+  - uid -> firebase_uid
+  - email -> alumni lookup / app user lookup
+- Backend issues an internal JWT.
+- Ordinary protected APIs use the internal JWT, not Firebase ID token verification on every request.
+
+Website endpoint:
+- POST /api/v1/auth/firebase
+- Request body: {"token": "<firebase-id-token>"}
+- Verifies via verify_firebase_token(body.token, tenant).
+- Upserts website_users.
+- Issues website JWT.
+
+Portal endpoint:
+- POST /api/v1/auth/alumni/firebase
+- Request body: {"firebase_token": "<firebase-id-token>"}
+- Verifies via firebase_admin.auth.verify_id_token(body.firebase_token).
+- Updates alumni last_login/firebase_uid/status.
+- Issues portal JWT.
+
+Event endpoint:
+- POST /api/v1/auth/firebase
+- Request body: {"token": "<firebase-id-token>"}
+- Verifies via verify_firebase_token(body.token).
+- Upserts event_users.
+- Issues event JWT.
+
+Recommendation for nitksaa-event
+
+No code credential-path change is needed. The current event code already follows the ADC pattern used by website and portal.
+
+The next fix should be local operational setup:
+- Configure ADC with gcloud auth application-default login.
+- Set the ADC quota project to project-d22bed42-f302-4e23-8dc.
+- Add FIREBASE_PROJECT_ID=project-d22bed42-f302-4e23-8dc to backend/.env or document that the default in backend/app/config.py is intentional.
+
+Do not:
+- Copy a Firebase service account JSON into the repo.
+- Add private key values to backend/.env.
+- Change migrations or database schema for this credential issue.
+- Replace ADC with credentials.Certificate().

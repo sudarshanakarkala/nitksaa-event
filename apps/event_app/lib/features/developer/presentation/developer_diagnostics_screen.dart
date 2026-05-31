@@ -1,9 +1,14 @@
+import 'dart:convert';
+
+import 'package:dio/dio.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/services.dart';
 import 'package:go_router/go_router.dart';
+import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/app_state.dart';
 import '../../../core/logger/app_logger.dart';
@@ -100,17 +105,9 @@ class DeveloperDiagnosticsScreen extends ConsumerWidget {
                 _divider,
                 _DiagRow(label: 'Platform', value: _platformLabel()),
                 _divider,
-                _DiagRow(
-                  label: 'Router',
-                  value: 'Active',
-                  status: _Status.ok,
-                ),
+                _DiagRow(label: 'Router', value: 'Active', status: _Status.ok),
                 _divider,
-                _DiagRow(
-                  label: 'Logger',
-                  value: 'Active',
-                  status: _Status.ok,
-                ),
+                _DiagRow(label: 'Logger', value: 'Active', status: _Status.ok),
                 _divider,
                 _DiagRow(
                   label: 'Auth Status',
@@ -137,8 +134,9 @@ class DeveloperDiagnosticsScreen extends ConsumerWidget {
                 runSpacing: 8,
                 children: [
                   OutlinedButton(
-                    onPressed: () =>
-                        AppLogger.debug('Test debug from developer diagnostics'),
+                    onPressed: () => AppLogger.debug(
+                      'Test debug from developer diagnostics',
+                    ),
                     child: const Text('Log Debug'),
                   ),
                   OutlinedButton(
@@ -147,13 +145,15 @@ class DeveloperDiagnosticsScreen extends ConsumerWidget {
                     child: const Text('Log Info'),
                   ),
                   OutlinedButton(
-                    onPressed: () =>
-                        AppLogger.warning('Test warning from developer diagnostics'),
+                    onPressed: () => AppLogger.warning(
+                      'Test warning from developer diagnostics',
+                    ),
                     child: const Text('Log Warning'),
                   ),
                   OutlinedButton(
-                    onPressed: () =>
-                        AppLogger.error('Test error from developer diagnostics'),
+                    onPressed: () => AppLogger.error(
+                      'Test error from developer diagnostics',
+                    ),
                     child: const Text('Log Error'),
                   ),
                 ],
@@ -192,6 +192,11 @@ class DeveloperDiagnosticsScreen extends ConsumerWidget {
               ),
             ),
           ),
+          if (kDebugMode) ...[
+            const SizedBox(height: 20),
+            const _SectionLabel(title: 'Firebase Token Test'),
+            const _DevFirebaseTokenCard(),
+          ],
         ],
       ),
     );
@@ -208,10 +213,10 @@ class DeveloperDiagnosticsScreen extends ConsumerWidget {
   }
 
   String _themeModeLabel(ThemeMode mode) => switch (mode) {
-        ThemeMode.system => 'System',
-        ThemeMode.light => 'Light',
-        ThemeMode.dark => 'Dark',
-      };
+    ThemeMode.system => 'System',
+    ThemeMode.light => 'Light',
+    ThemeMode.dark => 'Dark',
+  };
 
   String _platformLabel() {
     if (kIsWeb) return 'Web';
@@ -223,6 +228,691 @@ class DeveloperDiagnosticsScreen extends ConsumerWidget {
       TargetPlatform.linux => 'Linux',
       TargetPlatform.fuchsia => 'Fuchsia',
     };
+  }
+}
+
+class _DevFirebaseTokenCard extends StatefulWidget {
+  const _DevFirebaseTokenCard();
+
+  @override
+  State<_DevFirebaseTokenCard> createState() => _DevFirebaseTokenCardState();
+}
+
+class _DevFirebaseTokenCardState extends State<_DevFirebaseTokenCard> {
+  static final Future<void> _googleSignInInitialization = GoogleSignIn.instance
+      .initialize();
+  static const _jsonEncoder = JsonEncoder.withIndent('  ');
+
+  bool _loading = false;
+  bool _backendLoading = false;
+  bool _meLoading = false;
+  bool _tablesLoading = false;
+  bool _tableLoading = false;
+  String? _firebaseIdToken;
+  String? _backendAccessToken;
+  String? _tokenPreview;
+  String? _status;
+  String? _backendStatus;
+  String? _meStatus;
+  String? _tableStatus;
+  DateTime? _lastValidationAt;
+  DateTime? _lastTablesRefreshedAt;
+  DateTime? _lastTableRefreshedAt;
+  Map<String, dynamic>? _backendLoginResponse;
+  Map<String, dynamic>? _authMeResponse;
+  List<Map<String, dynamic>> _tables = const [];
+  Map<String, dynamic>? _selectedTableData;
+
+  String get _backendBaseUrl {
+    const configured = String.fromEnvironment('DEV_BACKEND_BASE_URL');
+    if (configured.isNotEmpty) return configured;
+    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
+      return 'http://10.0.2.2:8000';
+    }
+    return 'http://127.0.0.1:8000';
+  }
+
+  Dio get _dio => Dio(
+    BaseOptions(
+      baseUrl: _backendBaseUrl,
+      connectTimeout: const Duration(seconds: 10),
+      receiveTimeout: const Duration(seconds: 15),
+      sendTimeout: const Duration(seconds: 15),
+      headers: const {'Content-Type': 'application/json'},
+    ),
+  );
+
+  Future<void> _getFirebaseIdToken() async {
+    setState(() {
+      _loading = true;
+      _firebaseIdToken = null;
+      _tokenPreview = null;
+      _status = 'Starting Google sign-in...';
+    });
+
+    try {
+      await _ensureGoogleSignInInitialized();
+
+      final googleUser = await GoogleSignIn.instance.authenticate();
+      final googleAuth = googleUser.authentication;
+      final credential = GoogleAuthProvider.credential(
+        idToken: googleAuth.idToken,
+      );
+
+      final userCredential = await FirebaseAuth.instance.signInWithCredential(
+        credential,
+      );
+      final user = userCredential.user;
+      final token = await user?.getIdToken(true);
+
+      if (user == null || token == null) {
+        throw StateError('FirebaseAuth did not return a user/token.');
+      }
+
+      debugPrint('Firebase UID: ${user.uid}');
+      debugPrint('Email: ${user.email ?? googleUser.email}');
+      debugPrint(
+        'Display name: ${user.displayName ?? googleUser.displayName ?? ''}',
+      );
+      debugPrint('Firebase ID Token length: ${token.length}');
+      debugPrint('Firebase ID Token preview: ${_shortToken(token)}');
+
+      if (!mounted) return;
+      setState(() {
+        _firebaseIdToken = token;
+        _tokenPreview = _shortToken(token);
+        _status = 'Firebase ID token captured.';
+        _lastValidationAt = DateTime.now();
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Dev Firebase ID token generation failed',
+        error,
+        stackTrace,
+      );
+      if (!mounted) return;
+      setState(() {
+        _status = 'Failed: $error';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _loading = false);
+      }
+    }
+  }
+
+  Future<void> _validateFirebaseTokenWithBackend() async {
+    setState(() {
+      _backendLoading = true;
+      _backendStatus = 'Validating Firebase token with backend...';
+    });
+
+    try {
+      final token = await _freshFirebaseIdToken();
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/auth/firebase',
+        data: {'token': token},
+      );
+      final data = response.data ?? <String, dynamic>{};
+      final accessToken = data['access_token'] as String?;
+
+      if (accessToken == null || accessToken.isEmpty) {
+        throw StateError('Backend did not return an access token.');
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _firebaseIdToken = token;
+        _tokenPreview = _shortToken(token);
+        _backendAccessToken = accessToken;
+        _backendLoginResponse = data;
+        _backendStatus = 'Backend login status: ${data['status'] ?? 'ok'}';
+        _lastValidationAt = DateTime.now();
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Dev backend Firebase validation failed',
+        error,
+        stackTrace,
+      );
+      if (!mounted) return;
+      setState(() {
+        _backendStatus = 'Backend login failed: ${_errorMessage(error)}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _backendLoading = false);
+      }
+    }
+  }
+
+  Future<void> _validateAuthMe() async {
+    setState(() {
+      _meLoading = true;
+      _meStatus = 'Validating /auth/me...';
+    });
+
+    try {
+      final accessToken = await _ensureBackendAccessToken();
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/auth/me',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _authMeResponse = response.data ?? <String, dynamic>{};
+        _meStatus = '/auth/me returned authenticated user.';
+        _lastValidationAt = DateTime.now();
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error('Dev /auth/me validation failed', error, stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _meStatus = '/auth/me failed: ${_errorMessage(error)}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _meLoading = false);
+      }
+    }
+  }
+
+  Future<void> _refreshTables() async {
+    setState(() {
+      _tablesLoading = true;
+      _tableStatus = 'Refreshing database table list...';
+    });
+
+    try {
+      final accessToken = await _ensureBackendAccessToken();
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/dev/diagnostics/db/tables',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+      final rawTables = response.data?['tables'];
+      final tables = rawTables is List
+          ? rawTables
+                .whereType<Map>()
+                .map((table) => Map<String, dynamic>.from(table))
+                .toList()
+          : <Map<String, dynamic>>[];
+
+      if (!mounted) return;
+      setState(() {
+        _tables = tables;
+        _tableStatus = 'Database table list refreshed.';
+        _lastTablesRefreshedAt = DateTime.now();
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error('Dev database table refresh failed', error, stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _tableStatus = 'Table refresh failed: ${_errorMessage(error)}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _tablesLoading = false);
+      }
+    }
+  }
+
+  Future<void> _refreshEventUsers() => _refreshTable('event_users');
+
+  Future<void> _refreshTable(String tableName) async {
+    setState(() {
+      _tableLoading = true;
+      _tableStatus = 'Refreshing $tableName...';
+    });
+
+    try {
+      final accessToken = await _ensureBackendAccessToken();
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/dev/diagnostics/db/$tableName',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+
+      if (!mounted) return;
+      setState(() {
+        _selectedTableData = response.data ?? <String, dynamic>{};
+        _tableStatus = '$tableName refreshed.';
+        _lastTableRefreshedAt = DateTime.now();
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error('Dev database table fetch failed', error, stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _selectedTableData = {
+          'table': tableName,
+          'available': false,
+          'row_count': 0,
+          'rows': const [],
+          'error': _errorMessage(error),
+        };
+        _tableStatus = '$tableName failed: ${_errorMessage(error)}';
+      });
+    } finally {
+      if (mounted) {
+        setState(() => _tableLoading = false);
+      }
+    }
+  }
+
+  Future<void> _ensureGoogleSignInInitialized() async {
+    await _googleSignInInitialization;
+  }
+
+  Future<String> _freshFirebaseIdToken() async {
+    var user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      await _getFirebaseIdToken();
+      user = FirebaseAuth.instance.currentUser;
+    }
+
+    final token = await user?.getIdToken(true);
+    if (user == null || token == null || token.isEmpty) {
+      throw StateError('Firebase user or ID token is unavailable.');
+    }
+    return token;
+  }
+
+  Future<String> _ensureBackendAccessToken() async {
+    final existing = _backendAccessToken;
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final token = await _freshFirebaseIdToken();
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/auth/firebase',
+      data: {'token': token},
+    );
+    final accessToken = response.data?['access_token'] as String?;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw StateError('Backend access token is unavailable.');
+    }
+
+    if (mounted) {
+      setState(() {
+        _firebaseIdToken = token;
+        _tokenPreview = _shortToken(token);
+        _backendAccessToken = accessToken;
+        _backendLoginResponse = response.data ?? <String, dynamic>{};
+        _backendStatus =
+            'Backend login status: ${response.data?['status'] ?? 'ok'}';
+      });
+    }
+    return accessToken;
+  }
+
+  Future<void> _copyFirebaseIdToken() async {
+    final token = _firebaseIdToken;
+    if (token == null) return;
+
+    await Clipboard.setData(ClipboardData(text: token));
+    if (!mounted) return;
+
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(const SnackBar(content: Text('Firebase ID token copied.')));
+  }
+
+  String _shortToken(String token) {
+    if (token.length <= 40) return token;
+    return '${token.substring(0, 20)}...${token.substring(token.length - 20)}';
+  }
+
+  String _errorMessage(Object error) {
+    if (error is DioException) {
+      final status = error.response?.statusCode;
+      final data = error.response?.data;
+      return status == null
+          ? error.message ?? error.type.name
+          : '$status $data';
+    }
+    return error.toString();
+  }
+
+  String _formatTimestamp(DateTime? timestamp) {
+    if (timestamp == null) return 'Never';
+    return timestamp.toLocal().toIso8601String();
+  }
+
+  Map<String, String> _firebaseUserRows(User? user) {
+    return {
+      'Firebase UID': user?.uid ?? 'Not signed in',
+      'Email': user?.email ?? 'N/A',
+      'Display name': user?.displayName ?? 'N/A',
+      'Firebase ID token': _firebaseIdToken == null
+          ? 'Not captured'
+          : 'Captured (${_firebaseIdToken!.length} chars)',
+      'Backend login': _backendAccessToken == null ? 'Not validated' : 'Valid',
+      'Backend access_token': _backendAccessToken == null
+          ? 'Not captured'
+          : 'Captured',
+      '/auth/me': _authMeResponse == null ? 'Not validated' : 'Valid',
+      'Last validation': _formatTimestamp(_lastValidationAt),
+    };
+  }
+
+  Widget _statusCard(Map<String, String> rows) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        children: [
+          for (final entry in rows.entries) ...[
+            _DiagRow(label: entry.key, value: entry.value),
+            if (entry.key != rows.keys.last)
+              DeveloperDiagnosticsScreen._divider,
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _jsonBlock(String title, Object? value) {
+    if (value == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(title, style: Theme.of(context).textTheme.labelLarge),
+          const SizedBox(height: 6),
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              _jsonEncoder.convert(value),
+              style: Theme.of(
+                context,
+              ).textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _tableCards() {
+    if (_tablesLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (_tables.isEmpty) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Text('No table metadata loaded.'),
+      );
+    }
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        children: [
+          for (final table in _tables)
+            Container(
+              margin: const EdgeInsets.only(bottom: 8),
+              decoration: BoxDecoration(
+                border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant,
+                ),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: ListTile(
+                title: Text(table['name']?.toString() ?? 'unknown'),
+                subtitle: Text(
+                  table['available'] == true
+                      ? '${table['row_count'] ?? 0} rows'
+                      : table['error']?.toString() ?? 'Unavailable',
+                ),
+                trailing: const Icon(Icons.chevron_right),
+                onTap: _tableLoading
+                    ? null
+                    : () => _refreshTable(table['name'].toString()),
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  Widget _selectedTableView() {
+    final data = _selectedTableData;
+    if (_tableLoading) {
+      return const Padding(
+        padding: EdgeInsets.only(top: 12),
+        child: Center(child: CircularProgressIndicator()),
+      );
+    }
+    if (data == null) return const SizedBox.shrink();
+
+    final tableName = data['table']?.toString() ?? 'table';
+    final rows = data['rows'] is List ? data['rows'] as List : const [];
+    final error = data['error'];
+
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Text(
+            '$tableName (${data['row_count'] ?? rows.length} rows)',
+            style: Theme.of(context).textTheme.titleSmall,
+          ),
+          Text('Last refreshed: ${_formatTimestamp(_lastTableRefreshedAt)}'),
+          if (error != null) ...[
+            const SizedBox(height: 8),
+            Text(
+              'Error: $error',
+              style: TextStyle(color: Theme.of(context).colorScheme.error),
+            ),
+          ] else if (rows.isEmpty) ...[
+            const SizedBox(height: 8),
+            const Text('No rows found.'),
+          ] else ...[
+            const SizedBox(height: 8),
+            for (var index = 0; index < rows.length; index++)
+              _rowCard(
+                index + 1,
+                Map<String, dynamic>.from(rows[index] as Map),
+              ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  Widget _rowCard(int index, Map<String, dynamic> row) {
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      decoration: BoxDecoration(
+        border: Border.all(color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Row $index', style: Theme.of(context).textTheme.labelLarge),
+            const SizedBox(height: 8),
+            for (final entry in row.entries)
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      child: Text(
+                        entry.key,
+                        style: const TextStyle(fontWeight: FontWeight.w600),
+                      ),
+                    ),
+                    Expanded(
+                      child: SelectableText(entry.value?.toString() ?? 'NULL'),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final textTheme = Theme.of(context).textTheme;
+    final firebaseUser = FirebaseAuth.instance.currentUser;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Auth Validation', style: textTheme.titleMedium),
+            const SizedBox(height: 8),
+            Text(
+              'Backend: $_backendBaseUrl',
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            const SizedBox(height: 12),
+            _statusCard(_firebaseUserRows(firebaseUser)),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _loading ? null : _getFirebaseIdToken,
+              icon: _loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.key_outlined),
+              label: const Text('Dev: Get Firebase ID Token'),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _backendLoading
+                      ? null
+                      : _validateFirebaseTokenWithBackend,
+                  icon: _backendLoading
+                      ? const SizedBox(
+                          width: 16,
+                          height: 16,
+                          child: CircularProgressIndicator(strokeWidth: 2),
+                        )
+                      : const Icon(Icons.verified_user_outlined),
+                  label: const Text('Validate Firebase Token with Backend'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _meLoading ? null : _validateAuthMe,
+                  icon: const Icon(Icons.person_search_outlined),
+                  label: const Text('Validate /auth/me'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _tableLoading ? null : _refreshEventUsers,
+                  icon: const Icon(Icons.manage_accounts_outlined),
+                  label: const Text('Refresh event_users'),
+                ),
+                OutlinedButton.icon(
+                  onPressed: _tablesLoading ? null : _refreshTables,
+                  icon: const Icon(Icons.table_chart_outlined),
+                  label: const Text('Refresh Database Tables'),
+                ),
+              ],
+            ),
+            if (_firebaseIdToken != null) ...[
+              const SizedBox(height: 8),
+              OutlinedButton.icon(
+                onPressed: _copyFirebaseIdToken,
+                icon: const Icon(Icons.copy_outlined),
+                label: const Text('Copy Firebase ID Token'),
+              ),
+            ],
+            if (_status != null ||
+                _backendStatus != null ||
+                _meStatus != null ||
+                _tableStatus != null) ...[
+              const SizedBox(height: 12),
+              if (_status != null)
+                Text(
+                  _status!,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              if (_backendStatus != null)
+                Text(
+                  _backendStatus!,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              if (_meStatus != null)
+                Text(
+                  _meStatus!,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+              if (_tableStatus != null)
+                Text(
+                  _tableStatus!,
+                  style: textTheme.bodySmall?.copyWith(
+                    color: colorScheme.onSurfaceVariant,
+                  ),
+                ),
+            ],
+            if (_tokenPreview != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Token length: ${_firebaseIdToken?.length ?? 0}',
+                style: textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+              const SizedBox(height: 4),
+              SelectableText(
+                _tokenPreview!,
+                style: textTheme.bodySmall?.copyWith(fontFamily: 'monospace'),
+              ),
+            ],
+            _jsonBlock('Backend login response', _backendLoginResponse),
+            _jsonBlock('/auth/me response', _authMeResponse),
+            const SizedBox(height: 20),
+            Text('Database Viewer', style: textTheme.titleMedium),
+            const SizedBox(height: 6),
+            Text(
+              'Tables refreshed: ${_formatTimestamp(_lastTablesRefreshedAt)}',
+              style: textTheme.bodySmall?.copyWith(
+                color: colorScheme.onSurfaceVariant,
+              ),
+            ),
+            _tableCards(),
+            _selectedTableView(),
+          ],
+        ),
+      ),
+    );
   }
 }
 
@@ -244,10 +934,10 @@ class _SectionLabel extends StatelessWidget {
       child: Text(
         title.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.primary,
-              fontWeight: FontWeight.w700,
-              letterSpacing: 1.0,
-            ),
+          color: Theme.of(context).colorScheme.primary,
+          fontWeight: FontWeight.w700,
+          letterSpacing: 1.0,
+        ),
       ),
     );
   }
@@ -256,11 +946,7 @@ class _SectionLabel extends StatelessWidget {
 // ── Diagnostic row ───────────────────────────────────────────────────────────
 
 class _DiagRow extends StatelessWidget {
-  const _DiagRow({
-    required this.label,
-    required this.value,
-    this.status,
-  });
+  const _DiagRow({required this.label, required this.value, this.status});
 
   final String label;
   final String value;
@@ -273,9 +959,7 @@ class _DiagRow extends StatelessWidget {
     Widget? statusIcon;
     if (status != null) {
       statusIcon = Icon(
-        status == _Status.ok
-            ? Icons.check_circle_outline
-            : Icons.error_outline,
+        status == _Status.ok ? Icons.check_circle_outline : Icons.error_outline,
         color: status == _Status.ok ? Colors.green : colorScheme.error,
         size: 16,
       );
@@ -290,14 +974,11 @@ class _DiagRow extends StatelessWidget {
         children: [
           Text(
             value,
-            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  fontWeight: FontWeight.w500,
-                ),
+            style: Theme.of(
+              context,
+            ).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.w500),
           ),
-          if (statusIcon != null) ...[
-            const SizedBox(width: 6),
-            statusIcon,
-          ],
+          if (statusIcon != null) ...[const SizedBox(width: 6), statusIcon],
         ],
       ),
     );

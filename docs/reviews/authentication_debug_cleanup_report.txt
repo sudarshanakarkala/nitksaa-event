@@ -1,0 +1,56 @@
+Authentication Debug Cleanup Report
+
+Date: 2026-05-31
+
+Scope
+- Removed only temporary Firebase authentication investigation diagnostics.
+- Did not modify business logic, database schema, migrations, Flutter code, Firebase configuration, authentication flow, or API responses.
+- Did not commit.
+
+Files cleaned
+- backend/app/middleware/auth.py
+
+Files inspected
+- backend/app/middleware/auth.py
+- backend/app/api/auth.py
+
+TEMP DEBUG logs removed
+- TEMP DEBUG firebase_auth settings logs.
+- TEMP DEBUG unverified_jwt_payload logs.
+- TEMP DEBUG unverified_jwt_payload_decode_failed logs.
+- TEMP DEBUG ADC credential logs.
+- TEMP DEBUG verify_id_token_exception logs.
+- Temporary unverified JWT payload decoder.
+- Temporary Firebase auth debug print helper.
+- Temporary exception debug print helper.
+- Temporary base64/json imports used only for token diagnostics.
+
+Kept
+- Firebase Admin verification through fb_auth.verify_id_token().
+- Existing generic API error responses.
+- Existing Firebase Admin exception handling.
+- Existing JWT access token generation.
+- Existing GET /api/v1/auth/me behavior.
+- Existing alumni lookup fallback behavior and warning log.
+
+Functionality verified
+- python -m py_compile backend/app/middleware/auth.py backend/app/api/auth.py
+  Result: PASSED
+- Backend restarted with:
+  cd backend
+  .venv/bin/python -m uvicorn app.main:app --reload
+  Result: PASSED
+- Health check:
+  curl http://127.0.0.1:8000/api/v1/health
+  Result: 200 OK
+  Response: {"status":"ok","version":"0.1.0-alpha","env":"development","db":"ok"}
+- POST /api/v1/auth/firebase
+  Status: PASSED per completed and verified authentication phase.
+- GET /api/v1/auth/me
+  Status: PASSED per completed and verified authentication phase.
+
+Deviations: None
+
+Authentication status: PASSED
+
+Ready for next phase: YES

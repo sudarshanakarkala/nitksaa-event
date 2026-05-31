@@ -1,0 +1,47 @@
+Firebase Token Clipboard Debug Fix Report
+
+Date: 2026-05-31
+
+Scope
+- Fixed Developer Diagnostics Firebase ID token capture only.
+- Kept the diagnostics token UI behind kDebugMode.
+- Did not modify backend, database schema, migrations, Firebase project configuration, or service-account/ADC setup.
+- Did not commit.
+
+Problem
+- Firebase Google Sign-In succeeds on Android/iOS.
+- Backend Firebase Admin debug showed aud/iss match project-d22bed42-f302-4e23-8dc.
+- Firebase Admin failed with InvalidIdTokenError: Could not verify token signature.
+- Likely cause was copying a truncated Firebase ID token from Flutter/Logcat.
+
+Files changed
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+- docs/reviews/firebase_token_clipboard_debug_fix_report.txt
+
+Implementation
+- Added full Firebase ID token storage in _DevFirebaseTokenCard widget state after getIdToken(true).
+- Added Copy Firebase ID Token button using Clipboard.setData.
+- Added token length display in the debug UI.
+- Updated visible token preview to show only first 20 and last 20 characters.
+- Removed reliance on debugPrint for token capture; debugPrint now logs only UID/email/display name plus token length and shortened preview.
+- The full token is not displayed visibly in the UI.
+
+Debug-only guard
+- The Firebase Token Test section remains rendered only inside:
+  if (kDebugMode) ...
+
+Verification
+- dart format apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+  Result: passed
+- flutter analyze
+  Result: passed, no issues found
+- flutter test
+  Result: passed, all tests passed
+
+Recommended test flow
+- Open Developer Diagnostics in a debug Android/iOS build.
+- Tap Dev: Get Firebase ID Token.
+- Confirm token length is visible.
+- Confirm only first 20 and last 20 token characters are visible.
+- Tap Copy Firebase ID Token.
+- Paste the copied full token into the backend curl request.
