@@ -1,0 +1,74 @@
+Google Sign-In URL Scheme Fix Report
+
+Root cause
+- Google Sign-In on iOS/macOS requires the app bundle to declare a URL scheme matching REVERSED_CLIENT_ID from GoogleService-Info.plist.
+- The runtime error reported the missing scheme:
+  com.googleusercontent.apps.246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q
+- apps/event_app/ios/Runner/Info.plist and apps/event_app/macos/Runner/Info.plist did not contain CFBundleURLTypes entries for this scheme.
+
+Files inspected
+- apps/event_app/ios/Runner/GoogleService-Info.plist
+- apps/event_app/ios/Runner/Info.plist
+- apps/event_app/macos/Runner/GoogleService-Info.plist
+- apps/event_app/macos/Runner/Info.plist
+- apps/event_app/lib/firebase_options.dart
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+
+Files modified
+- apps/event_app/ios/Runner/Info.plist
+- apps/event_app/macos/Runner/Info.plist
+
+REVERSED_CLIENT_ID used
+- com.googleusercontent.apps.246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q
+
+Source values
+- iOS GoogleService-Info.plist:
+  - CLIENT_ID: 246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q.apps.googleusercontent.com
+  - REVERSED_CLIENT_ID: com.googleusercontent.apps.246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q
+  - BUNDLE_ID: org.nitksaa.event
+- macOS GoogleService-Info.plist:
+  - CLIENT_ID: 246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q.apps.googleusercontent.com
+  - REVERSED_CLIENT_ID: com.googleusercontent.apps.246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q
+  - BUNDLE_ID: org.nitksaa.event
+- firebase_options.dart uses the same iosClientId and org.nitksaa.event bundle ID for both iOS and macOS.
+
+iOS fix
+- Added CFBundleURLTypes to apps/event_app/ios/Runner/Info.plist.
+- Added CFBundleURLSchemes with:
+  com.googleusercontent.apps.246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q
+
+macOS fix
+- Added CFBundleURLTypes to apps/event_app/macos/Runner/Info.plist.
+- Added CFBundleURLSchemes with:
+  com.googleusercontent.apps.246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q
+- macOS has its own apps/event_app/macos/Runner/GoogleService-Info.plist, and it contains the same CLIENT_ID, REVERSED_CLIENT_ID, and BUNDLE_ID values as iOS.
+
+Verification result
+- plutil -lint apps/event_app/ios/Runner/Info.plist apps/event_app/macos/Runner/Info.plist
+  Result: both OK.
+- flutter analyze
+  Result: No issues found.
+- flutter test
+  Result: All tests passed.
+- flutter run -d macos
+  Result: macOS app built and launched.
+  Evidence:
+  - build succeeded and produced build/macos/Build/Products/Debug/event_app.app.
+  - runtime logs showed Firebase initialized: [DEFAULT].
+  - runtime logs showed Hive initialized.
+  - runtime logs showed unauthenticated user navigated to login.
+- Built macOS app Info.plist verification:
+  plutil -p build/macos/Build/Products/Debug/event_app.app/Contents/Info.plist showed CFBundleURLSchemes containing:
+  com.googleusercontent.apps.246773894709-70j994qk62rpn8ook12v1kfhm6f0cq8q
+
+Remaining blockers
+- The macOS app was launched successfully, but I could not complete interactive Google account selection from this non-interactive Codex session.
+- Press Dev: Get Firebase ID Token manually in the running app to verify:
+  - Google account chooser opens.
+  - FirebaseAuth signInWithCredential succeeds.
+  - Firebase UID, Email, Display name, and Firebase ID Token are printed.
+  - Auth Status changes to Logged In.
+- Web still has the known separate blocker: google_sign_in authenticate() is not supported on web; that was intentionally not changed in this task.
+
+Backend/database/auth API changes
+- None.

@@ -1,0 +1,69 @@
+NITKSAA Event Backend
+Migration 001 Events Report
+Date: 2026-05-30
+
+File created
+------------
+backend/migrations/events_db/001_events.sql
+
+Schema source
+-------------
+Product Owner document:
+docs/notes/may2026/nitksaa-event-app-integration-note_pw.md
+
+Section:
+Migration 001 — events
+
+Columns included
+----------------
+- event_id
+- slug
+- title
+- tagline
+- description
+- status
+- start_datetime
+- end_datetime
+- timezone
+- location_text
+- location_maps_url
+- is_virtual
+- virtual_url
+- thumbnail_url
+- banner_url
+- capacity
+- registration_opens_at
+- registration_closes_at
+- created_by_firebase_uid
+- created_at
+- updated_at
+- published_at
+- cancelled_at
+- cancelled_reason
+
+Indexes included
+----------------
+- idx_events_status ON events(status)
+- idx_events_start_datetime ON events(start_datetime)
+
+Deviations
+----------
+None
+
+Commands to run manually
+------------------------
+dropdb events_db
+createdb events_db
+psql -d events_db -f backend/migrations/events_db/001_events.sql
+psql -d events_db -c "\\d events"
+
+Risks
+-----
+- This Product Owner schema intentionally differs from the current Alpha backend schema. Current backend/app code still expects Alpha column names such as starts_at and ends_at, so this migration should not be applied against the active Alpha backend unless the API code is migrated later.
+- The existing Alpha migration remains at backend/migrations/events_db/001_create_events_alpha_schema.sql. It was not moved or modified because this task explicitly requested no old migration changes unless required.
+- Applying both 001_create_events_alpha_schema.sql and 001_events.sql to the same empty database would conflict because both create an events table with different shapes.
+- Later migrations must use Product Owner column names exactly, especially event_id and start_datetime.
+
+Next migration
+--------------
+002_sessions.sql

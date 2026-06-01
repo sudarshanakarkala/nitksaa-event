@@ -1,0 +1,87 @@
+NITKSAA Event Backend
+Migration 006 Audit and Notifications Report
+Date: 2026-05-30
+
+File created
+------------
+backend/migrations/events_db/006_audit_notifications.sql
+
+Schema source
+-------------
+Product Owner document:
+docs/notes/may2026/nitksaa-event-app-integration-note_pw.md
+
+Task schema:
+Migration 006 — audit and notifications
+
+Tables created
+--------------
+- event_audit_log
+- notifications
+- notification_preferences
+
+Columns included
+----------------
+event_audit_log:
+- log_id
+- actor_uid
+- event_type
+- entity_type
+- entity_id
+- created_at
+
+notifications:
+- notification_id
+- firebase_uid
+- event_type
+- entity_type
+- entity_id
+- is_read
+- created_at
+
+notification_preferences:
+- firebase_uid
+- event_type
+- push_enabled
+
+Primary keys included
+---------------------
+- event_audit_log.log_id
+- notifications.notification_id
+- notification_preferences PRIMARY KEY (firebase_uid, event_type)
+
+Default values included
+-----------------------
+- event_audit_log.created_at DEFAULT now()
+- notifications.is_read DEFAULT false
+- notifications.created_at DEFAULT now()
+- notification_preferences.push_enabled DEFAULT true
+
+Deviations
+----------
+None
+
+Commands to run manually
+------------------------
+psql -d events_db -f backend/migrations/events_db/006_audit_notifications.sql
+
+psql -d events_db -c "\dt"
+
+psql -d events_db -c "\d event_audit_log"
+
+psql -d events_db -c "\d notifications"
+
+psql -d events_db -c "\d notification_preferences"
+
+Risks
+-----
+- No indexes are included because the Product Owner schema does not define any.
+- No foreign keys are included because the Product Owner schema does not define any.
+- event_audit_log is intended to be append-only and immutable by application and permission policy, but this migration does not implement triggers, functions, procedures, or permission grants.
+- notifications are intended for the in-app notification bell, but this migration does not implement notification delivery or application logic.
+- notification_preferences are opt-out records where no row means push notifications are enabled, but this migration does not implement emit() or route handler behavior.
+- Current backend/app Alpha code has not been modified to write to these tables.
+
+Next migration
+--------------
+No further migration is specified by the Product Owner document.

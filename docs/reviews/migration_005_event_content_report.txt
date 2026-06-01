@@ -1,0 +1,75 @@
+NITKSAA Event Backend
+Migration 005 Event Content Report
+Date: 2026-05-30
+
+File created
+------------
+backend/migrations/events_db/005_event_content.sql
+
+Schema source
+-------------
+Product Owner document:
+docs/notes/may2026/nitksaa-event-app-integration-note_pw.md
+
+Task schema:
+Migration 005 — event_content
+
+Tables created
+--------------
+- event_content
+
+Columns included
+----------------
+event_content:
+- content_id
+- event_id
+- content_type
+- label
+- url
+- sort_order
+- added_by
+- added_at
+
+Indexes included
+----------------
+- idx_event_content_event_id ON event_content(event_id)
+
+Foreign keys included
+---------------------
+- event_content.event_id REFERENCES events(event_id) ON DELETE CASCADE
+- event_content.added_by REFERENCES event_users(firebase_uid)
+
+Check constraints included
+--------------------------
+- content_type IN ('recording', 'gallery')
+
+Default values included
+-----------------------
+- sort_order DEFAULT 0
+- added_at DEFAULT now()
+
+Deviations
+----------
+None
+
+Commands to run manually
+------------------------
+psql -d events_db -f backend/migrations/events_db/005_event_content.sql
+
+psql -d events_db -c "\\dt"
+
+psql -d events_db -c "\\d event_content"
+
+psql -d events_db -c "\\di"
+
+Risks
+-----
+- This migration depends on Migration 001 and Migration 003 having already created events and event_users.
+- event_content.added_by requires a matching event_users row before content rows can be inserted.
+- content_type is intentionally limited to recording and gallery.
+- This migration stores external URLs only; it does not add file upload, media hosting, metadata, created_at, updated_at, deleted_at, or storage columns.
+- Current backend/app Alpha code has not been modified to use event_content.
+
+Next migration
+--------------
+006_audit_notifications.sql

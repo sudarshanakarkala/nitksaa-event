@@ -1,0 +1,104 @@
+NITKSAA Event Backend
+Migration 004 Registrations and Check-ins Report
+Date: 2026-05-30
+
+File created
+------------
+backend/migrations/events_db/004_registrations_and_check_ins.sql
+
+Schema source
+-------------
+Product Owner document:
+docs/notes/may2026/nitksaa-event-app-integration-note_pw.md
+
+Task schema:
+Migration 004 — registrations and check_ins
+
+Tables created
+--------------
+- registrations
+- check_ins
+
+Columns included
+----------------
+registrations:
+- registration_id
+- event_id
+- firebase_uid
+- ref_id
+- badge_name
+- email
+- phone
+- attendee_type
+- status
+- qrtoken
+- confirmation_email_sent
+- notes
+- registered_at
+- cancelled_at
+
+check_ins:
+- checkin_id
+- registration_id
+- event_id
+- scanned_by
+- scanned_at
+- session_id
+- result
+
+Indexes included
+----------------
+registrations:
+- idx_registrations_event_id ON registrations(event_id)
+- idx_registrations_firebase_uid ON registrations(firebase_uid)
+- idx_registrations_qrtoken ON registrations(qrtoken)
+- idx_registrations_status ON registrations(event_id, status)
+
+check_ins:
+- idx_checkins_registration_id ON check_ins(registration_id)
+- idx_checkins_event_id ON check_ins(event_id)
+
+Foreign keys included
+---------------------
+registrations:
+- registrations.event_id REFERENCES events(event_id) ON DELETE CASCADE
+- registrations.firebase_uid REFERENCES event_users(firebase_uid)
+
+check_ins:
+- check_ins.registration_id REFERENCES registrations(registration_id)
+- check_ins.event_id REFERENCES events(event_id)
+- check_ins.scanned_by REFERENCES event_users(firebase_uid)
+- check_ins.session_id REFERENCES sessions(session_id)
+
+Unique constraints included
+---------------------------
+- registrations.qrtoken UNIQUE
+- registrations UNIQUE (event_id, firebase_uid)
+
+Deviations
+----------
+None
+
+Commands to run manually
+------------------------
+psql -d events_db -f backend/migrations/events_db/004_registrations_and_check_ins.sql
+
+psql -d events_db -c "\\dt"
+
+psql -d events_db -c "\\d registrations"
+
+psql -d events_db -c "\\d check_ins"
+
+psql -d events_db -c "\\di"
+
+Risks
+-----
+- This migration depends on Migration 001, 002, and 003 having already created events, sessions, and event_users.
+- registrations.firebase_uid requires a matching event_users row before a registration can be inserted.
+- registrations enforces one registration per event and firebase_uid through UNIQUE (event_id, firebase_uid).
+- The Product Owner schema uses qrtoken and checkin_id. Current backend/app Alpha code still uses qr_token and check_in_id naming, so API code must not be pointed at this schema until later migration work updates it intentionally.
+- No check_in_attempts table is created in this migration because it is not part of the provided Product Owner schema.
+
+Next migration
+--------------
+005_event_content.sql

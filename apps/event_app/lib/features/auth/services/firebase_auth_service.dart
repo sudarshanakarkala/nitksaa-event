@@ -1,54 +1,57 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:google_sign_in/google_sign_in.dart';
+import 'package:google_sign_in/google_sign_in.dart';
+
 import '../../../core/logger/app_logger.dart';
+import 'google_sign_in_initializer.dart';
 
 abstract class FirebaseAuthService {
   static Future<User?> signInWithEmail({
     required String email,
     required String password,
   }) async {
-    // TODO: Implement email/password sign-in
     AppLogger.info('signInWithEmail called for: $email');
-    return null;
+    final credential = await FirebaseAuth.instance.signInWithEmailAndPassword(
+      email: email,
+      password: password,
+    );
+    return credential.user;
   }
 
   static Future<User?> signInWithGoogle() async {
-    try {
-      AppLogger.info('signInWithGoogle called');
-      if (kIsWeb) {
-        final GoogleAuthProvider googleProvider = GoogleAuthProvider();
-        final UserCredential userCredential =
-            await FirebaseAuth.instance.signInWithPopup(googleProvider);
-        return userCredential.user;
-      } else {
-        final GoogleSignIn googleSignIn = GoogleSignIn();
-        final GoogleSignInAccount? googleUser = await googleSignIn.signIn();
-        if (googleUser == null) {
-          AppLogger.info('Google Sign-In cancelled by user');
-          return null;
-        }
+    AppLogger.info('signInWithGoogle called');
+    await GoogleSignInInitializer.ensureInitialized();
 
-        final GoogleSignInAuthentication googleAuth =
-            await googleUser.authentication;
+    final googleUser = await GoogleSignIn.instance.authenticate();
+    final googleAuth = googleUser.authentication;
+    final credential = GoogleAuthProvider.credential(
+      idToken: googleAuth.idToken,
+    );
+    final userCredential = await FirebaseAuth.instance.signInWithCredential(
+      credential,
+    );
+    return userCredential.user;
+  }
 
-        final AuthCredential credential = GoogleAuthProvider.credential(
-          accessToken: googleAuth.accessToken,
-          idToken: googleAuth.idToken,
-        );
-
-        final UserCredential userCredential =
-            await FirebaseAuth.instance.signInWithCredential(credential);
-        return userCredential.user;
-      }
-    } catch (e, st) {
-      AppLogger.error('Google Sign-In failed', e, st);
-      rethrow;
+  static Future<String> freshIdToken() async {
+    final user = FirebaseAuth.instance.currentUser;
+    final token = await user?.getIdToken(true);
+    if (user == null || token == null || token.isEmpty) {
+      throw StateError('Firebase user or ID token is unavailable.');
     }
+    return token;
   }
 
   static Future<void> signOut() async {
     AppLogger.info('signOut called');
+    try {
+      await GoogleSignInInitializer.ensureInitialized();
+      await GoogleSignIn.instance.signOut();
+    } catch (error, stackTrace) {
+      AppLogger.warning('Google sign-out skipped or failed: $error');
+      AppLogger.debug(stackTrace.toString());
+    }
     await FirebaseAuth.instance.signOut();
   }
 }

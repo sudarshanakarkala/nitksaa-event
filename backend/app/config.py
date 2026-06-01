@@ -1,18 +1,65 @@
-from pydantic_settings import BaseSettings
 from functools import lru_cache
+from pathlib import Path
+from typing import Optional
+
+from pydantic import Field
+from pydantic_settings import BaseSettings
+
+
+_ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
 
 class Settings(BaseSettings):
-    app_env: str = "development"
-    app_name: str = "NITKSAA Event API"
-    app_version: str = "0.1.0-alpha"
+    app_env: str = Field("development", alias="APP_ENV")
+    app_name: str = Field("NITKSAA Event API", alias="APP_NAME")
+    app_version: str = Field("0.1.0-alpha", alias="APP_VERSION")
+    allowed_origins: str = Field("http://localhost:5173", alias="ALLOWED_ORIGINS")
 
-    # events_db connection
-    events_db_url: str = "postgresql://postgres:postgres@localhost:5432/events_db"
+    # Database
+    db_host: str = Field("127.0.0.1", alias="DB_HOST")
+    db_port: int = Field(5432, alias="DB_PORT")
+    db_user: str = Field("postgres", alias="DB_USER")
+    db_password: str = Field("postgres", alias="DB_PASSWORD")
+    db_sslmode: str = Field("prefer", alias="DB_SSLMODE")
+    events_db_name: str = Field("events_db", alias="EVENTS_DB_NAME")
+    events_db_url: Optional[str] = Field(None, alias="EVENTS_DB_URL")
+    alumni_db_name: str = Field("alumni_db", alias="ALUMNI_DB_NAME")
+    alumni_db_url: Optional[str] = Field(None, alias="ALUMNI_DB_URL")
+
+    # Auth
+    secret_key: str = Field("dev-event-secret-change-me", alias="SECRET_KEY")
+    access_token_expire_minutes: int = Field(480, alias="ACCESS_TOKEN_EXPIRE_MINUTES")
+    firebase_project_id: str = Field(
+        "project-d22bed42-f302-4e23-8dc",
+        alias="FIREBASE_PROJECT_ID",
+    )
+
+    @property
+    def events_db_dsn(self) -> str:
+        if self.events_db_url:
+            return self.events_db_url
+        return self._postgres_url(self.events_db_name)
+
+    @property
+    def alumni_db_dsn(self) -> str:
+        if self.alumni_db_url:
+            return self.alumni_db_url
+        return self._postgres_url(self.alumni_db_name)
+
+    @property
+    def origins_list(self) -> list[str]:
+        return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    def _postgres_url(self, database: str) -> str:
+        url = f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{database}"
+        if self.db_sslmode:
+            return f"{url}?sslmode={self.db_sslmode}"
+        return url
 
     class Config:
-        env_file = ".env"
+        env_file = _ENV_FILE
         env_file_encoding = "utf-8"
+        populate_by_name = True
 
 
 @lru_cache

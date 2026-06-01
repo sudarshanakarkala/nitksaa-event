@@ -5,6 +5,7 @@ import 'package:hive_flutter/hive_flutter.dart';
 
 import 'core/app_state.dart';
 import 'core/logger/app_logger.dart';
+import 'features/auth/services/auth_controller.dart';
 import 'firebase_options.dart';
 import 'routes/app_router.dart';
 import 'theme/app_theme.dart';
@@ -27,6 +28,9 @@ Future<void> main() async {
 
   await Hive.initFlutter();
   AppLogger.info('Hive initialized');
+
+  await AuthController.instance.initialize();
+  AppLogger.info('Auth controller initialized');
 
   runApp(const ProviderScope(child: App()));
 }

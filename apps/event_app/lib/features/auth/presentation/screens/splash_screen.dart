@@ -1,8 +1,8 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
+import '../../services/auth_controller.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -15,17 +15,21 @@ class _SplashScreenState extends State<SplashScreen> {
   @override
   void initState() {
     super.initState();
-    Future.delayed(const Duration(seconds: 2), _navigate);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _navigate());
   }
 
   void _navigate() {
     if (!mounted) return;
-    final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
-      AppLogger.info('User authenticated. Navigating to home.');
+    final auth = AuthController.instance;
+    if (auth.isChecking || auth.isAuthenticating) {
+      Future<void>.delayed(const Duration(milliseconds: 150), _navigate);
+      return;
+    }
+    if (auth.isAuthenticated) {
+      AppLogger.info('Backend session authenticated. Navigating to home.');
       context.go(AppRoutes.home);
     } else {
-      AppLogger.info('No authenticated user. Navigating to login.');
+      AppLogger.info('No valid backend session. Navigating to login.');
       context.go(AppRoutes.login);
     }
   }

@@ -1,0 +1,41 @@
+Firebase Google Sign-In Init Fix Report
+
+Root cause
+- The Developer Diagnostics token test called GoogleSignIn.instance.initialize() through _ensureGoogleSignInInitialized().
+- The previous guard was a local static bool set only after initialize() completed.
+- That does not protect concurrent presses/rebuild paths from awaiting the same initialization work, and it can become out of sync with the Google Sign-In singleton/plugin state.
+- google_sign_in 7.x requires initialize() to be called exactly once before authenticate(); repeated init() calls throw:
+  Bad state: init() has already been called. Calling init() more than once results in undefined behavior.
+
+File modified
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+
+Code path fixed
+- Replaced the post-await boolean guard with a cached static Future:
+  _googleSignInInitialization = GoogleSignIn.instance.initialize()
+- _ensureGoogleSignInInitialized() now only awaits that one cached future.
+- The Dev: Get Firebase ID Token button continues to call:
+  1. _ensureGoogleSignInInitialized()
+  2. GoogleSignIn.instance.authenticate()
+  3. FirebaseAuth.instance.signInWithCredential(...)
+  4. user.getIdToken(true)
+  5. debugPrint Firebase UID, Email, Display name, and Firebase ID Token
+
+Verification performed
+- dart format lib/features/developer/presentation/developer_diagnostics_screen.dart
+- flutter analyze
+  Result: No issues found.
+- flutter test
+  Result: All tests passed.
+
+Remaining steps
+- Run the Flutter app in debug mode.
+- Open Login -> Developer Diagnostics.
+- Press Dev: Get Firebase ID Token.
+- Confirm Google account chooser appears.
+- Confirm FirebaseAuth signInWithCredential succeeds.
+- Confirm Firebase UID, Email, Display name, and Firebase ID Token are printed.
+- Confirm Auth Status changes from Logged Out to Logged In.
+
+Backend/database/auth API changes
+- None.

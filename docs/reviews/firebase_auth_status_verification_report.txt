@@ -1,0 +1,250 @@
+Firebase Auth Status Verification Report
+
+Final conclusion
+- Firebase Google Authentication is NOT Yet Complete.
+- Reason: the code/config path exists, but there is no runtime evidence of a successful Google sign-in, Firebase user session, real Firebase ID token generation, successful backend token exchange, successful /auth/me response with returned JWT, or event_users row insertion.
+
+Files inspected
+- apps/event_app/pubspec.yaml
+- apps/event_app/pubspec.lock
+- apps/event_app/lib/main.dart
+- apps/event_app/lib/firebase_options.dart
+- apps/event_app/lib/features/auth/services/firebase_auth_service.dart
+- apps/event_app/lib/features/auth/presentation/screens/login_screen.dart
+- apps/event_app/lib/features/auth/presentation/screens/splash_screen.dart
+- apps/event_app/lib/features/auth/presentation/screens/auth_wrapper_screen.dart
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+- apps/event_app/lib/features/home/presentation/home_placeholder_screen.dart
+- apps/event_app/android/app/build.gradle.kts
+- apps/event_app/android/app/google-services.json
+- apps/event_app/ios/Runner/GoogleService-Info.plist
+- apps/event_app/ios/Runner.xcodeproj/project.pbxproj
+- backend/app/main.py
+- backend/app/api/auth.py
+- backend/app/middleware/auth.py
+- backend/app/services/alumni_service.py
+
+Command evidence collected
+- flutter analyze: No issues found.
+- flutter test: All tests passed.
+- Backend route import check returned ['/api/v1/auth/firebase', '/api/v1/auth/me'].
+- curl http://127.0.0.1:8000/api/v1/health returned HTTP 200 and {"status":"ok","version":"0.1.0-alpha","env":"development","db":"ok"}.
+- curl POST /api/v1/auth/firebase with {"token":"invalid"} returned HTTP 401 and {"detail":"invalid_firebase_token"}.
+- curl GET /api/v1/auth/me without Authorization returned HTTP 403 and {"detail":"Not authenticated"}.
+- Local JWT helper make/decode script succeeded for a synthetic verification-only payload. This proves helper mechanics only; it does not prove /auth/firebase generated a JWT from a real Firebase token.
+- event_users verification query returned 0 rows.
+
+Flutter evidence
+
+1. Firebase initialization
+- Status: PARTIAL.
+- Evidence: firebase_core is declared in apps/event_app/pubspec.yaml:37. main() calls Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform) in apps/event_app/lib/main.dart:18-21. Successful initialization sets AppState.firebaseInitialized=true and logs Firebase.app().name in apps/event_app/lib/main.dart:22-23.
+- Runtime proof missing: no captured app runtime log proving Firebase.initializeApp completed on an actual target during Google login testing.
+
+2. Firebase project configuration
+- Status: VERIFIED for checked-in config files; NOT VERIFIED against Firebase Console.
+- Evidence: apps/event_app/lib/firebase_options.dart:47,56,64,74,84 use project-d22bed42-f302-4e23-8dc. Android google-services.json uses project_id project-d22bed42-f302-4e23-8dc at apps/event_app/android/app/google-services.json:3-5. iOS GoogleService-Info.plist uses PROJECT_ID project-d22bed42-f302-4e23-8dc at apps/event_app/ios/Runner/GoogleService-Info.plist:17-18.
+- Console proof missing: no Firebase Console screenshot/API evidence was collected to prove Google provider enabled or app registrations active server-side.
+
+3. Android app identifier
+- Status: VERIFIED in repo config.
+- Evidence: Android namespace and applicationId are org.nitksaa.event in apps/event_app/android/app/build.gradle.kts:12 and apps/event_app/android/app/build.gradle.kts:27. google-services.json package_name is org.nitksaa.event in apps/event_app/android/app/google-services.json:11-13 and again at apps/event_app/android/app/google-services.json:47-49.
+
+4. iOS bundle identifier
+- Status: VERIFIED in repo config.
+- Evidence: firebase_options.dart iosBundleId is org.nitksaa.event at apps/event_app/lib/firebase_options.dart:66-67. GoogleService-Info.plist BUNDLE_ID is org.nitksaa.event at apps/event_app/ios/Runner/GoogleService-Info.plist:15-18. Xcode project sets PRODUCT_BUNDLE_IDENTIFIER=org.nitksaa.event at apps/event_app/ios/Runner.xcodeproj/project.pbxproj:376,556,579.
+
+5. Google Sign-In dependency/config
+- Status: PARTIAL.
+- Evidence: google_sign_in is declared in apps/event_app/pubspec.yaml:45 and locked in apps/event_app/pubspec.lock:371. The debug diagnostics screen imports google_sign_in at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:7.
+- Runtime proof missing: no actual Google account chooser/sign-in success was captured.
+
+6. Normal login screen Google button
+- Status: NOT IMPLEMENTED.
+- Evidence: _handleGoogleSignIn only logs "Google Sign-In tapped" and has TODO at apps/event_app/lib/features/auth/presentation/screens/login_screen.dart:31-33. The visible "Continue with Google" button calls this TODO handler at apps/event_app/lib/features/auth/presentation/screens/login_screen.dart:128-134.
+
+7. Temporary developer Google Sign-In path
+- Status: PARTIAL.
+- Evidence: Developer Diagnostics is linked only under kDebugMode from login at apps/event_app/lib/features/auth/presentation/screens/login_screen.dart:145-151. The debug-only token card is included under kDebugMode at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:191-195. The button label "Dev: Get Firebase ID Token" exists at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:320-329.
+- Runtime proof missing: the button has not been observed executing successfully in a running app.
+
+8. Google Sign-In actually invoked
+- Status: NOT VERIFIED.
+- Evidence of implementation: GoogleSignIn.instance.initialize() is called at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:298-301. GoogleSignIn.instance.authenticate() is called at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:251-254.
+- Runtime proof missing: no successful GoogleSignInAccount object or log was captured.
+
+9. FirebaseAuth credential exchange actually invoked
+- Status: NOT VERIFIED.
+- Evidence of implementation: GoogleAuthProvider.credential(idToken: ...) is built at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:253-257. FirebaseAuth.instance.signInWithCredential() is called at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:259-261.
+- Runtime proof missing: no successful UserCredential/user object was captured.
+
+10. Firebase user session
+- Status: NOT VERIFIED.
+- Evidence of implementation: userCredential.user is read at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:262. Splash/auth wrapper check FirebaseAuth.instance.currentUser at apps/event_app/lib/features/auth/presentation/screens/splash_screen.dart:21-30 and apps/event_app/lib/features/auth/presentation/screens/auth_wrapper_screen.dart:22-25. Developer Diagnostics displays Auth Status from currentUser at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:108-116.
+- Runtime proof missing: no FirebaseAuth.currentUser object from an actual login was captured.
+
+11. Firebase ID token generation
+- Status: NOT VERIFIED.
+- Evidence of implementation: user?.getIdToken(true) is called at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:263. Null token/user throws at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:265-267.
+- Runtime proof missing: no real token value was generated or captured.
+
+12. Firebase ID token printed to logs
+- Status: NOT VERIFIED.
+- Evidence of implementation: debugPrint prints Firebase UID, Email, Display name, and Firebase ID Token at apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart:269-274.
+- Runtime proof missing: no debug console output containing a real Firebase UID/token was captured.
+
+13. Logout/signout logic
+- Status: PARTIAL.
+- Evidence: FirebaseAuthService.signOut calls FirebaseAuth.instance.signOut() at apps/event_app/lib/features/auth/services/firebase_auth_service.dart:14-16. HomePlaceholderScreen._signOut calls FirebaseAuth.instance.signOut() and navigates to login at apps/event_app/lib/features/home/presentation/home_placeholder_screen.dart:15-18.
+- Runtime proof missing: no successful runtime signout was captured.
+
+14. Auth state listeners
+- Status: NOT IMPLEMENTED.
+- Evidence: searched for authStateChanges/idTokenChanges/userChanges; none found. Current implementation uses synchronous FirebaseAuth.instance.currentUser checks in splash/auth wrapper/developer diagnostics.
+
+Backend evidence
+
+1. Router registration
+- Status: VERIFIED.
+- Evidence: backend/app/main.py imports auth at line 5 and includes auth.router at backend/app/main.py:28. Route import check returned ['/api/v1/auth/firebase', '/api/v1/auth/me'].
+
+2. POST /api/v1/auth/firebase implemented
+- Status: PARTIAL.
+- Evidence: APIRouter prefix is /api/v1/auth at backend/app/api/auth.py:11. POST /firebase is defined at backend/app/api/auth.py:38-39. Request body requires token at backend/app/api/auth.py:14-15.
+- Runtime proof: invalid token path returns HTTP 401 {"detail":"invalid_firebase_token"}.
+- Runtime proof missing: no successful status=ok response with a real Firebase ID token.
+
+3. Firebase token verification implemented
+- Status: PARTIAL.
+- Evidence: backend/app/api/auth.py:40 calls verify_firebase_token(body.token). backend/app/middleware/auth.py:38-53 initializes Firebase Admin app and calls fb_auth.verify_id_token().
+- Runtime proof: invalid token is rejected with invalid_firebase_token.
+- Runtime proof missing: no valid Firebase token was verified successfully.
+
+4. Alumni lookup implemented
+- Status: PARTIAL.
+- Evidence: backend/app/api/auth.py:49 calls find_alumni_by_email(email). backend/app/services/alumni_service.py:7-20 queries alumni_id, fullname, graduationyear from alumni by lower(email).
+- Runtime proof missing: no real login email was tested against alumni_db.
+
+5. event_users upsert implemented
+- Status: PARTIAL.
+- Evidence: backend/app/api/auth.py:60-67 calls _upsert_event_user. SQL INSERT/ON CONFLICT updates email, fullname, last_login and returns user fields at backend/app/api/auth.py:99-131.
+- Runtime proof missing: event_users query returned 0 rows.
+
+6. Backend JWT generation implemented
+- Status: PARTIAL.
+- Evidence: backend/app/api/auth.py:71-80 builds token payload and calls make_access_token. backend/app/middleware/auth.py:56-67 encodes JWT with exp and HS256.
+- Runtime proof collected: synthetic helper test produced a decodable token of length 316.
+- Runtime proof missing: no JWT was generated by /api/v1/auth/firebase from a real Firebase token.
+
+7. JWT validation implemented
+- Status: PARTIAL.
+- Evidence: backend/app/middleware/auth.py:70-89 decodes JWT and validates firebase_uid/user_type. backend/app/middleware/auth.py:92-116 defines get_current_user. backend/app/api/auth.py:94-96 uses get_current_user for /me.
+- Runtime proof: /api/v1/auth/me without Authorization returns HTTP 403 Not authenticated.
+- Runtime proof missing: no /api/v1/auth/me success with a valid backend access_token returned from /api/v1/auth/firebase.
+
+Runtime verification requirements
+
+1. Successful Google login
+- Status: NOT VERIFIED.
+- Required evidence: Firebase user object from actual app run.
+- Evidence available: none.
+
+2. Successful Firebase token generation
+- Status: NOT VERIFIED.
+- Required evidence: real Firebase ID token generated by currentUser.getIdToken(true).
+- Evidence available: none.
+
+3. Successful backend exchange
+- Status: NOT VERIFIED.
+- Required evidence: /api/v1/auth/firebase response with status=ok and access_token.
+- Evidence available: only invalid-token rejection.
+
+4. Successful /auth/me
+- Status: NOT VERIFIED.
+- Required evidence: /api/v1/auth/me response with firebase_uid/email/fullname/user_type/ref_id/graduation_year using returned access_token.
+- Evidence available: only missing-credentials rejection.
+
+5. Successful event_users insert
+- Status: NOT VERIFIED.
+- Required evidence: database row after login.
+- Evidence available: event_users SELECT returned 0 rows.
+
+Status matrix
+
+| Area | Status | Evidence summary |
+| --- | --- | --- |
+| Firebase Initialization | PARTIAL | Code/config present; no runtime initialization log captured. |
+| Google Sign-In | PARTIAL | Dependency and debug invocation present; normal login button still TODO; no runtime sign-in proof. |
+| FirebaseAuth Login | NOT VERIFIED | signInWithCredential exists only in debug path; no UserCredential captured. |
+| Firebase User Session | NOT VERIFIED | currentUser checks exist; no logged-in Firebase user object captured. |
+| Firebase ID Token | NOT VERIFIED | getIdToken(true) exists; no real token captured. |
+| Backend Token Exchange | NOT VERIFIED | Invalid-token rejection verified; no status=ok exchange with real token. |
+| Internal JWT | PARTIAL | Helper make/decode tested synthetically; not verified through real /auth/firebase flow. |
+| /auth/me | NOT VERIFIED | Route exists and rejects missing auth; no successful valid-JWT response. |
+| event_users Upsert | NOT VERIFIED | SQL exists; DB query returned 0 rows. |
+
+Direct answers
+
+1. Is Firebase initialized correctly?
+- PARTIAL. Code and checked-in config support initialization, but runtime success was not captured.
+
+2. Is Google Sign-In configured correctly?
+- PARTIAL. Dependency and platform config exist, but Firebase Console/Google provider state and runtime sign-in success were not verified.
+
+3. Is FirebaseAuth login actually executed?
+- NOT VERIFIED. signInWithCredential exists in code; no runtime execution proof.
+
+4. Is a Firebase user session created?
+- NOT VERIFIED. No FirebaseAuth.currentUser evidence after login.
+
+5. Is a Firebase ID token successfully generated?
+- NOT VERIFIED. No real token was captured.
+
+6. Is the Firebase ID token printed to logs?
+- NOT VERIFIED. Code prints it, but no runtime log evidence was captured.
+
+7. Is backend /api/v1/auth/firebase successfully tested?
+- NOT VERIFIED. Invalid-token failure path was tested; success path was not.
+
+8. Is backend JWT generation successfully tested?
+- PARTIAL. JWT helper was tested synthetically; JWT generation through successful backend token exchange was not verified.
+
+9. Is /api/v1/auth/me successfully tested?
+- NOT VERIFIED. Only unauthenticated rejection was tested.
+
+10. Is event_users populated after login?
+- NOT VERIFIED. event_users currently has 0 rows.
+
+11. Is authentication truly complete?
+- No. Firebase Google Authentication is NOT Yet Complete.
+
+12. What exact steps remain?
+- Run the Flutter app in debug mode on a usable target.
+- Navigate to Login -> Developer Diagnostics.
+- Press "Dev: Get Firebase ID Token".
+- Capture evidence of Firebase UID, email, display name, and real Firebase ID token in debug logs.
+- POST the real Firebase ID token to http://127.0.0.1:8000/api/v1/auth/firebase.
+- Capture status=ok response and access_token.
+- Call http://127.0.0.1:8000/api/v1/auth/me with Authorization: Bearer <ACCESS_TOKEN>.
+- Capture firebase_uid/email/fullname/user_type/ref_id/graduation_year response.
+- Re-run event_users SELECT and capture populated row with updated last_login.
+
+Blockers
+- No interactive Google sign-in was completed during this verification pass.
+- No real Firebase ID token was available.
+- No successful backend exchange evidence exists.
+- No event_users row exists yet.
+- Firebase Console Google provider/app registration state was not directly inspected from this environment.
+
+Exact next action
+- Run: cd apps/event_app && flutter run -d chrome
+- In the app: Login -> Developer Diagnostics -> Dev: Get Firebase ID Token.
+- Copy the printed Firebase ID Token from the debug console and immediately run:
+  curl -X POST http://127.0.0.1:8000/api/v1/auth/firebase -H "Content-Type: application/json" -d '{"token":"<REAL_FIREBASE_ID_TOKEN>"}'
+
+Estimated effort to finish auth flow
+- 30-60 minutes if Firebase Console Google provider and OAuth/app registration are already correct.
+- 1-3 hours if Google provider, SHA fingerprints, iOS URL schemes, or OAuth client configuration need correction.
+
+Deviations
+- None

@@ -1,0 +1,45 @@
+Auth Login Rollback Notes
+
+Date: 2026-06-01
+
+Rollback scope
+- Rollback is limited to Flutter auth integration files and the three review docs from this implementation.
+- No backend auth code, backend APIs, database schema, or migrations were changed.
+
+Files to remove if rolling back
+- apps/event_app/lib/features/auth/domain/auth_session.dart
+- apps/event_app/lib/features/auth/services/auth_controller.dart
+- apps/event_app/lib/features/auth/services/auth_session_store.dart
+- apps/event_app/lib/features/auth/services/backend_auth_service.dart
+- apps/event_app/lib/features/auth/services/google_sign_in_initializer.dart
+- docs/reviews/auth_login_implementation_report.txt
+- docs/reviews/auth_login_verification_report.txt
+- docs/reviews/auth_login_rollback_notes.txt
+
+Files to revert if rolling back
+- apps/event_app/lib/main.dart
+- apps/event_app/lib/routes/app_router.dart
+- apps/event_app/lib/routes/route_guards.dart
+- apps/event_app/lib/features/auth/services/firebase_auth_service.dart
+- apps/event_app/lib/features/auth/presentation/screens/login_screen.dart
+- apps/event_app/lib/features/auth/presentation/screens/splash_screen.dart
+- apps/event_app/lib/features/auth/presentation/screens/auth_wrapper_screen.dart
+- apps/event_app/lib/features/home/presentation/home_placeholder_screen.dart
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+
+Expected rollback result
+- LoginScreen returns to placeholder handlers.
+- /home route is no longer protected by backend session validity.
+- Splash/AuthWrapper return to FirebaseAuth.currentUser checks.
+- Home sign-out returns to Firebase-only sign-out.
+- Developer Diagnostics returns to its local GoogleSignIn initialization.
+
+Data cleanup
+- The app stores backend auth data in local Hive box auth_session.
+- To clear local auth state after rollback, sign out before deploying rollback or clear app data on the test device/simulator.
+- No server-side data cleanup is required by this implementation.
+
+Verification after rollback
+- Run flutter analyze from apps/event_app.
+- Run flutter test from apps/event_app.
+- Run python -m py_compile backend/app/**/*.py from repo root if backend files are part of the rollback branch verification.

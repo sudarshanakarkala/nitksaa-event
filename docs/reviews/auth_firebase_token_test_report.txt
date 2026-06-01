@@ -1,0 +1,96 @@
+Authentication Firebase Token Test Report
+
+Flutter files inspected
+- apps/event_app/pubspec.yaml
+- apps/event_app/pubspec.lock
+- apps/event_app/lib/main.dart
+- apps/event_app/lib/firebase_options.dart
+- apps/event_app/lib/features/auth/services/firebase_auth_service.dart
+- apps/event_app/lib/features/auth/presentation/screens/login_screen.dart
+- apps/event_app/lib/features/auth/presentation/screens/splash_screen.dart
+- apps/event_app/lib/features/auth/presentation/screens/auth_wrapper_screen.dart
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+- apps/event_app/lib/routes/app_router.dart
+- apps/event_app/lib/routes/app_routes.dart
+- apps/event_app/android/app/build.gradle.kts
+- apps/event_app/ios/Runner.xcodeproj/project.pbxproj
+
+Flutter files modified
+- apps/event_app/pubspec.yaml
+- apps/event_app/pubspec.lock
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+- apps/event_app/macos/Flutter/GeneratedPluginRegistrant.swift
+
+Dependencies added
+- google_sign_in: ^7.2.0
+- firebase_core was already present.
+- firebase_auth was already present.
+
+Firebase configuration verified
+- Firebase is initialized in apps/event_app/lib/main.dart with DefaultFirebaseOptions.currentPlatform.
+- Firebase project ID is project-d22bed42-f302-4e23-8dc.
+- Android applicationId is org.nitksaa.event.
+- iOS PRODUCT_BUNDLE_IDENTIFIER is org.nitksaa.event.
+
+How token was generated
+- A temporary debug-only card was added to the existing Developer Diagnostics screen.
+- The card is guarded by kDebugMode.
+- Button label: Dev: Get Firebase ID Token.
+- Flow:
+  1. GoogleSignIn.instance.initialize()
+  2. GoogleSignIn.instance.authenticate()
+  3. FirebaseAuth.instance.signInWithCredential(GoogleAuthProvider.credential(idToken: ...))
+  4. FirebaseAuth.instance.currentUser/getIdToken(true)
+  5. Print Firebase UID, Email, Display name, and Firebase ID Token to the debug console.
+- The full Firebase ID token is not stored in source code or persistent storage.
+- The UI only keeps a shortened in-memory preview for the current widget state.
+
+Backend curl command used
+- Not run with a real Firebase ID token in this verification pass because generating the token requires interactive Google sign-in on a device/browser.
+- Command to run after copying the debug-console token:
+  curl -X POST http://localhost:8000/api/v1/auth/firebase -H "Content-Type: application/json" -d '{"token":"<REAL_FIREBASE_ID_TOKEN>"}'
+
+/auth/firebase result
+- Pending real-token manual verification.
+- Current known invalid-token behavior from the backend is correct: {"detail":"invalid_firebase_token"}.
+
+/auth/me result
+- Pending real-token manual verification.
+- Command to run after /auth/firebase returns access_token:
+  curl http://localhost:8000/api/v1/auth/me -H "Authorization: Bearer <ACCESS_TOKEN>"
+
+event_users DB verification result
+- Command run:
+  psql -d events_db -c "SELECT firebase_uid, email, fullname, user_type, ref_id, graduation_year, is_suspended, last_login FROM event_users ORDER BY last_login DESC LIMIT 5;"
+- Result at verification time:
+  0 rows.
+- This is expected until a real Firebase token is exchanged successfully with the backend.
+
+Flutter verification commands
+- flutter pub add google_sign_in
+- dart format lib/features/developer/presentation/developer_diagnostics_screen.dart
+- flutter analyze
+- flutter test
+- flutter devices
+
+Flutter verification results
+- flutter analyze: No issues found.
+- flutter test: All tests passed.
+- flutter devices: macOS and Chrome are available; one wireless iOS device was detected but unavailable until unlocked/developer-mode/network requirements are satisfied.
+
+Issues found
+- google_sign_in was missing and was added.
+- No production auth flow was modified.
+- Real Firebase token exchange was not completed because no interactive sign-in token was available in this non-interactive verification pass.
+
+Pending items
+- Run the Flutter app in debug mode on Chrome, macOS, Android, or iOS.
+- Open Developer Diagnostics.
+- Press Dev: Get Firebase ID Token.
+- Copy the Firebase ID Token from the debug console.
+- Run the /api/v1/auth/firebase curl command.
+- Run the /api/v1/auth/me curl command with the returned access_token.
+- Re-run the event_users SELECT query and confirm firebase_uid, email, fullname/user fallback, user_type, optional ref_id/graduation_year, and last_login.
+
+Deviations
+- None

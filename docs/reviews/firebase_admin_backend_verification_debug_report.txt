@@ -1,0 +1,98 @@
+Firebase Admin Backend Verification Debug Report
+
+Date: 2026-05-31
+
+Scope
+- Debugged backend Firebase Admin verification for POST /api/v1/auth/firebase.
+- Did not modify database schema, migrations, Flutter, Firebase project configuration, or ADC/service-account strategy.
+- Did not commit.
+
+Files changed
+- backend/app/middleware/auth.py
+- docs/reviews/firebase_admin_backend_verification_debug_report.txt
+
+Temporary debug logs added
+- Added TEMP DEBUG logging in verify_firebase_token().
+- Added TEMP DEBUG unverified JWT payload decode for diagnostics only.
+- Added TEMP DEBUG exact exception logging for Firebase Admin verification failures.
+- These logs intentionally do not print the full token and should be removed after the real-token failure is captured.
+
+Firebase project used by backend
+- settings.firebase_project_id: project-d22bed42-f302-4e23-8dc
+- backend/.env FIREBASE_PROJECT_ID: project-d22bed42-f302-4e23-8dc
+
+ADC credential status
+- google.auth.default(): ok
+- ADC project returned: project-d22bed42-f302-4e23-8dc
+- ADC quota project: project-d22bed42-f302-4e23-8dc
+- ADC credentials class: Credentials
+
+Backend runtime/server status
+- Requested command was attempted:
+  cd backend
+  python -m uvicorn app.main:app --reload
+- The sandboxed run failed with: [Errno 1] Operation not permitted
+- The escalated run reached uvicorn but failed with: [Errno 48] Address already in use
+- Existing local uvicorn server is listening on 127.0.0.1:8000.
+- GET http://127.0.0.1:8000/docs returned HTTP 200 OK.
+
+Endpoint smoke test
+- Command run with a deliberately fake token:
+  curl -X POST http://127.0.0.1:8000/api/v1/auth/firebase \
+    -H "Content-Type: application/json" \
+    -d '{"token":"header.payload.signature"}'
+- Client response: HTTP 401 {"detail":"invalid_firebase_token"}
+- This confirms the client response remains generic.
+
+Instrumentation self-test
+- Directly invoked verify_firebase_token("header.payload.signature") with a fake token to confirm TEMP DEBUG output executes.
+- Observed TEMP DEBUG settings log with firebase_project_id='project-d22bed42-f302-4e23-8dc'.
+- Observed TEMP DEBUG ADC log with credentials_loaded=True, credential_class='ApplicationDefault', google_credential_class='Credentials'.
+- Observed generic client-facing HTTPException detail: invalid_firebase_token.
+- Fake-token exception was InvalidIdTokenError with message:
+  Invalid base64-encoded string: number of data characters (9) cannot be 1 more than a multiple of 4
+- This fake-token exception is not the Android/iOS production failure root cause; it only verifies the logging path.
+
+Exact backend error class
+- Pending real-token capture.
+- A fresh Firebase ID token was not available in this workspace/session, so the exact Firebase Admin exception for the Android/iOS-generated token could not be captured here.
+- The next real-token request will print:
+  TEMP DEBUG firebase_auth verify_id_token_exception exception_class='...' exception_message='...'
+
+Exact backend error message
+- Pending real-token capture.
+- The next real-token request will print the exact Firebase Admin exception message in the backend console.
+
+Token aud
+- Pending real-token capture.
+- The next real-token request will print aud from the unverified JWT payload before Firebase Admin verification.
+
+Token iss
+- Pending real-token capture.
+- The next real-token request will print iss from the unverified JWT payload before Firebase Admin verification.
+
+Root cause
+- Not conclusively determined without a fresh Firebase ID token hitting the instrumented backend.
+- Confirmed not an obvious backend settings/ADC project mismatch from local ADC diagnostics:
+  backend Firebase project, ADC project, and ADC quota project all resolve to project-d22bed42-f302-4e23-8dc.
+- Most likely remaining causes to confirm from TEMP DEBUG output:
+  1. Token aud does not equal project-d22bed42-f302-4e23-8dc.
+  2. Token iss does not equal https://securetoken.google.com/project-d22bed42-f302-4e23-8dc.
+  3. Firebase Admin reports a certificate/network/token-format verification failure.
+  4. The running server process has not reloaded the edited backend file before the fresh-token test.
+
+Recommended fix
+- Run the fresh-token curl against the currently running backend after confirming the server has reloaded backend/app/middleware/auth.py.
+- Use the TEMP DEBUG console output to decide the fix:
+  - If aud differs from project-d22bed42-f302-4e23-8dc, the app is generating a Firebase token for a different Firebase project; fix client/Firebase app configuration outside backend code.
+  - If iss differs from https://securetoken.google.com/project-d22bed42-f302-4e23-8dc, the token is not from the expected Firebase project; fix client/Firebase app configuration outside backend code.
+  - If DefaultCredentialsError appears, fix ADC on the backend host with gcloud auth application-default login or the existing ADC mechanism; do not switch to service-account JSON unless the project policy changes.
+  - If CertificateFetchError appears, investigate backend network access to Google's public cert endpoints.
+  - If the token is expired or revoked, request a fresh ID token from Firebase Auth immediately before POST /api/v1/auth/firebase.
+- Remove all TEMP DEBUG logging from backend/app/middleware/auth.py after the real root cause is captured.
+
+Fresh-token test command to run
+- Replace <FRESH_FIREBASE_ID_TOKEN> with a real current Firebase ID token:
+  curl -X POST http://127.0.0.1:8000/api/v1/auth/firebase \
+    -H "Content-Type: application/json" \
+    -d '{"token":"<FRESH_FIREBASE_ID_TOKEN>"}'

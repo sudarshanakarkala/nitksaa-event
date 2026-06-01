@@ -1,0 +1,114 @@
+Authentication Phase: Firebase Login Report
+
+Files reviewed
+- backend/app/main.py
+- backend/app/config.py
+- backend/app/database.py
+- backend/app/api/health.py
+- backend/app/api/events.py
+- backend/app/api/admin_events.py
+- backend/app/middleware/dev_auth.py
+- backend/src/middleware/firebase.py
+- backend/src/services/db.py
+- backend/src/services/alumni.py
+- backend/src/config/settings.py
+- backend/migrations/events_db/003_event_users_and_event_members.sql
+
+Files modified
+- backend/app/main.py
+- backend/app/config.py
+- backend/app/database.py
+- backend/requirements.txt
+
+Files created
+- backend/app/api/auth.py
+- backend/app/middleware/auth.py
+- backend/app/services/alumni_service.py
+- docs/reviews/auth_phase_firebase_login_report.txt
+
+Endpoint created
+- POST /api/v1/auth/firebase
+- GET /api/v1/auth/me
+
+Request format
+- POST /api/v1/auth/firebase
+- JSON body: {"token":"<firebase-id-token>"}
+
+Response format
+- JSON body:
+  {
+    "status": "ok",
+    "access_token": "<internal-jwt>",
+    "token_type": "bearer",
+    "firebase_uid": "<firebase_uid>",
+    "user_type": "alumni or other",
+    "fullname": "<fullname>",
+    "ref_id": "<alumni_id or null>",
+    "graduation_year": 2005
+  }
+
+Protected route format
+- GET /api/v1/auth/me
+- Header: Authorization: Bearer <ACCESS_TOKEN>
+- JSON body:
+  {
+    "firebase_uid": "<firebase_uid>",
+    "email": "<email>",
+    "fullname": "<fullname>",
+    "user_type": "<user_type>",
+    "ref_id": "<alumni_id or null>",
+    "graduation_year": 2005
+  }
+
+event_users upsert behavior
+- Inserts firebase_uid, email, fullname, user_type, ref_id, graduation_year, and last_login for first login.
+- Uses firebase_uid as the conflict key.
+- On existing rows, updates only email, fullname, and last_login.
+- Does not overwrite existing user_type, ref_id, graduation_year, is_suspended, or created_at.
+- If Firebase display name is missing, email is used as the fullname fallback.
+- If the resulting event_users row has is_suspended=true, login returns HTTP 403.
+
+JWT claims included
+- firebase_uid
+- sub
+- email
+- fullname
+- user_type
+- ref_id
+- graduation_year
+- exp
+- JWT algorithm: HS256
+- Expiry: ACCESS_TOKEN_EXPIRE_MINUTES, default 480 minutes / 8 hours
+
+Firebase project used
+- Project name: NITKSAA Alumni Database
+- Project ID: project-d22bed42-f302-4e23-8dc
+- Project number: 246773894709
+
+Android package confirmed
+- org.nitksaa.event
+
+iOS bundle confirmed
+- org.nitksaa.event
+
+Manual test commands
+- curl http://localhost:8000/api/v1/health
+- curl -X POST http://localhost:8000/api/v1/auth/firebase -H "Content-Type: application/json" -d '{"token":"<FIREBASE_ID_TOKEN>"}'
+- curl http://localhost:8000/api/v1/auth/me -H "Authorization: Bearer <ACCESS_TOKEN>"
+
+PostgreSQL verification commands
+- psql -d events_db -c "\d event_users"
+- psql -d events_db -c "SELECT firebase_uid, email, fullname, user_type, ref_id, graduation_year, is_suspended, last_login FROM event_users ORDER BY last_login DESC LIMIT 5;"
+
+Risks
+- Firebase verification requires Application Default Credentials or equivalent Firebase Admin credentials in the runtime environment.
+- Alumni lookup requires ALUMNI_DB_URL or DB_HOST/DB_PORT/DB_USER/DB_PASSWORD/ALUMNI_DB_NAME to point at alumni_db.
+- Existing event/admin APIs still use the dev auth dependency; only the auth module and protected auth test route use internal JWT auth in this phase.
+
+Pending items
+- Install new backend dependencies from backend/requirements.txt.
+- Run a real Firebase token exchange from the Flutter app after Firebase client configuration files are in place.
+- Verify Google provider, Android package, and iOS bundle in Firebase Console.
+
+Deviations
+- None
