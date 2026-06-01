@@ -1,7 +1,7 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../routes/app_routes.dart';
+import '../../services/auth_controller.dart';
 
 /// Synchronous auth guard — checks FirebaseAuth.currentUser and redirects.
 /// Used as a router-level guard for screens that require auth state resolution.
@@ -21,14 +21,12 @@ class _AuthWrapperScreenState extends State<AuthWrapperScreen> {
 
   void _redirect() {
     if (!mounted) return;
-    final user = FirebaseAuth.instance.currentUser;
-    context.go(user != null ? AppRoutes.home : AppRoutes.login);
+    final auth = AuthController.instance;
+    context.go(auth.isAuthenticated ? AppRoutes.home : AppRoutes.login);
   }
 
   @override
   Widget build(BuildContext context) {
-    return const Scaffold(
-      body: Center(child: CircularProgressIndicator()),
-    );
+    return const Scaffold(body: Center(child: CircularProgressIndicator()));
   }
 }

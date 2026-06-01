@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
+import '../../services/auth_controller.dart';
 
 class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
@@ -14,7 +15,12 @@ class LoginScreen extends StatefulWidget {
 class _LoginScreenState extends State<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _authController = AuthController.instance;
   bool _obscurePassword = true;
+  bool _emailLoading = false;
+  bool _googleLoading = false;
+  String? _statusMessage;
+  String? _errorMessage;
 
   @override
   void dispose() {
@@ -23,14 +29,68 @@ class _LoginScreenState extends State<LoginScreen> {
     super.dispose();
   }
 
-  void _handleEmailLogin() {
-    AppLogger.info('Login attempt initiated');
-    // TODO: Implement email/password sign-in via FirebaseAuthService
+  Future<void> _handleEmailLogin() async {
+    final email = _emailController.text.trim();
+    final password = _passwordController.text;
+    if (email.isEmpty || password.isEmpty) {
+      setState(() => _errorMessage = 'Enter both email and password.');
+      return;
+    }
+
+    AppLogger.info('Email login attempt initiated');
+    await _runLogin(
+      loadingSetter: (loading) => _emailLoading = loading,
+      login: () =>
+          _authController.signInWithEmail(email: email, password: password),
+    );
   }
 
-  void _handleGoogleSignIn() {
+  Future<void> _handleGoogleSignIn() async {
     AppLogger.info('Google Sign-In tapped');
-    // TODO: Implement Google Sign-In via FirebaseAuthService
+    await _runLogin(
+      loadingSetter: (loading) => _googleLoading = loading,
+      login: _authController.signInWithGoogle,
+    );
+  }
+
+  Future<void> _runLogin({
+    required void Function(bool loading) loadingSetter,
+    required Future<void> Function() login,
+  }) async {
+    if (_emailLoading || _googleLoading) return;
+
+    setState(() {
+      loadingSetter(true);
+      _errorMessage = null;
+      _statusMessage = 'Signing in with Firebase...';
+    });
+
+    try {
+      await login();
+      if (!mounted) return;
+      setState(() {
+        _statusMessage = 'Backend session validated. Opening home...';
+      });
+      context.go(AppRoutes.home);
+    } catch (error) {
+      if (!mounted) return;
+      setState(() {
+        _errorMessage = _authController.errorMessage ?? _friendlyError(error);
+        _statusMessage = null;
+      });
+    } finally {
+      if (mounted) {
+        setState(() => loadingSetter(false));
+      }
+    }
+  }
+
+  String _friendlyError(Object error) {
+    final message = error.toString();
+    if (message.startsWith('Exception: ')) {
+      return message.substring('Exception: '.length);
+    }
+    return message;
   }
 
   @override
@@ -95,18 +155,30 @@ class _LoginScreenState extends State<LoginScreen> {
                               ? Icons.visibility_outlined
                               : Icons.visibility_off_outlined,
                         ),
-                        onPressed: () =>
-                            setState(() => _obscurePassword = !_obscurePassword),
+                        onPressed: () => setState(
+                          () => _obscurePassword = !_obscurePassword,
+                        ),
                       ),
                     ),
                   ),
                   const SizedBox(height: 24),
+                  if (_statusMessage != null || _errorMessage != null) ...[
+                    _LoginStatusBanner(
+                      message: _errorMessage ?? _statusMessage!,
+                      isError: _errorMessage != null,
+                    ),
+                    const SizedBox(height: 16),
+                  ],
                   FilledButton(
-                    onPressed: _handleEmailLogin,
+                    onPressed: (_emailLoading || _googleLoading)
+                        ? null
+                        : _handleEmailLogin,
                     style: FilledButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    child: const Text('Sign In'),
+                    child: _emailLoading
+                        ? const _ButtonProgressLabel(label: 'Signing In')
+                        : const Text('Sign In'),
                   ),
                   const SizedBox(height: 16),
                   Row(
@@ -126,12 +198,22 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                   const SizedBox(height: 16),
                   OutlinedButton.icon(
-                    onPressed: _handleGoogleSignIn,
+                    onPressed: (_emailLoading || _googleLoading)
+                        ? null
+                        : _handleGoogleSignIn,
                     style: OutlinedButton.styleFrom(
                       padding: const EdgeInsets.symmetric(vertical: 14),
                     ),
-                    icon: const Icon(Icons.g_mobiledata, size: 22),
-                    label: const Text('Continue with Google'),
+                    icon: _googleLoading
+                        ? const SizedBox(
+                            width: 18,
+                            height: 18,
+                            child: CircularProgressIndicator(strokeWidth: 2),
+                          )
+                        : const Icon(Icons.g_mobiledata, size: 22),
+                    label: Text(
+                      _googleLoading ? 'Validating...' : 'Continue with Google',
+                    ),
                   ),
                   const SizedBox(height: 40),
                   Center(
@@ -157,6 +239,79 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         ),
       ),
+    );
+  }
+}
+
+class _LoginStatusBanner extends StatelessWidget {
+  const _LoginStatusBanner({required this.message, required this.isError});
+
+  final String message;
+  final bool isError;
+
+  @override
+  Widget build(BuildContext context) {
+    final colorScheme = Theme.of(context).colorScheme;
+    final background = isError
+        ? colorScheme.errorContainer
+        : colorScheme.secondaryContainer;
+    final foreground = isError
+        ? colorScheme.onErrorContainer
+        : colorScheme.onSecondaryContainer;
+
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: background,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Icon(
+              isError ? Icons.error_outline : Icons.verified_user_outlined,
+              color: foreground,
+              size: 20,
+            ),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: foreground,
+                  fontWeight: FontWeight.w600,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _ButtonProgressLabel extends StatelessWidget {
+  const _ButtonProgressLabel({required this.label});
+
+  final String label;
+
+  @override
+  Widget build(BuildContext context) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        SizedBox(
+          width: 18,
+          height: 18,
+          child: CircularProgressIndicator(
+            strokeWidth: 2,
+            color: Theme.of(context).colorScheme.onPrimary,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Text(label),
+      ],
     );
   }
 }

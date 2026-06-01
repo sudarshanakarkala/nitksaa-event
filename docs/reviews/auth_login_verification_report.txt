@@ -1,0 +1,168 @@
+Auth Login Verification Report
+
+Date: 2026-06-01
+
+Verification commands run
+
+1. dart format
+Command:
+dart format lib/features/auth lib/routes lib/main.dart lib/features/home/presentation/home_placeholder_screen.dart lib/features/developer/presentation/developer_diagnostics_screen.dart
+Working directory:
+apps/event_app
+Result:
+Passed. Formatted changed Dart files.
+
+2. flutter analyze
+Command:
+flutter analyze
+Working directory:
+apps/event_app
+Result:
+Passed. No issues found.
+
+3. flutter test
+Command:
+flutter test
+Working directory:
+apps/event_app
+Result:
+Passed. All tests passed.
+
+4. backend Python compile check
+Command:
+python -m py_compile backend/app/**/*.py
+Working directory:
+repo root
+Result:
+Passed. No Python syntax errors reported.
+
+Static verification
+- Login UI no longer contains TODO handlers for email/password or Google login.
+- /home route guard checks AuthController.isAuthenticated, which requires a validated backend session.
+- Splash and AuthWrapper no longer route to home based on FirebaseAuth.currentUser alone.
+- Logout path clears stored backend session and signs out of Firebase and Google.
+- Developer Diagnostics remains gated by kDebugMode in LoginScreen.
+- backend/app/api/auth.py was not modified.
+- backend/migrations/events_db/*.sql were not modified.
+
+Runtime verification update — 2026-06-01
+
+Environment
+- Backend: uvicorn app.main:app --host 0.0.0.0 --port 8000
+- Device: Android emulator sdk gphone64 arm64, emulator-5554
+- Flutter app: debug build
+
+Backend startup
+- First attempt with --reload failed due sandbox file watcher permission.
+- Backend started successfully without --reload after escalation.
+- GET /api/v1/health returned {"status":"ok","version":"0.1.0-alpha","env":"development","db":"ok"}.
+
+Google Login UI
+- Verified from actual Login UI.
+- Flutter logs:
+  Google Sign-In tapped
+  signInWithGoogle called
+  Backend-authenticated login completed.
+- Backend logs:
+  POST /api/v1/auth/firebase HTTP/1.1 200 OK
+  GET /api/v1/auth/me HTTP/1.1 200 OK
+- Result: Passed.
+
+Backend token exchange and /auth/me
+- POST /api/v1/auth/firebase succeeded with HTTP 200.
+- GET /api/v1/auth/me succeeded with HTTP 200.
+- Navigation reached Home only after backend-authenticated login completed.
+- Result: Passed.
+
+Backend JWT storage
+- App sandbox contained Hive session files after successful login:
+  ./app_flutter/auth_session.hive
+  ./app_flutter/auth_session.lock
+- Result: Passed.
+
+Session persistence
+- Initial runtime check found a real issue: after force-stop/relaunch, the app returned to Login even though auth_session.hive existed.
+- Root cause:
+  AuthController._handleFirebaseAuthChanged cleared the stored backend session when FirebaseAuth emitted a null user event during startup, before/around backend JWT restoration.
+- Minimal safe fix:
+  Updated apps/event_app/lib/features/auth/services/auth_controller.dart so Firebase-null startup events do not clear a backend session. Explicit logout remains responsible for clearing the backend JWT/session.
+- Re-test after fix:
+  Force-stop and explicit relaunch triggered GET /api/v1/auth/me HTTP 200 and app opened Home.
+- Result: Passed after fix.
+
+Logout
+- Tapping Sign Out logged:
+  User signing out
+  signOut called
+- App returned to Login.
+- Explicit force-stop and relaunch after logout stayed on Login and produced no backend /auth/me call.
+- Result: Passed.
+
+Email/password login
+- Verified from actual Login UI with a temporary Firebase Email/Password test user.
+- Flutter logs:
+  Email login attempt initiated
+  signInWithEmail called for: [redacted test email]
+  Backend-authenticated login completed.
+- Backend logs:
+  POST /api/v1/auth/firebase HTTP/1.1 200 OK
+  GET /api/v1/auth/me HTTP/1.1 200 OK
+- App navigated to Home after backend validation.
+- Prior negative-path check with an incorrect/autofilled password displayed "The password is incorrect."
+- Result: Passed.
+
+Developer Diagnostics
+- Developer Diagnostics link remained visible in debug Login UI.
+- Opened Developer Diagnostics from the Login screen.
+- Ran Full Validation.
+- UI result text:
+  Firebase token available.
+  Backend login passed; JWT generated.
+  /auth/me passed.
+  event_users refreshed.
+- Firebase ID token length shown in UI: 1229.
+- Backend login response included:
+  status: ok
+  token_type: bearer
+  access_token: present
+  firebase_uid: present
+- Backend logs:
+  POST /api/v1/auth/firebase HTTP/1.1 200 OK
+  GET /api/v1/auth/me HTTP/1.1 200 OK
+  GET /api/v1/dev/diagnostics/db/tables HTTP/1.1 200 OK
+  GET /api/v1/dev/diagnostics/db/event_users HTTP/1.1 200 OK
+- Captured diagnostics pass/fail:
+  Firebase token: Passed
+  Backend login: Passed
+  Backend JWT: Passed
+  /auth/me: Passed
+  DB tables: Passed
+  event_users: Passed
+- Result: Passed.
+
+Authentication checklist
+- Google Login works: Passed.
+- Email/Password Login works: Passed.
+- Firebase ID Token generated: Passed.
+- POST /api/v1/auth/firebase returns 200: Passed.
+- Backend JWT stored: Passed.
+- GET /api/v1/auth/me returns 200: Passed.
+- Home navigation works: Passed.
+- Route guard protects /home: Passed.
+- App restart preserves session: Passed after startup-session fix.
+- Logout clears session: Passed.
+- flutter analyze passed: Passed.
+- flutter test passed: Passed.
+- Backend compile check passed: Passed.
+
+Pending manual verification
+- None for the requested Android emulator runtime checklist.
+
+Known runtime environment warning
+- Backend logs showed alumni_db lookup failures:
+  asyncpg.exceptions.InvalidAuthorizationSpecificationError: role "postgres" does not exist
+- This is an environment/alumni_db configuration issue only. Existing backend auth fallback continued login as non-alumni, and /auth/firebase still returned 200.
+
+Post-fix verification
+- flutter analyze: Passed, no issues found.
+- flutter test: Passed, all tests passed.

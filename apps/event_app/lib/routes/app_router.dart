@@ -4,12 +4,16 @@ import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/developer/presentation/developer_diagnostics_screen.dart';
 import '../features/foundation/presentation/foundation_ready_screen.dart';
 import '../features/home/presentation/home_placeholder_screen.dart';
+import '../features/auth/services/auth_controller.dart';
 import 'app_routes.dart';
+import 'route_guards.dart';
 
 abstract class AppRouter {
   static final GoRouter router = GoRouter(
     initialLocation: AppRoutes.splash,
     debugLogDiagnostics: false,
+    refreshListenable: AuthController.instance,
+    redirect: RouteGuards.redirect,
     routes: [
       GoRoute(
         path: AppRoutes.foundation,

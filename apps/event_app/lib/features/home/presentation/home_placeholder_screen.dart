@@ -1,8 +1,8 @@
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../routes/app_routes.dart';
+import '../../auth/services/auth_controller.dart';
 
 class HomePlaceholderScreen extends StatefulWidget {
   const HomePlaceholderScreen({super.key});
@@ -14,7 +14,7 @@ class HomePlaceholderScreen extends StatefulWidget {
 class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
   Future<void> _signOut() async {
     AppLogger.info('User signing out');
-    await FirebaseAuth.instance.signOut();
+    await AuthController.instance.signOut();
     if (mounted) context.go(AppRoutes.login);
   }
 

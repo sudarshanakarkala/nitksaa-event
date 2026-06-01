@@ -12,6 +12,7 @@ import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/app_state.dart';
 import '../../../core/logger/app_logger.dart';
+import '../../auth/services/google_sign_in_initializer.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/theme_provider.dart';
 
@@ -239,8 +240,6 @@ class _DevFirebaseTokenCard extends StatefulWidget {
 }
 
 class _DevFirebaseTokenCardState extends State<_DevFirebaseTokenCard> {
-  static final Future<void> _googleSignInInitialization = GoogleSignIn.instance
-      .initialize();
   static const _jsonEncoder = JsonEncoder.withIndent('  ');
 
   bool _loading = false;
@@ -701,7 +700,7 @@ class _DevFirebaseTokenCardState extends State<_DevFirebaseTokenCard> {
   }
 
   Future<void> _ensureGoogleSignInInitialized() async {
-    await _googleSignInInitialization;
+    await GoogleSignInInitializer.ensureInitialized();
   }
 
   Future<String> _freshFirebaseIdToken() async {
