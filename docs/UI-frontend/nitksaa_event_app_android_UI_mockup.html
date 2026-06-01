@@ -1,0 +1,1555 @@
+
+<style>
+
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,300&display=swap');
+  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,600&display=swap');
+    @import url('https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600&family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,300&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0;}
+  .root{font-family:'DM Sans',sans-serif;font-size:13px;background:var(--color-background-tertiary);padding:2rem 1rem 4rem;}
+  .section-label{font-family:'DM Sans',sans-serif;font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-text-tertiary);margin:2.5rem 0 1rem;padding-bottom:0.5rem;border-bottom:0.5px solid var(--color-border-tertiary);}
+  .theme-toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;}
+  .page-title{font-family:'Fraunces',serif;font-size:22px;font-weight:600;color:var(--color-text-primary);}
+  .theme-toggle{display:flex;gap:6px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:20px;padding:3px;}
+  .theme-btn{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:5px 14px;border-radius:16px;border:none;cursor:pointer;transition:background 0.2s,color 0.2s;background:transparent;color:var(--color-text-secondary);}
+  .theme-btn.active{background:var(--color-background-primary);color:var(--color-text-primary);border:0.5px solid var(--color-border-secondary);}
+  .screens-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;}
+  .screen-wrap{display:flex;flex-direction:column;gap:8px;}
+  .screen-name{font-size:11px;font-weight:500;color:var(--color-text-tertiary);letter-spacing:0.06em;text-transform:uppercase;}
+
+  .phone{border-radius:24px;overflow:hidden;border:0.5px solid var(--color-border-secondary);font-family:'DM Sans',sans-serif;transition:background 0.3s,color 0.3s;}
+  .phone.light{background:#F7F8FC;color:#0D1B3E;}
+  .phone.dark{background:#0B111F;color:#E8EDF5;}
+
+  .top-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;}
+  .phone.light .top-bar{background:#FFFFFF;border-bottom:0.5px solid rgba(13,27,62,0.1);}
+  .phone.dark  .top-bar{background:#111827;border-bottom:0.5px solid rgba(255,255,255,0.08);}
+  .top-bar-title{font-family:'Fraunces',serif;font-size:15px;font-weight:600;flex:1;text-align:center;}
+  .phone.light .top-bar-title{color:#0D1B3E;}
+  .phone.dark  .top-bar-title{color:#E8EDF5;}
+  .top-bar-back{font-size:11px;color:#C9952A;font-weight:500;min-width:40px;}
+  .top-bar-action{font-size:11px;color:#C9952A;font-weight:500;min-width:40px;text-align:right;}
+
+  .screen-body{padding:14px;}
+
+  .search-bar{display:flex;align-items:center;gap:8px;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:12px;}
+  .phone.light .search-bar{background:#EEF3FA;color:#5A6A8A;}
+  .phone.dark  .search-bar{background:#1C2A40;color:#8B9AB8;}
+
+  .tab-row{display:flex;gap:0;margin-bottom:14px;border-radius:8px;overflow:hidden;}
+  .tab{flex:1;text-align:center;padding:6px 0;font-size:11px;font-weight:500;cursor:pointer;}
+  .phone.light .tab{background:#EEF3FA;color:#5A6A8A;}
+  .phone.light .tab.active{background:#0D1B3E;color:#FFFFFF;}
+  .phone.dark  .tab{background:#1C2A40;color:#6B7FA0;}
+  .phone.dark  .tab.active{background:#C9952A;color:#0B111F;}
+
+  .event-card{border-radius:14px;padding:14px;margin-bottom:10px;}
+  .phone.light .event-card{background:#FFFFFF;border:0.5px solid rgba(13,27,62,0.1);}
+  .phone.dark  .event-card{background:#131E30;border:0.5px solid rgba(255,255,255,0.07);}
+
+  .event-title{font-size:13px;font-weight:600;line-height:1.3;margin-bottom:6px;}
+  .phone.light .event-title{color:#0D1B3E;}
+  .phone.dark  .event-title{color:#E8EDF5;}
+
+  .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:8px;}
+  .meta-item{display:flex;align-items:center;gap:4px;font-size:10px;}
+  .phone.light .meta-item{color:#5A6A8A;}
+  .phone.dark  .meta-item{color:#8B9AB8;}
+  .meta-icon{font-size:12px;color:#C9952A;flex-shrink:0;}
+
+  .capacity-bar-wrap{margin-bottom:10px;}
+  .capacity-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .capacity-text{font-size:10px;font-weight:500;}
+  .phone.light .capacity-text{color:#5A6A8A;}
+  .phone.dark  .capacity-text{color:#8B9AB8;}
+  .capacity-count{font-size:10px;font-weight:600;}
+  .phone.light .capacity-count{color:#0D1B3E;}
+  .phone.dark  .capacity-count{color:#E8EDF5;}
+  .capacity-track{height:4px;border-radius:2px;overflow:hidden;}
+  .phone.light .capacity-track{background:#EEF3FA;}
+  .phone.dark  .capacity-track{background:#1C2A40;}
+  .capacity-fill{height:100%;border-radius:2px;}
+  .fill-ok{background:#1B7A52;}
+  .fill-warn{background:#C9952A;}
+  .fill-full{background:#9B1C1C;}
+
+  .sponsor-row{display:flex;align-items:center;gap:5px;margin-bottom:10px;flex-wrap:wrap;}
+  .sponsor-label{font-size:10px;}
+  .phone.light .sponsor-label{color:#5A6A8A;}
+  .phone.dark  .sponsor-label{color:#8B9AB8;}
+  .sponsor-pill{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;}
+  .phone.light .sponsor-pill{background:#F5E0A8;color:#7A5200;}
+  .phone.dark  .sponsor-pill{background:#3A2800;color:#F5C84A;}
+
+  .tag-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;}
+  .tag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;}
+  .tag-physical-l{background:#DDE8FF;color:#1B3C8A;}
+  .tag-open-l{background:#D9F4E8;color:#1B5C3A;}
+  .tag-virtual-l{background:#EDE6FF;color:#4A2DB0;}
+  .tag-physical-d{background:#1E2E50;color:#90B5FF;}
+  .tag-open-d{background:#0F2920;color:#6FDBA8;}
+  .tag-virtual-d{background:#1E1540;color:#B89AFF;}
+
+  .btn-primary{display:block;width:100%;text-align:center;padding:9px 0;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;border:none;background:#0D1B3E;color:#FFFFFF;}
+  .phone.dark .btn-primary{background:#C9952A;color:#0B111F;}
+  .btn-secondary{display:block;width:100%;text-align:center;padding:9px 0;border-radius:10px;font-size:12px;font-weight:500;cursor:pointer;margin-top:6px;}
+  .phone.light .btn-secondary{background:transparent;color:#0D1B3E;border:0.5px solid rgba(13,27,62,0.25);}
+  .phone.dark  .btn-secondary{background:transparent;color:#E8EDF5;border:0.5px solid rgba(255,255,255,0.15);}
+
+  .bottom-nav{display:flex;border-top:0.5px solid rgba(13,27,62,0.1);padding:10px 0 6px;}
+  .phone.dark .bottom-nav{border-top-color:rgba(255,255,255,0.08);}
+  .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;font-weight:500;}
+  .phone.light .nav-item{color:#9AAABB;}
+  .phone.dark  .nav-item{color:#4A5A70;}
+  .phone.light .nav-item.active{color:#0D1B3E;}
+  .phone.dark  .nav-item.active{color:#C9952A;}
+  .nav-icon{font-size:18px;}
+
+  .section-divider{height:0.5px;margin:12px 0;}
+  .phone.light .section-divider{background:rgba(13,27,62,0.1);}
+  .phone.dark  .section-divider{background:rgba(255,255,255,0.07);}
+
+  .detail-section-title{font-size:10px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:8px;}
+  .phone.light .detail-section-title{color:#5A6A8A;}
+  .phone.dark  .detail-section-title{color:#6B7FA0;}
+
+  .agenda-item{display:flex;gap:10px;margin-bottom:8px;}
+  .agenda-time{font-size:10px;font-weight:500;min-width:36px;}
+  .phone.light .agenda-time{color:#C9952A;}
+  .phone.dark  .agenda-time{color:#EBB84A;}
+  .agenda-text{font-size:11px;line-height:1.4;}
+  .phone.light .agenda-text{color:#0D1B3E;}
+  .phone.dark  .agenda-text{color:#C8D5E8;}
+
+  .speaker-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .speaker-avatar{width:30px;height:30px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:600;flex-shrink:0;}
+  .phone.light .speaker-avatar{background:#EDE6FF;color:#4A2DB0;}
+  .phone.dark  .speaker-avatar{background:#1E1540;color:#B89AFF;}
+  .speaker-name{font-size:11px;font-weight:500;}
+  .phone.light .speaker-name{color:#0D1B3E;}
+  .phone.dark  .speaker-name{color:#E8EDF5;}
+  .speaker-role{font-size:10px;}
+  .phone.light .speaker-role{color:#5A6A8A;}
+  .phone.dark  .speaker-role{color:#8B9AB8;}
+
+  .sponsor-logo-row{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:4px;}
+  .sponsor-logo-pill{font-size:10px;font-weight:600;padding:4px 10px;border-radius:6px;}
+  .phone.light .sponsor-logo-pill{background:#F5E0A8;color:#7A5200;border:0.5px solid rgba(201,149,42,0.3);}
+  .phone.dark  .sponsor-logo-pill{background:#3A2800;color:#F5C84A;border:0.5px solid rgba(201,149,42,0.2);}
+
+  .form-group{margin-bottom:10px;}
+  .form-label{font-size:10px;font-weight:500;margin-bottom:4px;display:block;}
+  .phone.light .form-label{color:#5A6A8A;}
+  .phone.dark  .form-label{color:#8B9AB8;}
+  .form-input{width:100%;padding:8px 10px;border-radius:8px;font-size:12px;font-family:'DM Sans',sans-serif;border:0.5px solid;outline:none;}
+  .phone.light .form-input{background:#FFFFFF;border-color:rgba(13,27,62,0.2);color:#0D1B3E;}
+  .phone.dark  .form-input{background:#1C2A40;border-color:rgba(255,255,255,0.1);color:#E8EDF5;}
+
+  .info-box{border-radius:8px;padding:10px 12px;font-size:10px;line-height:1.5;margin-top:8px;}
+  .phone.light .info-box{background:#EEF3FA;color:#5A6A8A;}
+  .phone.dark  .info-box{background:#1C2A40;color:#8B9AB8;}
+
+  .detail-stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px;}
+  .detail-stat{border-radius:10px;padding:10px;}
+  .phone.light .detail-stat{background:#EEF3FA;}
+  .phone.dark  .detail-stat{background:#1C2A40;}
+  .detail-stat-val{font-size:16px;font-weight:600;font-family:'Fraunces',serif;margin-bottom:2px;}
+  .phone.light .detail-stat-val{color:#0D1B3E;}
+  .phone.dark  .detail-stat-val{color:#E8EDF5;}
+  .detail-stat-label{font-size:9px;font-weight:500;}
+  .phone.light .detail-stat-label{color:#5A6A8A;}
+  .phone.dark  .detail-stat-label{color:#8B9AB8;}
+  *{box-sizing:border-box;margin:0;padding:0;}
+  .root{font-family:'DM Sans',sans-serif;font-size:13px;background:var(--color-background-tertiary);padding:2rem 1rem 4rem;}
+  .section-label{font-size:11px;font-weight:500;letter-spacing:0.1em;text-transform:uppercase;color:var(--color-text-tertiary);margin:2.5rem 0 1rem;padding-bottom:0.5rem;border-bottom:0.5px solid var(--color-border-tertiary);}
+  .theme-toggle-row{display:flex;align-items:center;justify-content:space-between;margin-bottom:1.5rem;}
+  .page-title{font-family:'Fraunces',serif;font-size:22px;font-weight:600;color:var(--color-text-primary);}
+  .theme-toggle{display:flex;gap:6px;background:var(--color-background-secondary);border:0.5px solid var(--color-border-tertiary);border-radius:20px;padding:3px;}
+  .theme-btn{font-family:'DM Sans',sans-serif;font-size:12px;font-weight:500;padding:5px 14px;border-radius:16px;border:none;cursor:pointer;background:transparent;color:var(--color-text-secondary);}
+  .theme-btn.active{background:var(--color-background-primary);color:var(--color-text-primary);border:0.5px solid var(--color-border-secondary);}
+  .screens-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(260px,1fr));gap:20px;}
+  .screen-wrap{display:flex;flex-direction:column;gap:8px;}
+  .screen-name{font-size:11px;font-weight:500;color:var(--color-text-tertiary);letter-spacing:0.06em;text-transform:uppercase;}
+
+  .phone{border-radius:24px;overflow:hidden;border:0.5px solid var(--color-border-secondary);font-family:'DM Sans',sans-serif;}
+  .phone.light{background:#F7F8FC;}
+  .phone.dark{background:#0B111F;}
+
+  .top-bar{display:flex;align-items:center;justify-content:space-between;padding:12px 16px 8px;}
+  .phone.light .top-bar{background:#fff;border-bottom:0.5px solid rgba(13,27,62,0.1);}
+  .phone.dark  .top-bar{background:#111827;border-bottom:0.5px solid rgba(255,255,255,0.08);}
+  .top-bar-title{font-family:'Fraunces',serif;font-size:15px;font-weight:600;flex:1;text-align:center;}
+  .phone.light .top-bar-title{color:#0D1B3E;}
+  .phone.dark  .top-bar-title{color:#E8EDF5;}
+  .top-bar-back{font-size:11px;color:#C9952A;font-weight:500;min-width:40px;}
+  .top-bar-action{min-width:40px;text-align:right;}
+
+  .screen-body{padding:14px;}
+
+  .search-bar{display:flex;align-items:center;gap:8px;border-radius:10px;padding:8px 12px;margin-bottom:12px;font-size:12px;}
+  .phone.light .search-bar{background:#EEF3FA;color:#5A6A8A;}
+  .phone.dark  .search-bar{background:#1C2A40;color:#8B9AB8;}
+
+  .tab-row{display:flex;margin-bottom:14px;border-radius:8px;overflow:hidden;}
+  .tab{flex:1;text-align:center;padding:6px 0;font-size:11px;font-weight:500;}
+  .phone.light .tab{background:#EEF3FA;color:#5A6A8A;}
+  .phone.light .tab.active{background:#0D1B3E;color:#fff;}
+  .phone.dark  .tab{background:#1C2A40;color:#6B7FA0;}
+  .phone.dark  .tab.active{background:#C9952A;color:#0B111F;}
+
+  .event-card{border-radius:14px;padding:14px;margin-bottom:10px;}
+  .phone.light .event-card{background:#fff;border:0.5px solid rgba(13,27,62,0.1);}
+  .phone.dark  .event-card{background:#131E30;border:0.5px solid rgba(255,255,255,0.07);}
+
+  .event-title{font-size:13px;font-weight:600;line-height:1.3;margin-bottom:6px;}
+  .phone.light .event-title{color:#0D1B3E;}
+  .phone.dark  .event-title{color:#E8EDF5;}
+
+  .meta-grid{display:grid;grid-template-columns:1fr 1fr;gap:4px;margin-bottom:10px;}
+  .meta-item{display:flex;align-items:center;gap:4px;font-size:10px;}
+  .phone.light .meta-item{color:#5A6A8A;}
+  .phone.dark  .meta-item{color:#8B9AB8;}
+  .meta-icon{font-size:12px;color:#C9952A;flex-shrink:0;}
+
+  .sponsors-section{margin-bottom:10px;}
+  .sponsors-label{font-size:10px;font-weight:500;margin-bottom:6px;display:flex;align-items:center;gap:4px;}
+  .phone.light .sponsors-label{color:#5A6A8A;}
+  .phone.dark  .sponsors-label{color:#8B9AB8;}
+
+  .sponsor-logos-row{display:flex;gap:6px;flex-wrap:wrap;align-items:center;}
+
+  .sponsor-chip{display:flex;align-items:center;gap:5px;padding:4px 8px;border-radius:8px;}
+  .phone.light .sponsor-chip{background:#F5F6FA;border:0.5px solid rgba(13,27,62,0.1);}
+  .phone.dark  .sponsor-chip{background:#1A2438;border:0.5px solid rgba(255,255,255,0.08);}
+  .sponsor-chip-name{font-size:10px;font-weight:600;}
+  .phone.light .sponsor-chip-name{color:#0D1B3E;}
+  .phone.dark  .sponsor-chip-name{color:#C8D5E8;}
+
+  .capacity-bar-wrap{margin-bottom:10px;}
+  .capacity-label{display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;}
+  .cap-text{font-size:10px;}
+  .phone.light .cap-text{color:#5A6A8A;}
+  .phone.dark  .cap-text{color:#8B9AB8;}
+  .cap-count{font-size:10px;font-weight:600;}
+  .phone.light .cap-count{color:#0D1B3E;}
+  .phone.dark  .cap-count{color:#E8EDF5;}
+  .cap-track{height:4px;border-radius:2px;overflow:hidden;}
+  .phone.light .cap-track{background:#EEF3FA;}
+  .phone.dark  .cap-track{background:#1C2A40;}
+  .cap-fill-ok{height:100%;border-radius:2px;background:#1B7A52;}
+  .cap-fill-warn{height:100%;border-radius:2px;background:#C9952A;}
+
+  .tag-row{display:flex;gap:5px;flex-wrap:wrap;margin-bottom:10px;}
+  .tag{font-size:10px;font-weight:500;padding:2px 8px;border-radius:20px;}
+  .tag-physical-l{background:#DDE8FF;color:#1B3C8A;}
+  .tag-open-l{background:#D9F4E8;color:#1B5C3A;}
+  .tag-virtual-l{background:#EDE6FF;color:#4A2DB0;}
+  .tag-physical-d{background:#1E2E50;color:#90B5FF;}
+  .tag-open-d{background:#0F2920;color:#6FDBA8;}
+  .tag-virtual-d{background:#1E1540;color:#B89AFF;}
+
+  .btn-primary{display:block;width:100%;text-align:center;padding:9px 0;border-radius:10px;font-size:12px;font-weight:600;cursor:pointer;border:none;}
+  .phone.light .btn-primary{background:#0D1B3E;color:#fff;}
+  .phone.dark  .btn-primary{background:#C9952A;color:#0B111F;}
+
+  .bottom-nav{display:flex;border-top:0.5px solid rgba(13,27,62,0.1);padding:10px 0 6px;}
+  .phone.dark .bottom-nav{border-top-color:rgba(255,255,255,0.08);}
+  .nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:2px;font-size:9px;font-weight:500;}
+  .phone.light .nav-item{color:#9AAABB;}
+  .phone.dark  .nav-item{color:#4A5A70;}
+  .phone.light .nav-item.active{color:#0D1B3E;}
+  .phone.dark  .nav-item.active{color:#C9952A;}
+
+  .section-divider{height:0.5px;margin:12px 0;}
+  .phone.light .section-divider{background:rgba(13,27,62,0.1);}
+  .phone.dark  .section-divider{background:rgba(255,255,255,0.07);}
+
+  .detail-section-title{font-size:10px;font-weight:600;letter-spacing:0.07em;text-transform:uppercase;margin-bottom:8px;}
+  .phone.light .detail-section-title{color:#5A6A8A;}
+  .phone.dark  .detail-section-title{color:#6B7FA0;}
+
+  .detail-stat-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:8px;}
+  .detail-stat{border-radius:10px;padding:10px;}
+  .phone.light .detail-stat{background:#EEF3FA;}
+  .phone.dark  .detail-stat{background:#1C2A40;}
+  .detail-stat-val{font-size:16px;font-weight:600;font-family:'Fraunces',serif;margin-bottom:2px;}
+  .phone.light .detail-stat-val{color:#0D1B3E;}
+  .phone.dark  .detail-stat-val{color:#E8EDF5;}
+  .detail-stat-label{font-size:9px;font-weight:500;}
+  .phone.light .detail-stat-label{color:#5A6A8A;}
+  .phone.dark  .detail-stat-label{color:#8B9AB8;}
+
+  .agenda-item{display:flex;gap:10px;margin-bottom:8px;}
+  .agenda-time{font-size:10px;font-weight:500;min-width:36px;}
+  .phone.light .agenda-time{color:#C9952A;}
+  .phone.dark  .agenda-time{color:#EBB84A;}
+  .agenda-text{font-size:11px;line-height:1.4;}
+  .phone.light .agenda-text{color:#0D1B3E;}
+  .phone.dark  .agenda-text{color:#C8D5E8;}
+
+  .speaker-row{display:flex;align-items:center;gap:8px;margin-bottom:8px;}
+  .speaker-avatar{width:28px;height:28px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:600;flex-shrink:0;}
+  .phone.light .speaker-avatar{background:#EDE6FF;color:#4A2DB0;}
+  .phone.dark  .speaker-avatar{background:#1E1540;color:#B89AFF;}
+  .speaker-name{font-size:11px;font-weight:500;}
+  .phone.light .speaker-name{color:#0D1B3E;}
+  .phone.dark  .speaker-name{color:#E8EDF5;}
+  .speaker-role{font-size:10px;}
+  .phone.light .speaker-role{color:#5A6A8A;}
+  .phone.dark  .speaker-role{color:#8B9AB8;}
+
+  .about-text{font-size:11px;line-height:1.6;margin-bottom:12px;}
+  .phone.light .about-text{color:#5A6A8A;}
+  .phone.dark  .about-text{color:#8B9AB8;}
+
+  .detail-cta{padding:10px 14px 14px;}
+  .phone.light .detail-cta{border-top:0.5px solid rgba(13,27,62,0.1);}
+  .phone.dark  .detail-cta{border-top:0.5px solid rgba(255,255,255,0.08);}
+  :root {
+    --nitk-navy: #0D1B3E;
+    --nitk-gold: #C9952A;
+    --nitk-gold-light: #F5E0A8;
+    --nitk-blue-mid: #1E3A6E;
+    --nitk-blue-light: #EEF3FA;
+    --nitk-surface: #F7F8FC;
+    --nitk-border: rgba(13,27,62,0.12);
+    --nitk-text: #0D1B3E;
+    --nitk-text-muted: #5A6A8A;
+    --nitk-success: #1B7A52;
+    --nitk-success-bg: #E3F5ED;
+    --nitk-warn: #A05E00;
+    --nitk-warn-bg: #FEF0D7;
+    --nitk-error: #9B1C1C;
+    --nitk-error-bg: #FDE8E8;
+    --tag-registered: #1B5C9B;
+    --tag-registered-bg: #DDEEFF;
+    --font-body: 'DM Sans', sans-serif;
+    --font-display: 'Fraunces', serif;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+
+  body, .root { font-family: var(--font-body); }
+
+  .design-root {
+    font-family: var(--font-body);
+    font-size: 13px;
+    background: var(--color-background-tertiary);
+    padding: 2rem 1rem 4rem;
+  }
+
+  .section-label {
+    font-family: var(--font-body);
+    font-size: 11px;
+    font-weight: 500;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--color-text-tertiary);
+    margin: 2.5rem 0 1rem;
+    padding-bottom: 0.5rem;
+    border-bottom: 0.5px solid var(--color-border-tertiary);
+  }
+
+  .theme-toggle-row {
+    display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;
+  }
+
+  .page-title {
+    font-family: var(--font-display);
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--color-text-primary);
+  }
+
+  .theme-toggle {
+    display: flex; gap: 6px; background: var(--color-background-secondary);
+    border: 0.5px solid var(--color-border-tertiary);
+    border-radius: 20px; padding: 3px;
+  }
+  .theme-btn {
+    font-family: var(--font-body); font-size: 12px; font-weight: 500;
+    padding: 5px 14px; border-radius: 16px; border: none; cursor: pointer;
+    transition: background 0.2s, color 0.2s; background: transparent;
+    color: var(--color-text-secondary);
+  }
+  .theme-btn.active {
+    background: var(--color-background-primary);
+    color: var(--color-text-primary);
+    border: 0.5px solid var(--color-border-secondary);
+  }
+
+  .screens-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 20px;
+  }
+
+  .screen-wrap {
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  .screen-name {
+    font-size: 11px; font-weight: 500; color: var(--color-text-tertiary);
+    letter-spacing: 0.06em; text-transform: uppercase;
+  }
+
+  /* ========= LIGHT PHONE FRAME ========= */
+  .phone {
+    border-radius: 24px;
+    overflow: hidden;
+    border: 0.5px solid var(--color-border-secondary);
+    font-family: var(--font-body);
+    transition: background 0.3s, color 0.3s;
+  }
+
+  .phone.light { background: #F7F8FC; color: #0D1B3E; }
+  .phone.dark  { background: #0B111F; color: #E8EDF5; }
+
+  /* Top bar */
+  .top-bar {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 12px 16px 8px;
+  }
+  .phone.light .top-bar { background: #FFFFFF; border-bottom: 0.5px solid rgba(13,27,62,0.1); }
+  .phone.dark  .top-bar { background: #111827; border-bottom: 0.5px solid rgba(255,255,255,0.08); }
+
+  .top-bar-title {
+    font-family: var(--font-display); font-size: 15px; font-weight: 600; flex: 1; text-align: center;
+  }
+  .phone.light .top-bar-title { color: #0D1B3E; }
+  .phone.dark  .top-bar-title { color: #E8EDF5; }
+
+  .top-bar-back { font-size: 11px; color: #C9952A; font-weight: 500; min-width: 40px; }
+  .top-bar-action { font-size: 11px; color: #C9952A; font-weight: 500; min-width: 40px; text-align: right; }
+
+  /* Screen body */
+  .screen-body { padding: 14px 14px; }
+
+  /* Search bar */
+  .search-bar {
+    display: flex; align-items: center; gap: 8px;
+    border-radius: 10px; padding: 8px 12px; margin-bottom: 12px; font-size: 12px;
+  }
+  .phone.light .search-bar { background: #EEF3FA; color: #5A6A8A; }
+  .phone.dark  .search-bar { background: #1C2A40; color: #8B9AB8; }
+
+  /* Toggle tabs */
+  .tab-row { display: flex; gap: 0; margin-bottom: 14px; border-radius: 8px; overflow: hidden; }
+  .tab {
+    flex: 1; text-align: center; padding: 6px 0; font-size: 11px; font-weight: 500; cursor: pointer;
+  }
+  .phone.light .tab { background: #EEF3FA; color: #5A6A8A; }
+  .phone.light .tab.active { background: #0D1B3E; color: #FFFFFF; }
+  .phone.dark  .tab { background: #1C2A40; color: #6B7FA0; }
+  .phone.dark  .tab.active { background: #C9952A; color: #0B111F; }
+
+  /* Event card */
+  .event-card {
+    border-radius: 14px; padding: 14px; margin-bottom: 10px;
+  }
+  .phone.light .event-card { background: #FFFFFF; border: 0.5px solid rgba(13,27,62,0.1); }
+  .phone.dark  .event-card { background: #131E30; border: 0.5px solid rgba(255,255,255,0.07); }
+
+  .event-card-header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 6px; }
+  .event-title { font-size: 13px; font-weight: 600; line-height: 1.3; }
+  .phone.light .event-title { color: #0D1B3E; }
+  .phone.dark  .event-title { color: #E8EDF5; }
+
+  .event-meta { font-size: 10px; margin-bottom: 8px; }
+  .phone.light .event-meta { color: #5A6A8A; }
+  .phone.dark  .event-meta { color: #8B9AB8; }
+
+  .tag-row { display: flex; gap: 5px; flex-wrap: wrap; margin-bottom: 10px; }
+  .tag {
+    font-size: 10px; font-weight: 500; padding: 2px 8px; border-radius: 20px;
+  }
+  .tag-physical-l  { background: #DDE8FF; color: #1B3C8A; }
+  .tag-open-l      { background: #D9F4E8; color: #1B5C3A; }
+  .tag-virtual-l   { background: #EDE6FF; color: #4A2DB0; }
+  .tag-closed-l    { background: #FFE9E9; color: #8A1B1B; }
+  .tag-reg-l       { background: #DDEEFF; color: #1B5C9B; }
+
+  .tag-physical-d  { background: #1E2E50; color: #90B5FF; }
+  .tag-open-d      { background: #0F2920; color: #6FDBA8; }
+  .tag-virtual-d   { background: #1E1540; color: #B89AFF; }
+  .tag-closed-d    { background: #2E1010; color: #FF9090; }
+  .tag-reg-d       { background: #0F2A3F; color: #7AC0FF; }
+
+  .btn-primary {
+    display: block; width: 100%; text-align: center; padding: 9px 0;
+    border-radius: 10px; font-size: 12px; font-weight: 600; cursor: pointer; border: none;
+    background: #0D1B3E; color: #FFFFFF;
+  }
+  .phone.dark .btn-primary { background: #C9952A; color: #0B111F; }
+
+  .btn-secondary {
+    display: block; width: 100%; text-align: center; padding: 9px 0;
+    border-radius: 10px; font-size: 12px; font-weight: 500; cursor: pointer;
+    margin-top: 6px;
+  }
+  .phone.light .btn-secondary { background: transparent; color: #0D1B3E; border: 0.5px solid rgba(13,27,62,0.25); }
+  .phone.dark  .btn-secondary { background: transparent; color: #E8EDF5; border: 0.5px solid rgba(255,255,255,0.15); }
+
+  .btn-disabled {
+    display: block; width: 100%; text-align: center; padding: 9px 0;
+    border-radius: 10px; font-size: 12px; font-weight: 500; cursor: default;
+  }
+  .phone.light .btn-disabled { background: #EEF3FA; color: #9AAABB; }
+  .phone.dark  .btn-disabled { background: #1C2A40; color: #4A5A70; }
+
+  /* Bottom nav */
+  .bottom-nav {
+    display: flex; border-top: 0.5px solid rgba(13,27,62,0.1); padding: 10px 0 6px;
+  }
+  .phone.dark .bottom-nav { border-top-color: rgba(255,255,255,0.08); }
+  .nav-item {
+    flex: 1; display: flex; flex-direction: column; align-items: center; gap: 2px;
+    font-size: 9px; font-weight: 500;
+  }
+  .phone.light .nav-item { color: #9AAABB; }
+  .phone.dark  .nav-item { color: #4A5A70; }
+  .phone.light .nav-item.active { color: #0D1B3E; }
+  .phone.dark  .nav-item.active { color: #C9952A; }
+  .nav-icon { font-size: 18px; }
+
+  /* Detail sections */
+  .section-divider { height: 0.5px; margin: 12px 0; }
+  .phone.light .section-divider { background: rgba(13,27,62,0.1); }
+  .phone.dark  .section-divider { background: rgba(255,255,255,0.07); }
+
+  .detail-section-title { font-size: 10px; font-weight: 600; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 8px; }
+  .phone.light .detail-section-title { color: #5A6A8A; }
+  .phone.dark  .detail-section-title { color: #6B7FA0; }
+
+  .detail-row { display: flex; gap: 8px; align-items: flex-start; margin-bottom: 5px; font-size: 11px; }
+  .phone.light .detail-row { color: #0D1B3E; }
+  .phone.dark  .detail-row { color: #C8D5E8; }
+
+  .detail-icon { font-size: 14px; margin-top: 1px; flex-shrink: 0; color: #C9952A; }
+
+  .agenda-item { display: flex; gap: 10px; margin-bottom: 8px; }
+  .agenda-time { font-size: 10px; font-weight: 500; min-width: 36px; }
+  .phone.light .agenda-time { color: #C9952A; }
+  .phone.dark  .agenda-time { color: #EBB84A; }
+  .agenda-text { font-size: 11px; line-height: 1.4; }
+  .phone.light .agenda-text { color: #0D1B3E; }
+  .phone.dark  .agenda-text { color: #C8D5E8; }
+
+  /* Form fields */
+  .form-group { margin-bottom: 10px; }
+  .form-label { font-size: 10px; font-weight: 500; margin-bottom: 4px; display: block; }
+  .phone.light .form-label { color: #5A6A8A; }
+  .phone.dark  .form-label { color: #8B9AB8; }
+  .form-input {
+    width: 100%; padding: 8px 10px; border-radius: 8px; font-size: 12px; font-family: var(--font-body);
+    border: 0.5px solid; outline: none;
+  }
+  .phone.light .form-input { background: #FFFFFF; border-color: rgba(13,27,62,0.2); color: #0D1B3E; }
+  .phone.dark  .form-input { background: #1C2A40; border-color: rgba(255,255,255,0.1); color: #E8EDF5; }
+
+  /* QR screen */
+  .qr-box {
+    border-radius: 12px; margin: 12px 0; padding: 16px; display: flex; flex-direction: column; align-items: center; gap: 10px;
+  }
+  .phone.light .qr-box { background: #FFFFFF; border: 0.5px solid rgba(13,27,62,0.12); }
+  .phone.dark  .qr-box { background: #131E30; border: 0.5px solid rgba(255,255,255,0.08); }
+
+  .qr-code-svg { width: 100px; height: 100px; }
+
+  .qr-name { font-size: 13px; font-weight: 600; text-align: center; }
+  .phone.light .qr-name { color: #0D1B3E; }
+  .phone.dark  .qr-name { color: #E8EDF5; }
+
+  .status-badge {
+    font-size: 10px; font-weight: 600; padding: 3px 10px; border-radius: 20px;
+  }
+  .badge-registered-l { background: #DDEEFF; color: #1B5C9B; }
+  .badge-checkedin-l  { background: #D9F4E8; color: #1B5C3A; }
+  .badge-registered-d { background: #0F2A3F; color: #7AC0FF; }
+  .badge-checkedin-d  { background: #0F2920; color: #6FDBA8; }
+
+  .info-box {
+    border-radius: 8px; padding: 10px 12px; font-size: 10px; line-height: 1.5; margin-top: 8px;
+  }
+  .phone.light .info-box { background: #EEF3FA; color: #5A6A8A; }
+  .phone.dark  .info-box { background: #1C2A40; color: #8B9AB8; }
+
+  /* Volunteer scanner */
+  .scanner-viewport {
+    border-radius: 12px; margin-bottom: 12px; display: flex; align-items: center; justify-content: center;
+    height: 130px; position: relative; overflow: hidden;
+  }
+  .phone.light .scanner-viewport { background: #1A2840; }
+  .phone.dark  .scanner-viewport { background: #0A0F1A; }
+
+  .scan-frame {
+    width: 80px; height: 80px; position: relative;
+  }
+  .scan-corner {
+    position: absolute; width: 18px; height: 18px; border-color: #C9952A; border-style: solid;
+    border-width: 0;
+  }
+  .scan-corner.tl { top: 0; left: 0; border-top-width: 2px; border-left-width: 2px; border-radius: 4px 0 0 0; }
+  .scan-corner.tr { top: 0; right: 0; border-top-width: 2px; border-right-width: 2px; border-radius: 0 4px 0 0; }
+  .scan-corner.bl { bottom: 0; left: 0; border-bottom-width: 2px; border-left-width: 2px; border-radius: 0 0 0 4px; }
+  .scan-corner.br { bottom: 0; right: 0; border-bottom-width: 2px; border-right-width: 2px; border-radius: 0 0 4px 0; }
+
+  .status-panel { border-radius: 10px; padding: 10px 12px; }
+  .phone.light .status-panel.success { background: #D9F4E8; }
+  .phone.dark  .status-panel.success { background: #0F2920; }
+  .phone.light .status-panel.warn    { background: #FEF0D7; }
+  .phone.dark  .status-panel.warn    { background: #2A1A00; }
+  .status-panel-name { font-size: 12px; font-weight: 600; }
+  .phone.light .status-panel.success .status-panel-name { color: #1B5C3A; }
+  .phone.dark  .status-panel.success .status-panel-name { color: #6FDBA8; }
+  .phone.light .status-panel.warn    .status-panel-name { color: #8A4800; }
+  .phone.dark  .status-panel.warn    .status-panel-name { color: #FFB74D; }
+  .status-panel-sub { font-size: 10px; }
+  .phone.light .status-panel.success .status-panel-sub { color: #2E7D5C; }
+  .phone.dark  .status-panel.success .status-panel-sub { color: #4CB882; }
+  .phone.light .status-panel.warn    .status-panel-sub { color: #8A4800; }
+  .phone.dark  .status-panel.warn    .status-panel-sub { color: #CC8A00; }
+
+  /* Metric row */
+  .metrics-row { display: flex; gap: 8px; margin-bottom: 12px; }
+  .metric-card { flex: 1; border-radius: 10px; padding: 10px 10px 8px; }
+  .phone.light .metric-card { background: #EEF3FA; }
+  .phone.dark  .metric-card { background: #1C2A40; }
+  .metric-val { font-size: 20px; font-weight: 600; font-family: var(--font-display); }
+  .phone.light .metric-val { color: #0D1B3E; }
+  .phone.dark  .metric-val { color: #E8EDF5; }
+  .metric-label { font-size: 9px; font-weight: 500; }
+  .phone.light .metric-label { color: #5A6A8A; }
+  .phone.dark  .metric-label { color: #8B9AB8; }
+
+  /* Success screen */
+  .success-icon {
+    width: 48px; height: 48px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 22px; margin: 12px auto 10px;
+  }
+  .phone.light .success-icon { background: #D9F4E8; color: #1B5C3A; }
+  .phone.dark  .success-icon { background: #0F2920; color: #6FDBA8; }
+
+  .success-title { font-size: 14px; font-weight: 600; text-align: center; margin-bottom: 4px; }
+  .phone.light .success-title { color: #0D1B3E; }
+  .phone.dark  .success-title { color: #E8EDF5; }
+
+  .success-sub { font-size: 10px; text-align: center; margin-bottom: 14px; }
+  .phone.light .success-sub { color: #5A6A8A; }
+  .phone.dark  .success-sub { color: #8B9AB8; }
+
+  .event-summary-card { border-radius: 10px; padding: 10px 12px; margin-bottom: 12px; }
+  .phone.light .event-summary-card { background: #EEF3FA; }
+  .phone.dark  .event-summary-card { background: #1C2A40; }
+
+  /* Settings */
+  .settings-section { margin-bottom: 14px; }
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 0.5px solid;
+  }
+  .phone.light .settings-row { border-bottom-color: rgba(13,27,62,0.08); }
+  .phone.dark  .settings-row { border-bottom-color: rgba(255,255,255,0.06); }
+  .settings-row-label { font-size: 12px; }
+  .phone.light .settings-row-label { color: #0D1B3E; }
+  .phone.dark  .settings-row-label { color: #C8D5E8; }
+  .settings-row-val { font-size: 11px; }
+  .phone.light .settings-row-val { color: #5A6A8A; }
+  .phone.dark  .settings-row-val { color: #8B9AB8; }
+
+  .avatar-circle {
+    width: 44px; height: 44px; border-radius: 50%; display: flex; align-items: center; justify-content: center;
+    font-size: 15px; font-weight: 600; margin: 0 auto 10px; font-family: var(--font-display);
+  }
+  .phone.light .avatar-circle { background: #C9952A; color: #FFFFFF; }
+  .phone.dark  .avatar-circle { background: #8A6010; color: #FDECC8; }
+
+  .user-name { font-size: 14px; font-weight: 600; text-align: center; margin-bottom: 2px; }
+  .phone.light .user-name { color: #0D1B3E; }
+  .phone.dark  .user-name { color: #E8EDF5; }
+  .user-email { font-size: 11px; text-align: center; margin-bottom: 14px; }
+  .phone.light .user-email { color: #5A6A8A; }
+  .phone.dark  .user-email { color: #8B9AB8; }
+
+  .btn-danger {
+    display: block; width: 100%; text-align: center; padding: 9px 0;
+    border-radius: 10px; font-size: 12px; font-weight: 500; cursor: pointer; margin-top: 14px;
+  }
+  .phone.light .btn-danger { background: #FDE8E8; color: #8A1B1B; border: 0.5px solid rgba(138,27,27,0.2); }
+  .phone.dark  .btn-danger { background: #2E1010; color: #FF9090; border: 0.5px solid rgba(255,144,144,0.15); }
+
+  /* Speaker row */
+  .speaker-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .speaker-avatar {
+    width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center;
+    justify-content: center; font-size: 11px; font-weight: 600; flex-shrink: 0;
+  }
+  .phone.light .speaker-avatar { background: #EDE6FF; color: #4A2DB0; }
+  .phone.dark  .speaker-avatar { background: #1E1540; color: #B89AFF; }
+  .speaker-name { font-size: 11px; font-weight: 500; }
+  .phone.light .speaker-name { color: #0D1B3E; }
+  .phone.dark  .speaker-name { color: #E8EDF5; }
+  .speaker-role { font-size: 10px; }
+  .phone.light .speaker-role { color: #5A6A8A; }
+  .phone.dark  .speaker-role { color: #8B9AB8; }
+
+  /* Splash */
+  .splash-screen {
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    min-height: 280px; padding: 32px 16px;
+  }
+  .phone.light .splash-screen { background: #0D1B3E; }
+  .phone.dark  .splash-screen { background: #060B14; }
+  .splash-logo { font-family: var(--font-display); font-size: 28px; font-weight: 600; color: #C9952A; margin-bottom: 4px; }
+  .splash-subtitle { font-size: 11px; color: rgba(255,255,255,0.5); margin-bottom: 32px; letter-spacing: 0.06em; }
+  .splash-spinner {
+    width: 24px; height: 24px; border: 2px solid rgba(201,149,42,0.3);
+    border-top-color: #C9952A; border-radius: 50%;
+    animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  .splash-connecting { font-size: 10px; color: rgba(255,255,255,0.3); margin-top: 10px; }
+
+  /* Login */
+  .login-logo { font-family: var(--font-display); font-size: 20px; font-weight: 600; text-align: center; margin-bottom: 20px; }
+  .phone.light .login-logo { color: #0D1B3E; }
+  .phone.dark  .login-logo { color: #E8EDF5; }
+
+  .divider-or { display: flex; align-items: center; gap: 10px; margin: 12px 0; }
+  .divider-line { flex: 1; height: 0.5px; }
+  .phone.light .divider-line { background: rgba(13,27,62,0.12); }
+  .phone.dark  .divider-line { background: rgba(255,255,255,0.1); }
+  .divider-text { font-size: 10px; }
+  .phone.light .divider-text { color: #9AAABB; }
+  .phone.dark  .divider-text { color: #4A5A70; }
+
+  .btn-google {
+    display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%;
+    padding: 9px 0; border-radius: 10px; font-size: 12px; font-weight: 500; cursor: pointer;
+  }
+  .phone.light .btn-google { background: transparent; color: #0D1B3E; border: 0.5px solid rgba(13,27,62,0.2); }
+  .phone.dark  .btn-google { background: transparent; color: #E8EDF5; border: 0.5px solid rgba(255,255,255,0.15); }
+
+  .link-text { font-size: 11px; text-align: center; margin-top: 12px; }
+  .phone.light .link-text { color: #C9952A; }
+  .phone.dark  .link-text { color: #EBB84A; }
+
+  /* Attendee list */
+  .attendee-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 10px 0; border-bottom: 0.5px solid;
+  }
+  .phone.light .attendee-row { border-bottom-color: rgba(13,27,62,0.08); }
+  .phone.dark  .attendee-row { border-bottom-color: rgba(255,255,255,0.06); }
+  .attendee-name { font-size: 12px; font-weight: 500; }
+  .phone.light .attendee-name { color: #0D1B3E; }
+  .phone.dark  .attendee-name { color: #E8EDF5; }
+  .attendee-email { font-size: 10px; }
+  .phone.light .attendee-email { color: #5A6A8A; }
+  .phone.dark  .attendee-email { color: #8B9AB8; }
+
+  .export-btn {
+    display: flex; align-items: center; gap: 6px; padding: 7px 12px; border-radius: 8px;
+    font-size: 11px; font-weight: 500; cursor: pointer; margin-bottom: 12px;
+  }
+  .phone.light .export-btn { background: #EEF3FA; color: #0D1B3E; border: none; }
+  .phone.dark  .export-btn { background: #1C2A40; color: #C8D5E8; border: none; }
+
+  /* Color tokens section */
+  .tokens-row { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+  .token-swatch { border-radius: 8px; padding: 8px 14px; font-size: 11px; font-weight: 500; }
+
+  /* Typography specimen */
+  .type-specimen { padding: 14px; border-radius: 14px; margin-bottom: 10px; }
+  .phone.light .type-specimen { background: #FFFFFF; border: 0.5px solid rgba(13,27,62,0.1); }
+  .phone.dark  .type-specimen { background: #131E30; border: 0.5px solid rgba(255,255,255,0.07); }
+</style>
+
+<div class="design-root" id="root">
+  <h2 class="sr-only">NITKSAA Event App – Design System Mockups with Light and Dark Themes</h2>
+
+  <div class="theme-toggle-row">
+    <div class="page-title">NITKSAA — Design System</div>
+    <div class="theme-toggle">
+      <button class="theme-btn active" id="btn-light" onclick="setTheme('light')">Light</button>
+      <button class="theme-btn" id="btn-dark" onclick="setTheme('dark')">Dark</button>
+    </div>
+  </div>
+
+  <p class="section-label">Authentication</p>
+  <div class="screens-grid">
+
+    <!-- SPLASH -->
+    <div class="screen-wrap">
+      <div class="screen-name">1 · Splash</div>
+      <div class="phone light" id="splash">
+        <div class="splash-screen">
+          <div class="splash-logo">NITKSAA</div>
+          <div class="splash-subtitle">EVENT PLATFORM · ALPHA</div>
+          <div style="width:56px;height:56px;border-radius:14px;background:rgba(201,149,42,0.15);display:flex;align-items:center;justify-content:center;margin-bottom:28px;">
+            <i class="ti ti-calendar-event" style="font-size:28px;color:#C9952A;"></i>
+          </div>
+          <div class="splash-spinner"></div>
+          <div class="splash-connecting">Connecting…</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- LOGIN -->
+    <div class="screen-wrap">
+      <div class="screen-name">2 · Login</div>
+      <div class="phone light" id="login">
+        <div class="top-bar">
+          <div class="top-bar-back"></div>
+          <div class="top-bar-title">Sign In</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body" style="padding-top:20px;">
+          <div class="login-logo">NITKSAA</div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="form-input" value="alumni@nitk.edu.in" readonly style="font-family:var(--font-body);">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Password</label>
+            <input class="form-input" value="••••••••" readonly style="font-family:var(--font-body);">
+          </div>
+          <button class="btn-primary" style="margin-top:4px;">Log in</button>
+          <div class="divider-or">
+            <div class="divider-line"></div>
+            <div class="divider-text">or</div>
+            <div class="divider-line"></div>
+          </div>
+          <button class="btn-google">
+            <svg width="14" height="14" viewBox="0 0 18 18"><path fill="#4285F4" d="M17.64 9.2c0-.637-.057-1.25-.164-1.84H9v3.48h4.844a4.14 4.14 0 01-1.796 2.717v2.258h2.908c1.702-1.567 2.684-3.874 2.684-6.615z"/><path fill="#34A853" d="M9 18c2.43 0 4.467-.806 5.956-2.18l-2.908-2.259c-.806.54-1.837.86-3.048.86-2.344 0-4.328-1.584-5.036-3.711H.957v2.332A8.997 8.997 0 009 18z"/><path fill="#FBBC05" d="M3.964 10.71A5.41 5.41 0 013.682 9c0-.593.102-1.17.282-1.71V4.958H.957A8.996 8.996 0 000 9c0 1.452.348 2.827.957 4.042l3.007-2.332z"/><path fill="#EA4335" d="M9 3.58c1.321 0 2.508.454 3.44 1.345l2.582-2.58C13.463.891 11.426 0 9 0A8.997 8.997 0 00.957 4.958L3.964 6.29C4.672 4.163 6.656 3.58 9 3.58z"/></svg>
+            Continue with Google
+          </button>
+          <div class="link-text">Trouble logging in?</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="section-label">Event Discovery</p>
+  <div class="screens-grid">
+
+    <!-- ===== EVENT LIST ===== -->
+    <div class="screen-wrap">
+      <div class="screen-name">3 · Event List</div>
+      <div class="phone light" id="event-list">
+        <div class="top-bar">
+          <div class="top-bar-back"></div>
+          <div class="top-bar-title">NITKSAA Events</div>
+          <div class="top-bar-action"><i class="ti ti-adjustments-horizontal" style="font-size:16px;color:#C9952A;" aria-hidden="true"></i></div>
+        </div>
+        <div class="screen-body">
+          <div class="search-bar"><i class="ti ti-search" style="font-size:14px;" aria-hidden="true"></i><span>Search events…</span></div>
+          <div class="tab-row"><div class="tab active">Upcoming</div><div class="tab">Past</div></div>
+
+          <!-- Card 1 -->
+          <div class="event-card">
+            <div class="event-title">NITKonnect 2026</div>
+            <div class="meta-grid">
+              <div class="meta-item"><i class="ti ti-calendar meta-icon" aria-hidden="true"></i> 12 Sep 2026</div>
+              <div class="meta-item"><i class="ti ti-clock meta-icon" aria-hidden="true"></i> 09:00 – 18:00</div>
+              <div class="meta-item"><i class="ti ti-map-pin meta-icon" aria-hidden="true"></i> Bengaluru</div>
+              <div class="meta-item"><i class="ti ti-building meta-icon" aria-hidden="true"></i> NIMHANS Conv.</div>
+            </div>
+            <div class="sponsors-section">
+              <div class="sponsors-label"><i class="ti ti-rosette" style="font-size:11px;" aria-hidden="true"></i> Sponsors</div>
+              <div class="sponsor-logos-row">
+                <!-- Infosys logo SVG -->
+                <div class="sponsor-chip">
+                  <svg width="14" height="14" viewBox="0 0 32 32" aria-label="Infosys"><circle cx="16" cy="16" r="16" fill="#007CC2"/><rect x="8" y="13" width="16" height="6" rx="1" fill="white"/></svg>
+                  <span class="sponsor-chip-name">Infosys</span>
+                </div>
+                <!-- NITK Alumni Foundation -->
+                <div class="sponsor-chip">
+                  <svg width="14" height="14" viewBox="0 0 32 32" aria-label="NITK Alumni Foundation"><rect width="32" height="32" rx="6" fill="#0D1B3E"/><polygon points="16,5 28,27 4,27" fill="none" stroke="#C9952A" stroke-width="2.5"/></svg>
+                  <span class="sponsor-chip-name">NITK Foundation</span>
+                </div>
+              </div>
+            </div>
+            <div class="capacity-bar-wrap">
+              <div class="capacity-label"><span class="cap-text">Registered</span><span class="cap-count">87 / 200</span></div>
+              <div class="cap-track"><div class="cap-fill-ok" style="width:43.5%;"></div></div>
+            </div>
+            <div class="tag-row"><span class="tag tag-physical-l">Physical</span><span class="tag tag-open-l">Registration open</span></div>
+            <button class="btn-primary">View details</button>
+          </div>
+
+          <!-- Card 2 -->
+          <div class="event-card">
+            <div class="event-title">NITK Tech Summit 2026</div>
+            <div class="meta-grid">
+              <div class="meta-item"><i class="ti ti-calendar meta-icon" aria-hidden="true"></i> 28 Oct 2026</div>
+              <div class="meta-item"><i class="ti ti-clock meta-icon" aria-hidden="true"></i> 10:00 – 16:00</div>
+              <div class="meta-item"><i class="ti ti-video meta-icon" aria-hidden="true"></i> Virtual (Zoom)</div>
+              <div class="meta-item"><i class="ti ti-link meta-icon" aria-hidden="true"></i> Link on reg.</div>
+            </div>
+            <div class="sponsors-section">
+              <div class="sponsors-label"><i class="ti ti-rosette" style="font-size:11px;" aria-hidden="true"></i> Sponsors</div>
+              <div class="sponsor-logos-row">
+                <!-- Wipro -->
+                <div class="sponsor-chip">
+                  <svg width="14" height="14" viewBox="0 0 32 32" aria-label="Wipro"><circle cx="16" cy="16" r="16" fill="#341F5F"/><circle cx="16" cy="16" r="7" fill="none" stroke="#B3D442" stroke-width="3"/><circle cx="16" cy="16" r="2" fill="#B3D442"/></svg>
+                  <span class="sponsor-chip-name">Wipro</span>
+                </div>
+                <!-- Mphasis -->
+                <div class="sponsor-chip">
+                  <svg width="14" height="14" viewBox="0 0 32 32" aria-label="Mphasis"><rect width="32" height="32" rx="4" fill="#E31837"/><text x="5" y="22" font-family="Arial" font-size="13" font-weight="bold" fill="white">M</text></svg>
+                  <span class="sponsor-chip-name">Mphasis</span>
+                </div>
+              </div>
+            </div>
+            <div class="capacity-bar-wrap">
+              <div class="capacity-label"><span class="cap-text">Registered</span><span class="cap-count">174 / 200</span></div>
+              <div class="cap-track"><div class="cap-fill-warn" style="width:87%;"></div></div>
+            </div>
+            <div class="tag-row"><span class="tag tag-virtual-l">Virtual</span><span class="tag tag-open-l">Registration open</span></div>
+            <button class="btn-primary">View details</button>
+          </div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item active"><i class="ti ti-calendar-event" style="font-size:18px;" aria-hidden="true"></i>Events</div>
+          <div class="nav-item"><i class="ti ti-bookmark" style="font-size:18px;" aria-hidden="true"></i>My Events</div>
+          <div class="nav-item"><i class="ti ti-shield-check" style="font-size:18px;" aria-hidden="true"></i>Volunteer</div>
+          <div class="nav-item"><i class="ti ti-menu-2" style="font-size:18px;" aria-hidden="true"></i>More</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ===== EVENT DETAIL ===== -->
+    <div class="screen-wrap">
+      <div class="screen-name">4 · Event Detail</div>
+      <div class="phone light" id="event-detail">
+        <div class="top-bar">
+          <div class="top-bar-back"><i class="ti ti-arrow-left" style="font-size:14px;vertical-align:-1px;" aria-hidden="true"></i> Back</div>
+          <div class="top-bar-title">NITKonnect 2026</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div class="meta-grid" style="margin-bottom:8px;">
+            <div class="meta-item"><i class="ti ti-calendar meta-icon" aria-hidden="true"></i> 12 Sep 2026</div>
+            <div class="meta-item"><i class="ti ti-clock meta-icon" aria-hidden="true"></i> 09:00 – 18:00</div>
+            <div class="meta-item"><i class="ti ti-map-pin meta-icon" aria-hidden="true"></i> Bengaluru</div>
+            <div class="meta-item"><i class="ti ti-building meta-icon" aria-hidden="true"></i> NIMHANS Conv.</div>
+          </div>
+          <div class="tag-row"><span class="tag tag-open-l">Registration open</span><span class="tag tag-physical-l">Physical</span></div>
+
+          <div class="detail-stat-row">
+            <div class="detail-stat"><div class="detail-stat-val">87</div><div class="detail-stat-label">Registered</div></div>
+            <div class="detail-stat"><div class="detail-stat-val">200</div><div class="detail-stat-label">Total capacity</div></div>
+          </div>
+          <div class="capacity-bar-wrap">
+            <div class="capacity-label"><span class="cap-text">113 seats remaining</span><span class="cap-count">43%</span></div>
+            <div class="cap-track" style="height:5px;"><div class="cap-fill-ok" style="width:43.5%;"></div></div>
+          </div>
+
+          <div class="section-divider"></div>
+
+          <!-- SPONSORS with larger logos -->
+          <div class="detail-section-title">Sponsors</div>
+          <div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:4px;" id="detail-sponsors">
+            <!-- Infosys -->
+            <div class="sponsor-chip" style="padding:6px 10px;gap:7px;">
+              <svg width="20" height="20" viewBox="0 0 32 32" aria-label="Infosys"><circle cx="16" cy="16" r="16" fill="#007CC2"/><rect x="8" y="13" width="16" height="6" rx="1" fill="white"/></svg>
+              <span class="sponsor-chip-name" style="font-size:11px;">Infosys</span>
+            </div>
+            <!-- NITK Foundation -->
+            <div class="sponsor-chip" style="padding:6px 10px;gap:7px;">
+              <svg width="20" height="20" viewBox="0 0 32 32" aria-label="NITK Alumni Foundation"><rect width="32" height="32" rx="6" fill="#0D1B3E"/><polygon points="16,5 28,27 4,27" fill="none" stroke="#C9952A" stroke-width="2.5"/></svg>
+              <span class="sponsor-chip-name" style="font-size:11px;">NITK Foundation</span>
+            </div>
+            <!-- Tata Elxsi -->
+            <div class="sponsor-chip" style="padding:6px 10px;gap:7px;">
+              <svg width="20" height="20" viewBox="0 0 32 32" aria-label="Tata Elxsi"><rect width="32" height="32" rx="4" fill="#003087"/><rect x="6" y="13" width="20" height="3" rx="1" fill="white"/><rect x="13" y="10" width="6" height="12" rx="1" fill="white"/></svg>
+              <span class="sponsor-chip-name" style="font-size:11px;">Tata Elxsi</span>
+            </div>
+          </div>
+
+          <div class="section-divider"></div>
+
+          <div class="detail-section-title">About</div>
+          <div class="about-text">The flagship annual alumni gathering of NITK Surathkal — celebrating achievements, networking, and giving back to the alma mater.</div>
+
+          <div class="section-divider"></div>
+
+          <div class="detail-section-title">Agenda</div>
+          <div class="agenda-item"><div class="agenda-time">09:00</div><div class="agenda-text">Keynote — Prof. Ashwin Rao</div></div>
+          <div class="agenda-item"><div class="agenda-time">10:30</div><div class="agenda-text">Panel: Future of Deep Tech</div></div>
+          <div class="agenda-item"><div class="agenda-time">13:00</div><div class="agenda-text">Alumni Networking Lunch</div></div>
+
+          <div class="section-divider"></div>
+
+          <div class="detail-section-title">Speakers</div>
+          <div class="speaker-row">
+            <div class="speaker-avatar">AR</div>
+            <div><div class="speaker-name">Prof. Ashwin Rao</div><div class="speaker-role">NITK — Chair, CSE Dept.</div></div>
+          </div>
+          <div class="speaker-row">
+            <div class="speaker-avatar">PK</div>
+            <div><div class="speaker-name">Priya Krishnamurthy</div><div class="speaker-role">CTO, Infosys Alumni Cell</div></div>
+          </div>
+        </div>
+        <div class="detail-cta" id="detail-cta">
+          <button class="btn-primary">Register</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="section-label">Registration Flow</p>
+  <div class="screens-grid">
+
+    <!-- REGISTRATION FORM -->
+    <div class="screen-wrap">
+      <div class="screen-name">5 · Registration Form — updated</div>
+      <div class="phone light" id="reg-form">
+        <div class="top-bar">
+          <div class="top-bar-back"><i class="ti ti-arrow-left" style="font-size:14px;vertical-align:-1px;" aria-hidden="true"></i> Back</div>
+          <div class="top-bar-title">Register</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div style="font-size:10px;margin-bottom:4px;" class="meta-item">NITKonnect 2026</div>
+          <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;">
+            <span class="meta-item" style="font-size:10px;"><i class="ti ti-calendar meta-icon" aria-hidden="true"></i> 12 Sep 2026</span>
+            <span class="meta-item" style="font-size:10px;"><i class="ti ti-clock meta-icon" aria-hidden="true"></i> 09:00 – 18:00</span>
+          </div>
+
+          <div class="form-group">
+            <label class="form-label">Badge name</label>
+            <input class="form-input" value="Rahul Nair" readonly>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Email</label>
+            <input class="form-input" value="rahul.nair@nitk.edu.in" readonly>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Phone</label>
+            <input class="form-input" value="+91 98765 43210" readonly>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Notes (optional)</label>
+            <div class="form-input" style="min-height:44px;font-size:12px;padding-top:10px;" id="notes-placeholder">Dietary preferences, accessibility needs…</div>
+          </div>
+
+          <button class="btn-primary" style="margin-top:4px;">Confirm registration</button>
+          <div class="info-box">
+            <i class="ti ti-info-circle" style="font-size:12px;vertical-align:-1px;" aria-hidden="true"></i> You'll receive a confirmation email. Your QR badge will appear in My Events.
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- SUCCESS -->
+    <div class="screen-wrap">
+      <div class="screen-name">6 · Registration Success</div>
+      <div class="phone light" id="reg-success">
+        <div class="top-bar">
+          <div class="top-bar-back"></div>
+          <div class="top-bar-title">Success</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div class="success-icon"><i class="ti ti-check" style="font-size:20px;"></i></div>
+          <div class="success-title">Registration confirmed!</div>
+          <div class="success-sub">A confirmation email has been sent to rahul.nair@nitk.edu.in</div>
+          <div class="event-summary-card">
+            <div style="font-size:12px;font-weight:600;color:#0D1B3E;margin-bottom:4px;">NITKonnect 2026</div>
+            <div style="font-size:10px;color:#5A6A8A;margin-bottom:6px;"><i class="ti ti-calendar" style="font-size:12px;vertical-align:-1px;"></i> 12 Sep 2026 &nbsp;·&nbsp; Bengaluru</div>
+            <span class="status-badge badge-registered-l">Registered</span>
+          </div>
+          <div class="info-box">Your QR badge is ready in My Events — present it at the venue for check-in.</div>
+          <button class="btn-primary" style="margin-top:12px;">View QR badge</button>
+          <button class="btn-secondary">Go to My Events</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="section-label">My Events & QR Badge</p>
+  <div class="screens-grid">
+
+    <!-- MY EVENTS -->
+    <div class="screen-wrap">
+      <div class="screen-name">7 · My Events</div>
+      <div class="phone light" id="my-events">
+        <div class="top-bar">
+          <div class="top-bar-back"></div>
+          <div class="top-bar-title">My Events</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div class="tab-row" style="margin-bottom:14px;">
+            <div class="tab active">Upcoming</div>
+            <div class="tab">Past</div>
+          </div>
+          <div class="event-card">
+            <div class="event-card-header">
+              <div class="event-title">NITKonnect 2026</div>
+              <span class="status-badge badge-registered-l">Registered</span>
+            </div>
+            <div class="event-meta" style="margin-top:4px;"><i class="ti ti-calendar" style="font-size:12px;vertical-align:-1px;"></i> 12 Sep 2026</div>
+            <button class="btn-primary" style="margin-top:10px;">View details</button>
+          </div>
+          <div class="event-card">
+            <div class="event-card-header">
+              <div class="event-title">NITK Founders Roundtable</div>
+              <span class="status-badge badge-checkedin-l">Checked-in</span>
+            </div>
+            <div class="event-meta" style="margin-top:4px;"><i class="ti ti-calendar" style="font-size:12px;vertical-align:-1px;"></i> 3 Mar 2026</div>
+            <div style="display:flex;align-items:center;gap:5px;margin-top:6px;margin-bottom:10px;">
+              <i class="ti ti-video" style="font-size:11px;color:#C9952A;"></i>
+              <span style="font-size:10px;color:#C9952A;">Post-event recording available</span>
+            </div>
+            <button class="btn-primary">View details</button>
+          </div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item"><i class="ti ti-calendar-event nav-icon"></i>Events</div>
+          <div class="nav-item active"><i class="ti ti-bookmark nav-icon"></i>My Events</div>
+          <div class="nav-item"><i class="ti ti-shield-check nav-icon"></i>Volunteer</div>
+          <div class="nav-item"><i class="ti ti-menu-2 nav-icon"></i>More</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- QR BADGE -->
+    <div class="screen-wrap">
+      <div class="screen-name">9 · QR Badge</div>
+      <div class="phone light" id="qr-badge">
+        <div class="top-bar">
+          <div class="top-bar-back"><i class="ti ti-arrow-left" style="font-size:14px;vertical-align:-1px;"></i> Back</div>
+          <div class="top-bar-title">QR Badge</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div style="font-size:10px;color:#5A6A8A;margin-bottom:10px;">NITKonnect 2026 · 12 Sep 2026</div>
+          <div class="qr-box">
+            <svg class="qr-code-svg" viewBox="0 0 100 100" xmlns="http://www.w3.org/2000/svg">
+              <rect width="100" height="100" fill="white"/>
+              <g fill="#0D1B3E">
+                <rect x="10" y="10" width="30" height="30" rx="3"/>
+                <rect x="14" y="14" width="22" height="22" fill="white" rx="2"/>
+                <rect x="18" y="18" width="14" height="14" rx="1"/>
+                <rect x="60" y="10" width="30" height="30" rx="3"/>
+                <rect x="64" y="14" width="22" height="22" fill="white" rx="2"/>
+                <rect x="68" y="18" width="14" height="14" rx="1"/>
+                <rect x="10" y="60" width="30" height="30" rx="3"/>
+                <rect x="14" y="64" width="22" height="22" fill="white" rx="2"/>
+                <rect x="18" y="68" width="14" height="14" rx="1"/>
+                <rect x="45" y="10" width="6" height="6"/>
+                <rect x="45" y="20" width="6" height="6"/>
+                <rect x="55" y="10" width="6" height="6"/>
+                <rect x="45" y="45" width="6" height="6"/>
+                <rect x="55" y="45" width="6" height="6"/>
+                <rect x="65" y="45" width="6" height="6"/>
+                <rect x="75" y="45" width="6" height="6"/>
+                <rect x="85" y="45" width="6" height="6"/>
+                <rect x="45" y="55" width="6" height="6"/>
+                <rect x="65" y="55" width="6" height="6"/>
+                <rect x="85" y="55" width="6" height="6"/>
+                <rect x="45" y="65" width="6" height="6"/>
+                <rect x="55" y="65" width="6" height="6"/>
+                <rect x="75" y="65" width="6" height="6"/>
+                <rect x="45" y="75" width="6" height="6"/>
+                <rect x="65" y="75" width="6" height="6"/>
+                <rect x="55" y="85" width="6" height="6"/>
+                <rect x="75" y="85" width="6" height="6"/>
+                <rect x="85" y="85" width="6" height="6"/>
+                <rect x="85" y="75" width="6" height="6"/>
+                <rect x="85" y="65" width="6" height="6"/>
+              </g>
+            </svg>
+            <div class="qr-name">Rahul Nair</div>
+            <span class="status-badge badge-registered-l">Registered</span>
+          </div>
+          <div class="info-box">
+            <i class="ti ti-brightness-up" style="font-size:12px;vertical-align:-1px;color:#C9952A;"></i> Increase screen brightness and present to a volunteer for check-in.
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="section-label">Volunteer Operations</p>
+  <div class="screens-grid">
+
+    <!-- VOLUNTEER HOME -->
+    <div class="screen-wrap">
+      <div class="screen-name">10 · Volunteer Home</div>
+      <div class="phone light" id="vol-home">
+        <div class="top-bar">
+          <div class="top-bar-back"></div>
+          <div class="top-bar-title">Volunteer</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div class="detail-section-title" style="margin-bottom:10px;">Your events</div>
+          <div class="event-card">
+            <div class="event-title" style="margin-bottom:4px;">NITKonnect 2026</div>
+            <div class="event-meta"><i class="ti ti-calendar" style="font-size:12px;vertical-align:-1px;"></i> 12 Sep 2026 · Bengaluru</div>
+            <button class="btn-primary" style="margin-top:10px;">Open operations</button>
+          </div>
+          <div class="event-card">
+            <div class="event-title" style="margin-bottom:4px;">NITK Tech Summit 2026</div>
+            <div class="event-meta"><i class="ti ti-calendar" style="font-size:12px;vertical-align:-1px;"></i> 28 Oct 2026 · Virtual</div>
+            <button class="btn-primary" style="margin-top:10px;">Open operations</button>
+          </div>
+          <div class="info-box">Select an event to manage check-ins and attendee lists.</div>
+        </div>
+        <div class="bottom-nav">
+          <div class="nav-item"><i class="ti ti-calendar-event nav-icon"></i>Events</div>
+          <div class="nav-item"><i class="ti ti-bookmark nav-icon"></i>My Events</div>
+          <div class="nav-item active"><i class="ti ti-shield-check nav-icon"></i>Volunteer</div>
+          <div class="nav-item"><i class="ti ti-menu-2 nav-icon"></i>More</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- EVENT OPS -->
+    <div class="screen-wrap">
+      <div class="screen-name">11 · Event Operations</div>
+      <div class="phone light" id="event-ops">
+        <div class="top-bar">
+          <div class="top-bar-back"><i class="ti ti-arrow-left" style="font-size:14px;vertical-align:-1px;"></i> Back</div>
+          <div class="top-bar-title">Event Operations</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div style="font-size:12px;font-weight:600;color:#0D1B3E;margin-bottom:2px;">NITKonnect 2026</div>
+          <div style="font-size:10px;color:#5A6A8A;margin-bottom:14px;">12 Sep 2026 · Bengaluru</div>
+          <div class="metrics-row">
+            <div class="metric-card">
+              <div class="metric-val">120</div>
+              <div class="metric-label">Registrations</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-val">45</div>
+              <div class="metric-label">Checked-in</div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-val">75</div>
+              <div class="metric-label">Pending</div>
+            </div>
+          </div>
+          <button class="btn-primary" style="display:flex;align-items:center;justify-content:center;gap:8px;margin-bottom:10px;">
+            <i class="ti ti-qrcode" style="font-size:16px;"></i> Open scanner
+          </button>
+          <button class="btn-secondary" style="display:flex;align-items:center;justify-content:center;gap:8px;">
+            <i class="ti ti-list" style="font-size:16px;"></i> View attendee list
+          </button>
+          <div class="info-box" style="margin-top:12px;">Use the scanner for QR-based check-in or browse the full attendee list.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="section-label">Scanner & Attendee List</p>
+  <div class="screens-grid">
+
+    <!-- SCANNER -->
+    <div class="screen-wrap">
+      <div class="screen-name">12 · QR Scanner</div>
+      <div class="phone light" id="scanner">
+        <div class="top-bar">
+          <div class="top-bar-back"><i class="ti ti-arrow-left" style="font-size:14px;vertical-align:-1px;"></i> Back</div>
+          <div class="top-bar-title">QR Scanner</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div class="scanner-viewport">
+            <div style="position:absolute;inset:0;background:repeating-linear-gradient(0deg,rgba(201,149,42,0.03) 0,rgba(201,149,42,0.03) 1px,transparent 1px,transparent 20px),repeating-linear-gradient(90deg,rgba(201,149,42,0.03) 0,rgba(201,149,42,0.03) 1px,transparent 1px,transparent 20px);"></div>
+            <div class="scan-frame">
+              <div class="scan-corner tl"></div>
+              <div class="scan-corner tr"></div>
+              <div class="scan-corner bl"></div>
+              <div class="scan-corner br"></div>
+              <div style="position:absolute;top:50%;left:0;right:0;height:1px;background:rgba(201,149,42,0.5);"></div>
+            </div>
+          </div>
+          <div style="font-size:11px;text-align:center;color:#9AAABB;margin-bottom:14px;">Align QR code within the frame</div>
+
+          <div class="status-panel success" style="margin-bottom:8px;">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+              <i class="ti ti-circle-check" style="font-size:14px;color:#1B5C3A;"></i>
+              <div class="status-panel-name">Rahul Nair</div>
+            </div>
+            <div class="status-panel-sub">Checked-in at 09:24 AM</div>
+          </div>
+          <div class="status-panel warn">
+            <div style="display:flex;align-items:center;gap:6px;margin-bottom:3px;">
+              <i class="ti ti-alert-circle" style="font-size:14px;color:#A05E00;"></i>
+              <div class="status-panel-name">Priya Menon</div>
+            </div>
+            <div class="status-panel-sub">Already checked-in at 08:58 AM</div>
+          </div>
+          <div style="text-align:center;margin-top:12px;">
+            <span style="font-size:11px;color:#C9952A;font-weight:500;cursor:pointer;">Enter code manually</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ATTENDEE LIST -->
+    <div class="screen-wrap">
+      <div class="screen-name">13 · Attendee List</div>
+      <div class="phone light" id="attendee-list">
+        <div class="top-bar">
+          <div class="top-bar-back"><i class="ti ti-arrow-left" style="font-size:14px;vertical-align:-1px;"></i> Back</div>
+          <div class="top-bar-title">Attendee List</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div class="search-bar" style="margin-bottom:10px;">
+            <i class="ti ti-search" style="font-size:14px;"></i>
+            <span>Search name or email…</span>
+          </div>
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;">
+            <button class="export-btn"><i class="ti ti-download" style="font-size:14px;"></i> Export CSV</button>
+            <div style="flex:1;"></div>
+            <div style="font-size:10px;color:#5A6A8A;">120 attendees</div>
+          </div>
+          <div class="attendee-row">
+            <div>
+              <div class="attendee-name">Rahul Nair</div>
+              <div class="attendee-email">rahul.nair@nitk.edu.in</div>
+            </div>
+            <span class="status-badge badge-checkedin-l">Checked-in</span>
+          </div>
+          <div class="attendee-row">
+            <div>
+              <div class="attendee-name">Asha Bhat</div>
+              <div class="attendee-email">asha.bhat@nitk.edu.in</div>
+            </div>
+            <span class="status-badge badge-registered-l">Registered</span>
+          </div>
+          <div class="attendee-row">
+            <div>
+              <div class="attendee-name">Kiran Shetty</div>
+              <div class="attendee-email">kiran.shetty@nitk.edu.in</div>
+            </div>
+            <span class="status-badge badge-registered-l">Registered</span>
+          </div>
+          <div class="attendee-row">
+            <div>
+              <div class="attendee-name">Deepa Kamath</div>
+              <div class="attendee-email">deepa.kamath@nitk.edu.in</div>
+            </div>
+            <span class="status-badge badge-checkedin-l">Checked-in</span>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <p class="section-label">Settings</p>
+  <div class="screens-grid">
+    <div class="screen-wrap">
+      <div class="screen-name">14 · Settings / Profile</div>
+      <div class="phone light" id="settings">
+        <div class="top-bar">
+          <div class="top-bar-back"><i class="ti ti-arrow-left" style="font-size:14px;vertical-align:-1px;"></i> Back</div>
+          <div class="top-bar-title">Settings</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div class="avatar-circle">RN</div>
+          <div class="user-name">Rahul Nair</div>
+          <div class="user-email">rahul.nair@nitk.edu.in</div>
+
+          <div class="detail-section-title">Account</div>
+          <div class="settings-section">
+            <div class="settings-row">
+              <span class="settings-row-label">Name</span>
+              <span class="settings-row-val">Rahul Nair</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Email</span>
+              <span class="settings-row-val">rahul.nair@nitk.edu.in</span>
+            </div>
+            <div class="settings-row">
+              <span class="settings-row-label">Role</span>
+              <span class="status-badge badge-registered-l">Member</span>
+            </div>
+          </div>
+
+          <div class="detail-section-title" style="margin-top:14px;">App</div>
+          <div class="settings-section">
+            <div class="settings-row">
+              <span class="settings-row-label">Theme</span>
+              <span class="settings-row-val">System <i class="ti ti-chevron-right" style="font-size:12px;vertical-align:-1px;"></i></span>
+            </div>
+            <div class="settings-row" style="border-bottom:none;">
+              <span class="settings-row-label">Version</span>
+              <span class="settings-row-val">1.0.0-alpha</span>
+            </div>
+          </div>
+
+          <button class="btn-danger">
+            <i class="ti ti-logout" style="font-size:14px;vertical-align:-2px;margin-right:5px;"></i>Log out
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Design Tokens -->
+    <div class="screen-wrap">
+      <div class="screen-name">Design tokens</div>
+      <div class="phone light" id="tokens" style="min-height:unset;">
+        <div class="top-bar">
+          <div class="top-bar-back"></div>
+          <div class="top-bar-title">Color &amp; Type</div>
+          <div class="top-bar-action"></div>
+        </div>
+        <div class="screen-body">
+          <div class="detail-section-title">Brand palette</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
+            <div style="background:#0D1B3E;color:#FFFFFF;border-radius:8px;padding:10px;font-size:11px;font-weight:500;">Navy<br><span style="font-weight:400;opacity:0.6;font-size:10px;">#0D1B3E</span></div>
+            <div style="background:#C9952A;color:#FFFFFF;border-radius:8px;padding:10px;font-size:11px;font-weight:500;">Gold<br><span style="font-weight:400;opacity:0.7;font-size:10px;">#C9952A</span></div>
+            <div style="background:#1E3A6E;color:#FFFFFF;border-radius:8px;padding:10px;font-size:11px;font-weight:500;">Blue Mid<br><span style="font-weight:400;opacity:0.6;font-size:10px;">#1E3A6E</span></div>
+            <div style="background:#EEF3FA;color:#0D1B3E;border-radius:8px;padding:10px;font-size:11px;font-weight:500;border:0.5px solid rgba(13,27,62,0.1);">Blue Light<br><span style="font-weight:400;color:#5A6A8A;font-size:10px;">#EEF3FA</span></div>
+          </div>
+
+          <div class="detail-section-title">Status</div>
+          <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px;margin-bottom:14px;">
+            <div style="background:#D9F4E8;color:#1B5C3A;border-radius:8px;padding:8px 10px;font-size:10px;font-weight:600;">Success</div>
+            <div style="background:#FEF0D7;color:#A05E00;border-radius:8px;padding:8px 10px;font-size:10px;font-weight:600;">Warning</div>
+            <div style="background:#FDE8E8;color:#8A1B1B;border-radius:8px;padding:8px 10px;font-size:10px;font-weight:600;">Error</div>
+            <div style="background:#DDEEFF;color:#1B5C9B;border-radius:8px;padding:8px 10px;font-size:10px;font-weight:600;">Info</div>
+          </div>
+
+          <div class="detail-section-title">Typography</div>
+          <div style="margin-bottom:8px;">
+            <div style="font-family:'Fraunces',serif;font-size:20px;font-weight:600;color:#0D1B3E;line-height:1.2;">Fraunces</div>
+            <div style="font-size:10px;color:#5A6A8A;">Display / Headings</div>
+          </div>
+          <div>
+            <div style="font-family:'DM Sans',sans-serif;font-size:14px;font-weight:400;color:#0D1B3E;">DM Sans — Body text, labels, UI copy</div>
+            <div style="font-size:10px;color:#5A6A8A;">Body / UI</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+const SCREENS = ['event-list','event-detail'];
+
+function applyTheme(el, theme) {
+  el.classList.toggle('light', theme==='light');
+  el.classList.toggle('dark',  theme==='dark');
+
+  const tagSwaps = [['tag-physical-l','tag-physical-d'],['tag-open-l','tag-open-d'],['tag-virtual-l','tag-virtual-d']];
+  tagSwaps.forEach(([l,d]) => {
+    el.querySelectorAll('.'+l).forEach(t => { if(theme==='dark'){t.classList.remove(l);t.classList.add(d);} });
+    el.querySelectorAll('.'+d).forEach(t => { if(theme==='light'){t.classList.remove(d);t.classList.add(l);} });
+  });
+}
+
+function setTheme(theme) {
+  SCREENS.forEach(id => { const el=document.getElementById(id); if(el) applyTheme(el,theme); });
+  document.getElementById('btn-light').classList.toggle('active', theme==='light');
+  document.getElementById('btn-dark').classList.toggle('active', theme==='dark');
+}
+
+const DARK_IDS = ['splash','login','event-list','event-detail','reg-form','reg-success','my-events','qr-badge','vol-home','event-ops','scanner','attendee-list','settings','tokens'];
+
+const DARK_SWAPS = {
+  'tag-physical-l':'tag-physical-d','tag-open-l':'tag-open-d','tag-virtual-l':'tag-virtual-d',
+  'tag-closed-l':'tag-closed-d','tag-reg-l':'tag-reg-d',
+  'badge-registered-l':'badge-registered-d','badge-checkedin-l':'badge-checkedin-d'
+};
+
+function applyTheme(el, theme) {
+  if (theme === 'dark') {
+    el.classList.remove('light'); el.classList.add('dark');
+  } else {
+    el.classList.remove('dark'); el.classList.add('light');
+  }
+  el.querySelectorAll('.event-meta').forEach(e => {
+    e.style.color = theme === 'dark' ? '#8B9AB8' : '#5A6A8A';
+  });
+  el.querySelectorAll('.detail-section-title').forEach(e => {
+    e.style.color = theme === 'dark' ? '#6B7FA0' : '#5A6A8A';
+  });
+  Object.entries(DARK_SWAPS).forEach(([light, dark]) => {
+    el.querySelectorAll('.'+light).forEach(t => {
+      if(theme==='dark'){t.classList.remove(light);t.classList.add(dark);}
+    });
+    el.querySelectorAll('.'+dark).forEach(t => {
+      if(theme==='light'){t.classList.remove(dark);t.classList.add(light);}
+    });
+  });
+  if (theme === 'dark') {
+    el.querySelectorAll('.btn-primary').forEach(b => { b.style.background='#C9952A'; b.style.color='#0B111F'; });
+    el.querySelectorAll('.btn-secondary').forEach(b => { b.style.background='transparent'; b.style.color='#E8EDF5'; b.style.border='0.5px solid rgba(255,255,255,0.15)'; });
+    el.querySelectorAll('.btn-danger').forEach(b => { b.style.background='#2E1010'; b.style.color='#FF9090'; b.style.border='0.5px solid rgba(255,144,144,0.15)'; });
+    el.querySelectorAll('.btn-google').forEach(b => { b.style.background='transparent'; b.style.color='#E8EDF5'; b.style.border='0.5px solid rgba(255,255,255,0.15)'; });
+    el.querySelectorAll('.metric-val').forEach(b => { b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.event-title').forEach(b => { b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.user-name').forEach(b => { b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.login-logo').forEach(b => { b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.settings-row-label').forEach(b => { b.style.color='#C8D5E8'; });
+    el.querySelectorAll('.attendee-name').forEach(b => { b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.speaker-name').forEach(b => { b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.form-label').forEach(b => { b.style.color='#8B9AB8'; });
+    el.querySelectorAll('.form-input').forEach(b => { b.style.background='#1C2A40'; b.style.borderColor='rgba(255,255,255,0.1)'; b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.success-title').forEach(b => { b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.agenda-time').forEach(b => { b.style.color='#EBB84A'; });
+    el.querySelectorAll('.agenda-text').forEach(b => { b.style.color='#C8D5E8'; });
+    el.querySelectorAll('.qr-name').forEach(b => { b.style.color='#E8EDF5'; });
+    el.querySelectorAll('.success-icon').forEach(b => { b.style.background='#0F2920'; b.style.color='#6FDBA8'; });
+    el.querySelectorAll('.event-summary-card').forEach(b => { b.style.background='#1C2A40'; b.querySelectorAll('[style*="color:#0D1B3E"]').forEach(x=>x.style.color='#E8EDF5'); });
+    el.querySelectorAll('.avatar-circle').forEach(b => { b.style.background='#8A6010'; b.style.color='#FDECC8'; });
+    el.querySelectorAll('.status-panel.success').forEach(b => { b.style.background='#0F2920'; });
+    el.querySelectorAll('.status-panel.warn').forEach(b => { b.style.background='#2A1A00'; });
+    el.querySelectorAll('.speaker-avatar').forEach(b => { b.style.background='#1E1540'; b.style.color='#B89AFF'; });
+    el.querySelectorAll('.export-btn').forEach(b => { b.style.background='#1C2A40'; b.style.color='#C8D5E8'; b.style.border='none'; });
+    el.querySelectorAll('.top-bar-title').forEach(b => { b.style.color='#E8EDF5'; });
+  } else {
+    el.querySelectorAll('.btn-primary').forEach(b => { b.style.background='#0D1B3E'; b.style.color='#FFFFFF'; });
+    el.querySelectorAll('.btn-secondary').forEach(b => { b.style.background='transparent'; b.style.color='#0D1B3E'; b.style.border='0.5px solid rgba(13,27,62,0.25)'; });
+    el.querySelectorAll('.btn-danger').forEach(b => { b.style.background='#FDE8E8'; b.style.color='#8A1B1B'; b.style.border='0.5px solid rgba(138,27,27,0.2)'; });
+    el.querySelectorAll('.btn-google').forEach(b => { b.style.background='transparent'; b.style.color='#0D1B3E'; b.style.border='0.5px solid rgba(13,27,62,0.2)'; });
+    el.querySelectorAll('.metric-val').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.event-title').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.user-name').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.login-logo').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.settings-row-label').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.attendee-name').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.speaker-name').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.form-label').forEach(b => { b.style.color='#5A6A8A'; });
+    el.querySelectorAll('.form-input').forEach(b => { b.style.background='#FFFFFF'; b.style.borderColor='rgba(13,27,62,0.2)'; b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.success-title').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.agenda-time').forEach(b => { b.style.color='#C9952A'; });
+    el.querySelectorAll('.agenda-text').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.qr-name').forEach(b => { b.style.color='#0D1B3E'; });
+    el.querySelectorAll('.success-icon').forEach(b => { b.style.background='#D9F4E8'; b.style.color='#1B5C3A'; });
+    el.querySelectorAll('.event-summary-card').forEach(b => { b.style.background='#EEF3FA'; });
+    el.querySelectorAll('.avatar-circle').forEach(b => { b.style.background='#C9952A'; b.style.color='#FFFFFF'; });
+    el.querySelectorAll('.status-panel.success').forEach(b => { b.style.background='#D9F4E8'; });
+    el.querySelectorAll('.status-panel.warn').forEach(b => { b.style.background='#FEF0D7'; });
+    el.querySelectorAll('.speaker-avatar').forEach(b => { b.style.background='#EDE6FF'; b.style.color='#4A2DB0'; });
+    el.querySelectorAll('.export-btn').forEach(b => { b.style.background='#EEF3FA'; b.style.color='#0D1B3E'; b.style.border='none'; });
+    el.querySelectorAll('.top-bar-title').forEach(b => { b.style.color='#0D1B3E'; });
+  }
+}
+
+function setTheme(theme) {
+  DARK_IDS.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) applyTheme(el, theme);
+  });
+  document.getElementById('btn-light').classList.toggle('active', theme === 'light');
+  document.getElementById('btn-dark').classList.toggle('active', theme === 'dark');
+
+  const root = document.getElementById('root');
+  if (theme === 'dark') {
+    const tokenCard = document.getElementById('tokens');
+    if (tokenCard) {
+      const palette = tokenCard.querySelectorAll('[style*="background:#EEF3FA"]');
+      palette.forEach(el => { el.style.background='#1C2A40'; el.style.color='#C8D5E8'; el.style.border='none'; });
+    }
+  }
+}
+</script>
