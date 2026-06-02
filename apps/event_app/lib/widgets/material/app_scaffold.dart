@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:nitksaa_event/apps/event_app/lib/theme/app_colors.dart';
+import 'package:event_app/theme/app_colors.dart';
 
 class AppScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
@@ -26,11 +26,8 @@ class AppScaffold extends StatelessWidget {
     return Scaffold(
       key: scaffoldMessengerKey,
       backgroundColor: backgroundColor,
-      appBar: appBar ?? AppBar(
-        title: const Text(''),
-        backgroundColor: backgroundColor,
-        elevation: 0,
-      ),
+      // If appBar is provided, use it; otherwise no app bar (e.g., splash screen)
+      appBar: appBar,
       body: SafeArea(
         child: body ?? const SizedBox.shrink(),
       ),

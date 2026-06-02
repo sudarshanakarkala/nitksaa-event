@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../routes/app_routes.dart';
 import '../../auth/services/auth_controller.dart';
+import '../../../widgets/shared/shared_screen.dart';
 
 class HomePlaceholderScreen extends StatefulWidget {
   const HomePlaceholderScreen({super.key});
@@ -23,7 +24,7 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Scaffold(
+    return SharedScreen(
       appBar: AppBar(
         title: const Text('NITKSAA Event'),
         automaticallyImplyLeading: false,

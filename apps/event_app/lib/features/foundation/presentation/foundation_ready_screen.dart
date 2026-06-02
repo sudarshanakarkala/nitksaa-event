@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+
 import '../../../core/app_state.dart';
+import '../../../core/logger/app_logger.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/theme_provider.dart';
+import '../../../widgets/shared/shared_screen.dart';
+import '../../../widgets/shared/status_row.dart';
 
 class FoundationReadyScreen extends ConsumerWidget {
   const FoundationReadyScreen({super.key});
@@ -14,7 +18,7 @@ class FoundationReadyScreen extends ConsumerWidget {
     final textTheme = Theme.of(context).textTheme;
     final colorScheme = Theme.of(context).colorScheme;
 
-    return Scaffold(
+    return SharedScreen(
       body: Center(
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -27,22 +31,18 @@ class FoundationReadyScreen extends ConsumerWidget {
                 style: textTheme.headlineMedium,
               ),
               const SizedBox(height: 40),
-              _StatusRow(
+              StatusRow(
                 label: 'Firebase',
-                value: AppState.firebaseInitialized
-                    ? 'Initialized'
-                    : 'Not Initialized',
+                value: AppState.firebaseInitialized ? 'Initialized' : 'Not Initialized',
                 ok: AppState.firebaseInitialized,
                 colorScheme: colorScheme,
-                textTheme: textTheme,
               ),
-              const SizedBox(height: 12),
-              _StatusRow(
+              const Divider(height: 1, indent: 16, endIndent: 16),
+              StatusRow(
                 label: 'Theme',
                 value: _themeModeLabel(themeMode),
                 ok: true,
                 colorScheme: colorScheme,
-                textTheme: textTheme,
               ),
               const SizedBox(height: 32),
               TextButton.icon(
