@@ -20,12 +20,12 @@ abstract class RouteGuards {
     }
 
     if (auth.isAuthenticated) {
-      if (isLogin || isSplash) return AppRoutes.home;
+      if (isLogin) return AppRoutes.home;
       return null;
     }
 
     if (isProtected) return AppRoutes.login;
-    if (isSplash) return AppRoutes.login;
+    if (isSplash) return null;
     if (isLogin || isFoundation || isDeveloper) return null;
 
     return null;
