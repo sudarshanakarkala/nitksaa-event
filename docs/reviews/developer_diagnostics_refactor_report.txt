@@ -1,0 +1,91 @@
+Developer Diagnostics Navigation Refactor Report
+Date: 2026-06-03
+
+Scope
+- Flutter app only: apps/event_app.
+- No backend files modified.
+- No database schema or migration files modified.
+- Existing authentication services and route guard auth behavior were not changed.
+
+Files changed
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+- apps/event_app/lib/routes/app_router.dart
+- apps/event_app/lib/routes/route_guards.dart
+- docs/reviews/developer_diagnostics_refactor_report.txt
+
+New diagnostics structure
+- Developer Diagnostics is now a navigation-based diagnostic center.
+- Main screen is an index/dashboard with Quick Actions and row-style diagnostic entries.
+- Each diagnostic row includes:
+  - Icon
+  - Title
+  - Short description
+  - Status badge: OK, INFO, WARNING, ERROR, or N/A
+  - Last run timestamp
+  - Chevron navigation indicator
+- Required dashboard categories are present:
+  - Foundation Status
+  - Logger Test
+  - Theme Control
+  - Firebase Token Test
+  - Backend Auth Test
+  - /auth/me Test
+  - Event Users Test
+  - Database Tables Test
+  - Network Test
+  - App Performance
+  - Debug Tools
+- Quick Actions section includes:
+  - Run All Diagnostics
+  - Export Diagnostic Report
+  - Clear Cached Data
+
+Detail pages
+- Foundation Status detail shows app, environment, Firebase, Hive, theme, platform, router, logger, and auth status.
+- Logger Test detail preserves debug/info/warning/error logger test buttons.
+- Theme Control detail preserves the light/system/dark segmented control.
+- Firebase Token Test detail preserves debug token capture and token-copy behavior. UI only shows a shortened token preview.
+- Backend Auth Test detail preserves Firebase token backend exchange validation.
+- /auth/me Test detail preserves backend JWT validation against /api/v1/auth/me.
+- Event Users Test detail preserves event_users diagnostic table refresh behavior.
+- Database Tables Test detail preserves database table list and row inspection behavior.
+- Network Test detail adds safe backend health endpoint checking for /api/v1/health.
+- App Performance detail provides runtime/platform diagnostics and DevTools guidance.
+- Debug Tools detail provides report export and cached backend session cleanup.
+
+Functionality preserved
+- Firebase token capture remains debug-only.
+- Backend Firebase login exchange remains pointed at /api/v1/auth/firebase.
+- Backend JWT validation remains pointed at /api/v1/auth/me.
+- event_users diagnostics remain pointed at /api/v1/dev/diagnostics/db/event_users.
+- Database table diagnostics remain pointed at /api/v1/dev/diagnostics/db/tables and table-specific diagnostics endpoints.
+- Existing logger test actions were preserved.
+- Existing theme switching was preserved.
+- Existing Developer Diagnostics entry link remains debug-only on LoginScreen.
+- Developer route is now also registered only in debug builds.
+- RouteGuards reject /developer outside debug builds.
+
+Manual verification
+- dart format: passed.
+- flutter analyze: passed with no issues.
+- flutter test: passed with all widget tests passing.
+- Android emulator run:
+  - Device: emulator-5554, sdk gphone64 arm64, Android 15/API 35.
+  - flutter run -d emulator-5554 built, installed, and launched the app.
+  - Startup logs showed Firebase initialized, Hive initialized, and AuthController initialized.
+  - LoginScreen showed the debug-only Developer Diagnostics link.
+  - Developer Diagnostics opened from LoginScreen.
+  - Main diagnostics dashboard showed Quick Actions and row-style diagnostics.
+  - Top rows verified: Foundation Status, Logger Test, Theme Control, Firebase Token Test, Backend Auth Test, /auth/me Test.
+  - After scrolling, remaining rows verified: Event Users Test, Database Tables Test, Network Test, App Performance, Debug Tools.
+  - Event Users Test detail opened from a dashboard row and displayed category-specific diagnostic content.
+
+Pending items
+- Full credential-based Firebase/backend validation was not executed during this pass to avoid changing auth/backend state without explicit test credentials.
+- Network health check action was not executed against a running backend during this pass.
+- Android doctor still reports missing Android cmdline-tools and unknown Android license status, but the emulator build/install/run path succeeded.
+
+Screenshots captured locally during verification
+- /private/tmp/dev_diag_overview_final.png
+- /private/tmp/dev_diag_overview_bottom.png
+- /private/tmp/dev_diag_network_detail.png (captured while verifying Event Users Test detail navigation)

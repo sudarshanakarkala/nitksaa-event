@@ -1,0 +1,120 @@
+Developer Diagnostics Category Refactor Report
+Date: 2026-06-03
+
+Scope
+- Flutter app only: apps/event_app.
+- No backend files modified.
+- No database schema or migration files modified.
+- Existing authentication flow and diagnostic test logic were preserved.
+
+Files changed
+- apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart
+- docs/api/backend_api_index.md
+- docs/reviews/developer_diagnostics_category_refactor_report.txt
+
+Categories added
+- General
+  - Foundation Status
+  - Logger Test
+  - Theme Control
+  - Network Test
+  - App Performance
+  - Debug Tools
+- Authentication
+  - Firebase Token Test
+  - Backend Auth Test
+  - /auth/me Test
+- Database
+  - Event Users Test
+  - Database Tables Test
+- Event Management
+  - Events API Test
+  - Event Detail API Test
+  - Event Creation API Test
+  - Event Publish/Unpublish Test
+- Registration
+  - Registration API Test
+  - My Registration Test
+  - Capacity Guard Test
+  - Confirmation Email Test
+  - Join Link Visibility Test
+- Admin / Attendees
+  - Attendee List API Test
+  - Attendee Export Test
+  - Admin Role Guard Test
+  - Audit Trail Test
+
+Default expanded/collapsed behavior
+- Expanded by default:
+  - General
+  - Authentication
+  - Database
+- Collapsed by default:
+  - Event Management
+  - Registration
+  - Admin / Attendees
+
+Category status behavior
+- ERROR if any child diagnostic is ERROR.
+- WARNING if any child diagnostic is WARNING and none are ERROR.
+- OK if all runnable non-informational child checks are OK.
+- INFO for informational-only categories or mixed informational/current state categories without failures.
+- N/A when a category has no implemented diagnostics or implemented diagnostics have not run.
+
+Existing functionality preserved
+- Developer Diagnostics remains debug-only.
+- Existing diagnostic detail navigation remains intact.
+- Existing logger test actions are preserved.
+- Existing theme control is preserved.
+- Firebase token test is preserved and still only shows a shortened token preview in UI.
+- Backend auth test still uses /api/v1/auth/firebase.
+- /auth/me test still validates backend JWT through /api/v1/auth/me.
+- Event users diagnostic still uses /api/v1/dev/diagnostics/db/event_users.
+- Database table diagnostic still uses /api/v1/dev/diagnostics/db/tables and table-specific diagnostic endpoints.
+- Run All Diagnostics continues to target currently implemented auth/database diagnostics only.
+
+Future placeholders added
+- Event Management placeholders are visible and marked N/A / Coming Soon.
+- Registration placeholders are visible and marked N/A / Coming Soon.
+- Admin / Attendees placeholders are visible and marked N/A / Coming Soon.
+- Placeholder detail screen is implemented with:
+  "This diagnostic will be enabled when the related API is implemented."
+- No backend API calls were added for future placeholders.
+
+Backend API metadata added
+- Every diagnostic item now carries frontend-facing API metadata.
+- Dashboard rows show compact API and auth requirement details.
+- Detail screens show feature name, endpoint/path, HTTP method, auth requirement, purpose, implementation status, sample response, and UI guidance where applicable.
+- Local-only diagnostics are marked as having no backend API.
+- Future diagnostics remain placeholders and do not call planned backend APIs.
+- docs/api/backend_api_index.md groups implemented and planned APIs by Health/Foundation, Authentication, Developer Diagnostics, Events, Registrations, Admin/Attendees, and Notifications/Audit.
+
+Verification results
+- dart format: passed.
+- flutter analyze: passed with no issues.
+- flutter test: passed with all widget tests passing.
+- Android emulator run:
+  - Device: emulator-5554, sdk gphone64 arm64, Android 15/API 35.
+  - flutter run -d emulator-5554 built, installed, and launched successfully.
+  - Developer Diagnostics opened from the debug-only LoginScreen link.
+  - Quick Actions remained visible.
+  - General category was expanded by default and showed child diagnostics.
+  - Authentication category was expanded by default and showed Firebase Token, Backend Auth, and /auth/me diagnostics.
+  - Database category was expanded by default and showed Event Users and Database Tables diagnostics.
+  - Event Management, Registration, and Admin / Attendees were visible as collapsed N/A categories by default.
+  - Expanding future sections showed placeholder rows with N/A and Coming Soon labels.
+- Additional Android API metadata verification:
+  - flutter run -d emulator-5554 built, installed, and launched successfully after adding API metadata.
+  - Dashboard rows showed compact API details such as "API: GET /api/v1/health" and auth requirement details such as "Auth: No".
+  - Foundation Status detail screen showed the Backend API Details card with feature, API, HTTP method, auth requirement, purpose, implementation status, sample response, and UI guidance.
+  - No planned backend APIs were called during this verification.
+
+Pending items
+- Full backend-connected diagnostic success was not verified because no explicit test backend/session run was requested for this pass.
+- Android doctor still reports missing Android cmdline-tools and unknown Android license status, but emulator build/install/run succeeded.
+
+Screenshots captured locally during verification
+- /private/tmp/dev_diag_categories_top.png
+- /private/tmp/dev_diag_categories_mid.png
+- /private/tmp/dev_diag_categories_bottom.png
+- /private/tmp/dev_diag_placeholder_position.png
