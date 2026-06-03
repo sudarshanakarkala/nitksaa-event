@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
+import '../../../../core/widgets/app_widgets.dart';
 import '../../../../routes/app_routes.dart';
 import '../../services/auth_controller.dart';
 import '../../../../../widgets/material/app_scaffold.dart';

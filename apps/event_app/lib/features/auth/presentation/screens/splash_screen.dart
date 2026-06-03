@@ -2,6 +2,7 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/widgets/app_widgets.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
 import '../../services/auth_controller.dart';

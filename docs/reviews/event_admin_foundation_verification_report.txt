@@ -1,0 +1,167 @@
+NITKSAA Event Admin Portal — Foundation Verification Report
+Generated: 2026-06-03
+Scope: admin/event_admin/ — Week 1 Foundation
+
+================================================================================
+AUTOMATED TOOLCHAIN RESULTS
+================================================================================
+
+--- npm install ---
+Command: npm install
+Location: admin/event_admin/
+Result:   PASS
+Output:   added 346 packages, audited 347 packages
+Notes:    12 audit vulnerabilities (11 moderate, 1 high) from transitive
+          dependencies in the dev toolchain (Vite, ESLint, Rollup).
+          None are in runtime dependencies (React, Firebase, react-router-dom).
+          Do NOT run "npm audit fix --force" — it introduces breaking changes.
+          Acceptable for Week 1 development; review before production.
+
+--- npm run build ---
+Command: vite build
+Location: admin/event_admin/
+Result:   PASS — clean build, no errors, no warnings
+Output:
+  dist/index.html                  0.72 kB │ gzip:  0.40 kB
+  dist/assets/index-CuQ0FIbE.css  15.11 kB │ gzip:  3.57 kB
+  dist/assets/index-CZuu4r4U.js   353.09 kB │ gzip: 93.44 kB
+  ✓ built in ~700ms
+Notes:    First build produced a dynamic import warning in AuthProvider.jsx.
+          Fixed by replacing `await import('./sessionStorage')` with a static
+          import. Second build was clean.
+
+--- npm run lint ---
+Command: eslint src
+Location: admin/event_admin/
+Result:   PASS — 0 errors, 0 warnings
+Notes:    Initial run produced 45 false-positive warnings because eslint-plugin-
+          react's jsx-uses-vars rule was not configured. Fixed by adding
+          'react/jsx-uses-vars': 'error' and 'react/jsx-uses-react': 'error'
+          to eslint.config.js. One real fix: unused `networkError` binding in
+          apiClient.js catch clause → changed to bare `catch {}`.
+
+================================================================================
+MANUAL VERIFICATION STEPS
+================================================================================
+
+Pre-requisite:
+  1. Backend running at http://localhost:8000
+  2. Create admin/event_admin/.env from .env.example (copy the file, rename)
+     The .env.example already contains the correct Firebase web project values
+     for project-d22bed42-f302-4e23-8dc (same project as Flutter app).
+  3. Start the admin portal dev server:
+       cd admin/event_admin
+       npm run dev
+     Opens at http://localhost:5173
+
+Verification checklist:
+  [ ] 1. Open http://localhost:5173 — confirms redirect to /login
+  [ ] 2. Open http://localhost:5173/dashboard while logged out — redirects to /login
+  [ ] 3. On LoginPage: backend health indicator turns green (backend online)
+  [ ] 4. On LoginPage: backend health indicator turns red if backend is stopped
+  [ ] 5. Login with Google: popup opens, sign-in completes, redirects to /dashboard
+  [ ] 6. Login with email/password: signs in (requires user in Firebase Auth console)
+  [ ] 7. On Dashboard: Backend Health card shows status:OK, db:ok, env:development
+  [ ] 8. On Dashboard: Logged-in User card shows fullname, email, user_type from /auth/me
+  [ ] 9. On Dashboard: Auth Status card shows Authenticated:Yes, Backend JWT:Present
+  [ ] 10. On Dashboard: 3 placeholder cards for Events/Registrations/Attendees show
+  [ ] 11. Header: shows user name, backend health dot (green), Logout button
+  [ ] 12. Sidebar: Dashboard, Events, Registrations, Attendees, Settings links render
+  [ ] 13. Sidebar: active link highlights in gold
+  [ ] 14. Navigate to /events — placeholder page with planned APIs shows
+  [ ] 15. Navigate to /registrations — placeholder with planned APIs shows
+  [ ] 16. Navigate to /attendees — placeholder with planned APIs shows
+  [ ] 17. Navigate to /settings — user info, env config, buttons show
+  [ ] 18. Settings: Clear Local Session button clears localStorage JWT
+           (page redirects to /login on next navigation or reload)
+  [ ] 19. Logout: clears Firebase session and backend JWT, redirects to /login
+  [ ] 20. After logout: open /dashboard — redirects back to /login (guard working)
+  [ ] 21. Reload /dashboard while logged in — session restores from localStorage,
+           /auth/me validates, stays on /dashboard (no re-login needed)
+
+================================================================================
+CORS FIX — 2026-06-03
+================================================================================
+
+Issue reported:
+  Admin portal login page showed:
+  "Network error: cannot reach backend at http://localhost:8000. Is it running?"
+  even though the backend was healthy.
+
+Root cause:
+  backend/app/main.py was missing CORSMiddleware.
+  curl works because it ignores CORS. The browser enforces it.
+  fetch() from http://localhost:5173 → http://localhost:8000 was blocked.
+  The browser threw TypeError: Failed to fetch, which apiClient.js caught
+  and reported as "Network error: cannot reach backend".
+
+Key finding:
+  backend/app/config.py already had:
+    allowed_origins: str = Field("http://localhost:5173", alias="ALLOWED_ORIGINS")
+    origins_list property (parses comma-separated origins)
+  The config was fully designed for CORS — it was simply never wired up.
+
+Fix applied (backend/app/main.py):
+  Added: from fastapi.middleware.cors import CORSMiddleware
+  Added: app.add_middleware(
+             CORSMiddleware,
+             allow_origins=settings.origins_list,
+             allow_credentials=True,
+             allow_methods=["*"],
+             allow_headers=["*"],
+         )
+
+Files changed:
+  backend/app/main.py  — 1 import + 8 lines added
+  No schema, migration, database, or Flutter changes.
+
+Post-fix verification:
+  OPTIONS /health   (Origin: localhost:5173) → HTTP 200 + access-control-allow-origin: http://localhost:5173  ✓
+  OPTIONS /auth/firebase (Origin: localhost:5173) → HTTP 200  ✓
+  OPTIONS /auth/me  (Origin: localhost:5173) → HTTP 200  ✓
+  GET /health with unknown origin → no Access-Control-Allow-Origin header (correctly blocked)  ✓
+
+Adding more origins (e.g. production):
+  In backend/.env add:
+  ALLOWED_ORIGINS=http://localhost:5173,https://admin.nitksaa.org
+
+================================================================================
+KNOWN LIMITATIONS (Week 1)
+================================================================================
+
+1. No admin role check on the frontend.
+   The backend returns user_type ("alumni", "staff", "admin"). The frontend
+   does not yet enforce admin-only access. Any authenticated user can see the
+   admin portal. Add a check in RequireAuth or a new RequireAdmin component.
+
+2. Token expiry not handled.
+   If the backend JWT expires mid-session, the next API call that returns 401
+   will trigger a hard redirect (window.location.replace) to /login. This is
+   functional but not graceful. Implement token refresh when the backend
+   supports it.
+
+3. No error boundary.
+   Unhandled React render errors will show a blank screen. Add a top-level
+   ErrorBoundary component before production.
+
+4. Mobile layout not implemented.
+   The sidebar is fixed-width (240px). On small screens the layout overflows.
+   Add a hamburger menu and responsive sidebar for mobile.
+
+5. Email/password sign-in requires the user to exist in Firebase Auth console.
+   No self-registration flow is implemented. Admin users must be created manually.
+
+6. Audit vulnerabilities in dev dependencies.
+   12 vulnerabilities in transitive deps (Vite, ESLint, Rollup). These are
+   dev-only and do not affect the production build output. Review before shipping.
+
+================================================================================
+BUILD ARTIFACT
+================================================================================
+
+Production build output: admin/event_admin/dist/
+This directory should be added to .gitignore if not already excluded.
+
+================================================================================
+END OF VERIFICATION REPORT
+================================================================================

@@ -1,0 +1,82 @@
+Week 1 Android Run Verification Report
+Date: 2026-06-03
+
+Target
+- Device: sdk gphone64 arm64
+- Device ID: emulator-5554
+- Platform: Android 15, API 35
+- Flutter: stable 3.38.7
+- App package: org.nitksaa.event
+
+Commands run
+- flutter devices
+- flutter doctor -v
+- flutter run -d emulator-5554
+- adb shell uiautomator dump
+- adb shell screencap
+- adb shell dumpsys window
+- adb logcat -d -t 300
+
+Run result
+- Debug APK built successfully.
+- Debug APK installed successfully on emulator-5554.
+- App launched successfully.
+- Flutter VM service attached successfully.
+- MainActivity was focused and visible according to Android window manager.
+- Window manager reported no ANR since boot.
+
+Startup verification
+- AppLogger reported app startup.
+- Firebase initialized successfully as [DEFAULT].
+- Hive initialized successfully.
+- AuthController initialized successfully.
+- App resolved to logged-out LoginScreen state on the emulator.
+
+UI verification
+- LoginScreen rendered on Android after the shared UI refactor.
+- Verified visible UI elements from Android UI hierarchy and screenshot:
+  - Welcome Back
+  - Sign in to your NITKSAA account
+  - Email field
+  - Password field with visibility toggle
+  - Sign In primary button
+  - Continue with Google secondary button
+  - NITKSAA Event v1.0.0
+  - Developer Diagnostics debug-only link
+- Empty email/password Sign In tap displayed the expected local validation message:
+  - Enter both email and password.
+- This validation check did not attempt Firebase login or backend JWT exchange.
+
+Developer Diagnostics verification
+- Developer Diagnostics link opened successfully from LoginScreen.
+- Diagnostics screen reported:
+  - App Name: NITKSAA Event
+  - Environment: Development
+  - Firebase: Initialized
+  - Firebase App: [DEFAULT]
+  - Hive: Initialized
+  - Theme Mode: System
+  - Platform: Android
+  - Router: Active
+  - Logger: Active
+  - Auth Status: Logged Out
+
+Auth preservation notes
+- Google login button is present and enabled on Android.
+- Email/password login UI is present and enabled on Android.
+- Full credential-based Firebase login, backend JWT exchange, /auth/me validation, session persistence, and logout cleanup were not executed because no test credentials/session were provided and this verification avoided changing auth data.
+- Route guard behavior was indirectly verified by logged-out startup resolving to LoginScreen and diagnostics reporting Auth Status: Logged Out.
+
+Environment notes
+- flutter doctor reports Android cmdline-tools missing and Android license status unknown.
+- Despite the doctor warning, the app built, installed, and ran successfully on the Android emulator.
+
+Screenshots captured locally
+- /private/tmp/week1_login.png
+- /private/tmp/week1_empty_login_error.png
+- /private/tmp/week1_diagnostics.png
+
+Conclusion
+- Android run verification passed for build, install, launch, refactored login UI rendering, local validation, debug diagnostics navigation, and initialization status.
+- No backend files were modified.
+- No database schema or migration files were modified.

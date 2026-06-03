@@ -1,0 +1,62 @@
+NITKSAA Event Admin Portal — Foundation Rollback Notes
+Generated: 2026-06-03
+Scope: admin/event_admin/ — Week 1 Foundation
+
+================================================================================
+WHAT TO REMOVE (full rollback)
+================================================================================
+
+Delete the entire admin portal directory:
+  rm -rf admin/event_admin/
+
+Delete the new documentation files:
+  rm docs/reviews/event_admin_foundation_implementation_report.txt
+  rm docs/reviews/event_admin_foundation_verification_report.txt
+  rm docs/reviews/event_admin_foundation_rollback_notes.txt
+  rm docs/api/event_admin_api_usage.md
+
+That is a complete rollback. Nothing else needs to be changed.
+
+================================================================================
+FILES TO REVERT (if using git after a commit)
+================================================================================
+
+If the work was committed:
+  git rm -r admin/event_admin/
+  git rm docs/reviews/event_admin_foundation_implementation_report.txt
+  git rm docs/reviews/event_admin_foundation_verification_report.txt
+  git rm docs/reviews/event_admin_foundation_rollback_notes.txt
+  git rm docs/api/event_admin_api_usage.md
+  git commit -m "revert: remove event_admin foundation"
+
+================================================================================
+NO BACKEND CLEANUP NEEDED
+================================================================================
+
+The admin portal uses existing backend endpoints only:
+  GET  /api/v1/health
+  POST /api/v1/auth/firebase
+  GET  /api/v1/auth/me
+
+No new backend routes were added.
+No database schema changes were made.
+No migrations were added or modified.
+No backend files were touched.
+No Flutter app files were touched.
+
+Removing admin/event_admin/ completely reverts the project to its prior state.
+
+================================================================================
+WHAT IS NOT AFFECTED BY ROLLBACK
+================================================================================
+
+  backend/                    — untouched
+  apps/event_app/             — untouched
+  docs/api/backend_api_index.md  — already existed before this work
+  docs/api/backend_auth_api.md   — already existed before this work
+  All other docs/reviews/*.txt   — already existed before this work
+  Firebase project               — no changes made
+
+================================================================================
+END OF ROLLBACK NOTES
+================================================================================

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
@@ -14,6 +15,8 @@ abstract class RouteGuards {
     final isFoundation = location == AppRoutes.foundation;
     final isDeveloper = location == AppRoutes.developer;
     final isProtected = location == AppRoutes.home;
+
+    if (isDeveloper && !kDebugMode) return AppRoutes.login;
 
     if (auth.isChecking) {
       return isSplash ? null : AppRoutes.splash;

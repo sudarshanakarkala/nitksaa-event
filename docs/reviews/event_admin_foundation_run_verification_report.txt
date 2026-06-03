@@ -1,0 +1,201 @@
+NITKSAA Event Admin Portal — Run & Verification Report
+Generated: 2026-06-03
+Scope: admin/event_admin/ — Week 1 Foundation
+Verified by: automated checks + dev server run
+
+================================================================================
+ENVIRONMENT AT TIME OF VERIFICATION
+================================================================================
+
+Backend:     http://localhost:8000 — RUNNING
+Admin Dev:   http://localhost:5173 — RUNNING (Vite 5.4.21)
+Firebase:    project-d22bed42-f302-4e23-8dc (same project as Flutter app)
+Node/npm:    Installed (346 packages)
+.env:        Present (copied from .env.example, correct Firebase web config)
+
+================================================================================
+TOOLCHAIN RESULTS
+================================================================================
+
+npm install
+  Result:  PASS
+  Output:  346 packages added, audited 347
+  Notes:   12 transitive-dep audit warnings (dev toolchain only, not runtime)
+
+npm run build
+  Result:  PASS — clean, no errors, no warnings
+  Output:
+    dist/index.html                  0.72 kB │ gzip:  0.40 kB
+    dist/assets/index-CuQ0FIbE.css  15.11 kB │ gzip:  3.57 kB
+    dist/assets/index-CZuu4r4U.js   353.09 kB │ gzip: 93.44 kB
+    ✓ built in ~700ms
+
+npm run lint
+  Result:  PASS — 0 errors, 0 warnings
+  Command: eslint src
+
+npm run dev
+  Result:  RUNNING at http://localhost:5173
+  Output:  VITE v5.4.21  ready in 170 ms
+  PID:     85876
+
+================================================================================
+HTTP / SPA CHECKS
+================================================================================
+
+GET http://localhost:5173/            → HTTP 200  ✓  (SPA index.html)
+GET http://localhost:5173/login       → HTTP 200  ✓  (SPA index.html)
+GET http://localhost:5173/dashboard   → HTTP 200  ✓  (SPA; route guard is client-side)
+
+index.html structure:
+  <div id="root">  found                ✓
+  <script type="module">  found         ✓
+  <title>NITKSAA Event Admin</title>    ✓
+
+Note: Vite serves index.html for all routes. Route guards (client-side) enforce
+/dashboard → /login redirect in the browser. HTTP 200 for /dashboard is correct
+for a SPA — the JavaScript bundle handles the redirect, not the server.
+
+================================================================================
+BACKEND API CHECKS
+================================================================================
+
+GET  /api/v1/health
+  Response: {"status":"ok","version":"0.1.0-alpha","env":"development","db":"ok"}
+  status: ok                            ✓
+  db: ok                                ✓
+
+GET  /api/v1/auth/me (no Authorization header)
+  Response: HTTP 403                    ✓
+  Correctly rejects unauthenticated requests
+
+POST /api/v1/auth/firebase (bad token: "bad_token_test")
+  Response: HTTP 401                    ✓
+  Correctly rejects invalid Firebase tokens
+
+================================================================================
+SOURCE INTEGRITY CHECKS
+================================================================================
+
+Auth flow:
+  AuthProvider: loginWithFirebaseToken  ✓
+  AuthProvider: clearSession on bad /auth/me response  ✓
+  AuthProvider: getStoredUser for offline restore  ✓
+  apiClient: 401/403 triggers clearSession + hard redirect  ✓
+  apiClient: skipAuth option available  ✓
+  authApi: exchangeFirebaseToken implemented  ✓
+
+Route guard (RequireAuth.jsx):
+  Uses Outlet for nested routing  ✓
+  Redirects to /login when not authenticated  ✓
+  Handles isLoading state (shows LoadingView)  ✓
+
+Token storage policy:
+  Firebase ID token: NOT stored in sessionStorage  ✓
+  Backend JWT key:   nitksaa_event_admin_access_token  ✓
+  User summary key:  nitksaa_event_admin_user  ✓
+
+Environment:
+  VITE_FIREBASE_API_KEY:     present  ✓
+  VITE_FIREBASE_AUTH_DOMAIN: present  ✓
+  VITE_FIREBASE_PROJECT_ID:  present  ✓
+  VITE_FIREBASE_APP_ID:      present  ✓
+  VITE_BACKEND_BASE_URL:     http://localhost:8000  ✓
+
+================================================================================
+MANUAL VERIFICATION CHECKLIST
+================================================================================
+
+The following items require a browser and a valid Firebase test account.
+Run from http://localhost:5173 with backend running at http://localhost:8000.
+
+Browser/UI checks (requires manual test):
+  [ ] 1.  Open http://localhost:5173 — redirects to /login
+  [ ] 2.  Open /dashboard while logged out — redirects to /login
+  [ ] 3.  LoginPage: backend health dot turns GREEN (backend online)
+  [ ] 4.  LoginPage: backend health dot turns RED if backend stopped
+  [ ] 5.  Google Sign-In: popup opens, completes → redirects to /dashboard
+  [ ] 6.  Email/Password: signs in with valid Firebase user → /dashboard
+  [ ] 7.  Dashboard: Backend Health card — status OK, db ok, env development
+  [ ] 8.  Dashboard: Logged-in User card — shows fullname, email, user_type
+  [ ] 9.  Dashboard: Auth Status — Authenticated: Yes, Backend JWT: Present
+  [ ] 10. Dashboard: 3 placeholder cards visible (Events, Registrations, Attendees)
+  [ ] 11. Header: user name shown, health dot green, Logout button visible
+  [ ] 12. Sidebar: 5 nav links render (Dashboard, Events, Registrations, Attendees, Settings)
+  [ ] 13. Sidebar: active link highlights in gold
+  [ ] 14. Events page: placeholder + 4 planned API rows shown
+  [ ] 15. Registrations page: placeholder + 2 planned API rows shown
+  [ ] 16. Attendees page: placeholder + 2 planned API rows shown
+  [ ] 17. Settings page: user info, env config, buttons render
+  [ ] 18. Settings: Clear Local Session removes JWT, next reload → /login
+  [ ] 19. Logout: clears Firebase session + JWT, redirects to /login
+  [ ] 20. After logout: open /dashboard → redirects to /login ✓
+  [ ] 21. Reload /dashboard while logged in → stays on /dashboard (session restored)
+
+================================================================================
+KNOWN LIMITATIONS (Week 1)
+================================================================================
+
+  1. No admin-role enforcement on frontend.
+     Backend returns user_type. Frontend does not yet gate on it.
+     Any Firebase user that passes backend /auth/me can reach the admin portal.
+     Add RequireAdmin component in Week 2.
+
+  2. Backend JWT expiry not handled gracefully.
+     On 401 mid-session, apiClient hard-redirects to /login.
+     Functional but not graceful — implement token refresh when backend supports it.
+
+  3. No React error boundary.
+     Unhandled render errors show a blank screen.
+     Add ErrorBoundary before production.
+
+  4. Mobile layout not implemented.
+     Sidebar is fixed 240px; overflows on narrow screens.
+
+  5. .env is present but should be added to .gitignore if not already excluded.
+     The dist/ folder should also be in .gitignore.
+
+================================================================================
+FILES VERIFIED
+================================================================================
+
+admin/event_admin/
+├── .env                          ✓ present (correct Firebase web config)
+├── .env.example                  ✓ template committed
+├── package.json                  ✓
+├── index.html                    ✓
+├── vite.config.js                ✓
+├── eslint.config.js              ✓
+├── dist/                         ✓ production build present
+└── src/ (26 files)               ✓ all present and lint-clean
+
+Documentation:
+  docs/api/event_admin_api_usage.md                              ✓
+  docs/reviews/event_admin_foundation_implementation_report.txt  ✓
+  docs/reviews/event_admin_foundation_verification_report.txt    ✓
+  docs/reviews/event_admin_foundation_rollback_notes.txt         ✓
+  docs/reviews/event_admin_foundation_run_verification_report.txt (this file) ✓
+
+================================================================================
+OVERALL RESULT
+================================================================================
+
+  npm install:         PASS
+  npm run build:       PASS  (clean, no warnings)
+  npm run lint:        PASS  (0 errors, 0 warnings)
+  npm run dev:         RUNNING  at http://localhost:5173
+  Backend health:      PASS  (status ok, db ok)
+  /auth/me guard:      PASS  (403 without token)
+  Firebase exchange:   PASS  (401 on bad token)
+  HTML structure:      PASS
+  Source integrity:    PASS  (all policy checks green)
+  Token policy:        PASS  (Firebase token never stored)
+
+  Manual browser verification: PENDING (requires Firebase test account)
+
+  No backend, database, schema, migrations, or Flutter app files were modified.
+  No commits created.
+
+================================================================================
+END OF RUN VERIFICATION REPORT
+================================================================================

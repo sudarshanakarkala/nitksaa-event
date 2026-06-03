@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/logger/app_logger.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../../../routes/app_routes.dart';
 import '../../auth/services/auth_controller.dart';
 import '../../../widgets/shared/shared_screen.dart';
@@ -38,7 +39,7 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
       ),
       body: Center(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.check_circle_outline,
@@ -55,10 +56,10 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
               ),
             ),
             const SizedBox(height: 40),
-            OutlinedButton.icon(
+            AppSecondaryButton(
+              label: 'Sign Out',
+              icon: Icons.logout_outlined,
               onPressed: _signOut,
-              icon: const Icon(Icons.logout_outlined),
-              label: const Text('Sign Out'),
             ),
           ],
         ),

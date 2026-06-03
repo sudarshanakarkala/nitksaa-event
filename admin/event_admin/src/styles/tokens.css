@@ -1,0 +1,70 @@
+/* NITKSAA Admin Design Tokens — Dark theme defaults */
+
+:root {
+  /* Navy backgrounds */
+  --navy-deep:  #060d1a;
+  --navy-mid:   #0c1828;
+
+  /* Gold palette */
+  --gold:       #c9a94a;
+  --gold-light: #e2c06b;
+  --gold-dim:   #a88d38;
+  --gold-ch:    201, 169, 74;
+
+  /* Text */
+  --text-primary:    #f0ecd8;
+  --text-primary-ch: 240, 236, 216;
+  --text-secondary:  #a8b9cc;
+  --text-muted:      #5a7a9a;
+
+  /* Surfaces & borders */
+  --surface:        rgba(12, 24, 40, 0.85);
+  --surface-hover:  rgba(17, 34, 52, 0.92);
+  --surface-ch:     12, 24, 40;
+  --border:         rgba(90, 122, 154, 0.22);
+  --border-hover:   rgba(90, 122, 154, 0.45);
+
+  /* Backgrounds */
+  --bg-canvas:      var(--navy-deep);
+  --bg-topbar:      var(--navy-mid);
+  --bg-overlay:     rgba(3, 8, 18, 0.88);
+  --bg-panel-start: #f5f2e8;
+
+  /* Typography */
+  --font-sans:  'Inter', 'Segoe UI', system-ui, sans-serif;
+  --font-serif: 'Playfair Display', 'Georgia', serif;
+
+  /* Layout */
+  --radius-sm:     6px;
+  --radius-md:     12px;
+  --sidebar-width: 240px;
+  --nav-height:    60px;
+  --container-max: 1200px;
+
+  /* Shadows */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.3);
+  --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
+  --shadow-lg: 0 8px 40px rgba(0, 0, 0, 0.55);
+
+  /* Status / danger */
+  --danger: #e05252;
+}
+
+[data-theme="light"] {
+  --navy-deep:  #f5f2e8;
+  --navy-mid:   #ede9d9;
+
+  --text-primary:    #1a1a2e;
+  --text-primary-ch: 26, 26, 46;
+  --text-secondary:  #4a5568;
+  --text-muted:      #8896a8;
+
+  --surface:       rgba(255, 255, 255, 0.92);
+  --surface-hover: rgba(248, 246, 240, 0.96);
+  --surface-ch:    255, 255, 255;
+  --border:        rgba(0, 0, 0, 0.10);
+  --border-hover:  rgba(0, 0, 0, 0.22);
+
+  --bg-canvas: var(--navy-deep);
+  --bg-topbar: var(--navy-mid);
+}

@@ -1,0 +1,162 @@
+/* NITKSAA Admin Login Page */
+
+.login-root {
+  min-height: 100vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--navy-deep);
+  padding: 24px;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Subtle geometric background */
+.login-root::before {
+  content: '';
+  position: absolute;
+  top: -200px;
+  right: -200px;
+  width: 600px;
+  height: 600px;
+  border: 1px solid rgba(var(--gold-ch), 0.06);
+  border-radius: 50%;
+  pointer-events: none;
+}
+.login-root::after {
+  content: '';
+  position: absolute;
+  bottom: -300px;
+  left: -200px;
+  width: 800px;
+  height: 800px;
+  border: 1px solid rgba(var(--gold-ch), 0.04);
+  border-radius: 50%;
+  pointer-events: none;
+}
+
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+  padding: 40px;
+  box-shadow: var(--shadow-lg);
+  position: relative;
+  z-index: 1;
+}
+
+/* ── Brand ────────────────────────────────────────────────────────────── */
+.login-brand {
+  text-align: center;
+  margin-bottom: 28px;
+}
+.login-brand-title {
+  font-family: var(--font-serif);
+  font-size: 1.55rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 3px;
+}
+.login-brand-subtitle {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+}
+.login-brand-line {
+  width: 36px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  margin: 12px auto 0;
+}
+
+/* ── Health indicator ─────────────────────────────────────────────────── */
+.login-health {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  margin-bottom: 22px;
+  font-size: 0.775rem;
+  color: var(--text-muted);
+}
+.health-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--text-muted);
+  flex-shrink: 0;
+}
+.health-dot--ok       { background: #4ade80; }
+.health-dot--error    { background: #f87171; }
+.health-dot--checking {
+  background: var(--gold);
+  animation: loginPulse 1.5s ease-in-out infinite;
+}
+@keyframes loginPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+/* ── Form ─────────────────────────────────────────────────────────────── */
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+/* ── Divider ──────────────────────────────────────────────────────────── */
+.login-divider {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 2px 0;
+}
+.login-divider-line { flex: 1; height: 1px; background: var(--border); }
+.login-divider-text {
+  font-size: 0.72rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  letter-spacing: 0.04em;
+}
+
+/* ── Google button ────────────────────────────────────────────────────── */
+.btn-google {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 22px;
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.btn-google:hover {
+  background: var(--surface-hover);
+  border-color: var(--border-hover);
+}
+.btn-google:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* ── Config error ─────────────────────────────────────────────────────── */
+.login-config-error {
+  max-width: 420px;
+  margin: 0 auto;
+}
+
+/* ── Light theme ──────────────────────────────────────────────────────── */
+[data-theme="light"] .login-root { background: var(--navy-deep); }

@@ -1,0 +1,233 @@
+/* NITKSAA Admin Shell Layout */
+
+/* ── Shell grid ───────────────────────────────────────────────────────── */
+.admin-shell {
+  display: grid;
+  grid-template-columns: var(--sidebar-width) 1fr;
+  height: 100vh;
+  overflow: hidden;
+}
+
+/* ── Sidebar ──────────────────────────────────────────────────────────── */
+.admin-sidebar {
+  background: var(--navy-mid);
+  border-right: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  overflow-x: hidden;
+}
+
+.sidebar-brand {
+  padding: 18px 16px 14px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.sidebar-brand-name {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  line-height: 1.25;
+}
+.sidebar-brand-sub {
+  font-size: 0.65rem;
+  text-transform: uppercase;
+  letter-spacing: 0.12em;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.sidebar-brand-line {
+  width: 32px;
+  height: 2px;
+  background: linear-gradient(90deg, var(--gold), transparent);
+  margin-top: 10px;
+}
+
+.sidebar-nav {
+  flex: 1;
+  padding: 10px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.sidebar-nav-link {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: var(--radius-sm);
+  text-decoration: none;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  font-weight: 500;
+  transition: color 0.15s, background 0.15s;
+}
+.sidebar-nav-link:hover {
+  background: rgba(var(--gold-ch), 0.07);
+  color: var(--text-primary);
+}
+.sidebar-nav-link.active {
+  background: rgba(var(--gold-ch), 0.12);
+  color: var(--gold);
+}
+.sidebar-nav-link svg { flex-shrink: 0; opacity: 0.65; transition: opacity 0.15s; }
+.sidebar-nav-link:hover svg, .sidebar-nav-link.active svg { opacity: 1; }
+
+.sidebar-footer {
+  padding: 10px 8px;
+  border-top: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+/* ── Main body ────────────────────────────────────────────────────────── */
+.admin-body {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  background: var(--bg-canvas);
+}
+
+/* ── Header ───────────────────────────────────────────────────────────── */
+.admin-header {
+  height: var(--nav-height);
+  background: var(--navy-mid);
+  border-bottom: 1px solid var(--border);
+  display: flex;
+  align-items: center;
+  padding: 0 28px;
+  gap: 16px;
+  flex-shrink: 0;
+}
+
+.header-app-name {
+  font-family: var(--font-serif);
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.header-spacer { flex: 1; }
+
+.header-health {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.775rem;
+  color: var(--text-muted);
+}
+.header-health-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  background: var(--text-muted);
+}
+.header-health-dot--ok    { background: #4ade80; }
+.header-health-dot--error { background: #f87171; }
+.header-health-dot--checking {
+  background: var(--gold);
+  animation: headerPulse 1.5s ease-in-out infinite;
+}
+@keyframes headerPulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.35; } }
+
+.header-user {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.header-divider {
+  width: 1px;
+  height: 20px;
+  background: var(--border);
+}
+
+/* ── Content area ─────────────────────────────────────────────────────── */
+.admin-content {
+  flex: 1;
+  overflow-y: auto;
+  padding: 36px 44px;
+}
+
+/* ── Page heading ─────────────────────────────────────────────────────── */
+.page-eyebrow {
+  font-family: var(--font-sans);
+  font-size: 0.68rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--gold);
+  font-weight: 600;
+  margin: 0 0 6px;
+}
+.page-heading {
+  font-family: var(--font-serif);
+  font-size: 1.9rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 6px;
+}
+.page-sub {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  margin: 0 0 32px;
+  line-height: 1.5;
+}
+
+/* ── Placeholder page ─────────────────────────────────────────────────── */
+.placeholder-page-card {
+  margin-bottom: 24px;
+}
+.placeholder-notice {
+  margin-bottom: 24px;
+}
+.planned-apis h4 {
+  font-family: var(--font-sans);
+  font-size: 0.72rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+.planned-apis-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.planned-api-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  background: rgba(var(--gold-ch), 0.04);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  font-size: 0.82rem;
+}
+.api-method {
+  font-family: monospace;
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  color: rgba(var(--gold-ch), 0.9);
+  background: rgba(var(--gold-ch), 0.1);
+  border: 1px solid rgba(var(--gold-ch), 0.2);
+  padding: 1px 6px;
+  border-radius: 3px;
+  flex-shrink: 0;
+}
+.api-path {
+  font-family: monospace;
+  font-size: 0.82rem;
+  color: var(--text-secondary);
+}
+.api-desc {
+  font-size: 0.8rem;
+  color: var(--text-muted);
+  margin-left: auto;
+}

@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
@@ -31,11 +32,12 @@ abstract class AppRouter {
         path: AppRoutes.home,
         builder: (context, state) => const HomePlaceholderScreen(),
       ),
-      GoRoute(
-        path: AppRoutes.developer,
-        name: 'developer',
-        builder: (context, state) => const DeveloperDiagnosticsScreen(),
-      ),
+      if (kDebugMode)
+        GoRoute(
+          path: AppRoutes.developer,
+          name: 'developer',
+          builder: (context, state) => const DeveloperDiagnosticsScreen(),
+        ),
     ],
   );
 }

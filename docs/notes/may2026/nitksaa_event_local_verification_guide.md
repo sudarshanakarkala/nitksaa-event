@@ -770,3 +770,340 @@ React Admin Portal             ❌ Not Started
 Week 1 Progress: ~70%
 Ready to close Week 1 after remaining validation items.
 ```
+
+---
+
+# How to Run Locally — All Platforms
+
+## Overview: Backend URL by Platform
+
+| Platform | Backend URL | Why |
+| --- | --- | --- |
+| Chrome on same Mac | `http://localhost:8000` | Loopback — same machine |
+| Admin Portal (same Mac) | `http://localhost:8000` | Loopback — same machine |
+| Android Emulator | `http://10.0.2.2:8000` | Emulator alias for host loopback |
+| iOS Simulator | `http://127.0.0.1:8000` | Simulator shares host network |
+| Physical Android device | `http://192.168.1.11:8000` | LAN IP of your MacBook |
+| Physical iPhone | `http://192.168.1.11:8000` | LAN IP of your MacBook |
+| Windows (same machine) | `http://localhost:8000` | Loopback |
+
+**Get your Mac LAN IP:**
+
+```bash
+ipconfig getifaddr en0
+```
+
+Replace `192.168.1.11` with the IP returned by this command.
+
+---
+
+## CORS Requirement
+
+The backend must be started with `--host 0.0.0.0` to accept connections from
+physical devices and emulators. The CORS configuration in `backend/app/config.py`
+defaults to `http://localhost:5173`. For physical devices or additional origins, add:
+
+```bash
+# In backend/.env
+ALLOWED_ORIGINS=http://localhost:5173,http://192.168.1.11:5173
+```
+
+---
+
+## Step 1 — Start Backend
+
+**Required for all platforms.**
+
+Backend must bind to `0.0.0.0` so physical devices on the LAN can reach it.
+
+### macOS / Linux
+
+```bash
+cd {NITK_Alumni_Project_Path}/nitksaa-event/backend
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Windows
+
+```cmd
+cd {NITK_Alumni_Project_Path}\nitksaa-event\backend
+.venv\Scripts\activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+Expected output:
+
+```text
+INFO:     Application startup complete.
+INFO:     Uvicorn running on http://0.0.0.0:8000
+```
+
+Verify health:
+
+```bash
+curl http://localhost:8000/api/v1/health
+```
+
+Expected:
+
+```json
+{"status":"ok","version":"0.1.0-alpha","env":"development","db":"ok"}
+```
+
+---
+
+## Step 2 — Admin Portal (React — Chrome on Mac)
+
+```bash
+cd {NITK_Alumni_Project_Path}/nitksaa-event/admin/event_admin
+
+# First-time setup only:
+cp .env.example .env
+npm install
+
+# Start dev server:
+npm run dev
+```
+
+Admin portal runs at: **http://localhost:5173**
+
+Backend URL for this platform: `http://localhost:8000`
+
+`.env` setting:
+
+```env
+VITE_BACKEND_BASE_URL=http://localhost:8000
+```
+
+Open Chrome: **http://localhost:5173/login**
+
+---
+
+## Step 3 — Flutter on Android Emulator
+
+Backend URL: **http://10.0.2.2:8000**
+
+`10.0.2.2` is the Android Emulator's fixed alias for the host machine's loopback.
+
+### Start emulator
+
+```bash
+flutter emulators --launch <emulator_id>
+# or launch from Android Studio AVD Manager
+```
+
+### Run Flutter app
+
+```bash
+cd {NITK_Alumni_Project_Path}/nitksaa-event/apps/event_app
+
+flutter run -d emulator-5554 \
+  --dart-define=DEV_BACKEND_BASE_URL=http://10.0.2.2:8000
+```
+
+### Verify emulator can reach backend
+
+Open Chrome inside the emulator and navigate to:
+
+```
+http://10.0.2.2:8000/api/v1/health
+```
+
+Expected: `{"status":"ok","db":"ok"}`
+
+---
+
+## Step 4 — Flutter on iOS Simulator
+
+Backend URL: **http://127.0.0.1:8000**
+
+The iOS Simulator shares the host machine's network stack. It uses the same loopback as your Mac.
+
+### Start simulator
+
+```bash
+open -a Simulator
+# or from Xcode → Xcode menu → Open Developer Tool → Simulator
+```
+
+### Run Flutter app
+
+```bash
+cd {NITK_Alumni_Project_Path}/nitksaa-event/apps/event_app
+
+flutter run -d "iPhone 16" \
+  --dart-define=DEV_BACKEND_BASE_URL=http://127.0.0.1:8000
+```
+
+### List available simulators
+
+```bash
+flutter devices
+```
+
+---
+
+## Step 5 — Flutter on Physical Android Device
+
+Backend URL: **http://192.168.1.11:8000** ← your Mac's LAN IP
+
+Physical devices use the network. The Mac and the Android phone must be on the same Wi-Fi network.
+
+### Prerequisites
+
+- Android device: Developer Options → USB Debugging enabled
+- Connected via USB cable
+- Verify device visible:
+
+```bash
+adb devices
+# Expected: <device-serial>  device
+```
+
+### Run Flutter app
+
+```bash
+cd {NITK_Alumni_Project_Path}/nitksaa-event/apps/event_app
+
+# Get your Mac LAN IP first:
+ipconfig getifaddr en0
+
+# Run with LAN IP:
+flutter run -d <device-serial> \
+  --dart-define=DEV_BACKEND_BASE_URL=http://192.168.1.11:8000
+```
+
+### Verify device can reach backend
+
+Open Chrome on the Android phone and navigate to:
+
+```
+http://192.168.1.11:8000/api/v1/health
+```
+
+Expected: `{"status":"ok","db":"ok"}`
+
+If unreachable: check Mac firewall allows port 8000:
+
+```bash
+# macOS — allow incoming connections on port 8000
+sudo /usr/libexec/ApplicationFirewall/socketfilterfw --add $(which python3)
+# Or disable firewall for development: System Settings → Network → Firewall → turn off
+```
+
+---
+
+## Step 6 — Flutter on Physical iPhone
+
+Backend URL: **http://192.168.1.11:8000** ← your Mac's LAN IP
+
+iPhone must be on the same Wi-Fi network as the Mac.
+
+### Prerequisites
+
+- Xcode installed and configured
+- Apple Developer account (free tier works for local testing)
+- iPhone connected via USB
+- Trust this computer on iPhone
+
+### Run Flutter app
+
+```bash
+cd {NITK_Alumni_Project_Path}/nitksaa-event/apps/event_app
+
+# Get your Mac LAN IP first:
+ipconfig getifaddr en0
+
+# Run with LAN IP:
+flutter run -d <iphone-device-id> \
+  --dart-define=DEV_BACKEND_BASE_URL=http://192.168.1.11:8000
+```
+
+### List devices
+
+```bash
+flutter devices
+```
+
+### Verify iPhone can reach backend
+
+Open Safari on iPhone and navigate to:
+
+```
+http://192.168.1.11:8000/api/v1/health
+```
+
+Expected: `{"status":"ok","db":"ok"}`
+
+---
+
+## Step 7 — Admin Portal on Windows
+
+Backend URL: **http://localhost:8000**
+
+### Prerequisites
+
+- Node.js 18+ installed
+- npm installed
+
+### Start backend on Windows
+
+```cmd
+cd {NITK_Alumni_Project_Path}\nitksaa-event\backend
+.venv\Scripts\activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### Start admin portal
+
+```cmd
+cd {NITK_Alumni_Project_Path}\nitksaa-event\admin\event_admin
+
+# First-time setup only:
+copy .env.example .env
+npm install
+
+# Start dev server:
+npm run dev
+```
+
+Open Chrome: **http://localhost:5173/login**
+
+---
+
+## Quick Reference — All Platforms
+
+| Platform | Start Command | Backend URL |
+|---|---|---|
+| Mac Backend | `uvicorn app.main:app --host 0.0.0.0 --port 8000` | — |
+| Mac Admin Portal | `npm run dev` (in admin/event_admin) | `http://localhost:8000` |
+| Android Emulator | `flutter run --dart-define=DEV_BACKEND_BASE_URL=http://10.0.2.2:8000` | `http://10.0.2.2:8000` |
+| iOS Simulator | `flutter run --dart-define=DEV_BACKEND_BASE_URL=http://127.0.0.1:8000` | `http://127.0.0.1:8000` |
+| Physical Android | `flutter run --dart-define=DEV_BACKEND_BASE_URL=http://192.168.1.11:8000` | `http://192.168.1.11:8000` |
+| Physical iPhone | `flutter run --dart-define=DEV_BACKEND_BASE_URL=http://192.168.1.11:8000` | `http://192.168.1.11:8000` |
+
+> **Replace `192.168.1.11`** with your Mac's LAN IP: run `ipconfig getifaddr en0`
+
+---
+
+## Admin Portal Status — Week 1
+
+| Item | Status | Notes |
+|---|---|---|
+| Login (Google + Email/Password) | ✅ Done | Full Firebase → Backend JWT flow |
+| Route Guard | ✅ Done | RequireAuth, redirects to /login |
+| Sidebar Navigation | ✅ Done | 5 nav links, active state |
+| Header | ✅ Done | Health indicator, user name, logout |
+| Dashboard | ✅ Done | 6 cards (health, user, auth, 3× placeholder) |
+| Events Page | ✅ Done | Placeholder + planned APIs (Week 2) |
+| Registrations Page | ✅ Done | Placeholder + planned APIs (Week 3) |
+| Attendees Page | ✅ Done | Placeholder + planned APIs (Week 4) |
+| Settings Page | ✅ Done | User info, env config, clear session, logout |
+| CORS Fix | ✅ Done | CORSMiddleware added to backend/app/main.py |
+| npm run build | ✅ PASS | Clean, 0 errors, 0 warnings |
+| npm run lint | ✅ PASS | 0 errors, 0 warnings |
+
+```text
+React Admin Portal Week 1 Foundation: COMPLETE
+```
