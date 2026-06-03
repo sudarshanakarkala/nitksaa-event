@@ -1,0 +1,53 @@
+Week 1 Flutter UI Refactor Closure Report
+Date: 2026-06-03
+
+Scope
+- Created a shared Flutter UI component library under apps/event_app/lib/core/widgets.
+- Refactored SplashScreen, LoginScreen, and HomePlaceholderScreen to consume the shared components.
+- Preserved existing auth calls, route navigation, route guard integration, session validation, and logout cleanup.
+- Added backend auth API documentation at docs/api/backend_auth_api.md.
+
+Shared components added
+- AppScaffold
+- AppCard
+- AppPrimaryButton
+- AppSecondaryButton
+- AppTextField
+- AppLoadingView
+- AppErrorView
+- AppEmptyView
+
+Auth preservation notes
+- Google login still calls AuthController.instance.signInWithGoogle.
+- Email/password login still calls AuthController.instance.signInWithEmail.
+- Backend JWT exchange remains owned by AuthController and BackendAuthService.
+- /api/v1/auth/me validation remains owned by BackendAuthService.validateAccessToken.
+- Route guard behavior remains wired through GoRouter refreshListenable and RouteGuards.redirect.
+- Session persistence remains owned by AuthSessionStore through AuthController.
+- Logout still calls AuthController.instance.signOut and returns to the login route.
+- Developer Diagnostics remains behind kDebugMode on LoginScreen.
+
+Files changed
+- apps/event_app/lib/core/widgets/app_card.dart
+- apps/event_app/lib/core/widgets/app_empty_view.dart
+- apps/event_app/lib/core/widgets/app_error_view.dart
+- apps/event_app/lib/core/widgets/app_loading_view.dart
+- apps/event_app/lib/core/widgets/app_primary_button.dart
+- apps/event_app/lib/core/widgets/app_scaffold.dart
+- apps/event_app/lib/core/widgets/app_secondary_button.dart
+- apps/event_app/lib/core/widgets/app_text_field.dart
+- apps/event_app/lib/core/widgets/app_widgets.dart
+- apps/event_app/lib/features/auth/presentation/screens/splash_screen.dart
+- apps/event_app/lib/features/auth/presentation/screens/login_screen.dart
+- apps/event_app/lib/features/home/presentation/home_placeholder_screen.dart
+- docs/api/backend_auth_api.md
+- docs/reviews/week1_flutter_ui_refactor_report.txt
+
+Validation
+- dart format: passed. Formatted apps/event_app shared widgets and refactored auth/home screens.
+- flutter analyze: passed. No issues found.
+- flutter test: passed. All widget tests passed.
+
+Backend/database statement
+- No backend files were modified.
+- No database schema or migration files were modified.

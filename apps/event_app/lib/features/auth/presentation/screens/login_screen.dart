@@ -2,6 +2,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
+import '../../../../core/widgets/app_widgets.dart';
 import '../../../../routes/app_routes.dart';
 import '../../services/auth_controller.dart';
 
@@ -98,145 +99,122 @@ class _LoginScreenState extends State<LoginScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Scaffold(
-      body: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Icon(
-                      Icons.account_balance_outlined,
-                      size: 56,
-                      color: colorScheme.primary,
-                    ),
-                  ),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: Text(
-                      'Welcome Back',
-                      style: textTheme.headlineMedium,
-                    ),
-                  ),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Text(
-                      'Sign in to your NITKSAA account',
-                      style: textTheme.bodyMedium?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 36),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email_outlined),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePassword
-                              ? Icons.visibility_outlined
-                              : Icons.visibility_off_outlined,
-                        ),
-                        onPressed: () => setState(
-                          () => _obscurePassword = !_obscurePassword,
-                        ),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  if (_statusMessage != null || _errorMessage != null) ...[
-                    _LoginStatusBanner(
-                      message: _errorMessage ?? _statusMessage!,
-                      isError: _errorMessage != null,
-                    ),
-                    const SizedBox(height: 16),
-                  ],
-                  FilledButton(
-                    onPressed: (_emailLoading || _googleLoading)
-                        ? null
-                        : _handleEmailLogin,
-                    style: FilledButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    child: _emailLoading
-                        ? const _ButtonProgressLabel(label: 'Signing In')
-                        : const Text('Sign In'),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text(
-                          'or',
-                          style: textTheme.bodyMedium?.copyWith(
-                            color: colorScheme.outline,
-                          ),
-                        ),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: (_emailLoading || _googleLoading)
-                        ? null
-                        : _handleGoogleSignIn,
-                    style: OutlinedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                    ),
-                    icon: _googleLoading
-                        ? const SizedBox(
-                            width: 18,
-                            height: 18,
-                            child: CircularProgressIndicator(strokeWidth: 2),
-                          )
-                        : const Icon(Icons.g_mobiledata, size: 22),
-                    label: Text(
-                      _googleLoading ? 'Validating...' : 'Continue with Google',
-                    ),
-                  ),
-                  const SizedBox(height: 40),
-                  Center(
-                    child: Text(
-                      'NITKSAA Event v1.0.0',
-                      style: textTheme.labelSmall?.copyWith(
-                        color: colorScheme.outlineVariant,
-                      ),
-                    ),
-                  ),
-                  if (kDebugMode) ...[
-                    const SizedBox(height: 8),
-                    Center(
-                      child: TextButton(
-                        onPressed: () => context.go(AppRoutes.developer),
-                        child: const Text('Developer Diagnostics'),
-                      ),
-                    ),
-                  ],
-                ],
+    return AppScaffold(
+      centerBody: true,
+      scrollable: true,
+      maxContentWidth: 420,
+      padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+      body: AppCard(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Center(
+              child: Icon(
+                Icons.account_balance_outlined,
+                size: 56,
+                color: colorScheme.primary,
               ),
             ),
-          ),
+            const SizedBox(height: 20),
+            Center(
+              child: Text('Welcome Back', style: textTheme.headlineMedium),
+            ),
+            const SizedBox(height: 6),
+            Center(
+              child: Text(
+                'Sign in to your NITKSAA account',
+                style: textTheme.bodyMedium?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            const SizedBox(height: 36),
+            AppTextField(
+              controller: _emailController,
+              label: 'Email',
+              prefixIcon: Icons.email_outlined,
+              keyboardType: TextInputType.emailAddress,
+              textInputAction: TextInputAction.next,
+            ),
+            const SizedBox(height: 16),
+            AppTextField(
+              controller: _passwordController,
+              label: 'Password',
+              prefixIcon: Icons.lock_outline,
+              obscureText: _obscurePassword,
+              textInputAction: TextInputAction.done,
+              onSubmitted: (_) => _handleEmailLogin(),
+              suffixIcon: IconButton(
+                icon: Icon(
+                  _obscurePassword
+                      ? Icons.visibility_outlined
+                      : Icons.visibility_off_outlined,
+                ),
+                onPressed: () =>
+                    setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+            const SizedBox(height: 24),
+            if (_statusMessage != null || _errorMessage != null) ...[
+              _LoginStatusBanner(
+                message: _errorMessage ?? _statusMessage!,
+                isError: _errorMessage != null,
+              ),
+              const SizedBox(height: 16),
+            ],
+            AppPrimaryButton(
+              label: 'Sign In',
+              isLoading: _emailLoading,
+              loadingLabel: 'Signing In',
+              onPressed: (_emailLoading || _googleLoading)
+                  ? null
+                  : _handleEmailLogin,
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'or',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.outline,
+                    ),
+                  ),
+                ),
+                const Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 16),
+            AppSecondaryButton(
+              label: _googleLoading ? 'Validating...' : 'Continue with Google',
+              icon: Icons.g_mobiledata,
+              isLoading: _googleLoading,
+              onPressed: (_emailLoading || _googleLoading)
+                  ? null
+                  : _handleGoogleSignIn,
+            ),
+            const SizedBox(height: 40),
+            Center(
+              child: Text(
+                'NITKSAA Event v1.0.0',
+                style: textTheme.labelSmall?.copyWith(
+                  color: colorScheme.outlineVariant,
+                ),
+              ),
+            ),
+            if (kDebugMode) ...[
+              const SizedBox(height: 8),
+              Center(
+                child: TextButton(
+                  onPressed: () => context.go(AppRoutes.developer),
+                  child: const Text('Developer Diagnostics'),
+                ),
+              ),
+            ],
+          ],
         ),
       ),
     );
@@ -287,31 +265,6 @@ class _LoginStatusBanner extends StatelessWidget {
           ],
         ),
       ),
-    );
-  }
-}
-
-class _ButtonProgressLabel extends StatelessWidget {
-  const _ButtonProgressLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(
-          width: 18,
-          height: 18,
-          child: CircularProgressIndicator(
-            strokeWidth: 2,
-            color: Theme.of(context).colorScheme.onPrimary,
-          ),
-        ),
-        const SizedBox(width: 10),
-        Text(label),
-      ],
     );
   }
 }

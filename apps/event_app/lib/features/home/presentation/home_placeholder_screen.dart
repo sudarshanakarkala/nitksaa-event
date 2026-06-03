@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../core/logger/app_logger.dart';
+import '../../../core/widgets/app_widgets.dart';
 import '../../../routes/app_routes.dart';
 import '../../auth/services/auth_controller.dart';
 
@@ -23,21 +24,21 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('NITKSAA Event'),
-        automaticallyImplyLeading: false,
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.logout_outlined),
-            tooltip: 'Sign Out',
-            onPressed: _signOut,
-          ),
-        ],
-      ),
-      body: Center(
+    return AppScaffold(
+      title: 'NITKSAA Event',
+      automaticallyImplyLeading: false,
+      centerBody: true,
+      maxContentWidth: 420,
+      actions: [
+        IconButton(
+          icon: const Icon(Icons.logout_outlined),
+          tooltip: 'Sign Out',
+          onPressed: _signOut,
+        ),
+      ],
+      body: AppCard(
         child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
+          mainAxisSize: MainAxisSize.min,
           children: [
             Icon(
               Icons.check_circle_outline,
@@ -54,10 +55,10 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
               ),
             ),
             const SizedBox(height: 40),
-            OutlinedButton.icon(
+            AppSecondaryButton(
+              label: 'Sign Out',
+              icon: Icons.logout_outlined,
               onPressed: _signOut,
-              icon: const Icon(Icons.logout_outlined),
-              label: const Text('Sign Out'),
             ),
           ],
         ),

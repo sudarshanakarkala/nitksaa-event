@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import '../../../../core/widgets/app_widgets.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
 import '../../services/auth_controller.dart';
@@ -36,45 +37,13 @@ class _SplashScreenState extends State<SplashScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
-
-    return Scaffold(
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(
-              Icons.account_balance_outlined,
-              size: 72,
-              color: colorScheme.primary,
-            ),
-            const SizedBox(height: 24),
-            Text(
-              'NITKSAA Event',
-              style: textTheme.headlineMedium?.copyWith(
-                color: colorScheme.primary,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'NIT Karnataka Alumni Association',
-              style: textTheme.bodyMedium?.copyWith(
-                color: colorScheme.onSurfaceVariant,
-              ),
-            ),
-            const SizedBox(height: 48),
-            SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2.5,
-                color: colorScheme.primary,
-              ),
-            ),
-          ],
-        ),
+    return const AppScaffold(
+      centerBody: true,
+      padding: EdgeInsets.zero,
+      body: AppLoadingView(
+        title: 'NITKSAA Event',
+        message: 'NIT Karnataka Alumni Association',
+        icon: Icons.account_balance_outlined,
       ),
     );
   }
