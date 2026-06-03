@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:google_sign_in/google_sign_in.dart';
@@ -942,15 +943,6 @@ class _SectionLabel extends StatelessWidget {
         padding: const EdgeInsets.symmetric(vertical: 8),
         child: Text(title, style: Theme.of(context).textTheme.titleMedium),
       );
-}
-
-class _DiagRow extends StatelessWidget {
-  final String label;
-  final String value;
-  final bool ok;
-  const _DiagRow({required this.label, required this.value, required this.ok});
-  @override
-  Widget build(BuildContext context) => StatusRow(label: label, value: value, ok: ok);
 }
 
 class _DebugToolsDetail extends StatefulWidget {
