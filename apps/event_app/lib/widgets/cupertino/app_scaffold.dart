@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'; // for ScaffoldMessenger fallback
-import 'package:nitksaa_event/apps/event_app/lib/theme/app_colors.dart';
+import 'package:event_app/theme/app_colors.dart';
 
 class AppScaffoldCupertino extends StatelessWidget {
   final ObstructingPreferredSizeWidget? navigationBar;

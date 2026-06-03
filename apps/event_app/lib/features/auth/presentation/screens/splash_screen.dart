@@ -2,13 +2,9 @@ import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
-import '../../../../core/widgets/app_widgets.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
 import '../../services/auth_controller.dart';
-import '../../services/firebase_auth_service.dart';
-import '../../../../../widgets/shared/info_screen.dart';
-import '../../../../../widgets/shared/shared_screen.dart';
 
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
@@ -104,7 +100,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   width: 72,
                   height: 72,
                   decoration: BoxDecoration(
-                    color: const Color(0xFFC9952A).withOpacity(0.15),
+                    color: const Color(0xFFC9952A).withValues(alpha: 0.15),
                     borderRadius: BorderRadius.circular(18),
                   ),
                   child: const Icon(
@@ -127,7 +123,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   'Connecting…',
                   style: TextStyle(
                     fontSize: 12,
-                    color: textColor.withOpacity(0.4),
+                    color: textColor.withValues(alpha: 0.4),
                   ),
                 ),
               ],
@@ -172,7 +168,7 @@ class _SplashScreenState extends State<SplashScreen> {
               width: 60,
               height: 60,
               decoration: BoxDecoration(
-                color: const Color(0xFFC9952A).withOpacity(0.15),
+                color: const Color(0xFFC9952A).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(16),
               ),
               child: const Icon(
@@ -232,7 +228,7 @@ class _SplashScreenState extends State<SplashScreen> {
               width: 56,
               height: 56,
               decoration: BoxDecoration(
-                color: const Color(0xFFC9952A).withOpacity(0.15),
+                color: const Color(0xFFC9952A).withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(14),
               ),
               child: const Icon(

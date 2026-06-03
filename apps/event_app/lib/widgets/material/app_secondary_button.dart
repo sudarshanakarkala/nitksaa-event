@@ -1,6 +1,6 @@
 import 'package:flutter/material.dart';
-import 'package:nitksaa_event/apps/event_app/lib/theme/app_colors.dart';
-import 'package:nitksaa_event/apps/event_app/lib/theme/app_text_styles.dart';
+import 'package:event_app/theme/app_colors.dart';
+import 'package:event_app/theme/app_text_styles.dart';
 
 class AppSecondaryButton extends StatelessWidget {
   final VoidCallback? onPressed;
