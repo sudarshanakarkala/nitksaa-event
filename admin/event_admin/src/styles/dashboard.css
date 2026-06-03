@@ -1,0 +1,153 @@
+/* NITKSAA Admin Dashboard */
+
+.dashboard-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: 20px;
+}
+
+/* ── Card header ──────────────────────────────────────────────────────── */
+.card-header {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid var(--border);
+}
+.card-header-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 8px;
+  background: rgba(var(--gold-ch), 0.12);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--gold);
+  flex-shrink: 0;
+}
+.card-title {
+  font-family: var(--font-serif);
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+.card-refresh-btn {
+  margin-left: auto;
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-muted);
+  padding: 4px 8px;
+  font-size: 0.72rem;
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.card-refresh-btn:hover { color: var(--text-primary); border-color: var(--border-hover); }
+.card-refresh-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* ── Health card ──────────────────────────────────────────────────────── */
+.health-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.health-row:last-child { border-bottom: none; }
+.health-label {
+  font-size: 0.78rem;
+  color: var(--text-muted);
+  min-width: 72px;
+  flex-shrink: 0;
+}
+.health-value {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.health-value--ok    { color: #4ade80; }
+.health-value--error { color: #f87171; }
+
+/* ── User card ────────────────────────────────────────────────────────── */
+.user-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(var(--gold-ch), 0.15);
+  border: 1px solid rgba(var(--gold-ch), 0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-family: var(--font-serif);
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: var(--gold);
+  flex-shrink: 0;
+  margin-bottom: 14px;
+}
+.user-field { margin-bottom: 10px; }
+.user-field:last-child { margin-bottom: 0; }
+.user-field-label {
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  margin-bottom: 1px;
+}
+.user-field-value {
+  font-size: 0.88rem;
+  color: var(--text-primary);
+  font-weight: 500;
+}
+.user-field-value--muted { color: var(--text-muted); font-style: italic; }
+
+/* ── Auth status card ─────────────────────────────────────────────────── */
+.auth-status-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 9px 0;
+  border-bottom: 1px solid var(--border);
+}
+.auth-status-row:last-child { border-bottom: none; }
+.auth-status-label { font-size: 0.82rem; color: var(--text-secondary); }
+.auth-status-value {
+  font-size: 0.82rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.auth-status-value--ok    { color: #4ade80; }
+.auth-status-value--error { color: #f87171; }
+
+/* ── Placeholder cards ────────────────────────────────────────────────── */
+.placeholder-card-inner {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 16px 8px 8px;
+}
+.placeholder-icon {
+  font-size: 1.75rem;
+  margin-bottom: 10px;
+  opacity: 0.35;
+}
+.placeholder-text {
+  font-size: 0.85rem;
+  color: var(--text-muted);
+  line-height: 1.5;
+}
+.placeholder-week {
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(var(--gold-ch), 0.6);
+  margin-top: 8px;
+}
