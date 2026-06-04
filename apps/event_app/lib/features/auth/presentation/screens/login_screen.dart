@@ -1,19 +1,28 @@
+import 'package:flutter/cupertino.dart';
+
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
-import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../../core/logger/app_logger.dart';
-import '../../../../routes/app_routes.dart';
+import 'package:go_router/go_router.dart';
+import 'package:event_app/routes/app_routes.dart';
 import '../../services/auth_controller.dart';
-import '../../../../../widgets/material/app_scaffold.dart';
+import 'package:event_app/widgets/material/app_scaffold.dart';
+import 'package:event_app/widgets/material/app_primary_button.dart';
 
-class LoginScreen extends StatefulWidget {
+
+import 'package:event_app/theme/app_colors.dart';
+import 'package:event_app/theme/theme_provider.dart';
+import 'package:event_app/widgets/shared/theme_toggle.dart';
+
+class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
   @override
-  State<LoginScreen> createState() => _LoginScreenState();
+  ConsumerState<LoginScreen> createState() => _LoginScreenState();
 }
 
-class _LoginScreenState extends State<LoginScreen> {
+class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authController = AuthController.instance;
@@ -88,10 +97,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
+    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+    return isIOS ? _buildCupertinoLogin() : _buildMaterialLogin();
+  }
+
+  // ---------------- Material UI (Android / Web) ----------------
+  Widget _buildMaterialLogin() {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-
+    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return AppScaffold(
+      appBar: AppBar(
+        backgroundColor: colorScheme.surface,
+        title: const Text('Sign In'),
+        actions: [
+          ThemeToggle(onToggle: _toggleTheme),
+        ],
+      ),
       body: SafeArea(
         child: Center(
           child: SingleChildScrollView(
@@ -100,89 +122,7 @@ class _LoginScreenState extends State<LoginScreen> {
               constraints: const BoxConstraints(maxWidth: 420),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Center(
-                    child: Icon(Icons.account_balance_outlined, size: 56, color: colorScheme.primary),
-                  ),
-                  const SizedBox(height: 20),
-                  Center(
-                    child: Text('Welcome Back', style: textTheme.headlineMedium),
-                  ),
-                  const SizedBox(height: 6),
-                  Center(
-                    child: Text(
-                      'Sign in to your NITKSAA account',
-                      style: textTheme.bodyMedium?.copyWith(color: colorScheme.onSurfaceVariant),
-                    ),
-                  ),
-                  const SizedBox(height: 36),
-                  TextField(
-                    controller: _emailController,
-                    keyboardType: TextInputType.emailAddress,
-                    decoration: const InputDecoration(
-                      labelText: 'Email',
-                      prefixIcon: Icon(Icons.email_outlined),
-                      border: OutlineInputBorder(),
-                    ),
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: _obscurePassword,
-                    decoration: InputDecoration(
-                      labelText: 'Password',
-                      prefixIcon: const Icon(Icons.lock_outline),
-                      border: const OutlineInputBorder(),
-                      suffixIcon: IconButton(
-                        icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                        onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-                      ),
-                    ),
-                  ),
-                  const SizedBox(height: 24),
-                  if (_statusMessage != null || _errorMessage != null) ...[
-                    _LoginStatusBanner(message: _errorMessage ?? _statusMessage!, isError: _errorMessage != null),
-                    const SizedBox(height: 16),
-                  ],
-                  FilledButton(
-                    onPressed: (_emailLoading || _googleLoading) ? null : _handleEmailLogin,
-                    style: FilledButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                    child: _emailLoading ? const _ButtonProgressLabel(label: 'Signing In') : const Text('Sign In'),
-                  ),
-                  const SizedBox(height: 16),
-                  Row(
-                    children: [
-                      const Expanded(child: Divider()),
-                      Padding(
-                        padding: const EdgeInsets.symmetric(horizontal: 12),
-                        child: Text('or', style: textTheme.bodyMedium?.copyWith(color: colorScheme.outline)),
-                      ),
-                      const Expanded(child: Divider()),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                  OutlinedButton.icon(
-                    onPressed: (_emailLoading || _googleLoading) ? null : _handleGoogleSignIn,
-                    style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-                    icon: _googleLoading
-                        ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : const Icon(Icons.g_mobiledata, size: 22),
-                    label: Text(_googleLoading ? 'Validating...' : 'Continue with Google'),
-                  ),
-                  const SizedBox(height: 40),
-                  Center(
-                    child: Text('NITKSAA Event v1.0.0', style: textTheme.labelSmall?.copyWith(color: colorScheme.outlineVariant)),
-                  ),
-                  if (kDebugMode) ...[
-                    const SizedBox(height: 8),
-                    Center(
-                      child: TextButton(
-                        onPressed: () => context.go(AppRoutes.developer),
-                        child: const Text('Developer Diagnostics'),
-                      ),
-                    ),
-                  ],
-                ],
+                children: _buildFormChildren(colorScheme, textTheme, false),
               ),
             ),
           ),
@@ -190,7 +130,153 @@ class _LoginScreenState extends State<LoginScreen> {
       ),
     );
   }
-}
+
+  // ---------------- Cupertino UI (iOS) ----------------
+  Widget _buildCupertinoLogin() {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final bg = isDark ? AppColors.darkBackground : AppColors.lightBackground;
+    return CupertinoPageScaffold(
+      backgroundColor: bg,
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('Sign In'),
+        trailing: ThemeToggle(onToggle: _toggleTheme),
+      ),
+      child: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
+            child: ConstrainedBox(
+              constraints: const BoxConstraints(maxWidth: 420),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: _buildFormChildren(null, null, true),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  // Shared form widgets for both platforms
+  List<Widget> _buildFormChildren(ColorScheme? colorScheme, TextTheme? textTheme, bool isCupertino) {
+    final logo = Text(
+      'NITKSAA',
+      style: TextStyle(
+        fontSize: 22,
+        fontWeight: FontWeight.bold,
+        color: isCupertino ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black) : colorScheme?.primary,
+      ),
+      textAlign: TextAlign.center,
+    );
+    final emailField = isCupertino
+        ? CupertinoTextField(
+            controller: _emailController,
+            placeholder: 'Email',
+            keyboardType: TextInputType.emailAddress,
+            prefix: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(CupertinoIcons.mail)),
+          )
+        : TextField(
+            controller: _emailController,
+            keyboardType: TextInputType.emailAddress,
+            decoration: const InputDecoration(
+              labelText: 'Email',
+              prefixIcon: Icon(Icons.email_outlined),
+              border: OutlineInputBorder(),
+            ),
+          );
+    final passwordField = isCupertino
+        ? CupertinoTextField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            placeholder: 'Password',
+            prefix: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(CupertinoIcons.lock)),
+            suffix: GestureDetector(
+              onTap: () => setState(() => _obscurePassword = !_obscurePassword),
+              child: Icon(_obscurePassword ? CupertinoIcons.eye : CupertinoIcons.eye_slash),
+            ),
+          )
+        : TextField(
+            controller: _passwordController,
+            obscureText: _obscurePassword,
+            decoration: InputDecoration(
+              labelText: 'Password',
+              prefixIcon: const Icon(Icons.lock_outline),
+              border: const OutlineInputBorder(),
+              suffixIcon: IconButton(
+                icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+              ),
+            ),
+          );
+    final loginButton = isCupertino
+        ? CupertinoButton.filled(
+            onPressed: (_emailLoading || _googleLoading) ? null : _handleEmailLogin,
+            child: const Text('Sign In'),
+          )
+        : AppPrimaryButton(
+            onPressed: (_emailLoading || _googleLoading) ? null : _handleEmailLogin,
+            isLoading: _emailLoading,
+            child: const Text('Sign In'),
+          );
+    final divider = Row(
+      children: const [
+        Expanded(child: Divider()),
+        Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('or')),
+        Expanded(child: Divider()),
+      ],
+    );
+    final googleButton = isCupertino
+        ? CupertinoButton(
+            color: Colors.white,
+            onPressed: (_emailLoading || _googleLoading) ? null : _handleGoogleSignIn,
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              const Icon(CupertinoIcons.cloud, color: Colors.black),
+              const SizedBox(width: 8),
+              Text(_googleLoading ? 'Validating…' : 'Continue with Google')
+            ]
+          ),
+        )
+        : OutlinedButton.icon(
+            onPressed: (_emailLoading || _googleLoading) ? null : _handleGoogleSignIn,
+            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+            icon: _googleLoading
+                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                : const Icon(Icons.g_mobiledata, size: 22),
+            label: Text(_googleLoading ? 'Validating...' : 'Continue with Google'),
+          );
+    return [
+      const SizedBox(height: 20),
+      logo,
+      const SizedBox(height: 20),
+      emailField,
+      const SizedBox(height: 16),
+      passwordField,
+      const SizedBox(height: 24),
+      if (_statusMessage != null || _errorMessage != null) ...[
+        _LoginStatusBanner(message: _errorMessage ?? _statusMessage!, isError: _errorMessage != null),
+        const SizedBox(height: 16),
+      ],
+      loginButton,
+      const SizedBox(height: 16),
+      divider,
+      const SizedBox(height: 16),
+      googleButton,
+      const SizedBox(height: 40),
+      Center(
+        child: Text(
+          'NITKSAA Event v1.0.0',
+          style: (textTheme?.labelSmall ?? Theme.of(context).textTheme.labelSmall ?? const TextStyle())
+              .copyWith(color: colorScheme?.outline ?? Theme.of(context).colorScheme.outline),
+        ),
+      ),
+    ];
+  }
+
+  void _toggleTheme() {
+    final notifier = ref.read(themeProvider.notifier);
+    notifier.setTheme(Theme.of(context).brightness == Brightness.dark ? ThemeMode.light : ThemeMode.dark);
+  }}
 
 class _LoginStatusBanner extends StatelessWidget {
   const _LoginStatusBanner({required this.message, required this.isError});
@@ -220,20 +306,3 @@ class _LoginStatusBanner extends StatelessWidget {
   }
 }
 
-class _ButtonProgressLabel extends StatelessWidget {
-  const _ButtonProgressLabel({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2, color: Theme.of(context).colorScheme.onPrimary)),
-        const SizedBox(width: 10),
-        Text(label),
-      ],
-    );
-  }
-}
