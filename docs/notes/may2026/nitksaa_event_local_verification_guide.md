@@ -1107,3 +1107,158 @@ Open Chrome: **http://localhost:5173/login**
 ```text
 React Admin Portal Week 1 Foundation: COMPLETE
 ```
+
+
+
+---
+
+## Set up the local PostgreSQL database for nitksaa-event on Windows.
+
+Project:
+nitksaa-event
+
+## Repository structure:
+nitksaa-event/
+├── backend/
+│   ├── migrations/
+│   │   └── events_db/
+│   │       ├── 001_events.sql
+│   │       ├── 002_sessions.sql
+│   │       ├── 003_event_users_event_members.sql
+│   │       ├── 004_registrations_check_ins.sql
+│   │       ├── 005_event_content.sql
+│   │       └── 006_audit_notifications.sql
+│   └── .env
+├── apps/
+│   └── event_app/
+├── admin/
+│   └── event_admin/
+└── docs/
+
+## Goal:
+Create local PostgreSQL database events_db and run all migration SQL files in order.
+
+Important:
+- Do not modify migration SQL files.
+- Do not modify backend application code.
+- Do not modify Flutter app.
+- Do not modify React admin portal.
+- Only create local database and run migrations.
+- If database already exists, do not fail. Continue safely.
+
+## Steps to perform on Windows:
+
+1. Verify PostgreSQL is installed:
+   psql --version
+
+2. Verify psql is available in PATH.
+   If not available, report the issue and suggest adding PostgreSQL bin path, usually:
+   C:\Program Files\PostgreSQL\<version>\bin
+
+3. Ask/confirm PostgreSQL username.
+   Default expected user:
+   postgres
+
+4. Create events_db if it does not exist.
+
+Use this command pattern:
+
+psql -U postgres -tc "SELECT 1 FROM pg_database WHERE datname = 'events_db'" | findstr 1
+
+If not found:
+
+psql -U postgres -c "CREATE DATABASE events_db;"
+
+5. Run migrations in this exact order from backend folder:
+
+psql -U postgres -d events_db -f migrations\events_db\001_events.sql
+psql -U postgres -d events_db -f migrations\events_db\002_sessions.sql
+psql -U postgres -d events_db -f migrations\events_db\003_event_users_and_event_members.sql
+psql -U postgres -d events_db -f migrations\events_db\004_registrations_and_check_ins.sql
+psql -U postgres -d events_db -f migrations\events_db\005_event_content.sql
+psql -U postgres -d events_db -f migrations\events_db\006_audit_notifications.sql
+
+6. Verify tables:
+
+psql -U postgres -d events_db -c "\dt"
+
+Expected tables:
+- events
+- sessions
+- event_users
+- event_members
+- registrations
+- check_ins
+- event_content
+- event_audit_log
+- notifications
+- notification_preferences
+
+7. Verify backend .env database URL.
+
+Open:
+backend\.env
+
+Update EVENTS_DB_URL based on local PostgreSQL credentials.
+
+If username is postgres and password is postgres:
+
+EVENTS_DB_URL=postgresql://postgres:postgres@localhost:5432/events_db
+
+If password is different:
+
+EVENTS_DB_URL=postgresql://postgres:<password>@localhost:5432/events_db
+
+If PostgreSQL uses trust authentication without password:
+
+EVENTS_DB_URL=postgresql://postgres@localhost:5432/events_db
+
+Do not keep:
+EVENTS_DB_URL=postgresql://ananth@localhost:5432/events_db
+
+because that is Mac-specific and belongs to another developer.
+
+8. Start backend:
+
+cd backend
+python -m uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+9. Verify health endpoint:
+
+curl http://localhost:8000/api/v1/health
+
+Expected:
+
+{
+  "status": "ok",
+  "version": "0.1.0-alpha",
+  "env": "development",
+  "db": "ok"
+}
+
+Deliverables:
+Create a short setup report:
+
+docs/reviews/windows_database_setup_report.txt
+
+Report should include:
+- PostgreSQL version
+- Database created or already existed
+- Migration files executed
+- Tables verified
+- Final EVENTS_DB_URL format used, but redact password
+- Backend health result
+- Any errors or pending issues
+
+Optional:
+Create helper script:
+
+backend\scripts\setup_events_db_windows.bat
+
+The script should:
+- create events_db if missing
+- run migrations in order
+- verify tables
+- print clear success/failure messages
+
+Do not commit anything.
