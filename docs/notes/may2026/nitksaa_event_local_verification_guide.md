@@ -1072,12 +1072,78 @@ Open Chrome: **http://localhost:5173/login**
 
 ---
 
+## Step 8 — Flutter Web (Chrome)
+
+Backend URL: **http://localhost:8000**
+
+Flutter Web runs in the same machine's browser, so it uses `localhost` — no emulator alias needed.
+
+### Fixed web port
+
+Always use `--web-port=5200` so the CORS origin is predictable:
+
+```bash
+cd {NITK_Alumni_Project_Path}/nitksaa-event/apps/event_app
+
+flutter run -d chrome \
+  --web-port=5200 \
+  --dart-define=DEV_BACKEND_BASE_URL=http://localhost:8000
+```
+
+### Required backend CORS entry
+
+`backend/.env` must include port 5200:
+
+```env
+ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5200
+```
+
+### Required Firebase Authorized Domain
+
+In the [Firebase Console](https://console.firebase.google.com/) → Authentication → Settings → Authorized domains,
+verify that `localhost` is listed. Firebase includes it by default for development.
+
+### Google Sign-In on Flutter Web
+
+Flutter Web uses `FirebaseAuth.instance.signInWithPopup(GoogleAuthProvider())` — a browser
+popup handled entirely by the Firebase JS SDK. The mobile `google_sign_in` flow is not
+used on web. No additional JS libraries need to be added to `web/index.html`.
+
+### Verify web authentication
+
+After the app opens at `http://localhost:5200`:
+
+1. Tap **Continue with Google** — a popup opens for Google account selection.
+2. Select account — popup closes and the app shows "Backend session validated. Opening home..."
+3. Home screen opens.
+
+Verify the backend logs show:
+
+```text
+POST /api/v1/auth/firebase  200
+GET  /api/v1/auth/me        200
+```
+
+### Verify logout
+
+1. Tap logout from the home/settings screen.
+2. App returns to the Login screen.
+3. Backend session and FirebaseAuth are both cleared.
+
+### Verify session persistence (refresh)
+
+1. While logged in, press F5 in Chrome to refresh.
+2. App should stay authenticated (backend JWT validated via `/auth/me`).
+
+---
+
 ## Quick Reference — All Platforms
 
 | Platform | Start Command | Backend URL |
 |---|---|---|
 | Mac Backend | `uvicorn app.main:app --host 0.0.0.0 --port 8000` | — |
 | Mac Admin Portal | `npm run dev` (in admin/event_admin) | `http://localhost:8000` |
+| Flutter Web | `flutter run -d chrome --web-port=5200 --dart-define=DEV_BACKEND_BASE_URL=http://localhost:8000` | `http://localhost:8000` |
 | Android Emulator | `flutter run --dart-define=DEV_BACKEND_BASE_URL=http://10.0.2.2:8000` | `http://10.0.2.2:8000` |
 | iOS Simulator | `flutter run --dart-define=DEV_BACKEND_BASE_URL=http://127.0.0.1:8000` | `http://127.0.0.1:8000` |
 | Physical Android | `flutter run --dart-define=DEV_BACKEND_BASE_URL=http://192.168.1.11:8000` | `http://192.168.1.11:8000` |

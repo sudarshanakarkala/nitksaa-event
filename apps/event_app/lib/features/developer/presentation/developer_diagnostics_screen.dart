@@ -1354,21 +1354,38 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
       _loading = true;
       _firebaseIdToken = null;
       _tokenPreview = null;
-      _status = 'Starting Google sign-in...';
+      _status = kIsWeb
+          ? 'Getting Firebase ID token...'
+          : 'Starting Google sign-in...';
     });
 
     try {
-      await GoogleSignInInitializer.ensureInitialized();
-      final googleUser = await GoogleSignIn.instance.authenticate();
-      final googleAuth = googleUser.authentication;
-      final credential = GoogleAuthProvider.credential(
-        idToken: googleAuth.idToken,
-      );
+      User? user;
 
-      final userCredential = await FirebaseAuth.instance.signInWithCredential(
-        credential,
-      );
-      final user = userCredential.user;
+      if (kIsWeb) {
+        user = FirebaseAuth.instance.currentUser;
+        if (user == null) {
+          final provider = GoogleAuthProvider();
+          provider.addScope('email');
+          provider.addScope('profile');
+          final userCredential = await FirebaseAuth.instance.signInWithPopup(
+            provider,
+          );
+          user = userCredential.user;
+        }
+      } else {
+        await GoogleSignInInitializer.ensureInitialized();
+        final googleUser = await GoogleSignIn.instance.authenticate();
+        final googleAuth = googleUser.authentication;
+        final credential = GoogleAuthProvider.credential(
+          idToken: googleAuth.idToken,
+        );
+        final userCredential = await FirebaseAuth.instance.signInWithCredential(
+          credential,
+        );
+        user = userCredential.user;
+      }
+
       final token = await user?.getIdToken(true);
 
       if (user == null || token == null) {
@@ -1376,10 +1393,8 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
       }
 
       debugPrint('Firebase UID: ${user.uid}');
-      debugPrint('Email: ${user.email ?? googleUser.email}');
-      debugPrint(
-        'Display name: ${user.displayName ?? googleUser.displayName ?? ''}',
-      );
+      debugPrint('Email: ${user.email}');
+      debugPrint('Display name: ${user.displayName ?? ''}');
       debugPrint('Firebase ID Token length: ${token.length}');
       debugPrint('Firebase ID Token preview: ${shortToken(token)}');
 

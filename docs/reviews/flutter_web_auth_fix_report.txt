@@ -1,0 +1,191 @@
+NITKSAA Event App — Flutter Web Authentication Fix Report
+==========================================================
+Date       : 2026-06-08
+Author     : Claude Code
+Scope      : apps/event_app only (backend .env CORS addition required)
+
+
+ROOT CAUSE
+----------
+FirebaseAuthService.signInWithGoogle() used the mobile-only GoogleSignIn SDK
+(google_sign_in v7.x) on all platforms:
+
+    await GoogleSignInInitializer.ensureInitialized();
+    final googleUser = await GoogleSignIn.instance.authenticate();
+
+On Flutter Web (Chrome), GoogleSignIn.instance.authenticate() does not work
+because it expects native platform authentication infrastructure (Android
+credential manager / iOS system sheet) which does not exist in a browser.
+
+Additionally, the backend/.env had no ALLOWED_ORIGINS entry, so the
+CORSMiddleware defaulted to allowing only http://localhost:5173 (React admin
+port). HTTP requests from Flutter Web at http://localhost:5200 were blocked
+by the browser CORS preflight check before they reached the backend.
+
+Both failures together made Google login on Flutter Web completely inoperable:
+- Step 1 (Firebase sign-in) failed due to wrong auth method.
+- Step 2 (POST /api/v1/auth/firebase) would have failed due to CORS even if
+  step 1 had succeeded.
+
+
+FILES CHANGED
+-------------
+1. apps/event_app/lib/features/auth/services/firebase_auth_service.dart
+2. backend/.env
+3. docs/notes/may2026/nitksaa_event_local_verification_guide.md  (doc update)
+
+
+CHANGE DETAILS
+--------------
+
+1. firebase_auth_service.dart
+   ----------------------------
+   Added import: package:flutter/foundation.dart  (for kIsWeb)
+
+   signInWithGoogle() — added web branch before existing mobile flow:
+
+       if (kIsWeb) {
+         final provider = GoogleAuthProvider();
+         provider.addScope('email');
+         provider.addScope('profile');
+         final userCredential =
+             await FirebaseAuth.instance.signInWithPopup(provider);
+         return userCredential.user;
+       }
+       // existing mobile path unchanged below
+
+   signInWithPopup() uses the Firebase JS SDK (bundled by firebase_auth_web)
+   to open a Google account-selector popup in the browser. No additional JS
+   libraries are required in web/index.html.
+
+   signOut() — wrapped mobile GoogleSignIn.instance.signOut() in !kIsWeb guard:
+
+       if (!kIsWeb) {
+         try {
+           await GoogleSignInInitializer.ensureInitialized();
+           await GoogleSignIn.instance.signOut();
+         } catch (error, stackTrace) { ... }
+       }
+       await FirebaseAuth.instance.signOut();
+
+   This prevents a crash on web where GoogleSignIn was never initialised as
+   part of the sign-in flow.
+
+   Mobile (Android/iOS) auth path: unchanged.
+
+2. backend/.env
+   -------------
+   Added:
+       ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5200
+
+   The settings.origins_list property splits this CSV and passes it to
+   FastAPI's CORSMiddleware. Flutter Web fixed to port 5200 via:
+       flutter run -d chrome --web-port=5200
+
+   React admin portal at port 5173 continues to work unchanged.
+
+3. Local verification guide
+   -------------------------
+   Added "Step 8 — Flutter Web (Chrome)" section covering:
+   - Run command with fixed web port 5200
+   - Required ALLOWED_ORIGINS entry
+   - Firebase Authorized Domain requirement (localhost included by default)
+   - Web-specific Google Sign-In popup behaviour
+   - Login / logout / session persistence verification steps
+   Updated Quick Reference table to include Flutter Web row.
+
+
+WEB-SPECIFIC AUTH FLOW
+-----------------------
+Flutter Web:
+    1. User taps "Continue with Google"
+    2. FirebaseAuth.instance.signInWithPopup(GoogleAuthProvider()) opens
+       a browser popup — Firebase JS SDK handles OAuth redirect internally
+    3. Popup closes; Firebase returns UserCredential with authenticated User
+    4. FirebaseAuthService.freshIdToken() calls user.getIdToken(true)
+    5. AuthController._runLoginFlow() posts the ID token to
+       POST http://localhost:8000/api/v1/auth/firebase
+    6. Backend validates the Firebase ID token, upserts event_users, returns
+       a signed JWT (access_token)
+    7. AuthController calls GET /api/v1/auth/me to validate the JWT
+    8. Validated AuthSession is stored via AuthSessionStore (Hive)
+    9. LoginScreen navigates to AppRoutes.home
+
+   The Firebase ID token is used only as a server-side exchange credential.
+   It is never shown in the UI.
+
+
+MOBILE AUTH PRESERVATION
+-------------------------
+The Android/iOS path through GoogleSignInInitializer and
+GoogleSignIn.instance.authenticate() is completely unchanged. The kIsWeb
+guard is a compile-time constant, so the mobile branch adds zero runtime
+overhead on mobile platforms.
+
+
+CORS CHANGES
+------------
+File   : backend/.env
+Before : (no ALLOWED_ORIGINS key — defaulted to http://localhost:5173)
+After  : ALLOWED_ORIGINS=http://localhost:5173,http://localhost:5200
+
+No changes to backend Python source files.
+No changes to CORSMiddleware configuration in app/main.py.
+The origins_list property in app/config.py handles CSV parsing already.
+
+
+FIREBASE AUTHORIZED DOMAINS NOTE
+----------------------------------
+Firebase's signInWithPopup requires the app's origin to be listed in
+Firebase Console → Authentication → Settings → Authorized domains.
+Firebase includes "localhost" by default, so http://localhost:5200 is
+covered without any console change needed for local development.
+
+For production, the production domain must be added to Authorized domains.
+
+
+VERIFICATION RESULTS
+---------------------
+dart format   : 1 file formatted, 0 changed  (already compliant)
+flutter analyze: No issues found
+flutter test  : All tests passed (1/1)
+
+Manual verification (to be completed after backend restart):
+
+  Pre-conditions:
+    [ ] Backend running:  uvicorn app.main:app --host 0.0.0.0 --port 8000
+    [ ] Health check:     curl http://localhost:8000/api/v1/health  → {"status":"ok"}
+    [ ] Flutter web:      flutter run -d chrome --web-port=5200
+                          --dart-define=DEV_BACKEND_BASE_URL=http://localhost:8000
+
+  Google login:
+    [ ] "Continue with Google" opens browser popup
+    [ ] Account selection completes; popup closes
+    [ ] "Backend session validated. Opening home..." appears briefly
+    [ ] Home screen opens
+    [ ] Backend logs: POST /api/v1/auth/firebase 200, GET /api/v1/auth/me 200
+
+  Logout:
+    [ ] Logout clears backend session and FirebaseAuth
+    [ ] App returns to login screen
+
+  Session persistence (refresh):
+    [ ] F5 while authenticated stays on home screen (JWT validated via /auth/me)
+
+  Android regression:
+    [ ] flutter run -d emulator-5554 --dart-define=DEV_BACKEND_BASE_URL=http://10.0.2.2:8000
+    [ ] Google login still works via GoogleSignIn native flow
+
+  Email/password (all platforms):
+    [ ] Email/password login unaffected on both web and mobile
+
+
+SUMMARY
+-------
+Two-line root cause: wrong auth method on web (mobile SDK used everywhere) +
+missing CORS origin for the Flutter web port.
+
+Fix: 11-line change in firebase_auth_service.dart (kIsWeb branch) +
+one-line addition to backend/.env (ALLOWED_ORIGINS).
+
+No schema changes. No migration changes. No mobile auth changes.

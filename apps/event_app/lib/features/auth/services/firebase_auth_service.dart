@@ -1,4 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:flutter/foundation.dart';
 import 'package:google_sign_in/google_sign_in.dart';
 
 import '../../../core/logger/app_logger.dart';
@@ -19,8 +20,18 @@ abstract class FirebaseAuthService {
 
   static Future<User?> signInWithGoogle() async {
     AppLogger.info('signInWithGoogle called');
-    await GoogleSignInInitializer.ensureInitialized();
 
+    if (kIsWeb) {
+      final provider = GoogleAuthProvider();
+      provider.addScope('email');
+      provider.addScope('profile');
+      final userCredential = await FirebaseAuth.instance.signInWithPopup(
+        provider,
+      );
+      return userCredential.user;
+    }
+
+    await GoogleSignInInitializer.ensureInitialized();
     final googleUser = await GoogleSignIn.instance.authenticate();
     final googleAuth = googleUser.authentication;
     final credential = GoogleAuthProvider.credential(
@@ -43,12 +54,14 @@ abstract class FirebaseAuthService {
 
   static Future<void> signOut() async {
     AppLogger.info('signOut called');
-    try {
-      await GoogleSignInInitializer.ensureInitialized();
-      await GoogleSignIn.instance.signOut();
-    } catch (error, stackTrace) {
-      AppLogger.warning('Google sign-out skipped or failed: $error');
-      AppLogger.debug(stackTrace.toString());
+    if (!kIsWeb) {
+      try {
+        await GoogleSignInInitializer.ensureInitialized();
+        await GoogleSignIn.instance.signOut();
+      } catch (error, stackTrace) {
+        AppLogger.warning('Google sign-out skipped or failed: $error');
+        AppLogger.debug(stackTrace.toString());
+      }
     }
     await FirebaseAuth.instance.signOut();
   }
