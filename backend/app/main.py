@@ -23,13 +23,18 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=settings.origins_list,
-    allow_credentials=True,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+_cors_kwargs: dict = {
+    "allow_credentials": True,
+    "allow_methods": ["*"],
+    "allow_headers": ["*"],
+}
+if settings.app_env == "development":
+    # Any localhost port is allowed in development (Flutter Web uses a dynamic port).
+    _cors_kwargs["allow_origin_regex"] = r"http://localhost(:\d+)?"
+else:
+    _cors_kwargs["allow_origins"] = settings.origins_list
+
+app.add_middleware(CORSMiddleware, **_cors_kwargs)
 
 app.include_router(health.router)
 app.include_router(events.router)

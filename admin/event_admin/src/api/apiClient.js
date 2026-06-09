@@ -6,9 +6,11 @@ async function request(path, options = {}) {
   const { skipAuth = false, ...fetchOptions } = options;
 
   const token = skipAuth ? null : getAccessToken();
+  const devUser = import.meta.env.VITE_DEV_USER;
   const headers = {
     'Content-Type': 'application/json',
-    ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    ...(token   ? { Authorization: `Bearer ${token}` } : {}),
+    ...(devUser ? { 'X-Dev-User': devUser }            : {}),
     ...fetchOptions.headers,
   };
 
