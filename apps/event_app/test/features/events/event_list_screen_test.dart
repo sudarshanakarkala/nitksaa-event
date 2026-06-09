@@ -5,6 +5,7 @@ import 'package:event_app/features/events/presentation/event_list_screen.dart';
 import 'package:event_app/features/events/services/public_event_service.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
+import 'package:go_router/go_router.dart';
 
 void main() {
   testWidgets('shows loading then upcoming physical and virtual event cards', (
@@ -37,11 +38,8 @@ void main() {
     expect(find.textContaining('join.example'), findsNothing);
 
     await tester.tap(find.text('Chapter Meetup'));
-    await tester.pump();
-    expect(
-      find.text('Event detail will be implemented in Phase 7.'),
-      findsOneWidget,
-    );
+    await tester.pumpAndSettle();
+    expect(find.text('Detail event 1'), findsOneWidget);
   });
 
   testWidgets('loads the past tab only when selected', (tester) async {
@@ -91,7 +89,22 @@ void main() {
 }
 
 Widget _app(PublicEventService service) {
-  return MaterialApp(home: EventListScreen(eventService: service));
+  final router = GoRouter(
+    initialLocation: '/events',
+    routes: [
+      GoRoute(
+        path: '/events',
+        builder: (_, _) => EventListScreen(eventService: service),
+      ),
+      GoRoute(
+        path: '/events/:eventId',
+        builder: (_, state) => Scaffold(
+          body: Text('Detail event ${state.pathParameters['eventId']}'),
+        ),
+      ),
+    ],
+  );
+  return MaterialApp.router(routerConfig: router);
 }
 
 class _FakePublicEventService implements PublicEventService {

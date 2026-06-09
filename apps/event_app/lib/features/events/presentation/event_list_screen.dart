@@ -1,7 +1,9 @@
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/widgets/app_widgets.dart';
+import '../../../routes/app_routes.dart';
 import '../domain/public_event.dart';
 import '../services/public_event_service.dart';
 
@@ -158,20 +160,11 @@ class _EventListScreenState extends State<EventListScreen>
         separatorBuilder: (_, _) => const SizedBox(height: 16),
         itemBuilder: (context, index) => _EventCard(
           event: state.events[index],
-          onTap: _showDetailPlaceholder,
+          onTap: () =>
+              context.push(AppRoutes.eventDetail(state.events[index].eventId)),
         ),
       ),
     );
-  }
-
-  void _showDetailPlaceholder() {
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Event detail will be implemented in Phase 7.'),
-        ),
-      );
   }
 }
 

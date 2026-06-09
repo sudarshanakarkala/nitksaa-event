@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/developer/presentation/developer_diagnostics_screen.dart';
+import '../features/events/presentation/event_detail_screen.dart';
 import '../features/events/presentation/event_list_screen.dart';
 import '../features/foundation/presentation/foundation_ready_screen.dart';
 import '../features/home/presentation/home_placeholder_screen.dart';
@@ -36,6 +37,13 @@ abstract class AppRouter {
       GoRoute(
         path: AppRoutes.events,
         builder: (context, state) => const EventListScreen(),
+      ),
+      GoRoute(
+        path: '${AppRoutes.events}/:eventId',
+        builder: (context, state) {
+          final eventId = int.tryParse(state.pathParameters['eventId'] ?? '');
+          return EventDetailScreen(eventId: eventId ?? -1);
+        },
       ),
       GoRoute(
         path: AppRoutes.home,
