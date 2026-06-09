@@ -5,6 +5,7 @@ import AdminLayout from './layout/AdminLayout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
 import EventsPage from './pages/EventsPage';
+import EventFormPage from './pages/EventFormPage';
 import RegistrationsPage from './pages/RegistrationsPage';
 import AttendeesPage from './pages/AttendeesPage';
 import SettingsPage from './pages/SettingsPage';
@@ -29,6 +30,8 @@ export default function App() {
             <Route element={<AdminLayout />}>
               <Route path="/dashboard" element={<DashboardPage />} />
               <Route path="/events" element={<EventsPage />} />
+              <Route path="/events/new" element={<EventFormPage />} />
+              <Route path="/events/:eventId/edit" element={<EventFormPage />} />
               <Route path="/registrations" element={<RegistrationsPage />} />
               <Route path="/attendees" element={<AttendeesPage />} />
               <Route path="/settings" element={<SettingsPage />} />

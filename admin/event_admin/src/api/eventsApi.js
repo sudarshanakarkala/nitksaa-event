@@ -7,3 +7,15 @@ export function listEvents({ page = 1, perPage = 20, status, isVirtual, search }
   if (search)            params.set('search',      search);
   return apiClient.get(`/api/v1/events?${params}`);
 }
+
+export function getEvent(eventId) {
+  return apiClient.get(`/api/v1/events/${eventId}`);
+}
+
+export function createEvent(data) {
+  return apiClient.post('/api/v1/events', data);
+}
+
+export function updateEvent(eventId, data) {
+  return apiClient.patch(`/api/v1/events/${eventId}`, data);
+}
