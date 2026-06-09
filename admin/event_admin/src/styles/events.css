@@ -183,3 +183,27 @@
   padding: 4px 10px;
   font-size: 0.75rem;
 }
+
+/* ── Toast notification ───────────────────────────────────────────────── */
+.events-toast {
+  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.events-toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.65;
+  font-size: 0.875rem;
+  padding: 2px 5px;
+  line-height: 1;
+  flex-shrink: 0;
+  border-radius: 3px;
+  transition: opacity 0.15s;
+}
+.events-toast-close:hover { opacity: 1; }

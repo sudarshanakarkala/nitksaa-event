@@ -19,3 +19,7 @@ export function createEvent(data) {
 export function updateEvent(eventId, data) {
   return apiClient.patch(`/api/v1/events/${eventId}`, data);
 }
+
+export function updateEventStatus(eventId, status) {
+  return apiClient.patch(`/api/v1/events/${eventId}/status`, { status });
+}
