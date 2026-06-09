@@ -196,6 +196,14 @@ class _LoginScreenState extends State<LoginScreen> {
                   ? null
                   : _handleGoogleSignIn,
             ),
+            const SizedBox(height: 12),
+            TextButton.icon(
+              onPressed: (_emailLoading || _googleLoading)
+                  ? null
+                  : () => context.go(AppRoutes.events),
+              icon: const Icon(Icons.event_outlined),
+              label: const Text('Browse Events'),
+            ),
             const SizedBox(height: 40),
             Center(
               child: Text(

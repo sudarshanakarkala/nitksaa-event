@@ -10,8 +10,10 @@ abstract class RouteGuards {
     final auth = AuthController.instance;
     final location = state.uri.path;
 
+    final isRoot = location == AppRoutes.root;
     final isSplash = location == AppRoutes.splash;
     final isLogin = location == AppRoutes.login;
+    final isEvents = location == AppRoutes.events;
     final isFoundation = location == AppRoutes.foundation;
     final isDeveloper = location == AppRoutes.developer;
     final isProtected = location == AppRoutes.home;
@@ -19,7 +21,7 @@ abstract class RouteGuards {
     if (isDeveloper && !kDebugMode) return AppRoutes.login;
 
     if (auth.isChecking) {
-      return isSplash ? null : AppRoutes.splash;
+      return (isRoot || isSplash || isEvents) ? null : AppRoutes.root;
     }
 
     if (auth.isAuthenticated) {
@@ -28,8 +30,14 @@ abstract class RouteGuards {
     }
 
     if (isProtected) return AppRoutes.login;
-    if (isSplash) return AppRoutes.login;
-    if (isLogin || isFoundation || isDeveloper) return null;
+    if (isRoot ||
+        isSplash ||
+        isLogin ||
+        isEvents ||
+        isFoundation ||
+        isDeveloper) {
+      return null;
+    }
 
     return null;
   }

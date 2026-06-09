@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
+import '../../../core/network/backend_api_config.dart';
 import '../domain/auth_session.dart';
 
 class BackendAuthService {
@@ -9,30 +9,15 @@ class BackendAuthService {
   final Dio _dio;
 
   static Dio _createDio() {
-    const configured = String.fromEnvironment('BACKEND_BASE_URL');
-    const devConfigured = String.fromEnvironment('DEV_BACKEND_BASE_URL');
-    final baseUrl = configured.isNotEmpty
-        ? configured
-        : devConfigured.isNotEmpty
-        ? devConfigured
-        : _defaultBackendBaseUrl;
-
     return Dio(
       BaseOptions(
-        baseUrl: baseUrl,
+        baseUrl: BackendApiConfig.baseUrl,
         connectTimeout: const Duration(seconds: 10),
         receiveTimeout: const Duration(seconds: 15),
         sendTimeout: const Duration(seconds: 15),
         headers: const {'Content-Type': 'application/json'},
       ),
     );
-  }
-
-  static String get _defaultBackendBaseUrl {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8000';
-    }
-    return 'http://127.0.0.1:8000';
   }
 
   Future<AuthSession> loginWithFirebaseToken(String firebaseIdToken) async {

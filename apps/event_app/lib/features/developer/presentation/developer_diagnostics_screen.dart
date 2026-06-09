@@ -59,6 +59,7 @@ class _DeveloperDiagnosticsScreenState
             runningAll: _runningAll,
             exporting: _exporting,
             clearing: _clearing,
+            onOpenEvents: _openEvents,
             onRunAll: _runAllDiagnostics,
             onExport: _exportDiagnosticReport,
             onClear: _clearCachedData,
@@ -74,6 +75,21 @@ class _DeveloperDiagnosticsScreenState
         ],
       ),
     );
+  }
+
+  void _openEvents() {
+    if (kIsWeb) {
+      context.go(AppRoutes.events);
+      return;
+    }
+
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(
+          content: Text('Events route is available in Flutter Web build.'),
+        ),
+      );
   }
 
   List<DiagnosticCategory> _diagnosticCategories(ThemeMode mode) {
@@ -2876,6 +2892,7 @@ class _QuickActionsCard extends StatelessWidget {
     required this.runningAll,
     required this.exporting,
     required this.clearing,
+    required this.onOpenEvents,
     required this.onRunAll,
     required this.onExport,
     required this.onClear,
@@ -2884,6 +2901,7 @@ class _QuickActionsCard extends StatelessWidget {
   final bool runningAll;
   final bool exporting;
   final bool clearing;
+  final VoidCallback onOpenEvents;
   final VoidCallback onRunAll;
   final VoidCallback onExport;
   final VoidCallback onClear;
@@ -2896,6 +2914,12 @@ class _QuickActionsCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            OutlinedButton.icon(
+              onPressed: onOpenEvents,
+              icon: const Icon(Icons.event_outlined),
+              label: const Text('Open Events'),
+            ),
+            const SizedBox(height: 8),
             FilledButton.icon(
               onPressed: runningAll ? null : onRunAll,
               icon: runningAll

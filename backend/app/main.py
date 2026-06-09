@@ -24,15 +24,16 @@ app = FastAPI(
 )
 
 _cors_kwargs: dict = {
+    "allow_origins": settings.origins_list,
     "allow_credentials": True,
     "allow_methods": ["*"],
     "allow_headers": ["*"],
 }
 if settings.app_env == "development":
-    # Any localhost port is allowed in development (Flutter Web uses a dynamic port).
-    _cors_kwargs["allow_origin_regex"] = r"http://localhost(:\d+)?"
-else:
-    _cors_kwargs["allow_origins"] = settings.origins_list
+    # Flutter Web uses a dynamic port during local development.
+    _cors_kwargs["allow_origin_regex"] = (
+        r"^http://(localhost|127\.0\.0\.1):\d+$"
+    )
 
 app.add_middleware(CORSMiddleware, **_cors_kwargs)
 

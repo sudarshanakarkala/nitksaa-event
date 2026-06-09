@@ -55,6 +55,12 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
               ),
             ),
             const SizedBox(height: 40),
+            AppPrimaryButton(
+              label: 'Browse Events',
+              icon: Icons.event_outlined,
+              onPressed: () => context.go(AppRoutes.events),
+            ),
+            const SizedBox(height: 12),
             AppSecondaryButton(
               label: 'Sign Out',
               icon: Icons.logout_outlined,
