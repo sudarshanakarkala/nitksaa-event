@@ -28,7 +28,8 @@
   --bg-canvas:      var(--navy-deep);
   --bg-topbar:      var(--navy-mid);
   --bg-overlay:     rgba(3, 8, 18, 0.88);
-  --bg-panel-start: #f5f2e8;
+  --bg-panel-start: #0c1828;
+  --bg-panel-end:   #060d1a;
 
   /* Typography */
   --font-sans:  'Inter', 'Segoe UI', system-ui, sans-serif;
@@ -37,6 +38,7 @@
   /* Layout */
   --radius-sm:     6px;
   --radius-md:     12px;
+  --radius-lg:     16px;
   --sidebar-width: 240px;
   --nav-height:    60px;
   --container-max: 1200px;
@@ -53,6 +55,8 @@
 [data-theme="light"] {
   --navy-deep:  #f5f2e8;
   --navy-mid:   #ede9d9;
+  --bg-panel-start: #ffffff;
+  --bg-panel-end:   #f5f2e8;
 
   --text-primary:    #1a1a2e;
   --text-primary-ch: 26, 26, 46;
