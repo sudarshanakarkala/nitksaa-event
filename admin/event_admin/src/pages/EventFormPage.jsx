@@ -45,10 +45,31 @@ const EMPTY = {
   banner_url:             '',
 };
 
-// Convert ISO datetime string to datetime-local input value (YYYY-MM-DDTHH:mm)
-function toLocal(iso) {
+// Convert a UTC ISO datetime string to a datetime-local input value (YYYY-MM-DDTHH:mm)
+// in the given IANA timezone (e.g. "Asia/Kolkata").
+// Uses Intl.DateTimeFormat — no extra libraries required.
+// Edge case: hour12:false can return "24" for midnight on some platforms; normalised to "00".
+function toDatetimeLocalInTZ(iso, tz) {
   if (!iso) return '';
-  return iso.substring(0, 16);
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz ?? 'UTC',
+      year:     'numeric',
+      month:    '2-digit',
+      day:      '2-digit',
+      hour:     '2-digit',
+      minute:   '2-digit',
+      hour12:   false,
+    })
+    .formatToParts(d)
+    .map(({ type, value }) => [type, value])
+  );
+
+  const hour = parts.hour === '24' ? '00' : (parts.hour ?? '00');
+  return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}`;
 }
 
 // Validate form; returns object of {field: errorMessage}
@@ -120,15 +141,15 @@ export default function EventFormPage() {
           title:                  ev.title                  ?? '',
           tagline:                ev.tagline                ?? '',
           description:            ev.description            ?? '',
-          start_datetime:         toLocal(ev.start_datetime),
-          end_datetime:           toLocal(ev.end_datetime),
+          start_datetime:         toDatetimeLocalInTZ(ev.start_datetime,         ev.timezone),
+          end_datetime:           toDatetimeLocalInTZ(ev.end_datetime,           ev.timezone),
           timezone:               ev.timezone               ?? 'Asia/Kolkata',
           is_virtual:             ev.is_virtual             ?? false,
           location_text:          ev.location_text          ?? '',
           virtual_url:            ev.virtual_url            ?? '',
           capacity:               ev.capacity != null ? String(ev.capacity) : '',
-          registration_opens_at:  toLocal(ev.registration_opens_at),
-          registration_closes_at: toLocal(ev.registration_closes_at),
+          registration_opens_at:  toDatetimeLocalInTZ(ev.registration_opens_at,  ev.timezone),
+          registration_closes_at: toDatetimeLocalInTZ(ev.registration_closes_at, ev.timezone),
           thumbnail_url:          ev.thumbnail_url          ?? '',
           banner_url:             ev.banner_url             ?? '',
         });
