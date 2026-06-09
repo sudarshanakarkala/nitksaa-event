@@ -1,18 +1,123 @@
 /* Events page */
 
-.events-toolbar {
+/* ── Toolbar wrap (two rows) ──────────────────────────────────────────── */
+.events-toolbar-wrap {
+  margin-bottom: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+/* ── Row 1: status filter pills + Create button ───────────────────────── */
+.events-filters-row {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 20px;
+  gap: 12px;
+  flex-wrap: wrap;
 }
+
+.events-filters {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
+.events-filter-btn {
+  display: inline-flex;
+  align-items: center;
+  font-family: var(--font-sans);
+  font-size: 0.8rem;
+  font-weight: 500;
+  padding: 6px 14px;
+  border-radius: 20px;
+  border: 1px solid var(--border);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: color 0.15s, border-color 0.15s, background 0.15s;
+  white-space: nowrap;
+}
+.events-filter-btn:hover {
+  border-color: rgba(var(--gold-ch), 0.35);
+  color: var(--text-primary);
+  background: rgba(var(--gold-ch), 0.05);
+}
+.events-filter-btn--active {
+  border-color: rgba(var(--gold-ch), 0.5);
+  background: rgba(var(--gold-ch), 0.1);
+  color: var(--gold);
+}
+
+/* ── Row 2: search + count + refresh ─────────────────────────────────── */
+.events-search-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.events-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  max-width: 420px;
+}
+
+.events-search-icon {
+  position: absolute;
+  left: 12px;
+  color: rgba(var(--gold-ch), 0.5);
+  pointer-events: none;
+  flex-shrink: 0;
+}
+
+.events-search-input {
+  width: 100%;
+  padding: 8px 36px 8px 38px;
+  background: var(--surface);
+  border: 1px solid rgba(var(--gold-ch), 0.2);
+  border-radius: 8px;
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  font-size: 0.875rem;
+  outline: none;
+  transition: border-color 0.2s, box-shadow 0.2s, background 0.2s;
+}
+.events-search-input::placeholder { color: var(--text-muted); }
+.events-search-input:focus {
+  border-color: rgba(var(--gold-ch), 0.5);
+  box-shadow: 0 0 0 3px rgba(var(--gold-ch), 0.07);
+  background: var(--surface-hover);
+}
+.events-search-input::-webkit-search-cancel-button { display: none; }
+
+.events-search-clear {
+  position: absolute;
+  right: 10px;
+  background: none;
+  border: none;
+  color: rgba(var(--text-primary-ch), 0.38);
+  cursor: pointer;
+  padding: 3px;
+  line-height: 1;
+  border-radius: 3px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: color 0.15s;
+}
+.events-search-clear:hover { color: var(--text-primary); }
 
 .events-count {
-  font-size: 0.875rem;
+  font-size: 0.82rem;
   color: var(--text-muted);
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 
-/* Table wrapper — matches website .data-table-wrap pattern */
+/* ── Table wrapper ────────────────────────────────────────────────────── */
 .events-table-wrap {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -21,11 +126,9 @@
   overflow-x: auto;
   transition: border-color 0.2s, background 0.2s;
 }
-.events-table-wrap:hover {
-  border-color: var(--border-hover);
-}
+.events-table-wrap:hover { border-color: var(--border-hover); }
 
-/* Table — matches website .data-table pattern */
+/* ── Table ────────────────────────────────────────────────────────────── */
 .events-table {
   width: 100%;
   border-collapse: collapse;
@@ -50,33 +153,19 @@
   vertical-align: middle;
   color: var(--text-secondary);
 }
+.events-table tbody tr:last-child td { border-bottom: none; }
+.events-table tbody tr:hover td      { background: var(--surface-hover); }
 
-.events-table tbody tr:last-child td {
-  border-bottom: none;
-}
-
-.events-table tbody tr:hover td {
-  background: var(--surface-hover);
-}
-
-/* Title cell */
+/* ── Title cell ───────────────────────────────────────────────────────── */
 .event-title-cell {
   display: flex;
   flex-direction: column;
   gap: 3px;
 }
+.event-title   { font-weight: 500; color: var(--text-primary); }
+.event-tagline { font-size: 0.78rem; color: var(--text-muted); }
 
-.event-title {
-  font-weight: 500;
-  color: var(--text-primary);
-}
-
-.event-tagline {
-  font-size: 0.78rem;
-  color: var(--text-muted);
-}
-
-/* Capacity & date cells */
+/* ── Data cells ───────────────────────────────────────────────────────── */
 .capacity-cell,
 .date-cell {
   white-space: nowrap;
@@ -84,13 +173,12 @@
   font-variant-numeric: tabular-nums;
 }
 
-/* Action buttons */
+/* ── Action buttons ───────────────────────────────────────────────────── */
 .actions-cell {
   display: flex;
   align-items: center;
   gap: 6px;
 }
-
 .btn-xs {
   padding: 4px 10px;
   font-size: 0.75rem;
