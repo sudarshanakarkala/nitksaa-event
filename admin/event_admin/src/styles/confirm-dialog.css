@@ -1,0 +1,90 @@
+/* Confirmation Dialog */
+
+.cd-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(3, 8, 18, 0.88);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: cdFadeIn 0.14s ease;
+}
+
+@keyframes cdFadeIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+.cd-box {
+  background: var(--navy-mid);
+  border: 1px solid var(--border-hover);
+  border-radius: var(--radius-lg);
+  padding: 32px 28px;
+  width: min(440px, 90vw);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: cdSlideUp 0.18s ease;
+  box-shadow: var(--shadow-lg);
+}
+
+@keyframes cdSlideUp {
+  from { transform: translateY(14px); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+.cd-title {
+  font-family: var(--font-serif);
+  font-size: 1.3rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+  line-height: 1.2;
+}
+
+.cd-event-name {
+  font-size: 0.875rem;
+  color: var(--gold);
+  margin: 0 0 4px;
+  line-height: 1.4;
+  word-break: break-word;
+  font-style: italic;
+}
+
+.cd-body {
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  line-height: 1.6;
+  margin: 0;
+}
+
+.cd-error {
+  font-size: 0.82rem;
+  color: #f87171;
+  background: rgba(248, 113, 113, 0.08);
+  border: 1px solid rgba(248, 113, 113, 0.22);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
+  margin: 2px 0 0;
+  line-height: 1.5;
+}
+
+.cd-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 12px;
+}
+
+/* Unpublish confirm button — gold-tinted ghost to signal a reversible action */
+.cd-btn-unpublish {
+  border-color: rgba(var(--gold-ch), 0.45) !important;
+  color: var(--gold) !important;
+}
+.cd-btn-unpublish:hover {
+  border-color: var(--gold) !important;
+  color: var(--gold-light) !important;
+  background: rgba(var(--gold-ch), 0.07) !important;
+}

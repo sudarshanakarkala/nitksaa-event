@@ -2,13 +2,11 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import StatusBadge from '../components/StatusBadge';
 import LoadingView from '../components/LoadingView';
-import { listEvents } from '../api/eventsApi';
+import ConfirmDialog from '../components/ConfirmDialog';
+import { listEvents, updateEventStatus } from '../api/eventsApi';
 import '../styles/events.css';
 
 // ── Status filter definitions ──────────────────────────────────────────────
-// match: null = show all; array = statuses that qualify for this filter tab.
-// "Archived" covers both 'archived' and 'completed' since the current schema
-// uses 'completed' for finished events.
 const STATUS_FILTERS = [
   { label: 'All',               value: 'all',               match: null },
   { label: 'Draft',             value: 'draft',             match: ['draft'] },
@@ -18,15 +16,37 @@ const STATUS_FILTERS = [
   { label: 'Archived',          value: 'archived',          match: ['archived', 'completed'] },
 ];
 
+// Which action buttons are enabled for a given event status
+function getActions(status) {
+  const s = status?.toLowerCase();
+  return {
+    canPublish:   s === 'draft',
+    canUnpublish: s === 'published',
+    canEdit:      s === 'draft' || s === 'published' || s === 'registration_open',
+    canCancel:    s === 'draft' || s === 'published' || s === 'registration_open',
+  };
+}
+
+// Turn backend error strings into human-readable messages
+function friendlyError(msg) {
+  if (!msg) return 'An unexpected error occurred.';
+  if (msg.startsWith('invalid_status_transition')) {
+    const [from, to] = msg.replace('invalid_status_transition_', '').split('_to_');
+    if (from && to) return `Cannot change from "${from}" to "${to}". Please refresh the list.`;
+  }
+  if (msg.startsWith('missing_fields_for_publish')) {
+    return `Cannot publish: missing required fields — ${msg.replace('missing_fields_for_publish: ', '')}.`;
+  }
+  if (msg === 'event_not_found') return 'Event not found — it may have been deleted.';
+  if (msg === 'event_not_editable') return 'This event cannot be edited in its current status.';
+  return msg;
+}
+
 function formatDate(iso) {
   if (!iso) return '—';
   return new Date(iso).toLocaleString('en-IN', {
-    day:    '2-digit',
-    month:  'short',
-    year:   'numeric',
-    hour:   '2-digit',
-    minute: '2-digit',
-    hour12: true,
+    day: '2-digit', month: 'short', year: 'numeric',
+    hour: '2-digit', minute: '2-digit', hour12: true,
   });
 }
 
@@ -38,6 +58,7 @@ function matchesSearch(event, query) {
 }
 
 export default function EventsPage() {
+  // ── List state ─────────────────────────────────────────────────────────
   const [events,       setEvents]       = useState([]);
   const [total,        setTotal]        = useState(0);
   const [loading,      setLoading]      = useState(true);
@@ -46,6 +67,14 @@ export default function EventsPage() {
   const [search,       setSearch]       = useState('');
   const searchRef = useRef(null);
 
+  // ── Status action state ────────────────────────────────────────────────
+  const [confirmState, setConfirmState] = useState(null); // { eventId, eventTitle, status }
+  const [actioningId,  setActioningId]  = useState(null); // event_id currently being updated
+  const [dialogError,  setDialogError]  = useState(null);
+  const [toast,        setToast]        = useState(null);  // { msg, type }
+  const toastRef = useRef(null);
+
+  // ── Data fetching ──────────────────────────────────────────────────────
   function fetchEvents() {
     setLoading(true);
     setError(null);
@@ -60,6 +89,40 @@ export default function EventsPage() {
 
   useEffect(() => { fetchEvents(); }, []);
 
+  // ── Toast helpers ──────────────────────────────────────────────────────
+  function showToast(msg, type = 'success') {
+    setToast({ msg, type });
+    clearTimeout(toastRef.current);
+    toastRef.current = setTimeout(() => setToast(null), 3500);
+  }
+
+  // ── Confirmation dialog ────────────────────────────────────────────────
+  function openConfirm(event, targetStatus) {
+    setDialogError(null);
+    setConfirmState({ eventId: event.event_id, eventTitle: event.title, status: targetStatus });
+  }
+
+  async function handleStatusConfirm() {
+    if (!confirmState) return;
+    const { eventId, status } = confirmState;
+    setActioningId(eventId);
+    setDialogError(null);
+    try {
+      await updateEventStatus(eventId, status);
+      setConfirmState(null);
+      const label = status === 'published' ? 'published'
+                  : status === 'draft'     ? 'moved to draft'
+                  :                          'cancelled';
+      showToast(`Event ${label} successfully.`);
+      fetchEvents(); // statusFilter + search remain in state — list re-filters automatically
+    } catch (err) {
+      setDialogError(friendlyError(err.message));
+    } finally {
+      setActioningId(null);
+    }
+  }
+
+  // ── Client-side filtering ──────────────────────────────────────────────
   const filteredEvents = useMemo(() => {
     const filter = STATUS_FILTERS.find(f => f.value === statusFilter);
     const q = search.trim();
@@ -136,6 +199,18 @@ export default function EventsPage() {
         </div>
       </div>
 
+      {/* ── Toast notification ────────────────────────────────────────── */}
+      {toast && (
+        <div className={`events-toast notice notice--${toast.type === 'error' ? 'warning' : 'success'} fade-up`}>
+          <span>{toast.msg}</span>
+          <button
+            className="events-toast-close"
+            onClick={() => setToast(null)}
+            aria-label="Dismiss notification"
+          >✕</button>
+        </div>
+      )}
+
       {/* ── States ───────────────────────────────────────────────────── */}
       {loading && <LoadingView message="Loading events…" />}
 
@@ -173,43 +248,79 @@ export default function EventsPage() {
               </tr>
             </thead>
             <tbody>
-              {filteredEvents.map(event => (
-                <tr key={event.event_id}>
-                  <td>
-                    <div className="event-title-cell">
-                      <span className="event-title">{event.title}</span>
-                      {event.tagline && (
-                        <span className="event-tagline">{event.tagline}</span>
-                      )}
-                    </div>
-                  </td>
-                  <td>
-                    <StatusBadge status={event.status} />
-                  </td>
-                  <td>{event.is_virtual ? 'Virtual' : 'In-person'}</td>
-                  <td className="capacity-cell">
-                    {event.capacity == null
-                      ? 'Unlimited'
-                      : `${event.registered_count ?? 0} / ${event.capacity}`}
-                  </td>
-                  <td className="date-cell">{formatDate(event.start_datetime)}</td>
-                  <td>
-                    <div className="actions-cell">
-                      <button className="btn btn-ghost btn-xs" disabled title="Coming soon">View</button>
-                      <Link
-                        className="btn btn-ghost btn-xs"
-                        to={`/events/${event.event_id}/edit`}
-                      >Edit</Link>
-                      <button className="btn btn-ghost btn-xs" disabled title="Coming soon">Publish</button>
-                      <button className="btn btn-danger btn-xs" disabled title="Coming soon">Cancel</button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+              {filteredEvents.map(event => {
+                const acts       = getActions(event.status);
+                const isActioning = actioningId === event.event_id;
+                return (
+                  <tr key={event.event_id}>
+                    <td>
+                      <div className="event-title-cell">
+                        <span className="event-title">{event.title}</span>
+                        {event.tagline && (
+                          <span className="event-tagline">{event.tagline}</span>
+                        )}
+                      </div>
+                    </td>
+                    <td>
+                      <StatusBadge status={event.status} />
+                    </td>
+                    <td>{event.is_virtual ? 'Virtual' : 'In-person'}</td>
+                    <td className="capacity-cell">
+                      {event.capacity == null
+                        ? 'Unlimited'
+                        : `${event.registered_count ?? 0} / ${event.capacity}`}
+                    </td>
+                    <td className="date-cell">{formatDate(event.start_datetime)}</td>
+                    <td>
+                      <div className="actions-cell">
+                        <button className="btn btn-ghost btn-xs" disabled title="Coming soon">
+                          View
+                        </button>
+
+                        {acts.canEdit ? (
+                          <Link
+                            className="btn btn-ghost btn-xs"
+                            to={`/events/${event.event_id}/edit`}
+                          >Edit</Link>
+                        ) : (
+                          <button className="btn btn-ghost btn-xs" disabled>Edit</button>
+                        )}
+
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          disabled={!acts.canPublish || isActioning}
+                          onClick={() => openConfirm(event, 'published')}
+                        >Publish</button>
+
+                        <button
+                          className="btn btn-ghost btn-xs"
+                          disabled={!acts.canUnpublish || isActioning}
+                          onClick={() => openConfirm(event, 'draft')}
+                        >Unpublish</button>
+
+                        <button
+                          className="btn btn-danger btn-xs"
+                          disabled={!acts.canCancel || isActioning}
+                          onClick={() => openConfirm(event, 'cancelled')}
+                        >{isActioning ? '…' : 'Cancel'}</button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         </div>
       )}
+
+      {/* ── Confirmation dialog (portal-like, fixed overlay) ─────────── */}
+      <ConfirmDialog
+        data={confirmState}
+        loading={!!actioningId}
+        error={dialogError}
+        onClose={() => { setConfirmState(null); setDialogError(null); }}
+        onConfirm={handleStatusConfirm}
+      />
     </div>
   );
 }
