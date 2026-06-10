@@ -17,28 +17,36 @@ abstract class FirebaseAuthService {
     return credential.user;
   }
 
+  /// Signs in with Google.
+  ///
+  /// On **web**: uses [FirebaseAuth.signInWithPopup] with [GoogleAuthProvider]
+  /// (no GoogleSignIn SDK needed — avoids the `authenticate()` restriction).
+  ///
+  /// On **mobile**: uses the GoogleSignIn SDK flow.
   static Future<User?> signInWithGoogle() async {
-    AppLogger.info('signInWithGoogle called');
+    AppLogger.info('signInWithGoogle called (kIsWeb=$kIsWeb)');
 
     if (kIsWeb) {
+      // Web: use Firebase's own OAuth popup — no GoogleSignIn SDK required.
       final provider = GoogleAuthProvider();
-      provider.addScope('email');
-      provider.addScope('profile');
-      final userCredential = await FirebaseAuth.instance.signInWithPopup(
-        provider,
-      );
+      final userCredential =
+          await FirebaseAuth.instance.signInWithPopup(provider);
       return userCredential.user;
     }
 
+    // Mobile (Android / iOS) — v7 API: authenticate() is the correct method.
     await GoogleSignInInitializer.ensureInitialized();
-    final googleUser = await GoogleSignIn.instance.authenticate();
+    final GoogleSignInAccount googleUser =
+        await GoogleSignIn.instance.authenticate();
+
+    // In google_sign_in v7, .authentication is synchronous (not a Future).
     final googleAuth = googleUser.authentication;
     final credential = GoogleAuthProvider.credential(
       idToken: googleAuth.idToken,
+      // accessToken was removed in v7 — idToken alone is sufficient.
     );
-    final userCredential = await FirebaseAuth.instance.signInWithCredential(
-      credential,
-    );
+    final userCredential =
+        await FirebaseAuth.instance.signInWithCredential(credential);
     return userCredential.user;
   }
 
