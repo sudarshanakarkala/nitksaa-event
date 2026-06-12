@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/logger/app_logger.dart';
 import '../domain/auth_session.dart';
@@ -193,3 +194,7 @@ class AuthController extends ChangeNotifier {
     super.dispose();
   }
 }
+
+final authControllerProvider = ChangeNotifierProvider<AuthController>((ref) {
+  return AuthController.instance;
+});

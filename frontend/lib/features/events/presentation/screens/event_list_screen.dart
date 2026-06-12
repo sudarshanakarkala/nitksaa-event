@@ -34,7 +34,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
   Future<void> _handleAuthAction() async {
-    final auth = AuthController.instance;
+    final auth = ref.read(authControllerProvider);
     if (auth.isAuthenticated) {
       await auth.signOut();
       if (mounted) {
@@ -63,7 +63,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   Widget _buildCupertinoLayout() {
     final state = ref.watch(eventsProvider);
     final filteredEvents = ref.watch(filteredEventsProvider);
-    final auth = AuthController.instance;
+    final auth = ref.watch(authControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final bg = isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
@@ -384,7 +384,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   Widget _buildMaterialLayout() {
     final state = ref.watch(eventsProvider);
     final filteredEvents = ref.watch(filteredEventsProvider);
-    final auth = AuthController.instance;
+    final auth = ref.watch(authControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final ThemeData theme = Theme.of(context);
