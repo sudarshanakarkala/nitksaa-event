@@ -36,13 +36,8 @@ class _SplashScreenState extends State<SplashScreen> {
     final elapsed = DateTime.now().difference(_startTime);
     final remaining = const Duration(milliseconds: 1500) - elapsed;
     if (remaining.isNegative) {
-      if (auth.isAuthenticated) {
-        AppLogger.info('Backend session authenticated. Navigating to home.');
-        context.go(AppRoutes.home);
-      } else {
-        AppLogger.info('No valid backend session. Navigating to login.');
-        context.go(AppRoutes.login);
-      }
+      AppLogger.info('Splash screen completed. Navigating to home.');
+      context.go(AppRoutes.home);
     } else {
       Future<void>.delayed(remaining, _navigate);
     }

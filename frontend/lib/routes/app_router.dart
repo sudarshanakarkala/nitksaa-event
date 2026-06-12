@@ -4,7 +4,7 @@ import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/developer/presentation/developer_diagnostics_screen.dart';
 import '../features/foundation/presentation/foundation_ready_screen.dart';
-import '../features/home/presentation/home_placeholder_screen.dart';
+import '../features/events/presentation/screens/event_list_screen.dart';
 import '../features/auth/services/auth_controller.dart';
 import 'app_routes.dart';
 import 'route_guards.dart';
@@ -30,7 +30,7 @@ abstract class AppRouter {
       ),
       GoRoute(
         path: AppRoutes.home,
-        builder: (context, state) => const HomePlaceholderScreen(),
+        builder: (context, state) => const EventListScreen(),
       ),
       if (kDebugMode)
         GoRoute(
