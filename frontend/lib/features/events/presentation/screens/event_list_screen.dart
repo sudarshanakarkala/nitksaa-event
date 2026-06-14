@@ -178,6 +178,20 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+    if (event.bannerUrl != null) ...[
+  ClipRRect(
+    borderRadius: BorderRadius.circular(8),
+    child: Image.network(event.bannerUrl!, height: 120, width: double.infinity, fit: BoxFit.cover),
+  ),
+  const SizedBox(height: 8),
+],
+if (event.thumbnailUrl != null) ...[
+  ClipRRect(
+    borderRadius: BorderRadius.circular(8),
+    child: Image.network(event.thumbnailUrl!, height: 60, width: double.infinity, fit: BoxFit.cover),
+  ),
+  const SizedBox(height: 8),
+],
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -575,7 +589,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                               crossAxisCount: isWebScreen ? 2 : 1,
                               crossAxisSpacing: 20,
                               mainAxisSpacing: 20,
-                              mainAxisExtent: 250,
+                              mainAxisExtent: 420,
                             ),
                             itemCount: filteredEvents.length,
                             itemBuilder: (context, index) {
@@ -719,6 +733,13 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
+            if (event.thumbnailUrl != null) ...[
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: Image.network(event.thumbnailUrl!, height: 180, width: double.infinity, fit: BoxFit.cover),
+              ),
+              const SizedBox(height: 8),
+            ],
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
@@ -752,11 +773,22 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             const SizedBox(height: 12),
             Expanded(
               child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  _buildMaterialMetaRow(Icons.calendar_today, _formatDate(event.startDatetime), theme),
-                  _buildMaterialMetaRow(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime), theme),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: _buildMaterialMetaRow(Icons.calendar_today, _formatDate(event.startDatetime), theme),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: _buildMaterialMetaRow(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime), theme),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 4),
                   _buildMaterialMetaRow(
-                    event.isVirtual ? Icons.videocam : Icons.map,
+                    event.isVirtual ? Icons.videocam : Icons.location_pin,
                     event.locationText ?? (event.isVirtual ? 'Zoom Link' : 'TBD'),
                     theme,
                   ),
