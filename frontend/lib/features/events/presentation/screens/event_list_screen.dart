@@ -69,7 +69,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     final bg = isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
     final cardBg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
     final textPrimary = isDark ? Colors.white : Colors.black;
-    final textSecondary = isDark ? const Color(0xFFEBEBF5) : const Color(0xFF3C3C43);
+    final textSecondary = isDark
+        ? const Color(0xFFEBEBF5)
+        : const Color(0xFF3C3C43);
     final accentGold = const Color(0xFFC9952A);
 
     return CupertinoPageScaffold(
@@ -82,7 +84,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         trailing: CupertinoButton(
           padding: EdgeInsets.zero,
           child: Icon(
-            auth.isAuthenticated ? CupertinoIcons.square_arrow_right : CupertinoIcons.person_crop_circle,
+            auth.isAuthenticated
+                ? CupertinoIcons.square_arrow_right
+                : CupertinoIcons.person_crop_circle,
             color: accentGold,
             size: 22,
           ),
@@ -93,7 +97,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         child: Column(
           children: [
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 12.0),
+              padding: const EdgeInsets.symmetric(
+                horizontal: 16.0,
+                vertical: 12.0,
+              ),
               child: CupertinoSearchTextField(
                 controller: _searchController,
                 placeholder: 'Search events…',
@@ -108,15 +115,29 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   groupValue: state.period,
                   selectedColor: isDark ? accentGold : const Color(0xFF007AFF),
                   unselectedColor: cardBg,
-                  borderColor: isDark ? accentGold.withValues(alpha: 0.5) : const Color(0x3C3C430C),
+                  borderColor: isDark
+                      ? accentGold.withValues(alpha: 0.5)
+                      : const Color(0x3C3C430C),
                   children: const {
                     'upcoming': Padding(
                       padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text('Upcoming', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                      child: Text(
+                        'Upcoming',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                     'past': Padding(
                       padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text('Past', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                      child: Text(
+                        'Past',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
                     ),
                   },
                   onValueChanged: (value) {
@@ -130,16 +151,26 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               child: state.isLoading
                   ? const Center(child: CupertinoActivityIndicator(radius: 12))
                   : state.errorMessage != null
-                      ? _buildCupertinoErrorState(state.errorMessage!)
-                      : filteredEvents.isEmpty
-                          ? _buildCupertinoEmptyState()
-                          : ListView.builder(
-                              padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
-                              itemCount: filteredEvents.length,
-                              itemBuilder: (context, index) {
-                                return _buildCupertinoEventCard(filteredEvents[index], cardBg, textPrimary, textSecondary, accentGold, isDark);
-                              },
-                            ),
+                  ? _buildCupertinoErrorState(state.errorMessage!)
+                  : filteredEvents.isEmpty
+                  ? _buildCupertinoEmptyState()
+                  : ListView.builder(
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 16.0,
+                        vertical: 8.0,
+                      ),
+                      itemCount: filteredEvents.length,
+                      itemBuilder: (context, index) {
+                        return _buildCupertinoEventCard(
+                          filteredEvents[index],
+                          cardBg,
+                          textPrimary,
+                          textSecondary,
+                          accentGold,
+                          isDark,
+                        );
+                      },
+                    ),
             ),
             _buildCupertinoBottomNav(accentGold, isDark),
           ],
@@ -148,7 +179,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  Widget _buildCupertinoEventCard(AppEvent event, Color cardBg, Color textPrimary, Color textSecondary, Color accentGold, bool isDark) {
+  Widget _buildCupertinoEventCard(
+    AppEvent event,
+    Color cardBg,
+    Color textPrimary,
+    Color textSecondary,
+    Color accentGold,
+    bool isDark,
+  ) {
     final regStatusColor = event.registrationStatus == 'open'
         ? (isDark ? const Color(0xFF30D158) : const Color(0xFF34C759))
         : (isDark ? const Color(0xFFFF453A) : const Color(0xFFFF3B30));
@@ -157,8 +195,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         ? (isDark ? const Color(0xFFBF5AF2) : const Color(0xFF5856D6))
         : (isDark ? const Color(0xFF90B5FF) : const Color(0xFF007AFF));
 
-    final capacityText = event.capacity != null ? '${event.registeredCount} / ${event.capacity}' : '${event.registeredCount} Registered';
-    final progress = event.capacity != null && event.capacity! > 0 ? (event.registeredCount / event.capacity!).clamp(0.0, 1.0) : 0.0;
+    final capacityText = event.capacity != null
+        ? '${event.registeredCount} / ${event.capacity}'
+        : '${event.registeredCount} Registered';
+    final progress = event.capacity != null && event.capacity! > 0
+        ? (event.registeredCount / event.capacity!).clamp(0.0, 1.0)
+        : 0.0;
 
     return Container(
       margin: const EdgeInsets.only(bottom: 16.0),
@@ -178,27 +220,41 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-    if (event.bannerUrl != null) ...[
-  ClipRRect(
-    borderRadius: BorderRadius.circular(8),
-    child: Image.network(event.bannerUrl!, height: 120, width: double.infinity, fit: BoxFit.cover),
-  ),
-  const SizedBox(height: 8),
-],
-if (event.thumbnailUrl != null) ...[
-  ClipRRect(
-    borderRadius: BorderRadius.circular(8),
-    child: Image.network(event.thumbnailUrl!, height: 60, width: double.infinity, fit: BoxFit.cover),
-  ),
-  const SizedBox(height: 8),
-],
+          if (event.bannerUrl != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                event.bannerUrl!,
+                height: 120,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
+          if (event.thumbnailUrl != null) ...[
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                event.thumbnailUrl!,
+                height: 60,
+                width: double.infinity,
+                fit: BoxFit.cover,
+              ),
+            ),
+            const SizedBox(height: 8),
+          ],
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               Expanded(
                 child: Text(
                   event.title,
-                  style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: textPrimary),
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: textPrimary,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -212,7 +268,11 @@ if (event.thumbnailUrl != null) ...[
                 ),
                 child: Text(
                   event.isVirtual ? 'Virtual' : 'Physical',
-                  style: TextStyle(color: typeColor, fontSize: 10, fontWeight: FontWeight.w600),
+                  style: TextStyle(
+                    color: typeColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
                 ),
               ),
             ],
@@ -221,16 +281,29 @@ if (event.thumbnailUrl != null) ...[
             const SizedBox(height: 4),
             Text(
               event.tagline!,
-              style: TextStyle(fontSize: 12, color: textSecondary, fontStyle: FontStyle.italic),
+              style: TextStyle(
+                fontSize: 12,
+                color: textSecondary,
+                fontStyle: FontStyle.italic,
+              ),
             ),
           ],
           const SizedBox(height: 12),
           // Metadata grid
-          _buildCupertinoMetaRow(CupertinoIcons.calendar, _formatDate(event.startDatetime), textSecondary),
-          _buildCupertinoMetaRow(CupertinoIcons.clock, _formatTime(event.startDatetime, event.endDatetime), textSecondary),
+          _buildCupertinoMetaRow(
+            CupertinoIcons.calendar,
+            _formatDate(event.startDatetime),
+            textSecondary,
+          ),
+          _buildCupertinoMetaRow(
+            CupertinoIcons.clock,
+            _formatTime(event.startDatetime, event.endDatetime),
+            textSecondary,
+          ),
           _buildCupertinoMetaRow(
             event.isVirtual ? CupertinoIcons.videocam : CupertinoIcons.location,
-            event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
+            event.locationText ??
+                (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
             textSecondary,
           ),
           const SizedBox(height: 12),
@@ -238,8 +311,18 @@ if (event.thumbnailUrl != null) ...[
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
-              Text('Capacity', style: TextStyle(fontSize: 11, color: textSecondary)),
-              Text(capacityText, style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: textPrimary)),
+              Text(
+                'Capacity',
+                style: TextStyle(fontSize: 11, color: textSecondary),
+              ),
+              Text(
+                capacityText,
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: textPrimary,
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 4),
@@ -249,8 +332,12 @@ if (event.thumbnailUrl != null) ...[
               height: 5,
               child: LinearProgressIndicator(
                 value: progress,
-                backgroundColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
-                valueColor: AlwaysStoppedAnimation<Color>(progress > 0.8 ? Colors.orange : Colors.green),
+                backgroundColor: isDark
+                    ? const Color(0xFF2C2C2E)
+                    : const Color(0xFFE5E5EA),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  progress > 0.8 ? Colors.orange : Colors.green,
+                ),
               ),
             ),
           ),
@@ -265,12 +352,21 @@ if (event.thumbnailUrl != null) ...[
                   borderRadius: BorderRadius.circular(6),
                 ),
                 child: Text(
-                  event.registrationStatus == 'open' ? 'Registration open' : 'Closed',
-                  style: TextStyle(color: regStatusColor, fontSize: 10, fontWeight: FontWeight.bold),
+                  event.registrationStatus == 'open'
+                      ? 'Registration open'
+                      : 'Closed',
+                  style: TextStyle(
+                    color: regStatusColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.bold,
+                  ),
                 ),
               ),
               CupertinoButton(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 8,
+                ),
                 color: isDark ? accentGold : const Color(0xFF007AFF),
                 borderRadius: BorderRadius.circular(8),
                 minimumSize: Size.zero,
@@ -285,7 +381,11 @@ if (event.thumbnailUrl != null) ...[
                 onPressed: () {
                   // View Details Action
                   ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('Details for "${event.title}" coming soon.')),
+                    SnackBar(
+                      content: Text(
+                        'Details for "${event.title}" coming soon.',
+                      ),
+                    ),
                   );
                 },
               ),
@@ -323,28 +423,63 @@ if (event.thumbnailUrl != null) ...[
     return Container(
       decoration: BoxDecoration(
         color: navBg,
-        border: Border(top: BorderSide(color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA), width: 0.5)),
+        border: Border(
+          top: BorderSide(
+            color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+            width: 0.5,
+          ),
+        ),
       ),
       padding: const EdgeInsets.only(top: 8, bottom: 12),
       child: Row(
         children: [
-          _buildCupertinoNavItem(CupertinoIcons.calendar, 'Events', true, accentGold, inactiveColor),
-          _buildCupertinoNavItem(CupertinoIcons.bookmark, 'My Events', false, accentGold, inactiveColor),
-          _buildCupertinoNavItem(CupertinoIcons.shield, 'Volunteer', false, accentGold, inactiveColor),
-          _buildCupertinoNavItem(CupertinoIcons.ellipsis, 'More', false, accentGold, inactiveColor),
+          _buildCupertinoNavItem(
+            CupertinoIcons.calendar,
+            'Events',
+            true,
+            accentGold,
+            inactiveColor,
+          ),
+          _buildCupertinoNavItem(
+            CupertinoIcons.bookmark,
+            'My Events',
+            false,
+            accentGold,
+            inactiveColor,
+          ),
+          _buildCupertinoNavItem(
+            CupertinoIcons.shield,
+            'Volunteer',
+            false,
+            accentGold,
+            inactiveColor,
+          ),
+          _buildCupertinoNavItem(
+            CupertinoIcons.ellipsis,
+            'More',
+            false,
+            accentGold,
+            inactiveColor,
+          ),
         ],
       ),
     );
   }
 
-  Widget _buildCupertinoNavItem(IconData icon, String label, bool active, Color activeColor, Color inactiveColor) {
+  Widget _buildCupertinoNavItem(
+    IconData icon,
+    String label,
+    bool active,
+    Color activeColor,
+    Color inactiveColor,
+  ) {
     return Expanded(
       child: GestureDetector(
         onTap: () {
           if (!active) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text('$label tab coming soon.')),
-            );
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('$label tab coming soon.')));
           }
         },
         child: Column(
@@ -352,7 +487,14 @@ if (event.thumbnailUrl != null) ...[
           children: [
             Icon(icon, size: 20, color: active ? activeColor : inactiveColor),
             const SizedBox(height: 3),
-            Text(label, style: TextStyle(fontSize: 10, color: active ? activeColor : inactiveColor, fontWeight: FontWeight.w500)),
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 10,
+                color: active ? activeColor : inactiveColor,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
           ],
         ),
       ),
@@ -366,11 +508,30 @@ if (event.thumbnailUrl != null) ...[
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(CupertinoIcons.exclamationmark_triangle, size: 42, color: CupertinoColors.systemRed),
+            const Icon(
+              CupertinoIcons.exclamationmark_triangle,
+              size: 42,
+              color: CupertinoColors.systemRed,
+            ),
             const SizedBox(height: 12),
-            Text('Error Loading Events', style: TextStyle(fontWeight: FontWeight.bold, color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black)),
+            Text(
+              'Error Loading Events',
+              style: TextStyle(
+                fontWeight: FontWeight.bold,
+                color: Theme.of(context).brightness == Brightness.dark
+                    ? Colors.white
+                    : Colors.black,
+              ),
+            ),
             const SizedBox(height: 6),
-            Text(message, textAlign: TextAlign.center, style: const TextStyle(fontSize: 13, color: CupertinoColors.systemGrey)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontSize: 13,
+                color: CupertinoColors.systemGrey,
+              ),
+            ),
           ],
         ),
       ),
@@ -382,11 +543,21 @@ if (event.thumbnailUrl != null) ...[
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(CupertinoIcons.calendar_badge_minus, size: 48, color: CupertinoColors.systemGrey),
+          Icon(
+            CupertinoIcons.calendar_badge_minus,
+            size: 48,
+            color: CupertinoColors.systemGrey,
+          ),
           const SizedBox(height: 12),
-          Text('No Events Found', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+          Text(
+            'No Events Found',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+          ),
           const SizedBox(height: 4),
-          Text('Try searching for something else.', style: TextStyle(fontSize: 13, color: CupertinoColors.systemGrey)),
+          Text(
+            'Try searching for something else.',
+            style: TextStyle(fontSize: 13, color: CupertinoColors.systemGrey),
+          ),
         ],
       ),
     );
@@ -412,7 +583,11 @@ if (event.thumbnailUrl != null) ...[
             width: 240,
             decoration: BoxDecoration(
               color: isDark ? const Color(0xFF0E1726) : const Color(0xFFF8F9FD),
-              border: Border(right: BorderSide(color: colorScheme.outlineVariant.withOpacity(0.5))),
+              border: Border(
+                right: BorderSide(
+                  color: colorScheme.outlineVariant.withOpacity(0.5),
+                ),
+              ),
             ),
             padding: const EdgeInsets.all(24.0),
             child: Column(
@@ -420,7 +595,11 @@ if (event.thumbnailUrl != null) ...[
               children: [
                 Row(
                   children: [
-                    const Icon(Icons.calendar_today_outlined, color: Color(0xFFC9952A), size: 24),
+                    const Icon(
+                      Icons.calendar_today_outlined,
+                      color: Color(0xFFC9952A),
+                      size: 24,
+                    ),
                     const SizedBox(width: 8),
                     Text(
                       'NITKSAA',
@@ -428,15 +607,27 @@ if (event.thumbnailUrl != null) ...[
                         fontFamily: 'Fraunces',
                         fontSize: 20,
                         fontWeight: FontWeight.bold,
-                        color: isDark ? const Color(0xFFC9952A) : colorScheme.primary,
+                        color: isDark
+                            ? const Color(0xFFC9952A)
+                            : colorScheme.primary,
                       ),
                     ),
                   ],
                 ),
                 const SizedBox(height: 32),
                 _buildSidebarItem(Icons.calendar_month, 'Events', true, isDark),
-                _buildSidebarItem(Icons.bookmark_border, 'My Events', false, isDark),
-                _buildSidebarItem(Icons.verified_user_outlined, 'Volunteer', false, isDark),
+                _buildSidebarItem(
+                  Icons.bookmark_border,
+                  'My Events',
+                  false,
+                  isDark,
+                ),
+                _buildSidebarItem(
+                  Icons.verified_user_outlined,
+                  'Volunteer',
+                  false,
+                  isDark,
+                ),
                 _buildSidebarItem(Icons.more_horiz, 'More', false, isDark),
                 const Spacer(),
                 if (auth.isAuthenticated) ...[
@@ -446,8 +637,14 @@ if (event.thumbnailUrl != null) ...[
                         backgroundColor: const Color(0xFFC9952A),
                         radius: 18,
                         child: Text(
-                          (auth.session?.fullname ?? 'U').substring(0, 1).toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13),
+                          (auth.session?.fullname ?? 'U')
+                              .substring(0, 1)
+                              .toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
                         ),
                       ),
                       const SizedBox(width: 10),
@@ -457,13 +654,19 @@ if (event.thumbnailUrl != null) ...[
                           children: [
                             Text(
                               auth.session?.fullname ?? 'Alumni User',
-                              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                              style: const TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                              ),
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                             ),
                             Text(
                               auth.session?.userType ?? 'Member',
-                              style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: theme.colorScheme.onSurfaceVariant,
+                              ),
                             ),
                           ],
                         ),
@@ -476,12 +679,18 @@ if (event.thumbnailUrl != null) ...[
                   width: double.infinity,
                   child: ElevatedButton.icon(
                     style: ElevatedButton.styleFrom(
-                      backgroundColor: isDark ? const Color(0xFFC9952A) : const Color(0xFF0D1B3E),
+                      backgroundColor: isDark
+                          ? const Color(0xFFC9952A)
+                          : const Color(0xFF0D1B3E),
                       foregroundColor: isDark ? Colors.black : Colors.white,
                       padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                      shape: RoundedRectangleBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
-                    icon: Icon(auth.isAuthenticated ? Icons.logout : Icons.login),
+                    icon: Icon(
+                      auth.isAuthenticated ? Icons.logout : Icons.login,
+                    ),
                     label: Text(auth.isAuthenticated ? 'Log Out' : 'Log In'),
                     onPressed: _handleAuthAction,
                   ),
@@ -510,7 +719,11 @@ if (event.thumbnailUrl != null) ...[
               ),
               if (!isWebScreen)
                 IconButton(
-                  icon: Icon(auth.isAuthenticated ? Icons.logout_outlined : Icons.login_outlined),
+                  icon: Icon(
+                    auth.isAuthenticated
+                        ? Icons.logout_outlined
+                        : Icons.login_outlined,
+                  ),
                   onPressed: _handleAuthAction,
                 ),
             ],
@@ -531,15 +744,22 @@ if (event.thumbnailUrl != null) ...[
                     prefixIcon: const Icon(Icons.search),
                     hintText: 'Search events…',
                     isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(
+                      horizontal: 12,
+                      vertical: 8,
+                    ),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                 ),
               );
 
               final filterTabs = TabBar(
                 isScrollable: true,
-                labelColor: isDark ? const Color(0xFFC9952A) : colorScheme.primary,
+                labelColor: isDark
+                    ? const Color(0xFFC9952A)
+                    : colorScheme.primary,
                 unselectedLabelColor: colorScheme.onSurfaceVariant,
                 indicatorColor: const Color(0xFFC9952A),
                 tabs: const [
@@ -547,7 +767,9 @@ if (event.thumbnailUrl != null) ...[
                   Tab(text: 'Past'),
                 ],
                 onTap: (index) {
-                  ref.read(eventsProvider.notifier).setPeriod(index == 0 ? 'upcoming' : 'past');
+                  ref
+                      .read(eventsProvider.notifier)
+                      .setPeriod(index == 0 ? 'upcoming' : 'past');
                 },
               );
 
@@ -581,21 +803,25 @@ if (event.thumbnailUrl != null) ...[
             child: state.isLoading
                 ? const Center(child: CircularProgressIndicator())
                 : state.errorMessage != null
-                    ? _buildMaterialErrorState(state.errorMessage!)
-                    : filteredEvents.isEmpty
-                        ? _buildMaterialEmptyState()
-                        : GridView.builder(
-                            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                              crossAxisCount: isWebScreen ? 2 : 1,
-                              crossAxisSpacing: 20,
-                              mainAxisSpacing: 20,
-                              mainAxisExtent: 420,
-                            ),
-                            itemCount: filteredEvents.length,
-                            itemBuilder: (context, index) {
-                              return _buildMaterialEventCard(filteredEvents[index], isDark, theme);
-                            },
-                          ),
+                ? _buildMaterialErrorState(state.errorMessage!)
+                : filteredEvents.isEmpty
+                ? _buildMaterialEmptyState()
+                : GridView.builder(
+                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+                      crossAxisCount: isWebScreen ? 2 : 1,
+                      crossAxisSpacing: 20,
+                      mainAxisSpacing: 20,
+                      mainAxisExtent: 420,
+                    ),
+                    itemCount: filteredEvents.length,
+                    itemBuilder: (context, index) {
+                      return _buildMaterialEventCard(
+                        filteredEvents[index],
+                        isDark,
+                        theme,
+                      );
+                    },
+                  ),
           ),
         ),
       ],
@@ -613,11 +839,18 @@ if (event.thumbnailUrl != null) ...[
                       currentAccountPicture: CircleAvatar(
                         backgroundColor: const Color(0xFFC9952A),
                         child: Text(
-                          (auth.session?.fullname ?? 'U').substring(0, 1).toUpperCase(),
-                          style: const TextStyle(color: Colors.white, fontSize: 24),
+                          (auth.session?.fullname ?? 'U')
+                              .substring(0, 1)
+                              .toUpperCase(),
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 24,
+                          ),
                         ),
                       ),
-                      accountName: Text(auth.session?.fullname ?? 'Alumni User'),
+                      accountName: Text(
+                        auth.session?.fullname ?? 'Alumni User',
+                      ),
                       accountEmail: Text(auth.session?.email ?? ''),
                     ),
                     ListTile(
@@ -631,7 +864,11 @@ if (event.thumbnailUrl != null) ...[
                       title: const Text('My Events'),
                       onTap: () {
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('My Events coming soon.')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('My Events coming soon.'),
+                          ),
+                        );
                       },
                     ),
                     ListTile(
@@ -639,7 +876,11 @@ if (event.thumbnailUrl != null) ...[
                       title: const Text('Volunteer'),
                       onTap: () {
                         Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Volunteer options coming soon.')));
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(
+                            content: Text('Volunteer options coming soon.'),
+                          ),
+                        );
                       },
                     ),
                   ],
@@ -656,16 +897,24 @@ if (event.thumbnailUrl != null) ...[
         ),
         bottomNavigationBar: (!isWebScreen && !auth.isAuthenticated)
             ? Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 16,
+                  vertical: 12,
+                ),
                 color: isDark ? const Color(0xFF14171C) : Colors.white,
                 child: ElevatedButton(
                   style: ElevatedButton.styleFrom(
                     backgroundColor: const Color(0xFFC9952A),
                     foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onPressed: _handleAuthAction,
-                  child: const Text('Log In to Access Premium Features', style: TextStyle(fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'Log In to Access Premium Features',
+                    style: TextStyle(fontWeight: FontWeight.bold),
+                  ),
                 ),
               )
             : null,
@@ -673,7 +922,12 @@ if (event.thumbnailUrl != null) ...[
     );
   }
 
-  Widget _buildSidebarItem(IconData icon, String label, bool active, bool isDark) {
+  Widget _buildSidebarItem(
+    IconData icon,
+    String label,
+    bool active,
+    bool isDark,
+  ) {
     final activeBg = isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA);
     final activeText = isDark ? Colors.white : const Color(0xFF0D1B3E);
     return Container(
@@ -684,7 +938,11 @@ if (event.thumbnailUrl != null) ...[
       ),
       child: ListTile(
         visualDensity: VisualDensity.compact,
-        leading: Icon(icon, color: active ? activeText : const Color(0xFF5A6A8A), size: 20),
+        leading: Icon(
+          icon,
+          color: active ? activeText : const Color(0xFF5A6A8A),
+          size: 20,
+        ),
         title: Text(
           label,
           style: TextStyle(
@@ -695,7 +953,9 @@ if (event.thumbnailUrl != null) ...[
         ),
         onTap: () {
           if (!active) {
-            ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('$label coming soon.')));
+            ScaffoldMessenger.of(
+              context,
+            ).showSnackBar(SnackBar(content: Text('$label coming soon.')));
           }
         },
       ),
@@ -718,14 +978,20 @@ if (event.thumbnailUrl != null) ...[
         ? (isDark ? const Color(0xFF6FDBA8) : const Color(0xFF1B5C3A))
         : (isDark ? const Color(0xFFFF9090) : const Color(0xFF8A1B1B));
 
-    final capacityText = event.capacity != null ? '${event.registeredCount} / ${event.capacity}' : '${event.registeredCount} Registered';
-    final progress = event.capacity != null && event.capacity! > 0 ? (event.registeredCount / event.capacity!).clamp(0.0, 1.0) : 0.0;
+    final capacityText = event.capacity != null
+        ? '${event.registeredCount} / ${event.capacity}'
+        : '${event.registeredCount} Registered';
+    final progress = event.capacity != null && event.capacity! > 0
+        ? (event.registeredCount / event.capacity!).clamp(0.0, 1.0)
+        : 0.0;
 
     return Card(
       elevation: 0,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.colorScheme.outlineVariant.withOpacity(0.5)),
+        side: BorderSide(
+          color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+        ),
       ),
       color: isDark ? const Color(0xFF131E30) : Colors.white,
       child: Padding(
@@ -736,7 +1002,12 @@ if (event.thumbnailUrl != null) ...[
             if (event.thumbnailUrl != null) ...[
               ClipRRect(
                 borderRadius: BorderRadius.circular(8),
-                child: Image.network(event.thumbnailUrl!, height: 180, width: double.infinity, fit: BoxFit.cover),
+                child: Image.network(
+                  event.thumbnailUrl!,
+                  height: 180,
+                  width: double.infinity,
+                  fit: BoxFit.cover,
+                ),
               ),
               const SizedBox(height: 8),
             ],
@@ -746,17 +1017,30 @@ if (event.thumbnailUrl != null) ...[
                 Expanded(
                   child: Text(
                     event.title,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    style: const TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                   ),
                 ),
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: tagBg, borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: tagBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   child: Text(
                     isPhysical ? 'Physical' : 'Virtual',
-                    style: TextStyle(color: tagText, fontSize: 11, fontWeight: FontWeight.w500),
+                    style: TextStyle(
+                      color: tagText,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
                 ),
               ],
@@ -765,7 +1049,10 @@ if (event.thumbnailUrl != null) ...[
               const SizedBox(height: 4),
               Text(
                 event.tagline!,
-                style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                style: TextStyle(
+                  fontSize: 12,
+                  color: theme.colorScheme.onSurfaceVariant,
+                ),
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
               ),
@@ -778,18 +1065,27 @@ if (event.thumbnailUrl != null) ...[
                   Row(
                     children: [
                       Expanded(
-                        child: _buildMaterialMetaRow(Icons.calendar_today, _formatDate(event.startDatetime), theme),
+                        child: _buildMaterialMetaRow(
+                          Icons.calendar_today,
+                          _formatDate(event.startDatetime),
+                          theme,
+                        ),
                       ),
                       const SizedBox(width: 8),
                       Expanded(
-                        child: _buildMaterialMetaRow(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime), theme),
+                        child: _buildMaterialMetaRow(
+                          Icons.access_time,
+                          _formatTime(event.startDatetime, event.endDatetime),
+                          theme,
+                        ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 4),
                   _buildMaterialMetaRow(
                     event.isVirtual ? Icons.videocam : Icons.location_pin,
-                    event.locationText ?? (event.isVirtual ? 'Zoom Link' : 'TBD'),
+                    event.locationText ??
+                        (event.isVirtual ? 'Zoom Link' : 'TBD'),
                     theme,
                   ),
                 ],
@@ -799,8 +1095,17 @@ if (event.thumbnailUrl != null) ...[
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                const Text('Capacity', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500)),
-                Text(capacityText, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                const Text(
+                  'Capacity',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                ),
+                Text(
+                  capacityText,
+                  style: const TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
               ],
             ),
             const SizedBox(height: 4),
@@ -809,8 +1114,12 @@ if (event.thumbnailUrl != null) ...[
               child: LinearProgressIndicator(
                 value: progress,
                 minHeight: 6,
-                backgroundColor: isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA),
-                valueColor: AlwaysStoppedAnimation<Color>(progress > 0.85 ? Colors.orange : Colors.green),
+                backgroundColor: isDark
+                    ? const Color(0xFF1C2A40)
+                    : const Color(0xFFEEF3FA),
+                valueColor: AlwaysStoppedAnimation<Color>(
+                  progress > 0.85 ? Colors.orange : Colors.green,
+                ),
               ),
             ),
             const SizedBox(height: 12),
@@ -818,25 +1127,48 @@ if (event.thumbnailUrl != null) ...[
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
                 Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                  decoration: BoxDecoration(color: regBg, borderRadius: BorderRadius.circular(20)),
+                  padding: const EdgeInsets.symmetric(
+                    horizontal: 10,
+                    vertical: 4,
+                  ),
+                  decoration: BoxDecoration(
+                    color: regBg,
+                    borderRadius: BorderRadius.circular(20),
+                  ),
                   child: Text(
-                    event.registrationStatus == 'open' ? 'Registration open' : 'Closed',
-                    style: TextStyle(color: regText, fontSize: 11, fontWeight: FontWeight.bold),
+                    event.registrationStatus == 'open'
+                        ? 'Registration open'
+                        : 'Closed',
+                    style: TextStyle(
+                      color: regText,
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
                   ),
                 ),
                 TextButton(
                   style: TextButton.styleFrom(
-                    backgroundColor: isDark ? const Color(0xFFC9952A) : const Color(0xFF0D1B3E),
+                    backgroundColor: isDark
+                        ? const Color(0xFFC9952A)
+                        : const Color(0xFF0D1B3E),
                     foregroundColor: isDark ? Colors.black : Colors.white,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                    shape: RoundedRectangleBorder(
+                      borderRadius: BorderRadius.circular(8),
+                    ),
                   ),
                   onPressed: () {
                     ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text('Details for "${event.title}" coming soon.')),
+                      SnackBar(
+                        content: Text(
+                          'Details for "${event.title}" coming soon.',
+                        ),
+                      ),
                     );
                   },
-                  child: const Text('View details', style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold)),
+                  child: const Text(
+                    'View details',
+                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
+                  ),
                 ),
               ],
             ),
@@ -856,7 +1188,10 @@ if (event.thumbnailUrl != null) ...[
           Expanded(
             child: Text(
               label,
-              style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+              style: TextStyle(
+                fontSize: 12,
+                color: theme.colorScheme.onSurfaceVariant,
+              ),
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
             ),
@@ -875,9 +1210,16 @@ if (event.thumbnailUrl != null) ...[
           children: [
             const Icon(Icons.error_outline, size: 48, color: Colors.red),
             const SizedBox(height: 12),
-            const Text('Something went wrong', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+            const Text(
+              'Something went wrong',
+              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
             const SizedBox(height: 6),
-            Text(message, textAlign: TextAlign.center, style: TextStyle(color: Theme.of(context).colorScheme.outline)),
+            Text(
+              message,
+              textAlign: TextAlign.center,
+              style: TextStyle(color: Theme.of(context).colorScheme.outline),
+            ),
           ],
         ),
       ),
@@ -891,9 +1233,15 @@ if (event.thumbnailUrl != null) ...[
         children: [
           Icon(Icons.calendar_today_outlined, size: 64, color: Colors.grey),
           const SizedBox(height: 16),
-          Text('No Events Found', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18)),
+          Text(
+            'No Events Found',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+          ),
           const SizedBox(height: 6),
-          Text('Please check back later or try adjusting filters.', style: TextStyle(color: Colors.grey)),
+          Text(
+            'Please check back later or try adjusting filters.',
+            style: TextStyle(color: Colors.grey),
+          ),
         ],
       ),
     );
@@ -903,7 +1251,20 @@ if (event.thumbnailUrl != null) ...[
   // HELPER DATE & TIME FORMATTERS
   // ==========================================
   String _formatDate(DateTime dt) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
   }
 
