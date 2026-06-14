@@ -717,7 +717,61 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   fontWeight: FontWeight.bold,
                 ),
               ),
-              if (!isWebScreen)
+              if (isWebScreen)
+                Row(
+                  children: [
+                    SizedBox(
+                      width: 250,
+                      child: TextField(
+                        controller: _searchController,
+                        decoration: InputDecoration(
+                          prefixIcon: const Icon(Icons.search),
+                          hintText: 'Search events…',
+                          isDense: true,
+                          contentPadding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 10,
+                          ),
+                          border: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: colorScheme.outlineVariant,
+                            ),
+                          ),
+                          enabledBorder: OutlineInputBorder(
+                            borderRadius: BorderRadius.circular(8),
+                            borderSide: BorderSide(
+                              color: colorScheme.outlineVariant.withOpacity(0.5),
+                            ),
+                          ),
+                          filled: true,
+                          fillColor: isDark
+                              ? const Color(0xFF1A2A3A).withOpacity(0.5)
+                              : Colors.grey.withOpacity(0.1),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    OutlinedButton.icon(
+                      icon: const Icon(Icons.tune, size: 18),
+                      label: const Text('Filters'),
+                      style: OutlinedButton.styleFrom(
+                        side: BorderSide(
+                          color: colorScheme.outlineVariant,
+                        ),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                      onPressed: () {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Filters coming soon')),
+                        );
+                      },
+                    ),
+                  ],
+                )
+              else if (!isWebScreen)
                 IconButton(
                   icon: Icon(
                     auth.isAuthenticated
@@ -730,58 +784,71 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           ),
         ),
 
-        // Search + Tab Row
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0),
-          child: LayoutBuilder(
-            builder: (context, constraints) {
-              final isWide = constraints.maxWidth > 600;
-              final searchWidget = SizedBox(
-                width: isWide ? 300 : double.infinity,
-                child: TextField(
-                  controller: _searchController,
-                  decoration: InputDecoration(
-                    prefixIcon: const Icon(Icons.search),
-                    hintText: 'Search events…',
-                    isDense: true,
-                    contentPadding: const EdgeInsets.symmetric(
-                      horizontal: 12,
-                      vertical: 8,
-                    ),
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(8),
+        // Tabs Row (for web only below header)
+        if (isWebScreen)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: TabBar(
+              isScrollable: false,
+              labelColor: isDark ? const Color(0xFFC9952A) : colorScheme.primary,
+              unselectedLabelColor: colorScheme.onSurfaceVariant,
+              indicatorColor: const Color(0xFFC9952A),
+              indicatorWeight: 3,
+              tabs: const [
+                Tab(text: 'Upcoming'),
+                Tab(text: 'Past'),
+              ],
+              onTap: (index) {
+                ref
+                    .read(eventsProvider.notifier)
+                    .setPeriod(index == 0 ? 'upcoming' : 'past');
+              },
+            ),
+          ),
+
+        // Mobile Search + Tab Row
+        if (!isWebScreen)
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 24.0),
+            child: LayoutBuilder(
+              builder: (context, constraints) {
+                final searchWidget = SizedBox(
+                  width: double.infinity,
+                  child: TextField(
+                    controller: _searchController,
+                    decoration: InputDecoration(
+                      prefixIcon: const Icon(Icons.search),
+                      hintText: 'Search events…',
+                      isDense: true,
+                      contentPadding: const EdgeInsets.symmetric(
+                        horizontal: 12,
+                        vertical: 8,
+                      ),
+                      border: OutlineInputBorder(
+                        borderRadius: BorderRadius.circular(8),
+                      ),
                     ),
                   ),
-                ),
-              );
-
-              final filterTabs = TabBar(
-                isScrollable: true,
-                labelColor: isDark
-                    ? const Color(0xFFC9952A)
-                    : colorScheme.primary,
-                unselectedLabelColor: colorScheme.onSurfaceVariant,
-                indicatorColor: const Color(0xFFC9952A),
-                tabs: const [
-                  Tab(text: 'Upcoming'),
-                  Tab(text: 'Past'),
-                ],
-                onTap: (index) {
-                  ref
-                      .read(eventsProvider.notifier)
-                      .setPeriod(index == 0 ? 'upcoming' : 'past');
-                },
-              );
-
-              if (isWide) {
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    searchWidget,
-                    SizedBox(width: 250, child: filterTabs),
-                  ],
                 );
-              } else {
+
+                final filterTabs = TabBar(
+                  isScrollable: true,
+                  labelColor: isDark
+                      ? const Color(0xFFC9952A)
+                      : colorScheme.primary,
+                  unselectedLabelColor: colorScheme.onSurfaceVariant,
+                  indicatorColor: const Color(0xFFC9952A),
+                  tabs: const [
+                    Tab(text: 'Upcoming'),
+                    Tab(text: 'Past'),
+                  ],
+                  onTap: (index) {
+                    ref
+                        .read(eventsProvider.notifier)
+                        .setPeriod(index == 0 ? 'upcoming' : 'past');
+                  },
+                );
+
                 return Column(
                   children: [
                     searchWidget,
@@ -789,10 +856,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     filterTabs,
                   ],
                 );
-              }
-            },
+              },
+            ),
           ),
-        ),
 
         const SizedBox(height: 16),
 
