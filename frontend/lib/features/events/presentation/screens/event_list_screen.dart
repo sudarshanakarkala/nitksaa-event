@@ -18,6 +18,7 @@ class EventListScreen extends ConsumerStatefulWidget {
 
 class _EventListScreenState extends ConsumerState<EventListScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
   @override
   void initState() {
@@ -31,6 +32,16 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
+    if (isIOS) {
+      return _buildCupertinoLayout();
+    } else {
+      return _buildMaterialLayout();
+    }
   }
 
   Future<void> _handleAuthAction() async {
@@ -47,15 +58,309 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-    if (isIOS) {
-      return _buildCupertinoLayout();
+  void _showFilterBottomSheet() {
+    final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
+    if (isWebScreen) {
+      // Open the scaffold end drawer for a standards-compliant side filter panel
+      _scaffoldKey.currentState?.openEndDrawer();
     } else {
-      return _buildMaterialLayout();
+      showModalBottomSheet(
+        context: context,
+        isScrollControlled: true,
+        builder: (context) => _buildFilterPanel(),
+      );
     }
   }
+
+  void _showFilterDialog() {
+    // Left for backward compatibility; prefer using the end-drawer via
+    // `_showFilterBottomSheet` on large screens. Fallback to dialog for
+    // contexts where a drawer isn't available.
+    showDialog(
+      context: context,
+      builder: (context) => Dialog(
+        child: Padding(
+          padding: const EdgeInsets.all(24.0),
+          child: SizedBox(
+            width: 500,
+            child: _buildFilterPanel(),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFilterPanel([WidgetRef? panelRef]) {
+    final rf = panelRef ?? ref;
+    final state = rf.watch(eventsProvider);
+    final hasActiveFilters = state.dateRangeStart != null ||
+      state.dateRangeEnd != null ||
+      !((state.filterModes?['physical'] ?? true) && (state.filterModes?['virtual'] ?? true)) ||
+      !((state.filterRegistrationStatus?['open'] ?? true) && (state.filterRegistrationStatus?['closed'] ?? true)) ||
+      state.searchQuery.isNotEmpty;
+    final isInDrawer = kIsWeb || MediaQuery.of(context).size.width > 900;
+
+    return SingleChildScrollView(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Header (with clear & close actions)
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              const Text(
+                'Filters',
+                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+              ),
+              Row(
+                children: [
+                  if (hasActiveFilters)
+                    TextButton.icon(
+                      onPressed: () {
+                        rf.read(eventsProvider.notifier).clearFilters();
+                        _searchController.clear();
+                        if (isInDrawer) {
+                          // keep drawer open so user can see cleared state
+                        } else {
+                          Navigator.pop(context);
+                        }
+                      },
+                      icon: const Icon(Icons.clear_all, size: 18),
+                      label: const Text('Clear All'),
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.orange,
+                      ),
+                    ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () {
+                      // Only close the panel; do not modify filters.
+                      if (isInDrawer) {
+                        Navigator.of(context).maybePop();
+                      } else {
+                        Navigator.pop(context);
+                      }
+                    },
+                  ),
+                ],
+              ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Date Range Section
+          const Text(
+            'Date Range',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: _buildDatePickerButton(
+                  label: state.dateRangeStart == null
+                      ? 'From Date'
+                      : '${state.dateRangeStart!.day}/${state.dateRangeStart!.month}/${state.dateRangeStart!.year}',
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: state.dateRangeStart ?? DateTime.now(),
+                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      rf.read(eventsProvider.notifier).setDateRangeStart(picked);
+                    }
+                  },
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: _buildDatePickerButton(
+                  label: state.dateRangeEnd == null
+                      ? 'To Date'
+                      : '${state.dateRangeEnd!.day}/${state.dateRangeEnd!.month}/${state.dateRangeEnd!.year}',
+                  onTap: () async {
+                    final picked = await showDatePicker(
+                      context: context,
+                      initialDate: state.dateRangeEnd ?? DateTime.now(),
+                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (picked != null) {
+                      rf.read(eventsProvider.notifier).setDateRangeEnd(picked);
+                    }
+                  },
+                ),
+              ),
+              if (state.dateRangeStart != null || state.dateRangeEnd != null)
+                Padding(
+                  padding: const EdgeInsets.only(left: 8.0),
+                  child: IconButton(
+                    icon: const Icon(Icons.close, size: 20),
+                    onPressed: () {
+                      rf.read(eventsProvider.notifier).setDateRangeStart(null);
+                      rf.read(eventsProvider.notifier).setDateRangeEnd(null);
+                    },
+                  ),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
+
+          // Event Mode Section (checkbox style)
+          const Text(
+            'Event Mode',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Physical'),
+            value: state.filterModes?['physical'] ?? true,
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: (val) {
+              if (val == null) return;
+              final current = state.filterModes?['physical'] ?? true;
+              if (val != current) {
+                rf.read(eventsProvider.notifier).toggleFilterMode('physical');
+              }
+            },
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Virtual'),
+            value: state.filterModes?['virtual'] ?? true,
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: (val) {
+              if (val == null) return;
+              final current = state.filterModes?['virtual'] ?? true;
+              if (val != current) {
+                rf.read(eventsProvider.notifier).toggleFilterMode('virtual');
+              }
+            },
+          ),
+          const SizedBox(height: 20),
+
+          // Registration Status Section (checkbox style)
+          const Text(
+            'Registration Status',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Open'),
+            value: state.filterRegistrationStatus?['open'] ?? true,
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: (val) {
+              if (val == null) return;
+              final current = state.filterRegistrationStatus?['open'] ?? true;
+              if (val != current) {
+                rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus('open');
+              }
+            },
+          ),
+          CheckboxListTile(
+            contentPadding: EdgeInsets.zero,
+            dense: true,
+            title: const Text('Closed'),
+            value: state.filterRegistrationStatus?['closed'] ?? true,
+            controlAffinity: ListTileControlAffinity.leading,
+            onChanged: (val) {
+              if (val == null) return;
+              final current = state.filterRegistrationStatus?['closed'] ?? true;
+              if (val != current) {
+                rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus('closed');
+              }
+            },
+          ),
+          const SizedBox(height: 24),
+
+          // Action Buttons
+          if (MediaQuery.of(context).size.width <= 900)
+            Row(
+              children: [
+                Expanded(
+                  child: TextButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: TextButton.styleFrom(
+                      side: BorderSide(
+                        color: Theme.of(context).colorScheme.outlineVariant,
+                      ),
+                    ),
+                    child: const Text('Cancel'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: ElevatedButton(
+                    onPressed: () => Navigator.pop(context),
+                    style: ElevatedButton.styleFrom(
+                      backgroundColor: const Color(0xFFC9952A),
+                    ),
+                    child: const Text(
+                      'Apply',
+                      style: TextStyle(color: Colors.white),
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          // Drawer-only clear button removed — top 'Clear All' handles clearing.
+        ],
+      ),
+    );
+  }
+
+  Widget _buildFilterToggle({
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFC9952A) : Colors.transparent,
+          border: Border.all(
+            color: isActive
+                ? const Color(0xFFC9952A)
+                : Theme.of(context).colorScheme.outlineVariant,
+            width: 2,
+          ),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.w600,
+            color: isActive ? Colors.white : null,
+            fontSize: 13,
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDatePickerButton({required String label, required VoidCallback onTap}) {
+    return OutlinedButton.icon(
+      onPressed: onTap,
+      icon: const Icon(Icons.calendar_today, size: 16),
+      label: Text(label, style: const TextStyle(fontSize: 12)),
+      style: OutlinedButton.styleFrom(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      ),
+    );
+  }
+
+  
 
   // ==========================================
   // CUPERTINO LAYOUT (iOS)
@@ -109,41 +414,70 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: SizedBox(
-                width: double.infinity,
-                child: CupertinoSegmentedControl<String>(
-                  groupValue: state.period,
-                  selectedColor: isDark ? accentGold : const Color(0xFF007AFF),
-                  unselectedColor: cardBg,
-                  borderColor: isDark
-                      ? accentGold.withValues(alpha: 0.5)
-                      : const Color(0x3C3C430C),
-                  children: const {
-                    'upcoming': Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
-                        'Upcoming',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+              child: Column(
+                children: [
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoSegmentedControl<String>(
+                      groupValue: state.period,
+                      selectedColor: isDark ? accentGold : const Color(0xFF007AFF),
+                      unselectedColor: cardBg,
+                      borderColor: isDark
+                          ? accentGold.withValues(alpha: 0.5)
+                          : const Color(0x3C3C430C),
+                      children: const {
+                        'upcoming': Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: Text(
+                            'Upcoming',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
-                    ),
-                    'past': Padding(
-                      padding: EdgeInsets.symmetric(vertical: 8.0),
-                      child: Text(
-                        'Past',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w500,
+                        'past': Padding(
+                          padding: EdgeInsets.symmetric(vertical: 8.0),
+                          child: Text(
+                            'Past',
+                            style: TextStyle(
+                              fontSize: 13,
+                              fontWeight: FontWeight.w500,
+                            ),
+                          ),
                         ),
-                      ),
+                      },
+                      onValueChanged: (value) {
+                        ref.read(eventsProvider.notifier).setPeriod(value);
+                      },
                     ),
-                  },
-                  onValueChanged: (value) {
-                    ref.read(eventsProvider.notifier).setPeriod(value);
-                  },
-                ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: [
+                          Icon(CupertinoIcons.slider_horizontal_3, color: accentGold, size: 18),
+                          const SizedBox(width: 6),
+                          const Text('Filters'),
+                        ],
+                      ),
+                      onPressed: () {
+                        showCupertinoModalPopup(
+                          context: context,
+                          builder: (context) => _buildCupertinoFilterPanel(
+                            state,
+                            accentGold,
+                            isDark,
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
             ),
             const SizedBox(height: 12),
@@ -563,6 +897,289 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
+  Widget _buildCupertinoFilterPanel(
+    EventsState state,
+    Color accentGold,
+    bool isDark,
+  ) {
+    final hasActiveFilters = state.dateRangeStart != null ||
+      state.dateRangeEnd != null ||
+      !((state.filterModes['physical'] ?? true) && (state.filterModes['virtual'] ?? true)) ||
+      !((state.filterRegistrationStatus['open'] ?? true) && (state.filterRegistrationStatus['closed'] ?? true)) ||
+      state.searchQuery.isNotEmpty;
+
+    return CupertinoActionSheetAction(
+      onPressed: () {},
+      child: Container(
+        color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+        child: SafeArea(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Header
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      const Text(
+                        'Filters',
+                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      ),
+                      CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        child: const Icon(CupertinoIcons.xmark, size: 20),
+                        onPressed: () => Navigator.pop(context),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+
+                  // Clear All Button
+                  if (hasActiveFilters)
+                    Padding(
+                      padding: const EdgeInsets.only(bottom: 12.0),
+                      child: CupertinoButton(
+                        padding: EdgeInsets.zero,
+                        child: Row(
+                          children: [
+                            Icon(CupertinoIcons.clear_thick, size: 16, color: accentGold),
+                            const SizedBox(width: 6),
+                            const Text('Clear All Filters'),
+                          ],
+                        ),
+                        onPressed: () {
+                          ref.read(eventsProvider.notifier).clearFilters();
+                          _searchController.clear();
+                          Navigator.pop(context);
+                        },
+                      ),
+                    ),
+
+                  // Date Range Section
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12.0, bottom: 8.0),
+                    child: Text(
+                      'Date Range',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: state.dateRangeStart ?? DateTime.now(),
+                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null) {
+                              ref.read(eventsProvider.notifier).setDateRangeStart(picked);
+                            }
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFD0D0D0)),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            padding: const EdgeInsets.all(8),
+                            child: Text(
+                              state.dateRangeStart == null
+                                  ? 'From'
+                                  : '${state.dateRangeStart!.day}/${state.dateRangeStart!.month}',
+                              style: const TextStyle(fontSize: 11),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: state.dateRangeEnd ?? DateTime.now(),
+                              firstDate: DateTime.now().subtract(const Duration(days: 365)),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null) {
+                              ref.read(eventsProvider.notifier).setDateRangeEnd(picked);
+                            }
+                          },
+                          child: Container(
+                            decoration: BoxDecoration(
+                              border: Border.all(color: const Color(0xFFD0D0D0)),
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            padding: const EdgeInsets.all(8),
+                            child: Text(
+                              state.dateRangeEnd == null
+                                  ? 'To'
+                                  : '${state.dateRangeEnd!.day}/${state.dateRangeEnd!.month}',
+                              style: const TextStyle(fontSize: 11),
+                              textAlign: TextAlign.center,
+                            ),
+                          ),
+                        ),
+                      ),
+                      if (state.dateRangeStart != null || state.dateRangeEnd != null)
+                        CupertinoButton(
+                          padding: const EdgeInsets.all(6),
+                          child: const Icon(CupertinoIcons.xmark_circle_fill, size: 18),
+                          onPressed: () {
+                            ref.read(eventsProvider.notifier).setDateRangeStart(null);
+                            ref.read(eventsProvider.notifier).setDateRangeEnd(null);
+                          },
+                        ),
+                    ],
+                  ),
+
+                  // Event Mode Section
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16.0, bottom: 8.0),
+                    child: Text(
+                      'Event Mode',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                  Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Physical'),
+                          CupertinoSwitch(
+                            value: state.filterModes['physical'] ?? true,
+                            onChanged: (val) {
+                              final current = state.filterModes['physical'] ?? true;
+                              if (val != current) {
+                                ref.read(eventsProvider.notifier).toggleFilterMode('physical');
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Virtual'),
+                          CupertinoSwitch(
+                            value: state.filterModes['virtual'] ?? true,
+                            onChanged: (val) {
+                              final current = state.filterModes['virtual'] ?? true;
+                              if (val != current) {
+                                ref.read(eventsProvider.notifier).toggleFilterMode('virtual');
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+
+                  // Registration Status Section
+                  const Padding(
+                    padding: EdgeInsets.only(top: 16.0, bottom: 8.0),
+                    child: Text(
+                      'Registration',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                  Column(
+                    children: [
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Open'),
+                          CupertinoSwitch(
+                            value: state.filterRegistrationStatus['open'] ?? true,
+                            onChanged: (val) {
+                              final current = state.filterRegistrationStatus['open'] ?? true;
+                              if (val != current) {
+                                ref.read(eventsProvider.notifier).toggleFilterRegistrationStatus('open');
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          const Text('Closed'),
+                          CupertinoSwitch(
+                            value: state.filterRegistrationStatus['closed'] ?? true,
+                            onChanged: (val) {
+                              final current = state.filterRegistrationStatus['closed'] ?? true;
+                              if (val != current) {
+                                ref.read(eventsProvider.notifier).toggleFilterRegistrationStatus('closed');
+                              }
+                            },
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 20),
+
+                  // Done Button
+                  SizedBox(
+                    width: double.infinity,
+                    child: CupertinoButton(
+                      color: accentGold,
+                      onPressed: () => Navigator.pop(context),
+                      child: const Text('Done'),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCupertinoFilterToggle({
+    required String label,
+    required bool isActive,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: Container(
+        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+        decoration: BoxDecoration(
+          color: isActive ? const Color(0xFFC9952A) : Colors.transparent,
+          border: Border.all(
+            color: isActive
+                ? const Color(0xFFC9952A)
+                : const Color(0xFFD0D0D0),
+            width: 1.5,
+          ),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(
+          label,
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontWeight: FontWeight.w500,
+            color: isActive ? Colors.white : Colors.black,
+            fontSize: 12,
+          ),
+        ),
+      ),
+    );
+  }
+
   // ==========================================
   // MATERIAL LAYOUT (WEB / ANDROID)
   // ==========================================
@@ -763,11 +1380,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           borderRadius: BorderRadius.circular(8),
                         ),
                       ),
-                      onPressed: () {
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(content: Text('Filters coming soon')),
-                        );
-                      },
+                      onPressed: _showFilterBottomSheet,
                     ),
                   ],
                 )
@@ -896,6 +1509,20 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     return DefaultTabController(
       length: 2,
       child: Scaffold(
+        key: _scaffoldKey,
+        endDrawer: isWebScreen
+            ? Drawer(
+                child: Consumer(
+                  builder: (context, drawerRef, _) => SafeArea(
+                    child: Container(
+                      width: 420,
+                      padding: const EdgeInsets.all(20.0),
+                      child: _buildFilterPanel(drawerRef),
+                    ),
+                  ),
+                ),
+              )
+            : null,
         drawer: (!isWebScreen && auth.isAuthenticated)
             ? Drawer(
                 child: ListView(
