@@ -5,6 +5,7 @@ import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/developer/presentation/developer_diagnostics_screen.dart';
 import '../features/foundation/presentation/foundation_ready_screen.dart';
 import '../features/events/presentation/screens/event_list_screen.dart';
+import '../features/events/presentation/screens/event_detail_screen.dart';
 import '../features/auth/services/auth_controller.dart';
 import 'app_routes.dart';
 import 'route_guards.dart';
@@ -31,6 +32,14 @@ abstract class AppRouter {
       GoRoute(
         path: AppRoutes.home,
         builder: (context, state) => const EventListScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.eventDetail,
+        builder: (context, state) {
+          final idStr = state.pathParameters['id'] ?? '';
+          final eventId = int.tryParse(idStr) ?? 0;
+          return EventDetailScreen(eventId: eventId);
+        },
       ),
       if (kDebugMode)
         GoRoute(

@@ -14,7 +14,7 @@ abstract class RouteGuards {
     final isLogin = location == AppRoutes.login;
     final isFoundation = location == AppRoutes.foundation;
     final isDeveloper = location == AppRoutes.developer;
-    final isProtected = false;
+    final isProtected = location.startsWith('/events/');
 
     if (isDeveloper && !kDebugMode) return AppRoutes.login;
 

@@ -713,14 +713,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   ),
                 ),
                 onPressed: () {
-                  // View Details Action
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(
-                      content: Text(
-                        'Details for "${event.title}" coming soon.',
-                      ),
-                    ),
-                  );
+                  context.push('/events/${event.eventId}');
                 },
               ),
             ],
@@ -1850,13 +1843,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     ),
                   ),
                   onPressed: () {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(
-                        content: Text(
-                          'Details for "${event.title}" coming soon.',
-                        ),
-                      ),
-                    );
+                    context.push('/events/${event.eventId}');
                   },
                   child: const Text(
                     'View details',

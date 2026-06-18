@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../domain/event.dart';
+
 class EventsRepository {
   EventsRepository({Dio? dio}) : _dio = dio ?? _createDio();
 
@@ -46,6 +48,46 @@ class EventsRepository {
         'per_page': perPage,
         'period': period,
       },
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<AppEvent> getPublicEvent(int eventId) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/events/public/$eventId',
+    );
+    final eventJson = response.data?['event'] as Map<String, dynamic>;
+    return AppEvent.fromJson(eventJson);
+  }
+
+  Future<Map<String, dynamic>> getRegistrationEligibility(int eventId, String accessToken) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/events/$eventId/registration-eligibility',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  Future<Map<String, dynamic>?> getMyEventRegistration(int eventId, String accessToken) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/events/$eventId/my-registration',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+      return response.data;
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        return null;
+      }
+      rethrow;
+    }
+  }
+
+  Future<Map<String, dynamic>> registerForEvent(int eventId, String accessToken, String attendeeNote) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/events/$eventId/register',
+      data: {'attendee_note': attendeeNote},
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
     return response.data ?? <String, dynamic>{};
   }
