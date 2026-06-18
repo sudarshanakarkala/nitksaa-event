@@ -17,6 +17,7 @@ class EventCreate(BaseModel):
     thumbnail_url: Optional[str] = None
     banner_url: Optional[str] = None
     capacity: Optional[int] = Field(default=None, gt=0)
+    show_attendee_list: bool = False
     registration_opens_at: Optional[datetime] = None
     registration_closes_at: Optional[datetime] = None
 

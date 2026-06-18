@@ -220,7 +220,16 @@ All tests passed.
 
 ---
 
-# 6. Verify Android Emulator
+# 6.0. Verify developer settings using chrome browser
+
+```bash
+flutter run \
+  --dart-define=DEV_DIAGNOSTICS_EMAIL=<Username> \
+  --dart-define=DEV_DIAGNOSTICS_PASSWORD=<Password>
+```
+
+
+# 6.1. Verify Android Emulator
 
 ## macOS
 

@@ -101,6 +101,46 @@
   cursor: pointer;
 }
 
+.ef-toggle-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  font-size: 0.875rem;
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+  margin-bottom: 0;
+}
+
+.ef-toggle-option input[type="checkbox"] {
+  width: 17px;
+  height: 17px;
+  min-width: 17px;
+  margin: 2px 0 0;
+  accent-color: var(--gold);
+  cursor: pointer;
+}
+
+.ef-toggle-option strong {
+  display: block;
+  color: var(--text-primary);
+  font-weight: 600;
+}
+
+.ef-toggle-option small {
+  display: block;
+  color: var(--text-muted);
+  font-size: 0.75rem;
+  line-height: 1.4;
+  margin-top: 3px;
+}
+
 /* ── Inline field error ───────────────────────────────────────────────── */
 .ef-field-error {
   font-size: 0.78rem;

@@ -1,0 +1,6 @@
+BEGIN;
+
+ALTER TABLE events
+ADD COLUMN IF NOT EXISTS show_attendee_list BOOLEAN NOT NULL DEFAULT false;
+
+COMMIT;

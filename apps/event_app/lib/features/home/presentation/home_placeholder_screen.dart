@@ -19,10 +19,19 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
     if (mounted) context.go(AppRoutes.login);
   }
 
+  void _showMyEventsUnavailable() {
+    ScaffoldMessenger.of(context)
+      ..hideCurrentSnackBar()
+      ..showSnackBar(
+        const SnackBar(content: Text('My Events will be available later.')),
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
+    final authController = AuthController.instance;
 
     return AppScaffold(
       title: 'NITKSAA Event',
@@ -60,6 +69,20 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
               icon: Icons.event_outlined,
               onPressed: () => context.go(AppRoutes.events),
             ),
+            const SizedBox(height: 12),
+            AppSecondaryButton(
+              label: 'My Events',
+              icon: Icons.event_available_outlined,
+              onPressed: _showMyEventsUnavailable,
+            ),
+            if (authController.canAccessDeveloperDiagnostics) ...[
+              const SizedBox(height: 12),
+              AppSecondaryButton(
+                label: 'Developer Diagnostics',
+                icon: Icons.build_outlined,
+                onPressed: () => context.go(AppRoutes.developer),
+              ),
+            ],
             const SizedBox(height: 12),
             AppSecondaryButton(
               label: 'Sign Out',

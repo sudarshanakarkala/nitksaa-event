@@ -39,6 +39,7 @@ const EMPTY = {
   location_text:          '',
   virtual_url:            '',
   capacity:               '',
+  show_attendee_list:     false,
   registration_opens_at:  '',
   registration_closes_at: '',
   thumbnail_url:          '',
@@ -110,6 +111,7 @@ function buildPayload(f) {
     location_text:          f.is_virtual ? null : (f.location_text.trim() || null),
     virtual_url:            f.is_virtual ? (f.virtual_url.trim() || null) : null,
     capacity:               f.capacity !== '' ? parseInt(f.capacity, 10) : null,
+    show_attendee_list:     Boolean(f.show_attendee_list),
     registration_opens_at:  dt(f.registration_opens_at),
     registration_closes_at: dt(f.registration_closes_at),
     thumbnail_url:          f.thumbnail_url.trim()          || null,
@@ -148,6 +150,7 @@ export default function EventFormPage() {
           location_text:          ev.location_text          ?? '',
           virtual_url:            ev.virtual_url            ?? '',
           capacity:               ev.capacity != null ? String(ev.capacity) : '',
+          show_attendee_list:     ev.show_attendee_list     ?? false,
           registration_opens_at:  toDatetimeLocalInTZ(ev.registration_opens_at,  ev.timezone),
           registration_closes_at: toDatetimeLocalInTZ(ev.registration_closes_at, ev.timezone),
           thumbnail_url:          ev.thumbnail_url          ?? '',
@@ -436,6 +439,21 @@ export default function EventFormPage() {
               />
             </div>
           </div>
+
+          <label className="ef-toggle-option" htmlFor="ef-show-attendee-list">
+            <input
+              id="ef-show-attendee-list"
+              type="checkbox"
+              checked={form.show_attendee_list}
+              onChange={e => set('show_attendee_list', e.target.checked)}
+            />
+            <span>
+              <strong>Show attendee list publicly</strong>
+              <small>
+                Keep this off unless the event should expose attendee visibility in a future attendee feature.
+              </small>
+            </span>
+          </label>
         </div>
 
         {/* ── Section 3: Media ─────────────────────────────────────────── */}

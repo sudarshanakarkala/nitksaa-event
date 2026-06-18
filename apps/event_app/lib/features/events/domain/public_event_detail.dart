@@ -17,6 +17,7 @@ class PublicEventDetail {
     this.thumbnailUrl,
     this.bannerUrl,
     this.capacity,
+    this.showAttendeeList = false,
     this.publishedAt,
     this.speakers = const [],
     this.sessions = const [],
@@ -39,6 +40,7 @@ class PublicEventDetail {
       thumbnailUrl: _optionalString(json['thumbnail_url']),
       bannerUrl: _optionalString(json['banner_url']),
       capacity: _optionalInt(json['capacity']),
+      showAttendeeList: _optionalBool(json['show_attendee_list']) ?? false,
       registeredCount: _optionalInt(json['registered_count']) ?? 0,
       registrationStatus: _requiredString(json, 'registration_status'),
       publishedAt: _optionalDateTime(json['published_at']),
@@ -62,6 +64,7 @@ class PublicEventDetail {
   final String? thumbnailUrl;
   final String? bannerUrl;
   final int? capacity;
+  final bool showAttendeeList;
   final int registeredCount;
   final String registrationStatus;
   final DateTime? publishedAt;
@@ -82,15 +85,13 @@ class PublicEventSpeaker {
   const PublicEventSpeaker({required this.name, this.title});
 
   factory PublicEventSpeaker.fromJson(Map<String, dynamic> json) {
-    final name =
-        _optionalString(json['name']) ??
+    final name = _optionalString(json['name']) ??
         _optionalString(json['full_name']) ??
         _optionalString(json['speaker_name']);
     if (name == null) throw const FormatException('Speaker name is missing.');
     return PublicEventSpeaker(
       name: name,
-      title:
-          _optionalString(json['title']) ??
+      title: _optionalString(json['title']) ??
           _optionalString(json['designation']),
     );
   }
@@ -142,10 +143,10 @@ int _requiredInt(Map<String, dynamic> json, String key) {
 }
 
 int? _optionalInt(dynamic value) => switch (value) {
-  int number => number,
-  num number => number.toInt(),
-  _ => null,
-};
+      int number => number,
+      num number => number.toInt(),
+      _ => null,
+    };
 
 String _requiredString(Map<String, dynamic> json, String key) {
   final value = _optionalString(json[key]);
@@ -163,6 +164,8 @@ bool _requiredBool(Map<String, dynamic> json, String key) {
   if (value is! bool) throw FormatException('Missing or invalid $key.');
   return value;
 }
+
+bool? _optionalBool(dynamic value) => value is bool ? value : null;
 
 DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
   final value = _optionalDateTime(json[key]);
@@ -182,11 +185,10 @@ String _formatStatus(String status) {
     'full' => 'Full',
     'not_open_yet' => 'Not Open Yet',
     'not_applicable' => 'Not Applicable',
-    _ =>
-      status
-          .split('_')
-          .where((part) => part.isNotEmpty)
-          .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
-          .join(' '),
+    _ => status
+        .split('_')
+        .where((part) => part.isNotEmpty)
+        .map((part) => '${part[0].toUpperCase()}${part.substring(1)}')
+        .join(' '),
   };
 }

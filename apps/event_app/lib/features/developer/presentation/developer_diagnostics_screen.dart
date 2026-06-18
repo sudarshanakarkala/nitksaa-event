@@ -30,6 +30,7 @@ class _DeveloperDiagnosticsScreenState
   final Map<DiagnosticId, DiagnosticRunState> _runState = {};
 
   bool _runningAll = false;
+  bool _runningPublicEventsApi = false;
   bool _exporting = false;
   bool _clearing = false;
 
@@ -57,9 +58,13 @@ class _DeveloperDiagnosticsScreenState
           const DiagnosticSectionHeader(title: 'Quick Actions'),
           _QuickActionsCard(
             runningAll: _runningAll,
+            runningPublicEventsApi: _runningPublicEventsApi,
             exporting: _exporting,
             clearing: _clearing,
             onOpenEvents: _openEvents,
+            onOpenEventListingTest: _openEventListingTest,
+            onOpenEventDetailTest: _openEventDetailTest,
+            onRunPublicEventsApiTest: _runPublicEventsApiTest,
             onRunAll: _runAllDiagnostics,
             onExport: _exportDiagnosticReport,
             onClear: _clearCachedData,
@@ -78,18 +83,57 @@ class _DeveloperDiagnosticsScreenState
   }
 
   void _openEvents() {
-    if (kIsWeb) {
-      context.go(AppRoutes.events);
-      return;
-    }
+    context.go(AppRoutes.events);
+  }
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Events route is available in Flutter Web build.'),
+  void _openEventListingTest() {
+    context.go(AppRoutes.events);
+  }
+
+  void _openEventDetailTest() {
+    const configuredId = int.fromEnvironment(
+      'DEV_TEST_EVENT_ID',
+      defaultValue: 1,
+    );
+    context.go(AppRoutes.eventDetail(configuredId));
+  }
+
+  Future<void> _runPublicEventsApiTest() async {
+    setState(() => _runningPublicEventsApi = true);
+    try {
+      final response = await devDio.get<Map<String, dynamic>>(
+        '/api/v1/events/public',
+        queryParameters: const {'period': 'upcoming'},
+      ).timeout(const Duration(seconds: 15));
+      final events = response.data?['events'];
+      final count = events is List ? events.length : 0;
+      if (!mounted) return;
+      setState(() {
+        _runState[DiagnosticId.eventsApi] = DiagnosticRunState(
+          status: DiagnosticStatus.ok,
+          lastRun: DateTime.now(),
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('Public Events API returned $count event(s).')),
+      );
+    } catch (error, stackTrace) {
+      AppLogger.error('Public Events API diagnostic failed', error, stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _runState[DiagnosticId.eventsApi] = DiagnosticRunState(
+          status: DiagnosticStatus.error,
+          lastRun: DateTime.now(),
+        );
+      });
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Public Events API failed: ${errorMessage(error)}'),
         ),
       );
+    } finally {
+      if (mounted) setState(() => _runningPublicEventsApi = false);
+    }
   }
 
   List<DiagnosticCategory> _diagnosticCategories(ThemeMode mode) {
@@ -495,30 +539,30 @@ class DiagnosticDetailScreen extends StatelessWidget {
       DiagnosticId.logger => const _LoggerDetail(),
       DiagnosticId.theme => const _ThemeDetail(),
       DiagnosticId.firebaseToken => _AuthDiagnosticDetail(
-        title: 'Firebase Token Test',
-        mode: _AuthDiagnosticMode.firebaseToken,
-        apiDetails: diagnosticApiDetails[DiagnosticId.firebaseToken]!,
-      ),
+          title: 'Firebase Token Test',
+          mode: _AuthDiagnosticMode.firebaseToken,
+          apiDetails: diagnosticApiDetails[DiagnosticId.firebaseToken]!,
+        ),
       DiagnosticId.backendAuth => _AuthDiagnosticDetail(
-        title: 'Backend Auth Test',
-        mode: _AuthDiagnosticMode.backendAuth,
-        apiDetails: diagnosticApiDetails[DiagnosticId.backendAuth]!,
-      ),
+          title: 'Backend Auth Test',
+          mode: _AuthDiagnosticMode.backendAuth,
+          apiDetails: diagnosticApiDetails[DiagnosticId.backendAuth]!,
+        ),
       DiagnosticId.authMe => _AuthDiagnosticDetail(
-        title: '/auth/me Test',
-        mode: _AuthDiagnosticMode.authMe,
-        apiDetails: diagnosticApiDetails[DiagnosticId.authMe]!,
-      ),
+          title: '/auth/me Test',
+          mode: _AuthDiagnosticMode.authMe,
+          apiDetails: diagnosticApiDetails[DiagnosticId.authMe]!,
+        ),
       DiagnosticId.eventUsers => _AuthDiagnosticDetail(
-        title: 'Event Users Test',
-        mode: _AuthDiagnosticMode.eventUsers,
-        apiDetails: diagnosticApiDetails[DiagnosticId.eventUsers]!,
-      ),
+          title: 'Event Users Test',
+          mode: _AuthDiagnosticMode.eventUsers,
+          apiDetails: diagnosticApiDetails[DiagnosticId.eventUsers]!,
+        ),
       DiagnosticId.databaseTables => _AuthDiagnosticDetail(
-        title: 'Database Tables Test',
-        mode: _AuthDiagnosticMode.databaseTables,
-        apiDetails: diagnosticApiDetails[DiagnosticId.databaseTables]!,
-      ),
+          title: 'Database Tables Test',
+          mode: _AuthDiagnosticMode.databaseTables,
+          apiDetails: diagnosticApiDetails[DiagnosticId.databaseTables]!,
+        ),
       DiagnosticId.network => const _NetworkDetail(),
       DiagnosticId.performance => const _PerformanceDetail(),
       DiagnosticId.debugTools => const _DebugToolsDetail(),
@@ -534,7 +578,8 @@ class DiagnosticDetailScreen extends StatelessWidget {
       DiagnosticId.attendeeListApi ||
       DiagnosticId.attendeeExport ||
       DiagnosticId.adminRoleGuard ||
-      DiagnosticId.auditTrail => _ComingSoonDiagnosticDetail(item: item),
+      DiagnosticId.auditTrail =>
+        _ComingSoonDiagnosticDetail(item: item),
     };
   }
 }
@@ -606,8 +651,8 @@ class DiagnosticDetailScaffold extends StatelessWidget {
           Text(
             description,
             style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-            ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
           ),
           const SizedBox(height: 16),
           if (apiDetails != null) ...[
@@ -627,9 +672,8 @@ class _FoundationDetail extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final themeMode = ref.watch(themeProvider);
-    final firebaseAppName = AppState.firebaseInitialized
-        ? _safeFirebaseAppName()
-        : 'N/A';
+    final firebaseAppName =
+        AppState.firebaseInitialized ? _safeFirebaseAppName() : 'N/A';
     final result = DiagnosticRunState(
       status: AppState.firebaseInitialized
           ? DiagnosticStatus.ok
@@ -1009,8 +1053,7 @@ class _DebugToolsDetailState extends State<_DebugToolsDetail> {
 
   Future<void> _exportDebugSummary() async {
     setState(() => _exporting = true);
-    final report =
-        'NITKSAA Event Debug Tools\n'
+    final report = 'NITKSAA Event Debug Tools\n'
         'Generated: ${DateTime.now().toLocal()}\n'
         'Platform: ${platformLabel()}\n'
         'Firebase initialized: ${AppState.firebaseInitialized}\n';
@@ -1154,8 +1197,8 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
                   Text(
                     'Tables refreshed: ${formatDiagnosticTimestamp(_lastTablesRefreshedAt)}',
                     style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                      color: Theme.of(context).colorScheme.onSurfaceVariant,
-                    ),
+                          color: Theme.of(context).colorScheme.onSurfaceVariant,
+                        ),
                   ),
                   _tableCards(),
                   _selectedTableView(),
@@ -1169,19 +1212,19 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
   }
 
   String _descriptionForMode(_AuthDiagnosticMode mode) => switch (mode) {
-    _AuthDiagnosticMode.firebaseToken =>
-      'Get a Firebase ID token in debug mode and show only a shortened preview.',
-    _AuthDiagnosticMode.backendAuth =>
-      'Validate Firebase authentication through the backend JWT exchange.',
-    _AuthDiagnosticMode.authMe =>
-      'Validate the backend JWT against /api/v1/auth/me.',
-    _AuthDiagnosticMode.eventUsers =>
-      'Fetch the event_users diagnostic table through the backend.',
-    _AuthDiagnosticMode.databaseTables =>
-      'Refresh database table metadata and inspect diagnostic rows.',
-    _AuthDiagnosticMode.fullValidation =>
-      'Run Firebase token, backend login, /auth/me, event_users, and table checks.',
-  };
+        _AuthDiagnosticMode.firebaseToken =>
+          'Get a Firebase ID token in debug mode and show only a shortened preview.',
+        _AuthDiagnosticMode.backendAuth =>
+          'Validate Firebase authentication through the backend JWT exchange.',
+        _AuthDiagnosticMode.authMe =>
+          'Validate the backend JWT against /api/v1/auth/me.',
+        _AuthDiagnosticMode.eventUsers =>
+          'Fetch the event_users diagnostic table through the backend.',
+        _AuthDiagnosticMode.databaseTables =>
+          'Refresh database table metadata and inspect diagnostic rows.',
+        _AuthDiagnosticMode.fullValidation =>
+          'Run Firebase token, backend login, /auth/me, event_users, and table checks.',
+      };
 
   List<Widget> _actionsForMode(_AuthDiagnosticMode mode) {
     final fullButton = FilledButton.icon(
@@ -1198,110 +1241,110 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
 
     return switch (mode) {
       _AuthDiagnosticMode.firebaseToken => [
-        FilledButton.icon(
-          onPressed: _loading ? null : _getFirebaseIdToken,
-          icon: _loading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.key_outlined),
-          label: const Text('Dev: Get Firebase ID Token'),
-        ),
-        if (_firebaseIdToken != null) ...[
-          const SizedBox(height: 8),
-          OutlinedButton.icon(
-            onPressed: _copyFirebaseIdToken,
-            icon: const Icon(Icons.copy_outlined),
-            label: const Text('Copy Firebase ID Token'),
+          FilledButton.icon(
+            onPressed: _loading ? null : _getFirebaseIdToken,
+            icon: _loading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.key_outlined),
+            label: const Text('Dev: Get Firebase ID Token'),
           ),
-        ],
-      ],
-      _AuthDiagnosticMode.backendAuth => [
-        FilledButton.icon(
-          onPressed: _backendLoading ? null : _validateFirebaseTokenWithBackend,
-          icon: _backendLoading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.verified_user_outlined),
-          label: const Text('Validate Firebase Token with Backend'),
-        ),
-      ],
-      _AuthDiagnosticMode.authMe => [
-        FilledButton.icon(
-          onPressed: _meLoading ? null : _validateAuthMe,
-          icon: _meLoading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.person_search_outlined),
-          label: const Text('Validate /auth/me'),
-        ),
-      ],
-      _AuthDiagnosticMode.eventUsers => [
-        FilledButton.icon(
-          onPressed: _tableLoading ? null : _refreshEventUsers,
-          icon: _tableLoading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.manage_accounts_outlined),
-          label: const Text('Refresh event_users'),
-        ),
-      ],
-      _AuthDiagnosticMode.databaseTables => [
-        FilledButton.icon(
-          onPressed: _tablesLoading ? null : _refreshTables,
-          icon: _tablesLoading
-              ? const SizedBox(
-                  width: 18,
-                  height: 18,
-                  child: CircularProgressIndicator(strokeWidth: 2),
-                )
-              : const Icon(Icons.table_chart_outlined),
-          label: const Text('Refresh Database Tables'),
-        ),
-      ],
-      _AuthDiagnosticMode.fullValidation => [
-        fullButton,
-        const SizedBox(height: 8),
-        Wrap(
-          spacing: 8,
-          runSpacing: 8,
-          children: [
+          if (_firebaseIdToken != null) ...[
+            const SizedBox(height: 8),
             OutlinedButton.icon(
-              onPressed: _backendLoading
-                  ? null
-                  : _validateFirebaseTokenWithBackend,
-              icon: const Icon(Icons.verified_user_outlined),
-              label: const Text('Backend Login'),
-            ),
-            OutlinedButton.icon(
-              onPressed: _meLoading ? null : _validateAuthMe,
-              icon: const Icon(Icons.person_search_outlined),
-              label: const Text('/auth/me'),
-            ),
-            OutlinedButton.icon(
-              onPressed: _tableLoading ? null : _refreshEventUsers,
-              icon: const Icon(Icons.manage_accounts_outlined),
-              label: const Text('event_users'),
-            ),
-            OutlinedButton.icon(
-              onPressed: _tablesLoading ? null : _refreshTables,
-              icon: const Icon(Icons.table_chart_outlined),
-              label: const Text('Tables'),
+              onPressed: _copyFirebaseIdToken,
+              icon: const Icon(Icons.copy_outlined),
+              label: const Text('Copy Firebase ID Token'),
             ),
           ],
-        ),
-      ],
+        ],
+      _AuthDiagnosticMode.backendAuth => [
+          FilledButton.icon(
+            onPressed:
+                _backendLoading ? null : _validateFirebaseTokenWithBackend,
+            icon: _backendLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.verified_user_outlined),
+            label: const Text('Validate Firebase Token with Backend'),
+          ),
+        ],
+      _AuthDiagnosticMode.authMe => [
+          FilledButton.icon(
+            onPressed: _meLoading ? null : _validateAuthMe,
+            icon: _meLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.person_search_outlined),
+            label: const Text('Validate /auth/me'),
+          ),
+        ],
+      _AuthDiagnosticMode.eventUsers => [
+          FilledButton.icon(
+            onPressed: _tableLoading ? null : _refreshEventUsers,
+            icon: _tableLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.manage_accounts_outlined),
+            label: const Text('Refresh event_users'),
+          ),
+        ],
+      _AuthDiagnosticMode.databaseTables => [
+          FilledButton.icon(
+            onPressed: _tablesLoading ? null : _refreshTables,
+            icon: _tablesLoading
+                ? const SizedBox(
+                    width: 18,
+                    height: 18,
+                    child: CircularProgressIndicator(strokeWidth: 2),
+                  )
+                : const Icon(Icons.table_chart_outlined),
+            label: const Text('Refresh Database Tables'),
+          ),
+        ],
+      _AuthDiagnosticMode.fullValidation => [
+          fullButton,
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              OutlinedButton.icon(
+                onPressed:
+                    _backendLoading ? null : _validateFirebaseTokenWithBackend,
+                icon: const Icon(Icons.verified_user_outlined),
+                label: const Text('Backend Login'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _meLoading ? null : _validateAuthMe,
+                icon: const Icon(Icons.person_search_outlined),
+                label: const Text('/auth/me'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _tableLoading ? null : _refreshEventUsers,
+                icon: const Icon(Icons.manage_accounts_outlined),
+                label: const Text('event_users'),
+              ),
+              OutlinedButton.icon(
+                onPressed: _tablesLoading ? null : _refreshTables,
+                icon: const Icon(Icons.table_chart_outlined),
+                label: const Text('Tables'),
+              ),
+            ],
+          ),
+        ],
     };
   }
 
@@ -1331,8 +1374,8 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
               child: Text(
                 message,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
               ),
             ),
         ],
@@ -1349,9 +1392,9 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
           Text(
             'Token length: ${_firebaseIdToken?.length ?? 0}',
             style: Theme.of(context).textTheme.bodySmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w600,
-            ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w600,
+                ),
           ),
           const SizedBox(height: 4),
           SelectableText(
@@ -1563,12 +1606,10 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
       });
 
       try {
-        final response = await devDio
-            .post<Map<String, dynamic>>(
-              '/api/v1/auth/firebase',
-              data: {'token': token},
-            )
-            .timeout(const Duration(seconds: 30));
+        final response = await devDio.post<Map<String, dynamic>>(
+          '/api/v1/auth/firebase',
+          data: {'token': token},
+        ).timeout(const Duration(seconds: 30));
         final data = response.data ?? <String, dynamic>{};
         accessToken = data['access_token'] as String?;
         if (accessToken == null || accessToken.isEmpty) {
@@ -1692,9 +1733,9 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
       final rawTables = response.data?['tables'];
       final tables = rawTables is List
           ? rawTables
-                .whereType<Map>()
-                .map((table) => Map<String, dynamic>.from(table))
-                .toList()
+              .whereType<Map>()
+              .map((table) => Map<String, dynamic>.from(table))
+              .toList()
           : <Map<String, dynamic>>[];
       passed += 1;
       if (!mounted) return;
@@ -1773,9 +1814,9 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
       final rawTables = response.data?['tables'];
       final tables = rawTables is List
           ? rawTables
-                .whereType<Map>()
-                .map((table) => Map<String, dynamic>.from(table))
-                .toList()
+              .whereType<Map>()
+              .map((table) => Map<String, dynamic>.from(table))
+              .toList()
           : <Map<String, dynamic>>[];
 
       if (!mounted) return;
@@ -1907,13 +1948,11 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
     final backendFailed =
         _backendStatus?.toLowerCase().contains('failed') ?? false;
     final meFailed = _meStatus?.toLowerCase().contains('failed') ?? false;
-    final userName =
-        _authMeResponse?['fullname']?.toString() ??
+    final userName = _authMeResponse?['fullname']?.toString() ??
         _backendLoginResponse?['fullname']?.toString() ??
         user?.displayName ??
         'N/A';
-    final email =
-        _authMeResponse?['email']?.toString() ??
+    final email = _authMeResponse?['email']?.toString() ??
         _backendLoginResponse?['email']?.toString() ??
         user?.email ??
         'N/A';
@@ -1959,8 +1998,7 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
           const SizedBox(height: 8),
           _SummaryField(
             label: 'Firebase UID',
-            value:
-                user?.uid ??
+            value: user?.uid ??
                 _authMeResponse?['firebase_uid']?.toString() ??
                 'N/A',
           ),
@@ -1985,20 +2023,20 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
     final colorScheme = Theme.of(context).colorScheme;
     final (text, color, foreground) = switch (state) {
       IndicatorState.passed => (
-        'OK $label',
-        Colors.green.withValues(alpha: 0.12),
-        Colors.green.shade800,
-      ),
+          'OK $label',
+          Colors.green.withValues(alpha: 0.12),
+          Colors.green.shade800,
+        ),
       IndicatorState.failed => (
-        'ERROR $label',
-        colorScheme.errorContainer,
-        colorScheme.onErrorContainer,
-      ),
+          'ERROR $label',
+          colorScheme.errorContainer,
+          colorScheme.onErrorContainer,
+        ),
       IndicatorState.pending => (
-        'PENDING $label',
-        colorScheme.surfaceContainerHighest,
-        colorScheme.onSurfaceVariant,
-      ),
+          'PENDING $label',
+          colorScheme.surfaceContainerHighest,
+          colorScheme.onSurfaceVariant,
+        ),
     };
 
     return Container(
@@ -2010,9 +2048,9 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
       child: Text(
         text,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w700,
-        ),
+              color: foreground,
+              fontWeight: FontWeight.w700,
+            ),
       ),
     );
   }
@@ -2059,7 +2097,9 @@ class _AuthDiagnosticDetailState extends State<_AuthDiagnosticDetail> {
                       Expanded(
                         child: Text(
                           table['name']?.toString() ?? 'unknown',
-                          style: Theme.of(context).textTheme.bodyMedium
+                          style: Theme.of(context)
+                              .textTheme
+                              .bodyMedium
                               ?.copyWith(fontWeight: FontWeight.w600),
                         ),
                       ),
@@ -2475,9 +2515,9 @@ class DiagnosticItem {
     required this.description,
     required this.icon,
     required this.apiDetails,
-  }) : initialStatus = DiagnosticStatus.notApplicable,
-       statusNote = 'Coming Soon',
-       comingSoon = true;
+  })  : initialStatus = DiagnosticStatus.notApplicable,
+        statusNote = 'Coming Soon',
+        comingSoon = true;
 
   final DiagnosticId id;
   final String title;
@@ -2583,8 +2623,8 @@ class DiagnosticOverviewRow extends StatelessWidget {
                     Text(
                       item.title,
                       style: Theme.of(context).textTheme.titleSmall?.copyWith(
-                        fontWeight: FontWeight.w700,
-                      ),
+                            fontWeight: FontWeight.w700,
+                          ),
                     ),
                     const SizedBox(height: 3),
                     Text(
@@ -2592,8 +2632,8 @@ class DiagnosticOverviewRow extends StatelessWidget {
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
                       style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                        color: colorScheme.onSurfaceVariant,
-                      ),
+                            color: colorScheme.onSurfaceVariant,
+                          ),
                     ),
                     const SizedBox(height: 6),
                     DiagnosticApiSummary(details: item.apiDetails),
@@ -2608,13 +2648,17 @@ class DiagnosticOverviewRow extends StatelessWidget {
                         ),
                         Text(
                           'Last run: ${formatDiagnosticTimestamp(runState.lastRun)}',
-                          style: Theme.of(context).textTheme.labelSmall
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelSmall
                               ?.copyWith(color: colorScheme.onSurfaceVariant),
                         ),
                         if (item.statusNote != null)
                           Text(
                             item.statusNote!,
-                            style: Theme.of(context).textTheme.labelSmall
+                            style: Theme.of(context)
+                                .textTheme
+                                .labelSmall
                                 ?.copyWith(color: colorScheme.onSurfaceVariant),
                           ),
                       ],
@@ -2647,9 +2691,9 @@ class DiagnosticApiSummary extends StatelessWidget {
         Text(
           details.compactApiLabel,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: colorScheme.primary,
-            fontWeight: FontWeight.w700,
-          ),
+                color: colorScheme.primary,
+                fontWeight: FontWeight.w700,
+              ),
         ),
         Text(
           'Auth: ${details.authRequirement}',
@@ -2724,9 +2768,9 @@ class _ApiDetailLine extends StatelessWidget {
           Text(
             label,
             style: Theme.of(context).textTheme.labelSmall?.copyWith(
-              color: Theme.of(context).colorScheme.onSurfaceVariant,
-              fontWeight: FontWeight.w800,
-            ),
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  fontWeight: FontWeight.w800,
+                ),
           ),
           const SizedBox(height: 2),
           SelectableText(value, style: Theme.of(context).textTheme.bodyMedium),
@@ -2786,16 +2830,16 @@ class DiagnosticCategorySection extends StatelessWidget {
                 maxLines: 2,
                 overflow: TextOverflow.ellipsis,
                 style: Theme.of(context).textTheme.bodySmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                ),
+                      color: colorScheme.onSurfaceVariant,
+                    ),
               ),
               const SizedBox(height: 4),
               Text(
                 '${category.items.length} diagnostics',
                 style: Theme.of(context).textTheme.labelSmall?.copyWith(
-                  color: colorScheme.onSurfaceVariant,
-                  fontWeight: FontWeight.w700,
-                ),
+                      color: colorScheme.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    ),
               ),
             ],
           ),
@@ -2823,30 +2867,30 @@ class DiagnosticStatusBadge extends StatelessWidget {
     final colorScheme = Theme.of(context).colorScheme;
     final (label, background, foreground) = switch (status) {
       DiagnosticStatus.ok => (
-        'OK',
-        Colors.green.withValues(alpha: 0.12),
-        Colors.green.shade800,
-      ),
+          'OK',
+          Colors.green.withValues(alpha: 0.12),
+          Colors.green.shade800,
+        ),
       DiagnosticStatus.info => (
-        'INFO',
-        colorScheme.secondaryContainer,
-        colorScheme.onSecondaryContainer,
-      ),
+          'INFO',
+          colorScheme.secondaryContainer,
+          colorScheme.onSecondaryContainer,
+        ),
       DiagnosticStatus.warning => (
-        'WARNING',
-        Colors.amber.withValues(alpha: 0.18),
-        Colors.amber.shade900,
-      ),
+          'WARNING',
+          Colors.amber.withValues(alpha: 0.18),
+          Colors.amber.shade900,
+        ),
       DiagnosticStatus.error => (
-        'ERROR',
-        colorScheme.errorContainer,
-        colorScheme.onErrorContainer,
-      ),
+          'ERROR',
+          colorScheme.errorContainer,
+          colorScheme.onErrorContainer,
+        ),
       DiagnosticStatus.notApplicable => (
-        'N/A',
-        colorScheme.surfaceContainerHighest,
-        colorScheme.onSurfaceVariant,
-      ),
+          'N/A',
+          colorScheme.surfaceContainerHighest,
+          colorScheme.onSurfaceVariant,
+        ),
     };
 
     return Container(
@@ -2858,9 +2902,9 @@ class DiagnosticStatusBadge extends StatelessWidget {
       child: Text(
         label,
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: foreground,
-          fontWeight: FontWeight.w800,
-        ),
+              color: foreground,
+              fontWeight: FontWeight.w800,
+            ),
       ),
     );
   }
@@ -2878,10 +2922,10 @@ class DiagnosticSectionHeader extends StatelessWidget {
       child: Text(
         title.toUpperCase(),
         style: Theme.of(context).textTheme.labelSmall?.copyWith(
-          color: Theme.of(context).colorScheme.primary,
-          fontWeight: FontWeight.w700,
-          letterSpacing: 1.0,
-        ),
+              color: Theme.of(context).colorScheme.primary,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 1.0,
+            ),
       ),
     );
   }
@@ -2890,18 +2934,26 @@ class DiagnosticSectionHeader extends StatelessWidget {
 class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
     required this.runningAll,
+    required this.runningPublicEventsApi,
     required this.exporting,
     required this.clearing,
     required this.onOpenEvents,
+    required this.onOpenEventListingTest,
+    required this.onOpenEventDetailTest,
+    required this.onRunPublicEventsApiTest,
     required this.onRunAll,
     required this.onExport,
     required this.onClear,
   });
 
   final bool runningAll;
+  final bool runningPublicEventsApi;
   final bool exporting;
   final bool clearing;
   final VoidCallback onOpenEvents;
+  final VoidCallback onOpenEventListingTest;
+  final VoidCallback onOpenEventDetailTest;
+  final VoidCallback onRunPublicEventsApiTest;
   final VoidCallback onRunAll;
   final VoidCallback onExport;
   final VoidCallback onClear;
@@ -2918,6 +2970,31 @@ class _QuickActionsCard extends StatelessWidget {
               onPressed: onOpenEvents,
               icon: const Icon(Icons.event_outlined),
               label: const Text('Open Events'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: onOpenEventListingTest,
+              icon: const Icon(Icons.view_list_outlined),
+              label: const Text('Open Event Listing Test'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed: onOpenEventDetailTest,
+              icon: const Icon(Icons.event_note_outlined),
+              label: const Text('Open Event Detail Test'),
+            ),
+            const SizedBox(height: 8),
+            OutlinedButton.icon(
+              onPressed:
+                  runningPublicEventsApi ? null : onRunPublicEventsApiTest,
+              icon: runningPublicEventsApi
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.cloud_sync_outlined),
+              label: const Text('Run Public Events API Test'),
             ),
             const SizedBox(height: 8),
             FilledButton.icon(
@@ -2973,9 +3050,9 @@ class _ProductionWarningBanner extends StatelessWidget {
               child: Text(
                 'Developer Diagnostics - Not for Production UI',
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: colorScheme.onErrorContainer,
-                  fontWeight: FontWeight.w600,
-                ),
+                      color: colorScheme.onErrorContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ),
           ],
@@ -3000,9 +3077,9 @@ class _SummaryField extends StatelessWidget {
         Text(
           label,
           style: Theme.of(context).textTheme.labelSmall?.copyWith(
-            color: colorScheme.onSurfaceVariant,
-            fontWeight: FontWeight.w700,
-          ),
+                color: colorScheme.onSurfaceVariant,
+                fontWeight: FontWeight.w700,
+              ),
         ),
         const SizedBox(height: 2),
         SelectableText(
@@ -3035,9 +3112,9 @@ class _CountBadge extends StatelessWidget {
         value,
         textAlign: TextAlign.center,
         style: Theme.of(context).textTheme.labelMedium?.copyWith(
-          color: colorScheme.onPrimaryContainer,
-          fontWeight: FontWeight.w800,
-        ),
+              color: colorScheme.onPrimaryContainer,
+              fontWeight: FontWeight.w800,
+            ),
       ),
     );
   }
@@ -3094,13 +3171,13 @@ class _DiagRow extends StatelessWidget {
         status == DiagnosticStatus.ok
             ? Icons.check_circle_outline
             : status == DiagnosticStatus.error
-            ? Icons.error_outline
-            : Icons.info_outline,
+                ? Icons.error_outline
+                : Icons.info_outline,
         color: status == DiagnosticStatus.ok
             ? Colors.green
             : status == DiagnosticStatus.error
-            ? Theme.of(context).colorScheme.error
-            : Theme.of(context).colorScheme.primary,
+                ? Theme.of(context).colorScheme.error
+                : Theme.of(context).colorScheme.primary,
         size: 16,
       );
     }
@@ -3134,14 +3211,14 @@ class _DiagRow extends StatelessWidget {
 const _divider = Divider(height: 1, indent: 16, endIndent: 16);
 
 Dio get devDio => Dio(
-  BaseOptions(
-    baseUrl: backendBaseUrl,
-    connectTimeout: const Duration(seconds: 10),
-    receiveTimeout: const Duration(seconds: 15),
-    sendTimeout: const Duration(seconds: 15),
-    headers: const {'Content-Type': 'application/json'},
-  ),
-);
+      BaseOptions(
+        baseUrl: backendBaseUrl,
+        connectTimeout: const Duration(seconds: 10),
+        receiveTimeout: const Duration(seconds: 15),
+        sendTimeout: const Duration(seconds: 15),
+        headers: const {'Content-Type': 'application/json'},
+      ),
+    );
 
 String get backendBaseUrl {
   const configured = String.fromEnvironment('DEV_BACKEND_BASE_URL');
@@ -3153,10 +3230,10 @@ String get backendBaseUrl {
 }
 
 String _themeModeLabel(ThemeMode mode) => switch (mode) {
-  ThemeMode.system => 'System',
-  ThemeMode.light => 'Light',
-  ThemeMode.dark => 'Dark',
-};
+      ThemeMode.system => 'System',
+      ThemeMode.light => 'Light',
+      ThemeMode.dark => 'Dark',
+    };
 
 String platformLabel() {
   if (kIsWeb) return 'Web';

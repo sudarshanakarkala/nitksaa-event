@@ -1,4 +1,3 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
@@ -70,9 +69,15 @@ class _LoginScreenState extends State<LoginScreen> {
       await login();
       if (!mounted) return;
       setState(() {
-        _statusMessage = 'Backend session validated. Opening home...';
+        _statusMessage = _authController.canAccessDeveloperDiagnostics
+            ? 'Backend session validated. Opening diagnostics...'
+            : 'Backend session validated. Opening home...';
       });
-      context.go(AppRoutes.home);
+      context.go(
+        _authController.canAccessDeveloperDiagnostics
+            ? AppRoutes.developer
+            : AppRoutes.home,
+      );
     } catch (error) {
       if (!mounted) return;
       setState(() {
@@ -129,7 +134,32 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 36),
+            const SizedBox(height: 32),
+            AppSecondaryButton(
+              label: _googleLoading ? 'Validating...' : 'Continue with Google',
+              icon: Icons.g_mobiledata,
+              isLoading: _googleLoading,
+              onPressed: (_emailLoading || _googleLoading)
+                  ? null
+                  : _handleGoogleSignIn,
+            ),
+            const SizedBox(height: 18),
+            Row(
+              children: [
+                const Expanded(child: Divider()),
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 12),
+                  child: Text(
+                    'or sign in with email',
+                    style: textTheme.bodyMedium?.copyWith(
+                      color: colorScheme.outline,
+                    ),
+                  ),
+                ),
+                const Expanded(child: Divider()),
+              ],
+            ),
+            const SizedBox(height: 18),
             AppTextField(
               controller: _emailController,
               label: 'Email',
@@ -167,34 +197,8 @@ class _LoginScreenState extends State<LoginScreen> {
               label: 'Sign In',
               isLoading: _emailLoading,
               loadingLabel: 'Signing In',
-              onPressed: (_emailLoading || _googleLoading)
-                  ? null
-                  : _handleEmailLogin,
-            ),
-            const SizedBox(height: 16),
-            Row(
-              children: [
-                const Expanded(child: Divider()),
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12),
-                  child: Text(
-                    'or',
-                    style: textTheme.bodyMedium?.copyWith(
-                      color: colorScheme.outline,
-                    ),
-                  ),
-                ),
-                const Expanded(child: Divider()),
-              ],
-            ),
-            const SizedBox(height: 16),
-            AppSecondaryButton(
-              label: _googleLoading ? 'Validating...' : 'Continue with Google',
-              icon: Icons.g_mobiledata,
-              isLoading: _googleLoading,
-              onPressed: (_emailLoading || _googleLoading)
-                  ? null
-                  : _handleGoogleSignIn,
+              onPressed:
+                  (_emailLoading || _googleLoading) ? null : _handleEmailLogin,
             ),
             const SizedBox(height: 12),
             TextButton.icon(
@@ -213,15 +217,6 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
               ),
             ),
-            if (kDebugMode) ...[
-              const SizedBox(height: 8),
-              Center(
-                child: TextButton(
-                  onPressed: () => context.go(AppRoutes.developer),
-                  child: const Text('Developer Diagnostics'),
-                ),
-              ),
-            ],
           ],
         ),
       ),
@@ -238,9 +233,8 @@ class _LoginStatusBanner extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colorScheme = Theme.of(context).colorScheme;
-    final background = isError
-        ? colorScheme.errorContainer
-        : colorScheme.secondaryContainer;
+    final background =
+        isError ? colorScheme.errorContainer : colorScheme.secondaryContainer;
     final foreground = isError
         ? colorScheme.onErrorContainer
         : colorScheme.onSecondaryContainer;
@@ -265,9 +259,9 @@ class _LoginStatusBanner extends StatelessWidget {
               child: Text(
                 message,
                 style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                  color: foreground,
-                  fontWeight: FontWeight.w600,
-                ),
+                      color: foreground,
+                      fontWeight: FontWeight.w600,
+                    ),
               ),
             ),
           ],

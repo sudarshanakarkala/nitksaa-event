@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter/foundation.dart';
 
+import '../../../core/dev_access_config.dart';
 import '../../../core/logger/app_logger.dart';
 import '../domain/auth_session.dart';
 import 'auth_session_store.dart';
@@ -15,8 +16,8 @@ class AuthController extends ChangeNotifier {
   AuthController._({
     BackendAuthService? backendAuthService,
     AuthSessionStore? sessionStore,
-  }) : _backendAuthService = backendAuthService ?? BackendAuthService(),
-       _sessionStore = sessionStore ?? AuthSessionStore();
+  })  : _backendAuthService = backendAuthService ?? BackendAuthService(),
+        _sessionStore = sessionStore ?? AuthSessionStore();
 
   static final AuthController instance = AuthController._();
 
@@ -36,6 +37,8 @@ class AuthController extends ChangeNotifier {
   bool get isAuthenticating => _status == AuthStatus.authenticating;
   bool get isAuthenticated =>
       _status == AuthStatus.authenticated && _session?.isValid == true;
+  bool get canAccessDeveloperDiagnostics =>
+      DevAccessConfig.canAccessDiagnostics(_session);
 
   Future<void> initialize() async {
     if (_initialized) return;

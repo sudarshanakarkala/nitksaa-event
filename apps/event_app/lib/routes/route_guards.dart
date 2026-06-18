@@ -13,8 +13,7 @@ abstract class RouteGuards {
     final isRoot = location == AppRoutes.root;
     final isSplash = location == AppRoutes.splash;
     final isLogin = location == AppRoutes.login;
-    final isEvents =
-        location == AppRoutes.events ||
+    final isEvents = location == AppRoutes.events ||
         location.startsWith('${AppRoutes.events}/');
     final isFoundation = location == AppRoutes.foundation;
     final isDeveloper = location == AppRoutes.developer;
@@ -26,18 +25,18 @@ abstract class RouteGuards {
       return (isRoot || isSplash || isEvents) ? null : AppRoutes.root;
     }
 
+    if (isDeveloper) {
+      if (!auth.isAuthenticated) return AppRoutes.login;
+      return auth.canAccessDeveloperDiagnostics ? null : AppRoutes.home;
+    }
+
     if (auth.isAuthenticated) {
       if (isLogin || isSplash) return AppRoutes.home;
       return null;
     }
 
     if (isProtected) return AppRoutes.login;
-    if (isRoot ||
-        isSplash ||
-        isLogin ||
-        isEvents ||
-        isFoundation ||
-        isDeveloper) {
+    if (isRoot || isSplash || isLogin || isEvents || isFoundation) {
       return null;
     }
 
