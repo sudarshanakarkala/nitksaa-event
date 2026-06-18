@@ -157,7 +157,7 @@ class _EventListScreenState extends State<EventListScreen>
         padding: const EdgeInsets.all(24),
         physics: const AlwaysScrollableScrollPhysics(),
         itemCount: state.events.length,
-        separatorBuilder: (_, _) => const SizedBox(height: 16),
+        separatorBuilder: (context, child) => const SizedBox(height: 16),
         itemBuilder: (context, index) => _EventCard(
           event: state.events[index],
           onTap: () =>

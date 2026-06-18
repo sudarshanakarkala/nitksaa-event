@@ -94,7 +94,7 @@ Widget _app(PublicEventService service) {
     routes: [
       GoRoute(
         path: '/events',
-        builder: (_, _) => EventListScreen(eventService: service),
+        builder: (context, index) => EventListScreen(eventService: service),
       ),
       GoRoute(
         path: '/events/:eventId',
