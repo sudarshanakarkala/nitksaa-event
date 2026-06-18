@@ -116,6 +116,24 @@ export default function LoginPage() {
 
         {!configError && (
           <>
+            {/* Google sign-in */}
+            <button
+              type="button"
+              className="btn-google"
+              onClick={handleGoogleLogin}
+              disabled={busy}
+            >
+              <GoogleIcon />
+              {gLoading ? 'Signing in with Google…' : 'Continue with Google'}
+            </button>
+
+            {/* Divider */}
+            <div className="login-divider" style={{ marginTop: 16, marginBottom: 16 }}>
+              <span className="login-divider-line" />
+              <span className="login-divider-text">or sign in with email</span>
+              <span className="login-divider-line" />
+            </div>
+
             {/* Email / password form */}
             <form className="login-form" onSubmit={handleEmailLogin} noValidate>
               <div className="login-field">
@@ -152,24 +170,6 @@ export default function LoginPage() {
                 {loading ? 'Signing in…' : 'Sign In'}
               </button>
             </form>
-
-            {/* Divider */}
-            <div className="login-divider" style={{ marginTop: 16, marginBottom: 16 }}>
-              <span className="login-divider-line" />
-              <span className="login-divider-text">or</span>
-              <span className="login-divider-line" />
-            </div>
-
-            {/* Google sign-in */}
-            <button
-              type="button"
-              className="btn-google"
-              onClick={handleGoogleLogin}
-              disabled={busy}
-            >
-              <GoogleIcon />
-              {gLoading ? 'Signing in with Google…' : 'Continue with Google'}
-            </button>
           </>
         )}
       </div>
