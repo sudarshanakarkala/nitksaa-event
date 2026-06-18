@@ -12,8 +12,6 @@ import 'package:event_app/widgets/material/app_primary_button.dart';
 
 
 import 'package:event_app/theme/app_colors.dart';
-import 'package:event_app/theme/theme_provider.dart';
-import 'package:event_app/widgets/shared/theme_toggle.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -105,14 +103,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   Widget _buildMaterialLogin() {
     final colorScheme = Theme.of(context).colorScheme;
     final textTheme = Theme.of(context).textTheme;
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
     return AppScaffold(
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
         title: const Text('Sign In'),
-        actions: [
-          ThemeToggle(onToggle: _toggleTheme),
-        ],
       ),
       body: SafeArea(
         child: Center(
@@ -137,9 +131,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     final bg = isDark ? AppColors.darkBackground : AppColors.lightBackground;
     return CupertinoPageScaffold(
       backgroundColor: bg,
-      navigationBar: CupertinoNavigationBar(
-        middle: const Text('Sign In'),
-        trailing: ThemeToggle(onToggle: _toggleTheme),
+      navigationBar: const CupertinoNavigationBar(
+        middle: Text('Sign In'),
       ),
       child: SafeArea(
         child: Center(
@@ -272,11 +265,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       ),
     ];
   }
-
-  void _toggleTheme() {
-    final notifier = ref.read(themeProvider.notifier);
-    notifier.setTheme(Theme.of(context).brightness == Brightness.dark ? ThemeMode.light : ThemeMode.dark);
-  }}
+}
 
 class _LoginStatusBanner extends StatelessWidget {
   const _LoginStatusBanner({required this.message, required this.isError});

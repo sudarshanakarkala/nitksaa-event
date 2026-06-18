@@ -54,8 +54,8 @@ class App extends ConsumerWidget {
             if (child != null) child,
             // Global theme toggle button in the top-right corner so all screens inherit it
             Positioned(
-              top: MediaQuery.of(context).padding.top + 8,
-              right: 12,
+              bottom: MediaQuery.of(context).padding.bottom + 16,
+              right: 16,
               child: SafeArea(
                 child: Consumer(
                   builder: (context, innerRef, _) {
@@ -63,9 +63,31 @@ class App extends ConsumerWidget {
                     final isDark = mode == ThemeMode.dark || (mode == ThemeMode.system && MediaQuery.of(context).platformBrightness == Brightness.dark);
                     return Material(
                       color: Colors.transparent,
-                      child: IconButton(
-                        icon: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: Colors.orangeAccent),
-                        onPressed: () => innerRef.read(themeProvider.notifier).toggleTheme(),
+                      child: Container(
+                        decoration: BoxDecoration(
+                          color: isDark 
+                              ? Colors.grey[900]?.withOpacity(0.85) 
+                              : Colors.white.withOpacity(0.85),
+                          shape: BoxShape.circle,
+                          border: Border.all(
+                            color: isDark ? Colors.white24 : Colors.black12,
+                            width: 1.5,
+                          ),
+                          boxShadow: [
+                            BoxShadow(
+                              color: Colors.black.withOpacity(0.15),
+                              blurRadius: 8,
+                              offset: const Offset(0, 4),
+                            ),
+                          ],
+                        ),
+                        child: IconButton(
+                          icon: Icon(
+                            isDark ? Icons.light_mode : Icons.dark_mode, 
+                            color: isDark ? Colors.amberAccent : Colors.indigo,
+                          ),
+                          onPressed: () => innerRef.read(themeProvider.notifier).toggleTheme(),
+                        ),
                       ),
                     );
                   },
