@@ -1,57 +1,90 @@
-import json
-from pydantic import BaseModel, Field, EmailStr, field_validator
-from typing import Optional, Dict, Any
+"""Week 3 registration request and response schemas."""
 from datetime import datetime
+from typing import Any, Dict, List, Optional
+
+from pydantic import BaseModel, Field
 
 
-def _parse_jsonb(v: Any) -> Any:
-    """asyncpg returns JSONB columns as raw strings; parse them to Python dicts."""
-    if isinstance(v, str):
-        return json.loads(v)
-    return v
+class RegisterRequest(BaseModel):
+    """Body for POST /events/{event_id}/register.
+
+    All profile data is fetched from alumni_db — the only client-supplied field
+    is the optional attendee note, which is stored in registrations.notes.
+    """
+
+    attendee_note: Optional[str] = Field(None, max_length=500)
 
 
-class RegistrationCreate(BaseModel):
-    full_name: str = Field(..., min_length=2, max_length=255)
-    email: EmailStr
-    firebase_uid: Optional[str] = None
-    ref_id: Optional[str] = None
+class AlumniProfileResponse(BaseModel):
+    """Response for GET /alumni/me."""
+
+    ref_id: str
+    fullname: str
+    email: str
     phone: Optional[str] = None
-    badge_name: Optional[str] = None
-    metadata: Optional[Dict[str, Any]] = {}
+    batch_year: Optional[int] = None
+    branch: Optional[str] = None
+    is_active: bool
+
+
+class EventSummary(BaseModel):
+    """Embedded event summary included in registration responses."""
+
+    event_id: int
+    title: str
+    start_datetime: datetime
+    end_datetime: datetime
+    timezone: str
+    is_virtual: bool
+    location_text: Optional[str] = None
+    location_maps_url: Optional[str] = None
 
 
 class RegistrationResponse(BaseModel):
+    """Full registration detail — used in POST /register, GET /my-registration, GET /my/registrations.
+
+    Field notes:
+      email_snapshot   — maps from registrations.email (alumni email at registration time)
+      phone_snapshot   — maps from registrations.phone
+      attendee_note    — maps from registrations.notes
+      join_url         — only present when user is registered for a published virtual event;
+                         never present in public event APIs
+    """
+
     registration_id: int
+    registration_number: Optional[str] = None
     event_id: int
-    firebase_uid: Optional[str]
-    ref_id: Optional[str]
-    email: Optional[str]
-    full_name: str
+    firebase_uid: str
+    ref_id: Optional[str] = None
     status: str
-    registration_source: str
-    qr_token: Optional[str]
+    fullname_snapshot: Optional[str] = None
+    email_snapshot: Optional[str] = None
+    phone_snapshot: Optional[str] = None
+    batch_year_snapshot: Optional[int] = None
+    branch_snapshot: Optional[str] = None
+    attendee_note: Optional[str] = None
     registered_at: datetime
-    cancelled_at: Optional[datetime]
-    cancel_reason: Optional[str]
-    metadata: Optional[Dict[str, Any]]
-    created_at: datetime
+    cancelled_at: Optional[datetime] = None
+    confirmation_email_status: Optional[str] = None
+    confirmation_email_sent_at: Optional[datetime] = None
+    join_url: Optional[str] = None
+    event: Optional[EventSummary] = None
+    updated_at: Optional[datetime] = None
 
-    @field_validator("metadata", mode="before")
-    @classmethod
-    def parse_metadata(cls, v: Any) -> Any:
-        return _parse_jsonb(v)
+    model_config = {"from_attributes": True}
 
 
-class AttendeeResponse(BaseModel):
-    attendee_id: int
-    registration_id: int
+class RegistrationEligibilityResponse(BaseModel):
+    """Response for GET /events/{event_id}/registration-eligibility."""
+
     event_id: int
-    ref_id: Optional[str]
-    firebase_uid: Optional[str]
-    attendee_type: str
-    display_name: str
-    email: Optional[str]
-    phone: Optional[str]
-    badge_name: Optional[str]
-    created_at: datetime
+    firebase_uid: str
+    eligibility_status: str
+    message: str
+    registered_count: Optional[int] = None
+    capacity: Optional[int] = None
+
+
+class MyRegistrationsListResponse(BaseModel):
+    registrations: List[RegistrationResponse]
+    total: int

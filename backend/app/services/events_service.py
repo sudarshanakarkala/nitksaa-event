@@ -42,15 +42,13 @@ def _compute_registration_status(event: Dict[str, Any]) -> str:
 
 
 def _enrich(d: Dict[str, Any]) -> Dict[str, Any]:
-    d["registered_count"] = 0
+    d.setdefault("registered_count", 0)
     d["registration_status"] = _compute_registration_status(d)
     return d
 
 
 def _with_public_card_metadata(d: Dict[str, Any]) -> Dict[str, Any]:
-    # Week 2 exposes the safe aggregate field expected by public event cards.
-    # Registration integration will replace this placeholder count in Week 3.
-    d["registered_count"] = 0
+    d.setdefault("registered_count", 0)
     d["registration_status"] = _compute_registration_status(d)
     return d
 

@@ -329,11 +329,38 @@ class _SpeakersCard extends StatelessWidget {
             )
           else
             for (final speaker in speakers)
-              ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: const CircleAvatar(child: Icon(Icons.person_outline)),
-                title: Text(speaker.name),
-                subtitle: speaker.title == null ? null : Text(speaker.title!),
+              Padding(
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.center,
+                  children: [
+                    const CircleAvatar(child: Icon(Icons.person_outline)),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            speaker.name,
+                            style: Theme.of(context).textTheme.bodyLarge,
+                          ),
+                          if (speaker.title != null)
+                            Text(
+                              speaker.title!,
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodyMedium
+                                  ?.copyWith(
+                                    color: Theme.of(context)
+                                        .colorScheme
+                                        .onSurfaceVariant,
+                                  ),
+                            ),
+                        ],
+                      ),
+                    ),
+                  ],
+                ),
               ),
         ],
       ),

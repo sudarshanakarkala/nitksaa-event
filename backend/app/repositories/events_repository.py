@@ -5,7 +5,9 @@ from app.schemas.event_create import EventCreate
 
 
 _SELECT_WITH_CREATOR = """
-    SELECT e.*, u.fullname AS created_by_name
+    SELECT e.*, u.fullname AS created_by_name,
+           (SELECT COUNT(*) FROM registrations r
+            WHERE r.event_id = e.event_id AND r.status = 'registered') AS registered_count
     FROM events e
     LEFT JOIN event_users u ON u.firebase_uid = e.created_by_firebase_uid
 """
@@ -17,7 +19,9 @@ _PUBLIC_COLUMNS = """
     e.thumbnail_url, e.banner_url, e.capacity,
     e.show_attendee_list,
     e.registration_opens_at, e.registration_closes_at,
-    e.published_at
+    e.published_at,
+    (SELECT COUNT(*) FROM registrations r
+     WHERE r.event_id = e.event_id AND r.status = 'registered') AS registered_count
 """
 
 

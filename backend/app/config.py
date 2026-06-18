@@ -34,6 +34,16 @@ class Settings(BaseSettings):
         alias="FIREBASE_PROJECT_ID",
     )
 
+    # Email
+    email_mode: str = Field("log", alias="EMAIL_MODE")
+    email_from: Optional[str] = Field(None, alias="EMAIL_FROM")
+    email_reply_to: Optional[str] = Field(None, alias="EMAIL_REPLY_TO")
+    smtp_host: str = Field("smtp.gmail.com", alias="SMTP_HOST")
+    smtp_port: int = Field(587, alias="SMTP_PORT")
+    smtp_user: Optional[str] = Field(None, alias="SMTP_USER")
+    smtp_password: Optional[str] = Field(None, alias="SMTP_PASSWORD")
+    app_public_base_url: str = Field("http://localhost:8000", alias="APP_PUBLIC_BASE_URL")
+
     @property
     def events_db_dsn(self) -> str:
         if self.events_db_url:
@@ -60,6 +70,7 @@ class Settings(BaseSettings):
         env_file = _ENV_FILE
         env_file_encoding = "utf-8"
         populate_by_name = True
+        extra = "ignore"
 
 
 @lru_cache
