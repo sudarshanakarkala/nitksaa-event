@@ -48,6 +48,33 @@ class App extends ConsumerWidget {
       darkTheme: AppTheme.dark,
       themeMode: themeMode,
       routerConfig: AppRouter.router,
+      builder: (context, child) {
+        return Stack(
+          children: [
+            if (child != null) child,
+            // Global theme toggle button in the top-right corner so all screens inherit it
+            Positioned(
+              top: MediaQuery.of(context).padding.top + 8,
+              right: 12,
+              child: SafeArea(
+                child: Consumer(
+                  builder: (context, innerRef, _) {
+                    final mode = innerRef.watch(themeProvider);
+                    final isDark = mode == ThemeMode.dark || (mode == ThemeMode.system && MediaQuery.of(context).platformBrightness == Brightness.dark);
+                    return Material(
+                      color: Colors.transparent,
+                      child: IconButton(
+                        icon: Icon(isDark ? Icons.dark_mode : Icons.light_mode, color: Colors.orangeAccent),
+                        onPressed: () => innerRef.read(themeProvider.notifier).toggleTheme(),
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ),
+          ],
+        );
+      },
     );
   }
 }
