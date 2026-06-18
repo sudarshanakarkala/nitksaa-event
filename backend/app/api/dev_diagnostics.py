@@ -559,3 +559,582 @@ async def run_event_management_diagnostics(
         "run_by": user["firebase_uid"],
         "run_at": run_ts.isoformat() + "Z",
     }
+
+
+# ── Registration Flow Diagnostics ─────────────────────────────────────────────
+
+
+@router.get("/registrations")
+async def run_registration_diagnostics(
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """Run Registration Flow diagnostics. Development mode only."""
+    from app.schemas.event_create import EventCreate
+    from app.schemas.event_status import EventStatusUpdate
+    from app.schemas.registrations import RegisterRequest
+    from app.services import alumni_service, registration_service
+    from app.services.events_service import EventsService
+
+    pool = await get_pool()
+    results: List[Dict[str, Any]] = []
+    run_ts = datetime.utcnow()
+    ts_key = run_ts.strftime("%Y%m%d%H%M%S")
+    actor: Dict[str, Any] = {"firebase_uid": user["firebase_uid"]}
+    start_dt = run_ts + timedelta(days=30)
+    end_dt = start_dt + timedelta(hours=2)
+    test_title_v = f"DIAG_REG_VIRTUAL_{ts_key}"
+    test_title_c = f"DIAG_REG_CAP_{ts_key}"
+
+    test_virtual_event_id: Optional[int] = None
+    test_cap_event_id: Optional[int] = None
+    test_registration_id: Optional[int] = None
+
+    is_alumni = user.get("user_type") == "alumni" and bool(user.get("ref_id"))
+
+    # ── Diag 1: Alumni Profile ────────────────────────────────────────────────
+    t0 = time.monotonic()
+    if is_alumni:
+        try:
+            profile = await alumni_service.get_alumni_profile_by_ref_id(user["ref_id"])
+            ms = int((time.monotonic() - t0) * 1000)
+            if profile:
+                active = alumni_service.is_alumni_active(profile.get("registrationstatus"))
+                results.append(_diag_entry(
+                    "Alumni Profile", "/api/v1/alumni/me", "GET", True,
+                    {"ref_id": user["ref_id"]},
+                    {
+                        "fullname": profile.get("fullname"),
+                        "is_active": active,
+                        "registrationstatus": profile.get("registrationstatus"),
+                    },
+                    active, ms,
+                    None if active else "Alumni profile found but not active",
+                ))
+            else:
+                results.append(_diag_entry(
+                    "Alumni Profile", "/api/v1/alumni/me", "GET", True,
+                    {"ref_id": user["ref_id"]}, {}, False, ms, "alumni_profile_not_found",
+                ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Alumni Profile", "/api/v1/alumni/me", "GET", True,
+                {"ref_id": user["ref_id"]}, {}, False, ms, str(exc),
+            ))
+    else:
+        results.append(_diag_entry(
+            "Alumni Profile", "/api/v1/alumni/me", "GET", True,
+            {"user_type": user.get("user_type")}, {}, False, 0,
+            "skipped: user is not alumni or has no ref_id",
+        ))
+
+    # ── Test event setup ──────────────────────────────────────────────────────
+    async with pool.acquire() as conn:
+        svc = EventsService(conn)
+
+        # Virtual event for registration + join_url tests
+        t0 = time.monotonic()
+        try:
+            v_data = EventCreate(
+                title=test_title_v,
+                description="Dev diagnostic test virtual event. Safe to ignore.",
+                start_datetime=start_dt,
+                end_datetime=end_dt,
+                timezone="Asia/Kolkata",
+                is_virtual=True,
+                virtual_url="https://meet.example.com/dev-diagnostic-test",
+                capacity=5,
+            )
+            created_v = await svc.create_event(v_data, actor)
+            test_virtual_event_id = created_v["event_id"]
+            await svc.update_status(
+                test_virtual_event_id,
+                EventStatusUpdate(status="published"),
+                actor,
+            )
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Test Virtual Event Setup", "/api/v1/events (diagnostic)", "POST", True,
+                {"title": test_title_v, "is_virtual": True, "capacity": 5},
+                {"event_id": test_virtual_event_id, "status": "published"},
+                True, ms,
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Test Virtual Event Setup", "/api/v1/events (diagnostic)", "POST", True,
+                {"title": test_title_v}, {}, False, ms, str(exc),
+            ))
+
+        # Capacity-guard event (capacity=1, in-person)
+        t0 = time.monotonic()
+        try:
+            c_data = EventCreate(
+                title=test_title_c,
+                description="Dev diagnostic capacity guard test. Safe to ignore.",
+                start_datetime=start_dt,
+                end_datetime=end_dt,
+                timezone="Asia/Kolkata",
+                is_virtual=False,
+                location_text="Diagnostic Test Location",
+                capacity=1,
+            )
+            created_c = await svc.create_event(c_data, actor)
+            test_cap_event_id = created_c["event_id"]
+            await svc.update_status(
+                test_cap_event_id,
+                EventStatusUpdate(status="published"),
+                actor,
+            )
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Test Capacity Event Setup", "/api/v1/events (diagnostic)", "POST", True,
+                {"title": test_title_c, "capacity": 1},
+                {"event_id": test_cap_event_id, "status": "published"},
+                True, ms,
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Test Capacity Event Setup", "/api/v1/events (diagnostic)", "POST", True,
+                {"title": test_title_c}, {}, False, ms, str(exc),
+            ))
+
+    # ── Diag 2: Registration Eligibility ──────────────────────────────────────
+    t0 = time.monotonic()
+    if test_virtual_event_id is not None and is_alumni:
+        try:
+            elig = await registration_service.get_registration_eligibility(
+                test_virtual_event_id, user
+            )
+            ms = int((time.monotonic() - t0) * 1000)
+            passed = elig.eligibility_status == "eligible"
+            results.append(_diag_entry(
+                "Registration Eligibility",
+                f"/api/v1/events/{test_virtual_event_id}/registration-eligibility",
+                "GET", True,
+                {"event_id": test_virtual_event_id},
+                {"eligibility_status": elig.eligibility_status, "message": elig.message},
+                passed, ms,
+                None if passed else f"Not eligible: {elig.eligibility_status} — {elig.message}",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Registration Eligibility",
+                f"/api/v1/events/{test_virtual_event_id}/registration-eligibility",
+                "GET", True,
+                {"event_id": test_virtual_event_id}, {}, False, ms, str(exc),
+            ))
+    else:
+        results.append(_diag_entry(
+            "Registration Eligibility",
+            "/api/v1/events/{event_id}/registration-eligibility", "GET", True,
+            {}, {}, False, 0, "skipped: no test event or user is not alumni",
+        ))
+
+    # ── Diag 3: Register for Event ─────────────────────────────────────────────
+    t0 = time.monotonic()
+    if test_virtual_event_id is not None and is_alumni:
+        try:
+            body = RegisterRequest(attendee_note="Dev diagnostic auto-registration — safe to ignore")
+            reg = await registration_service.register_for_event(
+                test_virtual_event_id, user, body
+            )
+            test_registration_id = reg.registration_id
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Register for Event",
+                f"/api/v1/events/{test_virtual_event_id}/register",
+                "POST", True,
+                {"event_id": test_virtual_event_id, "user": user.get("email")},
+                {
+                    "registration_id": reg.registration_id,
+                    "registration_number": reg.registration_number,
+                    "status": reg.status,
+                    "confirmation_email_status": reg.confirmation_email_status,
+                },
+                True, ms,
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Register for Event",
+                f"/api/v1/events/{test_virtual_event_id}/register",
+                "POST", True,
+                {"event_id": test_virtual_event_id}, {}, False, ms, str(exc),
+            ))
+    else:
+        results.append(_diag_entry(
+            "Register for Event", "/api/v1/events/{event_id}/register", "POST", True,
+            {}, {}, False, 0, "skipped: no test event or user is not alumni",
+        ))
+
+    # ── Diag 4: My Registration (also verifies join_url for virtual event) ────
+    t0 = time.monotonic()
+    if test_virtual_event_id is not None and test_registration_id is not None:
+        try:
+            my_reg = await registration_service.get_my_event_registration(
+                test_virtual_event_id, user
+            )
+            ms = int((time.monotonic() - t0) * 1000)
+            join_url_present = my_reg.join_url is not None
+            passed = my_reg.status == "registered" and join_url_present
+            results.append(_diag_entry(
+                "My Registration",
+                f"/api/v1/events/{test_virtual_event_id}/my-registration",
+                "GET", True,
+                {"event_id": test_virtual_event_id},
+                {
+                    "status": my_reg.status,
+                    "registration_number": my_reg.registration_number,
+                    "join_url_present": join_url_present,
+                },
+                passed, ms,
+                None if passed else (
+                    f"Expected status=registered + join_url; "
+                    f"got status={my_reg.status} join_url={'present' if join_url_present else 'absent'}"
+                ),
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "My Registration",
+                f"/api/v1/events/{test_virtual_event_id}/my-registration",
+                "GET", True,
+                {"event_id": test_virtual_event_id}, {}, False, ms, str(exc),
+            ))
+    else:
+        results.append(_diag_entry(
+            "My Registration", "/api/v1/events/{event_id}/my-registration", "GET", True,
+            {}, {}, False, 0, "skipped: registration not created",
+        ))
+
+    # ── Diag 5: My Registrations List ─────────────────────────────────────────
+    t0 = time.monotonic()
+    if test_registration_id is not None:
+        try:
+            my_list = await registration_service.list_my_registrations(user)
+            ms = int((time.monotonic() - t0) * 1000)
+            found = any(r.registration_id == test_registration_id for r in my_list.registrations)
+            results.append(_diag_entry(
+                "My Registrations List", "/api/v1/my/registrations", "GET", True,
+                {},
+                {"total": my_list.total, "test_registration_found": found},
+                found, ms,
+                None if found else "Test registration not found in list",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "My Registrations List", "/api/v1/my/registrations", "GET", True,
+                {}, {}, False, ms, str(exc),
+            ))
+    else:
+        results.append(_diag_entry(
+            "My Registrations List", "/api/v1/my/registrations", "GET", True,
+            {}, {}, False, 0, "skipped: registration not created",
+        ))
+
+    # ── Diag 6: Duplicate Registration Guard ──────────────────────────────────
+    t0 = time.monotonic()
+    if test_virtual_event_id is not None and test_registration_id is not None:
+        try:
+            body2 = RegisterRequest(attendee_note="Duplicate guard test — should be rejected")
+            await registration_service.register_for_event(test_virtual_event_id, user, body2)
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Duplicate Registration Guard",
+                f"/api/v1/events/{test_virtual_event_id}/register",
+                "POST", True,
+                {"event_id": test_virtual_event_id},
+                {}, False, ms,
+                "Expected 409 already_registered but second registration succeeded",
+            ))
+        except HTTPException as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            passed = exc.status_code == 409 and exc.detail == "already_registered"
+            results.append(_diag_entry(
+                "Duplicate Registration Guard",
+                f"/api/v1/events/{test_virtual_event_id}/register",
+                "POST", True,
+                {"event_id": test_virtual_event_id},
+                {"status_code": exc.status_code, "detail": exc.detail},
+                passed, ms,
+                None if passed else f"Expected 409 already_registered, got {exc.status_code} {exc.detail}",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Duplicate Registration Guard",
+                f"/api/v1/events/{test_virtual_event_id}/register",
+                "POST", True,
+                {}, {}, False, ms, str(exc),
+            ))
+    else:
+        results.append(_diag_entry(
+            "Duplicate Registration Guard",
+            "/api/v1/events/{event_id}/register", "POST", True,
+            {}, {}, False, 0, "skipped: no base registration to test against",
+        ))
+
+    # ── Diag 7: Capacity Guard ────────────────────────────────────────────────
+    t0 = time.monotonic()
+    if test_cap_event_id is not None and is_alumni:
+        filler_uid = f"diag_cap_filler_{ts_key}"
+        async with pool.acquire() as conn:
+            try:
+                # registrations.firebase_uid has a FK to event_users — insert a
+                # temporary event_users row so the filler registration passes the constraint
+                await conn.execute(
+                    """
+                    INSERT INTO event_users
+                        (firebase_uid, email, fullname, user_type)
+                    VALUES ($1, $2, $3, 'other')
+                    ON CONFLICT (firebase_uid) DO NOTHING
+                    """,
+                    filler_uid, "capfiller@dev.internal", "Capacity Filler (Dev Diag)",
+                )
+                await conn.execute(
+                    """
+                    INSERT INTO registrations
+                        (event_id, firebase_uid, status, email, phone,
+                         fullname_snapshot, batch_year_snapshot, branch_snapshot,
+                         notes, registered_at, confirmation_email_status)
+                    VALUES ($1, $2, 'registered', $3, $4, $5, $6, $7, $8, NOW(), 'skipped')
+                    """,
+                    test_cap_event_id, filler_uid,
+                    "capfiller@dev.internal", "0000000000",
+                    "Capacity Filler (Dev Diag)", 2000, "Diagnostics", None,
+                )
+                body3 = RegisterRequest(attendee_note="Capacity guard test — should fail event_full")
+                try:
+                    await registration_service.register_for_event(test_cap_event_id, user, body3)
+                    ms = int((time.monotonic() - t0) * 1000)
+                    results.append(_diag_entry(
+                        "Capacity Guard",
+                        f"/api/v1/events/{test_cap_event_id}/register",
+                        "POST", True,
+                        {"event_id": test_cap_event_id, "capacity": 1},
+                        {}, False, ms,
+                        "Expected 409 event_full but registration succeeded (capacity guard not working)",
+                    ))
+                except HTTPException as exc:
+                    ms = int((time.monotonic() - t0) * 1000)
+                    passed = exc.status_code == 409 and exc.detail == "event_full"
+                    results.append(_diag_entry(
+                        "Capacity Guard",
+                        f"/api/v1/events/{test_cap_event_id}/register",
+                        "POST", True,
+                        {"event_id": test_cap_event_id, "capacity": 1},
+                        {"status_code": exc.status_code, "detail": exc.detail},
+                        passed, ms,
+                        None if passed else f"Expected 409 event_full, got {exc.status_code} {exc.detail}",
+                    ))
+                except Exception as exc:
+                    ms = int((time.monotonic() - t0) * 1000)
+                    results.append(_diag_entry(
+                        "Capacity Guard",
+                        f"/api/v1/events/{test_cap_event_id}/register",
+                        "POST", True,
+                        {}, {}, False, ms, str(exc),
+                    ))
+            finally:
+                # Always clean up filler registration and the temp event_users row
+                try:
+                    await conn.execute(
+                        "DELETE FROM registrations WHERE event_id=$1 AND firebase_uid=$2",
+                        test_cap_event_id, filler_uid,
+                    )
+                except Exception:
+                    pass
+                try:
+                    await conn.execute(
+                        "DELETE FROM event_users WHERE firebase_uid=$1",
+                        filler_uid,
+                    )
+                except Exception:
+                    pass
+    else:
+        results.append(_diag_entry(
+            "Capacity Guard", "/api/v1/events/{event_id}/register", "POST", True,
+            {}, {}, False, 0, "skipped: no capacity test event or user is not alumni",
+        ))
+
+    # ── Diag 8: Join Link Visibility ──────────────────────────────────────────
+    t0 = time.monotonic()
+    if test_registration_id is not None and test_virtual_event_id is not None:
+        try:
+            join_reg = await registration_service.get_my_event_registration(
+                test_virtual_event_id, user
+            )
+            ms = int((time.monotonic() - t0) * 1000)
+            join_url = join_reg.join_url
+            passed = join_url is not None
+            results.append(_diag_entry(
+                "Join Link Visibility",
+                f"/api/v1/events/{test_virtual_event_id}/my-registration",
+                "GET", True,
+                {"event_id": test_virtual_event_id, "is_virtual": True, "status": "registered"},
+                {
+                    "join_url_present": passed,
+                    "join_url_prefix": join_url[:50] if join_url else None,
+                },
+                passed, ms,
+                None if passed else "join_url was None for virtual+published+registered event",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Join Link Visibility",
+                f"/api/v1/events/{test_virtual_event_id}/my-registration",
+                "GET", True,
+                {}, {}, False, ms, str(exc),
+            ))
+    else:
+        results.append(_diag_entry(
+            "Join Link Visibility",
+            "/api/v1/events/{event_id}/my-registration", "GET", True,
+            {}, {}, False, 0, "skipped: no registration",
+        ))
+
+    # ── Diag 9: Confirmation Email Status ─────────────────────────────────────
+    t0 = time.monotonic()
+    if test_registration_id is not None:
+        async with pool.acquire() as conn:
+            try:
+                row = await conn.fetchrow(
+                    """
+                    SELECT confirmation_email_status, confirmation_email_sent_at
+                    FROM registrations WHERE registration_id = $1
+                    """,
+                    test_registration_id,
+                )
+                ms = int((time.monotonic() - t0) * 1000)
+                email_status = row["confirmation_email_status"] if row else None
+                passed = email_status in ("sent", "failed")
+                results.append(_diag_entry(
+                    "Confirmation Email Status",
+                    "registrations (DB direct)", "DB", False,
+                    {"registration_id": test_registration_id},
+                    {
+                        "confirmation_email_status": email_status,
+                        "sent_at": _serialize(row["confirmation_email_sent_at"]) if row else None,
+                    },
+                    passed, ms,
+                    None if passed else f"Expected sent/failed, got {email_status!r}",
+                ))
+            except Exception as exc:
+                ms = int((time.monotonic() - t0) * 1000)
+                results.append(_diag_entry(
+                    "Confirmation Email Status", "registrations (DB direct)", "DB", False,
+                    {}, {}, False, ms, str(exc),
+                ))
+    else:
+        results.append(_diag_entry(
+            "Confirmation Email Status", "registrations (DB direct)", "DB", False,
+            {}, {}, False, 0, "skipped: no registration",
+        ))
+
+    # ── Diag 10: Audit Log Check ──────────────────────────────────────────────
+    t0 = time.monotonic()
+    if test_registration_id is not None:
+        async with pool.acquire() as conn:
+            try:
+                audit_row = await conn.fetchrow(
+                    """
+                    SELECT log_id, event_type, actor_uid, created_at
+                    FROM event_audit_log
+                    WHERE entity_type = 'registration'
+                      AND entity_id = $1
+                    ORDER BY created_at DESC LIMIT 1
+                    """,
+                    test_registration_id,
+                )
+                ms = int((time.monotonic() - t0) * 1000)
+                found = audit_row is not None
+                results.append(_diag_entry(
+                    "Audit Log Check",
+                    "event_audit_log (DB direct)", "DB", False,
+                    {"entity_type": "registration", "entity_id": test_registration_id},
+                    {
+                        "found": found,
+                        "event_type": audit_row["event_type"] if audit_row else None,
+                        "actor_uid": audit_row["actor_uid"] if audit_row else None,
+                    },
+                    found, ms,
+                    None if found else "No audit_log row found for registration — audit.emit() may have failed silently",
+                ))
+            except Exception as exc:
+                ms = int((time.monotonic() - t0) * 1000)
+                results.append(_diag_entry(
+                    "Audit Log Check", "event_audit_log (DB direct)", "DB", False,
+                    {}, {}, False, ms, str(exc),
+                ))
+    else:
+        results.append(_diag_entry(
+            "Audit Log Check", "event_audit_log (DB direct)", "DB", False,
+            {}, {}, False, 0, "skipped: no registration",
+        ))
+
+    # ── Diag 11: Public API Leak Check (virtual_url must not appear) ──────────
+    t0 = time.monotonic()
+    if test_virtual_event_id is not None:
+        async with pool.acquire() as conn:
+            svc2 = EventsService(conn)
+            try:
+                pub_event = await svc2.get_public_event(test_virtual_event_id)
+                ms = int((time.monotonic() - t0) * 1000)
+                forbidden = ["virtual_url", "created_by_firebase_uid"]
+                leaked = [f for f in forbidden if f in pub_event]
+                passed = len(leaked) == 0
+                results.append(_diag_entry(
+                    "Public API Leak Check",
+                    f"/api/v1/events/public/{test_virtual_event_id}", "GET", False,
+                    {"event_id": test_virtual_event_id, "forbidden_fields": forbidden},
+                    {"forbidden_fields_leaked": leaked if leaked else "none"},
+                    passed, ms,
+                    None if passed else f"Forbidden fields in public response: {leaked}",
+                ))
+            except Exception as exc:
+                ms = int((time.monotonic() - t0) * 1000)
+                results.append(_diag_entry(
+                    "Public API Leak Check",
+                    f"/api/v1/events/public/{test_virtual_event_id}", "GET", False,
+                    {}, {}, False, ms, str(exc),
+                ))
+    else:
+        results.append(_diag_entry(
+            "Public API Leak Check",
+            "/api/v1/events/public/{event_id}", "GET", False,
+            {}, {}, False, 0, "skipped: no test virtual event",
+        ))
+
+    # ── Cleanup: cancel test events ───────────────────────────────────────────
+    async with pool.acquire() as conn:
+        svc3 = EventsService(conn)
+        for eid in [test_virtual_event_id, test_cap_event_id]:
+            if eid is not None:
+                try:
+                    await svc3.update_status(
+                        eid, EventStatusUpdate(status="cancelled"), actor
+                    )
+                except Exception:
+                    pass
+
+    passed_count = sum(1 for r in results if r["status"] == "PASS")
+    failed_count = sum(1 for r in results if r["status"] == "FAIL")
+
+    return {
+        "status": "ok",
+        "category": "Registration Flow",
+        "total": len(results),
+        "passed": passed_count,
+        "failed": failed_count,
+        "test_virtual_event_id": test_virtual_event_id,
+        "test_registration_id": test_registration_id,
+        "is_alumni_user": is_alumni,
+        "results": results,
+        "run_by": user["firebase_uid"],
+        "run_at": run_ts.isoformat() + "Z",
+    }

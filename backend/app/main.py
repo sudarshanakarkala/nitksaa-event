@@ -3,7 +3,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.database import get_pool, close_pool
-from app.api import health, events, admin_events, auth, dev_diagnostics
+from app.api import health, events, admin_events, auth, dev_diagnostics, alumni, registrations
 
 
 @asynccontextmanager
@@ -42,3 +42,5 @@ app.include_router(events.router)
 app.include_router(admin_events.router)
 app.include_router(auth.router)
 app.include_router(dev_diagnostics.router)
+app.include_router(alumni.router)
+app.include_router(registrations.router)

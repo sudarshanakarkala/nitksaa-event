@@ -4,10 +4,8 @@ from fastapi import APIRouter, Depends, Query
 from app.database import get_pool
 from app.middleware.dev_auth import get_admin_user
 from app.services.event_service import EventService
-from app.services.registration_service import RegistrationService
 from app.services.checkin_service import CheckInService
 from app.schemas.events import EventCreate, EventUpdate, EventResponse, SessionCreate, SessionResponse
-from app.schemas.registrations import RegistrationResponse, AttendeeResponse
 from app.schemas.checkins import CheckInCreate, CheckInResponse, CheckInAttemptResponse, QRVerifyResponse
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
@@ -90,30 +88,25 @@ async def create_session(
         return dict(session)
 
 
-# ── Registrations & Attendees ─────────────────────────────────────────────────
+# ── Registrations & Attendees (admin) ────────────────────────────────────────
+# Not yet implemented in Week 3 — registration management is Phase 2 alumni-side only.
 
-@router.get("/events/{event_id}/registrations", response_model=List[RegistrationResponse])
+@router.get("/events/{event_id}/registrations")
 async def list_registrations(
     event_id: int,
     user: Dict[str, Any] = Depends(get_admin_user),
 ):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        svc = RegistrationService(conn)
-        regs = await svc.list_registrations(event_id)
-        return [dict(r) for r in regs]
+    from fastapi import HTTPException
+    raise HTTPException(status_code=501, detail="admin_registration_list_not_implemented")
 
 
-@router.get("/events/{event_id}/attendees", response_model=List[AttendeeResponse])
+@router.get("/events/{event_id}/attendees")
 async def list_attendees(
     event_id: int,
     user: Dict[str, Any] = Depends(get_admin_user),
 ):
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        svc = RegistrationService(conn)
-        attendees = await svc.list_attendees(event_id)
-        return [dict(a) for a in attendees]
+    from fastapi import HTTPException
+    raise HTTPException(status_code=501, detail="admin_attendee_list_not_implemented")
 
 
 # ── Check-In ──────────────────────────────────────────────────────────────────
