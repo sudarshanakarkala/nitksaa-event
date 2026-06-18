@@ -15,6 +15,7 @@ _PUBLIC_COLUMNS = """
     e.status, e.start_datetime, e.end_datetime, e.timezone,
     e.location_text, e.location_maps_url, e.is_virtual,
     e.thumbnail_url, e.banner_url, e.capacity,
+    e.show_attendee_list,
     e.registration_opens_at, e.registration_closes_at,
     e.published_at
 """
@@ -46,7 +47,8 @@ class EventsRepository:
                 location_text, location_maps_url,
                 is_virtual, virtual_url,
                 thumbnail_url, banner_url,
-                capacity, registration_opens_at, registration_closes_at,
+                capacity, show_attendee_list,
+                registration_opens_at, registration_closes_at,
                 created_by_firebase_uid, status
             ) VALUES (
                 $1, $2, $3, $4,
@@ -54,8 +56,9 @@ class EventsRepository:
                 $8, $9,
                 $10, $11,
                 $12, $13,
-                $14, $15, $16,
-                $17, 'draft'
+                $14, $15,
+                $16, $17,
+                $18, 'draft'
             ) RETURNING event_id
             """,
             slug,
@@ -72,6 +75,7 @@ class EventsRepository:
             data.thumbnail_url,
             data.banner_url,
             data.capacity,
+            data.show_attendee_list,
             data.registration_opens_at,
             data.registration_closes_at,
             firebase_uid,

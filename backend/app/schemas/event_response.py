@@ -20,6 +20,7 @@ class EventResponse(BaseModel):
     thumbnail_url: Optional[str] = None
     banner_url: Optional[str] = None
     capacity: Optional[int] = None
+    show_attendee_list: bool = False
     registration_opens_at: Optional[datetime] = None
     registration_closes_at: Optional[datetime] = None
     registered_count: int = 0
@@ -51,6 +52,7 @@ class PublicEventResponse(BaseModel):
     thumbnail_url: Optional[str] = None
     banner_url: Optional[str] = None
     capacity: Optional[int] = None
+    show_attendee_list: bool = False
     registered_count: int = 0
     registration_status: str
     published_at: Optional[datetime] = None
