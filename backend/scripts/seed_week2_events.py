@@ -10,6 +10,10 @@ NOTE: The seed plan referenced 'registration_open' and 'archived' statuses.
       Events 5-6 (plan: registration_open) → published
       Events 9-10 (plan: archived)         → completed
 
+      Week 2 public APIs expose registered_count as an aggregate field, but the
+      event service keeps it at 0 until Week 3 registration integration is
+      connected. This script does not create fake attendee PII.
+
 Usage (from repo root):
     cd backend
     python scripts/seed_week2_events.py
@@ -31,6 +35,49 @@ load_dotenv(Path(__file__).parent.parent / ".env")
 
 EVENTS_DB_URL = os.getenv("EVENTS_DB_URL", "postgresql://ananth@localhost:5432/events_db")
 SEED_UID      = "seed-admin-firebase-uid"  # dev placeholder — no real Firebase user needed
+
+IMAGE_URLS = {
+    "breakfast": {
+        "thumbnail": "https://placehold.co/480x270/f7efe2/47321f?text=Breakfast+Club",
+        "banner": "https://placehold.co/1280x480/f7efe2/47321f?text=Breakfast+Club+Bangalore",
+    },
+    "ai": {
+        "thumbnail": "https://placehold.co/480x270/e8f0ff/12324a?text=AI+Webinar",
+        "banner": "https://placehold.co/1280x480/e8f0ff/12324a?text=Webinar+on+AI",
+    },
+    "startup": {
+        "thumbnail": "https://placehold.co/480x270/ecfdf3/163522?text=Startup+Meetup",
+        "banner": "https://placehold.co/1280x480/ecfdf3/163522?text=NITK+Startup+Meetup",
+    },
+    "global": {
+        "thumbnail": "https://placehold.co/480x270/edf2ff/26346b?text=Global+Connect",
+        "banner": "https://placehold.co/1280x480/edf2ff/26346b?text=Global+Alumni+Connect",
+    },
+    "ev": {
+        "thumbnail": "https://placehold.co/480x270/e6f7f1/0f3b2e?text=EV+Innovation",
+        "banner": "https://placehold.co/1280x480/e6f7f1/0f3b2e?text=EV+Innovation+Summit",
+    },
+    "women": {
+        "thumbnail": "https://placehold.co/480x270/f8e8f2/4a1735?text=Women+Engineering",
+        "banner": "https://placehold.co/1280x480/f8e8f2/4a1735?text=Women+in+Engineering",
+    },
+    "sports": {
+        "thumbnail": "https://placehold.co/480x270/e8f5ff/17324a?text=Sports+Meet",
+        "banner": "https://placehold.co/1280x480/e8f5ff/17324a?text=Sports+Meet+2026",
+    },
+    "leadership": {
+        "thumbnail": "https://placehold.co/480x270/f1edff/2f235f?text=Tech+Leadership",
+        "banner": "https://placehold.co/1280x480/f1edff/2f235f?text=Tech+Leadership+Forum",
+    },
+    "reunion": {
+        "thumbnail": "https://placehold.co/480x270/fff4df/4a2d0f?text=NITKonnect",
+        "banner": "https://placehold.co/1280x480/fff4df/4a2d0f?text=NITKonnect+2025",
+    },
+    "entrepreneurship": {
+        "thumbnail": "https://placehold.co/480x270/eaf7ff/14364a?text=Entrepreneurship",
+        "banner": "https://placehold.co/1280x480/eaf7ff/14364a?text=Entrepreneurship+Workshop",
+    },
+}
 
 _now = datetime.now(timezone.utc)
 
@@ -66,6 +113,8 @@ EVENTS = [
         "is_virtual":    False,
         "location_text": "The Leela Palace, Bangalore",
         "capacity":      30,
+        "thumbnail_url": IMAGE_URLS["breakfast"]["thumbnail"],
+        "banner_url":    IMAGE_URLS["breakfast"]["banner"],
         "start_days":    15,
         "hours":         3,
     },
@@ -78,6 +127,8 @@ EVENTS = [
         "is_virtual":  True,
         "virtual_url": "https://meet.google.com/nitk-ai-webinar",
         "capacity":    100,
+        "thumbnail_url": IMAGE_URLS["ai"]["thumbnail"],
+        "banner_url":    IMAGE_URLS["ai"]["banner"],
         "start_days":  20,
         "hours":       2,
     },
@@ -90,6 +141,8 @@ EVENTS = [
         "is_virtual":    False,
         "location_text": "NASSCOM 10000 Startups Hub, Bangalore",
         "capacity":      50,
+        "thumbnail_url": IMAGE_URLS["startup"]["thumbnail"],
+        "banner_url":    IMAGE_URLS["startup"]["banner"],
         "start_days":    30,
         "hours":         4,
     },
@@ -102,6 +155,8 @@ EVENTS = [
         "is_virtual":  True,
         "virtual_url": "https://meet.google.com/nitk-global-connect",
         "capacity":    500,
+        "thumbnail_url": IMAGE_URLS["global"]["thumbnail"],
+        "banner_url":    IMAGE_URLS["global"]["banner"],
         "start_days":  45,
         "hours":       2,
     },
@@ -114,6 +169,8 @@ EVENTS = [
         "is_virtual":    False,
         "location_text": "ITC Grand Chola, Chennai",
         "capacity":      200,
+        "thumbnail_url": IMAGE_URLS["ev"]["thumbnail"],
+        "banner_url":    IMAGE_URLS["ev"]["banner"],
         "start_days":    10,
         "hours":         8,
     },
@@ -126,6 +183,8 @@ EVENTS = [
         "is_virtual":  True,
         "virtual_url": "https://meet.google.com/nitk-women-eng",
         "capacity":    150,
+        "thumbnail_url": IMAGE_URLS["women"]["thumbnail"],
+        "banner_url":    IMAGE_URLS["women"]["banner"],
         "start_days":  25,
         "hours":       3,
     },
@@ -138,6 +197,8 @@ EVENTS = [
         "is_virtual":       False,
         "location_text":    "NITK Surathkal Campus",
         "capacity":         300,
+        "thumbnail_url":    IMAGE_URLS["sports"]["thumbnail"],
+        "banner_url":       IMAGE_URLS["sports"]["banner"],
         "start_days":       60,
         "hours":            8,
         "cancelled_reason": "Venue unavailable",
@@ -151,6 +212,8 @@ EVENTS = [
         "is_virtual":       True,
         "virtual_url":      "https://meet.google.com/nitk-tech-leadership",
         "capacity":         75,
+        "thumbnail_url":    IMAGE_URLS["leadership"]["thumbnail"],
+        "banner_url":       IMAGE_URLS["leadership"]["banner"],
         "start_days":       35,
         "hours":            2,
         "cancelled_reason": "Speaker unavailable",
@@ -164,6 +227,8 @@ EVENTS = [
         "is_virtual":    False,
         "location_text": "NITK Surathkal Campus, Mangalore",
         "capacity":      1000,
+        "thumbnail_url": IMAGE_URLS["reunion"]["thumbnail"],
+        "banner_url":    IMAGE_URLS["reunion"]["banner"],
         "start_days":    -90,   # past event
         "hours":         16,
     },
@@ -176,6 +241,8 @@ EVENTS = [
         "is_virtual":  True,
         "virtual_url": "https://meet.google.com/nitk-entrepreneur",
         "capacity":    200,
+        "thumbnail_url": IMAGE_URLS["entrepreneurship"]["thumbnail"],
+        "banner_url":    IMAGE_URLS["entrepreneurship"]["banner"],
         "start_days":  -30,   # past event
         "hours":       6,
     },
@@ -197,6 +264,7 @@ async def _insert(conn: asyncpg.Connection, ev: dict) -> dict:
             slug, title, tagline, description, status,
             start_datetime, end_datetime, timezone,
             location_text, is_virtual, virtual_url,
+            thumbnail_url, banner_url,
             capacity, created_by_firebase_uid,
             published_at, cancelled_at, cancelled_reason
         ) VALUES (
@@ -204,7 +272,8 @@ async def _insert(conn: asyncpg.Connection, ev: dict) -> dict:
             $6,  $7,  $8,
             $9,  $10, $11,
             $12, $13,
-            $14, $15, $16
+            $14, $15,
+            $16, $17, $18
         )
         RETURNING event_id, slug, title, status, is_virtual, capacity,
                   start_datetime
@@ -212,6 +281,7 @@ async def _insert(conn: asyncpg.Connection, ev: dict) -> dict:
         slug, ev["title"], ev.get("tagline"), ev.get("description"), ev["status"],
         start, end, "Asia/Kolkata",
         ev.get("location_text"), ev["is_virtual"], ev.get("virtual_url"),
+        ev.get("thumbnail_url"), ev.get("banner_url"),
         ev.get("capacity"), SEED_UID,
         published_at, cancelled_at, cancelled_reason,
     )

@@ -47,6 +47,14 @@ def _enrich(d: Dict[str, Any]) -> Dict[str, Any]:
     return d
 
 
+def _with_public_card_metadata(d: Dict[str, Any]) -> Dict[str, Any]:
+    # Week 2 exposes the safe aggregate field expected by public event cards.
+    # Registration integration will replace this placeholder count in Week 3.
+    d["registered_count"] = 0
+    d["registration_status"] = _compute_registration_status(d)
+    return d
+
+
 class EventsService:
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
@@ -173,9 +181,7 @@ class EventsService:
         result = []
         for r in rows:
             d = self._to_dict(r)
-            d["registered_count"] = 0
-            d["registration_status"] = _compute_registration_status(d)
-            result.append(d)
+            result.append(_with_public_card_metadata(d))
         return result, total
 
     # ── Public: Get ──────────────────────────────────────────────────────────
@@ -185,8 +191,7 @@ class EventsService:
         if not record:
             raise HTTPException(status_code=404, detail="event_not_found")
         d = self._to_dict(record)
-        d["registered_count"] = 0
-        d["registration_status"] = _compute_registration_status(d)
+        _with_public_card_metadata(d)
         d["sessions"] = []
         d["speakers"] = []
         return d
