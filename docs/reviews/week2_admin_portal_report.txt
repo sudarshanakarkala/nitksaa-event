@@ -1,0 +1,90 @@
+NITKSAA Event App - Week 2 Admin Portal Report
+Date: 2026-06-18
+
+Scope
+- Verified admin portal Week 2 event management surface.
+- No Registration, Email, Attendee Management, or hard-delete UI was added.
+
+Screens implemented
+- LoginPage
+- DashboardPage
+- EventsPage
+- EventFormPage
+- Placeholder pages for registrations, attendees, and settings remain outside Week 2 scope.
+
+Routes implemented
+- /
+- /login
+- /dashboard
+- /events
+- /events/new
+- /events/:eventId/edit
+- /registrations
+- /attendees
+- /settings
+
+API integrations
+- listEvents -> GET /api/v1/events
+- getEvent -> GET /api/v1/events/{event_id}
+- createEvent -> POST /api/v1/events
+- updateEvent -> PATCH /api/v1/events/{event_id}
+- updateEventStatus -> PATCH /api/v1/events/{event_id}/status
+- Firebase login exchange -> POST /api/v1/auth/firebase
+- Current user restore -> GET /api/v1/auth/me
+
+Login verification
+- Source verified: LoginPage supports email/password and Google Firebase sign-in.
+- Source verified: AuthProvider exchanges Firebase ID token for backend JWT and restores /api/v1/auth/me.
+- Full interactive login was not executed because no Firebase admin credentials were provided for this verification run.
+- Build and lint passed for the login code path.
+
+Event list verification
+- Source verified: EventsPage loads events from GET /api/v1/events.
+- Runtime API probe: GET /api/v1/events with X-Dev-User: admin returned 200.
+- Status, event type, capacity, start date, and actions are rendered.
+
+Create/edit verification
+- Source verified: EventFormPage supports create and edit modes.
+- Physical event validation requires venue.
+- Virtual event validation requires Join URL internally.
+- Runtime API probe:
+  Breakfast Club Demo create/edit: 201/200
+  Webinar Demo create/edit: 201/200
+  Disposable physical probe create/edit: 201/200
+
+Publish/unpublish/cancel verification
+- Source verified: EventsPage exposes Publish, Unpublish, and Cancel actions.
+- Runtime API probe:
+  publish physical: 200
+  unpublish physical: 200
+  publish virtual: 200
+  cancel virtual: 200
+  cancelled/draft events returned 404 from public detail.
+
+Filtering/search verification
+- Source verified: EventsPage includes status filters for All, Draft, Published, Registration Open, Cancelled, and Archived.
+- Source verified: search checks title, tagline, description, and location_text client-side.
+- Runtime build/lint passed with the filtering/search code.
+
+No hard delete
+- Source verified: EventsPage has no delete action.
+- Runtime API probe: DELETE /api/v1/events/1 returned 405.
+
+Join URL storage
+- Runtime admin detail for Webinar Demo included virtual_url.
+- Runtime public detail for Webinar Demo did not include virtual_url.
+- Result: PASS. Join URL is stored internally and hidden publicly.
+
+Build result
+- PASS.
+- Command: npm run build
+- Output: Vite built successfully, 73 modules transformed.
+
+Lint result
+- PASS.
+- Command: npm run lint
+- Output: eslint src completed with exit code 0.
+
+Known issues
+- Full interactive Firebase login was not executed in-browser due missing test credentials.
+- No critical Week 2 admin bug was found.

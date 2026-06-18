@@ -1,0 +1,81 @@
+NITKSAA Event App - Week 2 Flutter Report
+Date: 2026-06-18
+
+Scope
+- Verified public event listing and detail behavior.
+- No Registration, Email, Attendee Management, or Join URL display was added.
+
+Screens implemented
+- EventListScreen
+- EventDetailScreen
+- LoginScreen
+- SplashScreen
+- FoundationReadyScreen
+- DeveloperDiagnosticsScreen in debug mode
+
+Routes implemented
+- /events
+- /events/:eventId
+- /login
+- /splash
+- /foundation
+- /home
+- /developer in debug mode
+
+Public listing verification
+- Source verified: EventListScreen loads via DioPublicEventService.
+- API path: GET /api/v1/events/public.
+- Source verified: no Authorization header is configured by the public Dio client.
+- Runtime API probe: public upcoming returned 200.
+
+Public detail verification
+- Source verified: EventDetailScreen loads via DioPublicEventDetailService.
+- API path: GET /api/v1/events/public/{event_id}.
+- Source verified: no Authorization header is configured by the public detail Dio client.
+- Runtime API probe:
+  Breakfast Club Demo public detail returned 200.
+  Webinar Demo public detail returned 200.
+
+Upcoming/past verification
+- Source verified: EventListScreen has Upcoming and Past tabs.
+- Source verified: service sends period=upcoming or period=past.
+- Flutter tests passed and include past tab loading coverage.
+
+Card navigation
+- Source verified: event cards push AppRoutes.eventDetail(eventId).
+- Flutter tests passed for event list card behavior.
+
+Direct route refresh
+- Source verified: GoRouter route /events/:eventId builds EventDetailScreen directly from path parameter.
+- EventDetailScreen fetches the event on initState, so direct route refresh performs an API reload.
+
+Register CTA behavior
+- Source verified: Register button is visible on EventDetailScreen.
+- Unauthenticated users are sent to /login.
+- Authenticated users receive "Registration will be available in Week 3."
+- Flutter tests passed for authenticated Week 3 message.
+
+No join URL verification
+- Source verified: PublicEvent and PublicEventDetail models do not parse or expose virtual_url.
+- Source verified: EventDetailScreen displays virtual events as "Online".
+- Runtime API probe: public Webinar Demo detail did not include virtual_url.
+- Result: PASS.
+
+Public API calls do not send Authorization header
+- Source verified: public Dio clients set only Content-Type in BaseOptions headers.
+- No auth interceptor is attached to public event services.
+- Result: PASS.
+
+Analyze result
+- Initial sandbox run failed while Flutter attempted to delete generated iOS ephemeral files.
+- Approved retry result: PASS.
+- Command: flutter analyze
+- Output: No issues found. Ran in 2.0s.
+
+Test result
+- PASS.
+- Command: flutter test
+- Output: All tests passed. 16 tests passed.
+
+Known issues
+- None found in Flutter Week 2 event listing/detail scope.

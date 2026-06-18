@@ -1,0 +1,100 @@
+NITKSAA Event App - Week 2 Diagnostics Report
+Date: 2026-06-18
+
+Diagnostics endpoint
+- GET /api/v1/dev/diagnostics/events
+- Category: Event Management
+- Auth: Bearer token required.
+
+Environment guard
+- The diagnostics dependency calls _require_development().
+- When APP_ENV is not development, diagnostics return 404 not_found.
+- Result: PASS by source verification.
+
+Command/probe run
+- In-process FastAPI TestClient call using backend/.venv and a dev JWT.
+- The first sandboxed attempt was blocked by local socket permissions.
+- Approved retry outside sandbox reached the local PostgreSQL database and completed.
+
+Final diagnostics result
+- HTTP status: 200
+- total: 8
+- passed: 8
+- failed: 0
+- test_event_id: 23
+- run_by: dev-admin-firebase-uid
+- run_at: 2026-06-18T00:54:02.103123Z
+
+Diagnostics
+1. Event Create Test
+- API: POST /api/v1/events
+- Auth required: true
+- Result: PASS
+- Duration: 14 ms
+
+2. Events List Test
+- API: GET /api/v1/events
+- Auth required: true
+- Result: PASS
+- Duration: 1 ms
+- total: 21
+- returned: 20
+- test_event_found: true
+
+3. Event Detail Test
+- API: GET /api/v1/events/23
+- Auth required: true
+- Result: PASS
+- Duration: 0 ms
+
+4. Event Update Test
+- API: PATCH /api/v1/events/23
+- Auth required: true
+- Result: PASS
+- Duration: 2 ms
+
+5. Event Publish Test
+- API: PATCH /api/v1/events/23/status
+- Auth required: true
+- Result: PASS
+- Duration: 2 ms
+- Verified draft -> published and published -> draft.
+
+6. Public Events Test
+- API: GET /api/v1/events/public
+- Auth required: false
+- Result: PASS
+- Duration: 0 ms
+- total: 8
+- returned: 8
+- test_event_visible: true
+- forbidden_fields_leaked: none
+
+7. Public Event Detail Test
+- API: GET /api/v1/events/public/23
+- Auth required: false
+- Result: PASS
+- Duration: 0 ms
+- forbidden_fields_leaked: none
+- sessions_present: true
+- speakers_present: true
+
+8. Event Cancel Test
+- API: PATCH /api/v1/events/23/status
+- Auth required: true
+- Result: PASS
+- Duration: 1 ms
+
+Public leak checks
+- Diagnostics checked virtual_url, created_by_firebase_uid, and created_by_name.
+- No forbidden public fields leaked in list or detail diagnostics.
+
+Duration summary
+- Reported diagnostic durations: 14 ms, 1 ms, 0 ms, 2 ms, 2 ms, 0 ms, 0 ms, 1 ms.
+- Total reported diagnostic operation time: 20 ms.
+
+Final result
+- PASS. Event Management diagnostics are 8/8 green.
+
+Known issues
+- None found in diagnostics.

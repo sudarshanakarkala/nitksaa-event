@@ -1,0 +1,103 @@
+NITKSAA Event App - Week 2 End-to-End Verification Report
+Date: 2026-06-18
+
+Week 2 goal status
+- Staff can create events: PASS.
+- Public users can browse published events: PASS.
+- Public users can view published event details: PASS.
+- Registration functionality was not added.
+- Attendee management was not added.
+- Email functionality was not added.
+- Join URL is not exposed publicly.
+
+Demo scenarios
+- Demo 1: Breakfast Club Demo
+  Admin API create/edit/publish: 201/200/200.
+  Public upcoming listing contains event: true.
+  Public detail: 200.
+  Public detail venue: Bangalore.
+  Register CTA: source verified visible on EventDetailScreen.
+  Join URL: not applicable.
+  Result: PASS.
+
+- Demo 2: Webinar Demo
+  Admin API create/edit/publish: 201/200/200.
+  Public upcoming listing contains event: true.
+  Public detail: 200.
+  Public detail location display: Online in Flutter source; API location_text is null and is_virtual is true.
+  Public detail virtual_url present: false.
+  Register CTA: source verified visible on EventDetailScreen.
+  Result: PASS.
+
+Backend summary
+- Required Week 2 backend APIs are implemented.
+- DELETE /api/v1/events/{event_id} is not implemented; runtime returned 405.
+- Admin APIs require development admin auth.
+- Public APIs require no auth.
+- Diagnostics returned 8/8 PASS.
+- Backend compile passed.
+
+Admin summary
+- Event list, filters, search, create, edit, publish, unpublish, and cancel are implemented.
+- No hard delete action exists.
+- Virtual Join URL is accepted in the admin form and retained in admin detail.
+- Admin build passed.
+- Admin lint passed.
+- Interactive Firebase login was source/build verified but not manually executed without credentials.
+
+Flutter summary
+- Event listing and detail screens are implemented.
+- Upcoming and Past tabs are implemented.
+- Card navigation and direct /events/:eventId route are implemented.
+- RefreshIndicator is implemented on list views.
+- Register CTA routes unauthenticated users to Login.
+- Public clients do not send Authorization headers.
+- Flutter analyze passed.
+- Flutter tests passed.
+
+Security verification
+- Public API exposes only status='published' events.
+- Draft event public detail after unpublish returned 404.
+- Cancelled event public detail returned 404.
+- Public list/detail responses did not expose virtual_url.
+- Public list/detail responses did not expose created_by_firebase_uid or created_by_name.
+- Public responses do not include audit rows.
+- Diagnostics are development-only guarded.
+
+Public API leak verification
+- Diagnostics public list leak check: PASS, none.
+- Diagnostics public detail leak check: PASS, none.
+- Demo Webinar public detail virtual_url present: false.
+- Demo public list leaks: none.
+- Demo public detail leaks: none.
+
+CORS verification
+- Source verified: FastAPI CORSMiddleware uses ALLOWED_ORIGINS.
+- Source verified: development mode allows dynamic localhost/127.0.0.1 ports for Flutter Web.
+- Runtime CORS preflight was not separately executed.
+
+Final commands run
+- python -m compileall app
+- npm run build
+- npm run lint
+- flutter analyze
+- flutter test
+- In-process GET /api/v1/dev/diagnostics/events
+- In-process API lifecycle/demo probes through FastAPI TestClient
+
+Command results
+- Backend compile: PASS.
+- Admin build: PASS.
+- Admin lint: PASS.
+- Flutter analyze: PASS after approved sandbox retry.
+- Flutter test: PASS, 16 tests passed.
+- Diagnostics: PASS, 8/8.
+
+Open issues
+- Full interactive Admin Firebase login was not executed because no test credentials were provided.
+- Runtime CORS preflight was source-verified but not separately exercised.
+- One draft Breakfast Club Demo was created by an initial failed inline demo probe; it is not public.
+
+Final recommendation
+- Week 2 is ready for internal demo and handoff, with the caveat that an owner with Firebase test credentials should perform one browser login smoke test before a stakeholder demo.
+- No Week 3 functionality was added.

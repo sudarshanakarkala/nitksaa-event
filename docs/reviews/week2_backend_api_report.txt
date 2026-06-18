@@ -1,0 +1,89 @@
+NITKSAA Event App - Week 2 Backend API Report
+Date: 2026-06-18
+
+Scope
+- Verified Week 2 event backend APIs only.
+- No Registration, Email, Attendee Management, or Join URL exposure was added.
+
+APIs implemented
+- POST /api/v1/events
+- GET /api/v1/events
+- GET /api/v1/events/{event_id}
+- PATCH /api/v1/events/{event_id}
+- PATCH /api/v1/events/{event_id}/status
+- GET /api/v1/events/public
+- GET /api/v1/events/public/{event_id}
+
+APIs intentionally not implemented
+- DELETE /api/v1/events/{event_id}
+- Registration APIs are not part of Week 2.
+- Email APIs are not part of Week 2.
+- Attendee management APIs are not part of Week 2.
+
+DELETE endpoint status
+- Runtime check: DELETE /api/v1/events/1 returned HTTP 405.
+- Result: PASS. Hard delete is not implemented on the Week 2 event route.
+
+Admin auth behavior
+- Admin event endpoints depend on get_admin_user.
+- In development, get_admin_user requires X-Dev-User: admin.
+- Non-admin development users are rejected with admin_required.
+- Dev auth is blocked outside APP_ENV=development.
+
+Public API behavior
+- Public list and detail routes require no authentication.
+- Public route order places /events/public before /events/{event_id}.
+- Public list supports period=upcoming|past|all, page, and per_page.
+- Public detail only returns events with status='published'.
+- Public responses include event display fields, registration_status, and registered_count.
+
+Event status model
+- Supported status transitions:
+  draft -> published, cancelled
+  published -> draft, cancelled, completed
+  cancelled -> terminal
+  completed -> terminal
+- Publish validates required public fields before status transition.
+- Unpublish is represented by published -> draft.
+- Cancel records cancelled_at.
+
+Validation rules
+- title is required.
+- start_datetime and end_datetime are required for create.
+- end_datetime must be after start_datetime.
+- Physical events require location_text.
+- Virtual events require virtual_url internally.
+- capacity must be positive when provided.
+- Publish requires title, description, start_datetime, end_datetime, timezone, capacity, and location_text or virtual_url depending on event type.
+
+Audit logging behavior
+- create_event writes event_created.
+- update_event writes event_updated.
+- publish writes event_published.
+- unpublish writes event_unpublished.
+- cancel writes event_cancelled.
+- Audit rows are internal and are not selected by public APIs.
+
+Runtime verification
+- Backend compile: PASS.
+  Command: python -m compileall app
+- Diagnostics: PASS, 8/8.
+- API lifecycle probe:
+  create physical probe: 201
+  list admin: 200
+  get admin: 200
+  patch admin: 200
+  publish physical: 200
+  unpublish physical: 200
+  public detail after unpublish: 404
+  create virtual probe: 201
+  publish virtual: 200
+  cancel virtual: 200
+  public detail after cancel: 404
+- Demo API probe:
+  Breakfast Club Demo create/edit/publish: 201/200/200
+  Webinar Demo create/edit/publish: 201/200/200
+
+Known issues
+- The first failed inline demo script created one draft Breakfast Club Demo record before script failure. It is not public.
+- No backend feature code changes were required during this verification.
