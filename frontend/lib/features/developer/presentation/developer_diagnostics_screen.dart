@@ -149,6 +149,18 @@ class _DeveloperDiagnosticsScreenState
           items[DiagnosticId.auditTrail]!,
         ],
       ),
+      DiagnosticCategory(
+        title: 'Alumni Database',
+        description:
+            'Verify alumni_db records and diagnose login mapping issues. '
+            'Use to find why users appear as user_type=other with ref_id=NULL.',
+        items: [
+          items[DiagnosticId.alumniSearchEmail]!,
+          items[DiagnosticId.alumniSearchPrefix]!,
+          items[DiagnosticId.alumniLookupId]!,
+          items[DiagnosticId.alumniLoginTrace]!,
+        ],
+      ),
     ];
   }
 
@@ -346,6 +358,45 @@ class _DeveloperDiagnosticsScreenState
         initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.week3UxShowcase]!,
       ),
+      DiagnosticId.alumniSearchEmail: DiagnosticItem(
+        id: DiagnosticId.alumniSearchEmail,
+        title: 'Search by Email',
+        description:
+            'Search alumni_db for an exact email match. '
+            'Shows full alumni record if found.',
+        icon: Icons.search_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.alumniSearchEmail]!,
+      ),
+      DiagnosticId.alumniSearchPrefix: DiagnosticItem(
+        id: DiagnosticId.alumniSearchPrefix,
+        title: 'Search by Prefix',
+        description:
+            'Search alumni_db by email prefix or name fragment. '
+            'Returns up to 50 matching records.',
+        icon: Icons.manage_search_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.alumniSearchPrefix]!,
+      ),
+      DiagnosticId.alumniLookupId: DiagnosticItem(
+        id: DiagnosticId.alumniLookupId,
+        title: 'Lookup by Alumni ID',
+        description:
+            'Fetch the full alumni record for a known alumni_id (ref_id).',
+        icon: Icons.badge_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.alumniLookupId]!,
+      ),
+      DiagnosticId.alumniLoginTrace: DiagnosticItem(
+        id: DiagnosticId.alumniLoginTrace,
+        title: 'Login Mapping Trace',
+        description:
+            'Trace why a user may appear as user_type=other with ref_id=NULL. '
+            'Shows alumni_db lookup result, expected mapping, and actual event_users row.',
+        icon: Icons.troubleshoot_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.alumniLoginTrace]!,
+      ),
     };
   }
 
@@ -538,8 +589,981 @@ class DiagnosticDetailScreen extends StatelessWidget {
       DiagnosticId.attendeeListApi ||
       DiagnosticId.attendeeExport ||
       DiagnosticId.adminRoleGuard ||
-      DiagnosticId.auditTrail => _ComingSoonDiagnosticDetail(item: item),
+      DiagnosticId.auditTrail =>
+        _ComingSoonDiagnosticDetail(item: item),
+      DiagnosticId.alumniSearchEmail ||
+      DiagnosticId.alumniSearchPrefix ||
+      DiagnosticId.alumniLookupId ||
+      DiagnosticId.alumniLoginTrace =>
+        _AlumniDiagnosticDetail(item: item),
     };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Alumni Database Diagnostic Detail
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AlumniDiagnosticDetail extends StatefulWidget {
+  const _AlumniDiagnosticDetail({required this.item});
+
+  final DiagnosticItem item;
+
+  @override
+  State<_AlumniDiagnosticDetail> createState() =>
+      _AlumniDiagnosticDetailState();
+}
+
+class _AlumniDiagnosticDetailState extends State<_AlumniDiagnosticDetail> {
+  String? _backendAccessToken;
+
+  // ── Search by Email ──────────────────────────────────────────────────────
+  final TextEditingController _emailCtrl = TextEditingController();
+  bool _emailLoading = false;
+  Map<String, dynamic>? _emailResult;
+  String? _emailError;
+
+  // ── Search by Prefix ─────────────────────────────────────────────────────
+  final TextEditingController _prefixCtrl = TextEditingController();
+  bool _prefixLoading = false;
+  Map<String, dynamic>? _prefixResult;
+  String? _prefixError;
+
+  // ── Lookup by Alumni ID ──────────────────────────────────────────────────
+  final TextEditingController _idCtrl = TextEditingController();
+  bool _idLoading = false;
+  Map<String, dynamic>? _idResult;
+  String? _idError;
+
+  // ── Login Mapping Trace ──────────────────────────────────────────────────
+  final TextEditingController _traceEmailCtrl = TextEditingController();
+  bool _traceLoading = false;
+  Map<String, dynamic>? _traceResult;
+  String? _traceError;
+
+  @override
+  void dispose() {
+    _emailCtrl.dispose();
+    _prefixCtrl.dispose();
+    _idCtrl.dispose();
+    _traceEmailCtrl.dispose();
+    super.dispose();
+  }
+
+  // ── shared token helper ──────────────────────────────────────────────────
+
+  Future<String> _getToken() async {
+    final existing = _backendAccessToken;
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    final store = AuthSessionStore();
+    final session = await store.load();
+    if (session != null && session.accessToken.isNotEmpty) {
+      if (mounted) setState(() => _backendAccessToken = session.accessToken);
+      return session.accessToken;
+    }
+
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError(
+        'Not signed in. Complete the Backend Auth diagnostic first.',
+      );
+    }
+    final firebaseToken = await user.getIdToken(true);
+    if (firebaseToken == null || firebaseToken.isEmpty) {
+      throw StateError('Firebase ID token unavailable.');
+    }
+    final resp = await devDio.post<Map<String, dynamic>>(
+      '/api/v1/auth/firebase',
+      data: {'token': firebaseToken},
+    );
+    final accessToken = resp.data?['access_token'] as String?;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw StateError('Backend access token exchange failed.');
+    }
+    if (mounted) setState(() => _backendAccessToken = accessToken);
+    return accessToken;
+  }
+
+  // ── API calls ────────────────────────────────────────────────────────────
+
+  Future<void> _searchByEmail() async {
+    final email = _emailCtrl.text.trim();
+    if (email.isEmpty) {
+      setState(() => _emailError = 'Enter an email address.');
+      return;
+    }
+    setState(() {
+      _emailLoading = true;
+      _emailError = null;
+      _emailResult = null;
+    });
+    try {
+      final token = await _getToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/dev/diagnostics/alumni/search',
+            queryParameters: {'email': email},
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _emailResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Alumni search by email failed', e, st);
+      if (!mounted) return;
+      setState(() => _emailError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _emailLoading = false);
+    }
+  }
+
+  Future<void> _searchByPrefix() async {
+    final prefix = _prefixCtrl.text.trim();
+    if (prefix.isEmpty) {
+      setState(() => _prefixError = 'Enter a prefix or name fragment.');
+      return;
+    }
+    setState(() {
+      _prefixLoading = true;
+      _prefixError = null;
+      _prefixResult = null;
+    });
+    try {
+      final token = await _getToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/dev/diagnostics/alumni/search-prefix',
+            queryParameters: {'prefix': prefix},
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _prefixResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Alumni search by prefix failed', e, st);
+      if (!mounted) return;
+      setState(() => _prefixError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _prefixLoading = false);
+    }
+  }
+
+  Future<void> _lookupById(String alumniId) async {
+    final id = alumniId.trim();
+    if (id.isEmpty) {
+      setState(() => _idError = 'Enter an alumni_id.');
+      return;
+    }
+    setState(() {
+      _idLoading = true;
+      _idError = null;
+      _idResult = null;
+    });
+    try {
+      final token = await _getToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/dev/diagnostics/alumni/${Uri.encodeComponent(id)}',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _idResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Alumni lookup by ID failed', e, st);
+      if (!mounted) return;
+      setState(() => _idError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _idLoading = false);
+    }
+  }
+
+  Future<void> _traceLogin() async {
+    final email = _traceEmailCtrl.text.trim();
+    if (email.isEmpty) {
+      setState(() => _traceError = 'Enter an email address.');
+      return;
+    }
+    setState(() {
+      _traceLoading = true;
+      _traceError = null;
+      _traceResult = null;
+    });
+    try {
+      final token = await _getToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/dev/diagnostics/alumni/login-trace',
+            queryParameters: {'email': email},
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _traceResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Login mapping trace failed', e, st);
+      if (!mounted) return;
+      setState(() => _traceError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _traceLoading = false);
+    }
+  }
+
+  // ── build ────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    return DiagnosticDetailScaffold(
+      title: widget.item.title,
+      description: widget.item.description,
+      apiDetails: widget.item.apiDetails,
+      children: _buildContent(context),
+    );
+  }
+
+  List<Widget> _buildContent(BuildContext context) {
+    return switch (widget.item.id) {
+      DiagnosticId.alumniSearchEmail => _buildSearchEmail(context),
+      DiagnosticId.alumniSearchPrefix => _buildSearchPrefix(context),
+      DiagnosticId.alumniLookupId => _buildLookupId(context),
+      DiagnosticId.alumniLoginTrace => _buildLoginTrace(context),
+      _ => const [],
+    };
+  }
+
+  // ── Search by Email ──────────────────────────────────────────────────────
+
+  List<Widget> _buildSearchEmail(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final records = _emailResult?['records'] as List? ?? const [];
+    final found = _emailResult?['found'] == true;
+    final count = _emailResult?['count'] as int? ?? 0;
+
+    return [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Backend: $backendBaseUrl',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      )),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _emailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Enter alumni email',
+                  hintText: 'full email address',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  prefixIcon: Icon(Icons.email_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _emailLoading ? null : _searchByEmail,
+                icon: _emailLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.search),
+                label: const Text('Search Alumni'),
+              ),
+              if (_emailError != null) ...[
+                const SizedBox(height: 8),
+                _errorChip(context, _emailError!),
+              ],
+              if (_emailResult != null) ...[
+                const SizedBox(height: 16),
+                _foundBadge(context, found, count),
+                const SizedBox(height: 12),
+                for (final r in records)
+                  _alumniRecordCard(context,
+                      Map<String, dynamic>.from(r as Map)),
+                _jsonBlockWithCopy(
+                    context, 'GET /alumni/search response', _emailResult),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
+
+  // ── Search by Prefix ─────────────────────────────────────────────────────
+
+  List<Widget> _buildSearchPrefix(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final records = _prefixResult?['records'] as List? ?? const [];
+    final count = _prefixResult?['count'] as int? ?? 0;
+
+    return [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Backend: $backendBaseUrl',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      )),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _prefixCtrl,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Enter email/name prefix',
+                  hintText: 'e.g. sudarshana',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  prefixIcon: Icon(Icons.manage_search_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _prefixLoading ? null : _searchByPrefix,
+                icon: _prefixLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.search),
+                label: const Text('Search Prefix'),
+              ),
+              if (_prefixError != null) ...[
+                const SizedBox(height: 8),
+                _errorChip(context, _prefixError!),
+              ],
+              if (_prefixResult != null) ...[
+                const SizedBox(height: 16),
+                Row(children: [
+                  _countBadge(context, count),
+                  const SizedBox(width: 8),
+                  Text('records found',
+                      style: Theme.of(context).textTheme.bodySmall),
+                ]),
+                const SizedBox(height: 12),
+                for (final r in records)
+                  _prefixResultRow(context,
+                      Map<String, dynamic>.from(r as Map)),
+                _jsonBlockWithCopy(
+                    context, 'GET /alumni/search-prefix response', _prefixResult),
+              ],
+            ],
+          ),
+        ),
+      ),
+      if (_idResult != null || _idLoading || _idError != null) ...[
+        const SizedBox(height: 16),
+        _buildLookupIdCard(context),
+      ],
+    ];
+  }
+
+  Widget _prefixResultRow(BuildContext context, Map<String, dynamic> r) {
+    final cs = Theme.of(context).colorScheme;
+    final alumniId = r['alumni_id']?.toString() ?? '';
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () {
+          _idCtrl.text = alumniId;
+          _lookupById(alumniId);
+        },
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          child: Row(children: [
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(r['fullname']?.toString() ?? '—',
+                      style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                            fontWeight: FontWeight.w700,
+                          )),
+                  const SizedBox(height: 2),
+                  Text(r['email']?.toString() ?? '—',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.primary,
+                          )),
+                  Text(alumniId,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                            fontFamily: 'monospace',
+                          )),
+                ],
+              ),
+            ),
+            Icon(Icons.chevron_right, color: cs.onSurfaceVariant),
+          ]),
+        ),
+      ),
+    );
+  }
+
+  // ── Lookup by Alumni ID ──────────────────────────────────────────────────
+
+  List<Widget> _buildLookupId(BuildContext context) {
+    return [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: _buildLookupIdInner(context),
+        ),
+      ),
+    ];
+  }
+
+  Widget _buildLookupIdCard(BuildContext context) {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: _buildLookupIdInner(context),
+      ),
+    );
+  }
+
+  Widget _buildLookupIdInner(BuildContext context) {
+    final record = _idResult?['record'] as Map?;
+    final found = _idResult?['found'] == true;
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _idCtrl,
+          autocorrect: false,
+          decoration: const InputDecoration(
+            labelText: 'Enter alumni_id',
+            hintText: 'UUID or ref_id value',
+            border: OutlineInputBorder(),
+            isDense: true,
+            prefixIcon: Icon(Icons.badge_outlined),
+          ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton.icon(
+          onPressed: _idLoading
+              ? null
+              : () => _lookupById(_idCtrl.text),
+          icon: _idLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.person_search_outlined),
+          label: const Text('Lookup Alumni ID'),
+        ),
+        if (_idError != null) ...[
+          const SizedBox(height: 8),
+          _errorChip(context, _idError!),
+        ],
+        if (_idResult != null) ...[
+          const SizedBox(height: 16),
+          _foundBadge(context, found, found ? 1 : 0),
+          if (record != null) ...[
+            const SizedBox(height: 12),
+            _alumniRecordCard(context, Map<String, dynamic>.from(record)),
+          ],
+          _jsonBlockWithCopy(
+              context, 'GET /alumni/{alumni_id} response', _idResult),
+        ],
+      ],
+    );
+  }
+
+  // ── Login Mapping Trace ──────────────────────────────────────────────────
+
+  List<Widget> _buildLoginTrace(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final alumniLookup = _traceResult?['alumni_lookup'] as Map?;
+    final expectedMapping =
+        _traceResult?['expected_event_user_mapping'] as Map?;
+    final existingEu = _traceResult?['existing_event_user'] as Map?;
+    final diagnosis = _traceResult?['diagnosis'] as Map?;
+
+    return [
+      Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Backend: $backendBaseUrl',
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: cs.onSurfaceVariant,
+                      )),
+              const SizedBox(height: 4),
+              Text(
+                'Simulates POST /auth/firebase lookup without a Firebase token. '
+                'Shows why a user may appear as user_type=other.',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                    ),
+              ),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _traceEmailCtrl,
+                keyboardType: TextInputType.emailAddress,
+                autocorrect: false,
+                decoration: const InputDecoration(
+                  labelText: 'Enter alumni email',
+                  hintText: 'full email address',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  prefixIcon: Icon(Icons.troubleshoot_outlined),
+                ),
+              ),
+              const SizedBox(height: 12),
+              FilledButton.icon(
+                onPressed: _traceLoading ? null : _traceLogin,
+                icon: _traceLoading
+                    ? const SizedBox(
+                        width: 18,
+                        height: 18,
+                        child: CircularProgressIndicator(strokeWidth: 2))
+                    : const Icon(Icons.travel_explore_outlined),
+                label: const Text('Trace Login Mapping'),
+              ),
+              if (_traceError != null) ...[
+                const SizedBox(height: 8),
+                _errorChip(context, _traceError!),
+              ],
+              if (_traceResult != null) ...[
+                const SizedBox(height: 20),
+
+                // ── Diagnosis banner ─────────────────────────────────────
+                if (diagnosis != null)
+                  _diagnosisBanner(context, diagnosis),
+                const SizedBox(height: 16),
+
+                // ── Alumni DB found ──────────────────────────────────────
+                _traceSection(context, 'Alumni DB Lookup',
+                    Icons.school_outlined, cs.primary, [
+                  _traceRow(context, 'Found',
+                      alumniLookup?['found'] == true ? 'Yes' : 'No',
+                      status: alumniLookup?['found'] == true
+                          ? DiagnosticStatus.ok
+                          : DiagnosticStatus.error),
+                  if (alumniLookup?['found'] == true) ...[
+                    _traceRow(context, 'Alumni ID',
+                        alumniLookup?['alumni_id']?.toString() ?? '—'),
+                    _traceRow(context, 'Name',
+                        alumniLookup?['fullname']?.toString() ?? '—'),
+                    _traceRow(context, 'Email',
+                        alumniLookup?['email']?.toString() ?? '—'),
+                    _traceRow(context, 'Grad Year',
+                        alumniLookup?['graduationyear']?.toString() ?? '—'),
+                    _traceRow(context, 'Status',
+                        alumniLookup?['registrationstatus']?.toString() ?? '—'),
+                  ],
+                ]),
+                const SizedBox(height: 12),
+
+                // ── Expected mapping ─────────────────────────────────────
+                if (expectedMapping != null)
+                  _traceSection(context, 'Expected event_users Mapping',
+                      Icons.route_outlined, cs.secondary, [
+                    _traceRow(context, 'Expected user_type',
+                        expectedMapping['expected_user_type']?.toString() ?? '—'),
+                    _traceRow(context, 'Expected ref_id',
+                        expectedMapping['expected_ref_id']?.toString() ?? 'NULL'),
+                    _traceRow(context, 'Expected grad year',
+                        expectedMapping['expected_graduation_year']?.toString() ?? '—'),
+                    _traceRow(context, 'Is active',
+                        expectedMapping['is_active'] == true ? 'Yes' : 'No',
+                        status: expectedMapping['is_active'] == true
+                            ? DiagnosticStatus.ok
+                            : DiagnosticStatus.warning),
+                  ]),
+                if (expectedMapping != null) const SizedBox(height: 12),
+
+                // ── Existing event_users row ─────────────────────────────
+                _traceSection(context, 'Existing event_users Row',
+                    Icons.table_rows_outlined, cs.tertiary, [
+                  _traceRow(context, 'Found',
+                      existingEu?['found'] == true ? 'Yes' : 'No',
+                      status: existingEu?['found'] == true
+                          ? DiagnosticStatus.ok
+                          : DiagnosticStatus.warning),
+                  if (existingEu?['found'] == true) ...[
+                    _traceRow(context, 'user_type',
+                        existingEu?['user_type']?.toString() ?? '—',
+                        status: existingEu?['user_type'] == 'alumni'
+                            ? DiagnosticStatus.ok
+                            : DiagnosticStatus.error),
+                    _traceRow(context, 'ref_id',
+                        existingEu?['ref_id']?.toString() ?? 'NULL',
+                        status: existingEu?['ref_id'] != null
+                            ? DiagnosticStatus.ok
+                            : DiagnosticStatus.error),
+                    _traceRow(context, 'graduation_year',
+                        existingEu?['graduation_year']?.toString() ?? 'NULL'),
+                    _traceRow(context, 'last_login',
+                        existingEu?['last_login']?.toString() ?? '—'),
+                  ],
+                ]),
+                const SizedBox(height: 12),
+
+                _jsonBlockWithCopy(context, 'GET /alumni/login-trace response',
+                    _traceResult),
+              ],
+            ],
+          ),
+        ),
+      ),
+    ];
+  }
+
+  Widget _diagnosisBanner(BuildContext context, Map diagnosis) {
+    final cs = Theme.of(context).colorScheme;
+    final result = diagnosis['result']?.toString() ?? '';
+    final reason = diagnosis['reason']?.toString() ?? '';
+    final isPassed = result == 'pass_mapping_correct';
+    final isWarning = result.startsWith('warning_');
+
+    final (bg, fg, icon) = isPassed
+        ? (
+            Colors.green.withValues(alpha: 0.12),
+            Colors.green.shade800,
+            Icons.check_circle_outline,
+          )
+        : isWarning
+            ? (
+                cs.tertiaryContainer,
+                cs.onTertiaryContainer,
+                Icons.warning_amber_outlined,
+              )
+            : (
+                cs.errorContainer,
+                cs.onErrorContainer,
+                Icons.error_outline,
+              );
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(
+            color: isPassed
+                ? Colors.green.withValues(alpha: 0.3)
+                : isWarning
+                    ? cs.tertiary.withValues(alpha: 0.3)
+                    : cs.error.withValues(alpha: 0.3)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(children: [
+            Icon(icon, size: 18, color: fg),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                isPassed ? 'PASS' : isWarning ? 'WARNING' : 'FAIL',
+                style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: fg,
+                    ),
+              ),
+            ),
+          ]),
+          const SizedBox(height: 6),
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(
+              color: fg.withValues(alpha: 0.12),
+              borderRadius: BorderRadius.circular(6),
+            ),
+            child: SelectableText(
+              result,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: fg,
+                    fontFamily: 'monospace',
+                    fontWeight: FontWeight.w700,
+                  ),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Text(reason,
+              style:
+                  Theme.of(context).textTheme.bodySmall?.copyWith(color: fg)),
+        ],
+      ),
+    );
+  }
+
+  Widget _traceSection(
+    BuildContext context,
+    String title,
+    IconData icon,
+    Color color,
+    List<Widget> rows,
+  ) {
+    return Container(
+      decoration: BoxDecoration(
+        border: Border.all(
+            color: Theme.of(context).colorScheme.outlineVariant),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            padding:
+                const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: color.withValues(alpha: 0.08),
+              borderRadius:
+                  const BorderRadius.vertical(top: Radius.circular(7)),
+            ),
+            child: Row(children: [
+              Icon(icon, size: 14, color: color),
+              const SizedBox(width: 6),
+              Text(title,
+                  style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: color,
+                      )),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(12),
+            child: Column(children: rows),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _traceRow(
+    BuildContext context,
+    String label,
+    String value, {
+    DiagnosticStatus? status,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    Widget? statusIcon;
+    if (status != null) {
+      statusIcon = Icon(
+        status == DiagnosticStatus.ok
+            ? Icons.check_circle_outline
+            : status == DiagnosticStatus.error
+                ? Icons.error_outline
+                : Icons.warning_amber_outlined,
+        size: 14,
+        color: status == DiagnosticStatus.ok
+            ? Colors.green
+            : status == DiagnosticStatus.error
+                ? cs.error
+                : cs.tertiary,
+      );
+    }
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 6),
+      child: Row(children: [
+        SizedBox(
+          width: 120,
+          child: Text(label,
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontWeight: FontWeight.w600,
+                  )),
+        ),
+        Expanded(
+          child: SelectableText(value,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(fontWeight: FontWeight.w500)),
+        ),
+        if (statusIcon != null) ...[
+          const SizedBox(width: 4),
+          statusIcon,
+        ],
+      ]),
+    );
+  }
+
+  // ── shared helpers ───────────────────────────────────────────────────────
+
+  Widget _alumniRecordCard(BuildContext context, Map<String, dynamic> r) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(r['fullname']?.toString() ?? '—',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelLarge
+                  ?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 6),
+          for (final entry in r.entries)
+            if (entry.key != 'fullname')
+              Padding(
+                padding: const EdgeInsets.only(bottom: 3),
+                child: Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    SizedBox(
+                      width: 140,
+                      child: Text(entry.key,
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelSmall
+                              ?.copyWith(
+                                color: cs.onSurfaceVariant,
+                                fontWeight: FontWeight.w600,
+                              )),
+                    ),
+                    Expanded(
+                      child: SelectableText(
+                          entry.value?.toString() ?? 'null',
+                          style:
+                              Theme.of(context).textTheme.bodySmall),
+                    ),
+                  ],
+                ),
+              ),
+        ],
+      ),
+    );
+  }
+
+  Widget _foundBadge(BuildContext context, bool found, int count) {
+    final cs = Theme.of(context).colorScheme;
+    final (bg, fg) = found
+        ? (Colors.green.withValues(alpha: 0.12), Colors.green.shade800)
+        : (cs.errorContainer, cs.onErrorContainer);
+    return Row(children: [
+      Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration:
+            BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(
+            found ? Icons.check_circle_outline : Icons.search_off_outlined,
+            size: 14,
+            color: fg,
+          ),
+          const SizedBox(width: 6),
+          Text(found ? 'Found — $count record(s)' : 'Not Found',
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(color: fg, fontWeight: FontWeight.w700)),
+        ]),
+      ),
+    ]);
+  }
+
+  Widget _countBadge(BuildContext context, int count) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+        color: cs.primaryContainer,
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text('$count',
+          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                color: cs.onPrimaryContainer,
+                fontWeight: FontWeight.w800,
+              )),
+    );
+  }
+
+  Widget _errorChip(BuildContext context, String error) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: cs.errorContainer,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        Icon(Icons.error_outline, size: 14, color: cs.onErrorContainer),
+        const SizedBox(width: 6),
+        Expanded(
+          child: SelectableText(error,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onErrorContainer)),
+        ),
+      ]),
+    );
+  }
+
+  Widget _jsonBlockWithCopy(
+      BuildContext context, String title, Object? value) {
+    if (value == null) return const SizedBox.shrink();
+    final jsonStr = const JsonEncoder.withIndent('  ').convert(value);
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        title: Text(title, style: Theme.of(context).textTheme.labelLarge),
+        subtitle: const Text('Show Raw JSON'),
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(
+                color: Theme.of(context).colorScheme.outlineVariant,
+              ),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Align(
+                  alignment: Alignment.centerRight,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      await Clipboard.setData(ClipboardData(text: jsonStr));
+                      if (!context.mounted) return;
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(content: Text('JSON copied.')),
+                      );
+                    },
+                    icon: const Icon(Icons.copy_outlined, size: 14),
+                    label: const Text('Copy JSON'),
+                    style: TextButton.styleFrom(
+                      visualDensity: VisualDensity.compact,
+                    ),
+                  ),
+                ),
+                SelectableText(
+                  jsonStr,
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(fontFamily: 'monospace'),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -4589,6 +5613,10 @@ enum DiagnosticId {
   adminRoleGuard,
   auditTrail,
   week3UxShowcase,
+  alumniSearchEmail,
+  alumniSearchPrefix,
+  alumniLookupId,
+  alumniLoginTrace,
 }
 
 enum DiagnosticStatus { ok, info, warning, error, notApplicable }
@@ -4868,6 +5896,65 @@ const Map<DiagnosticId, BackendApiDetails> diagnosticApiDetails = {
     sampleResponse: 'Interactive showcase — runs live against backend.',
     uiGuidance:
         'Use as Product Owner demo, frontend developer reference, and backend validation.',
+  ),
+  DiagnosticId.alumniSearchEmail: BackendApiDetails(
+    featureName: 'Alumni Search by Email',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/alumni/search?email=<email>',
+    authRequirement: 'Backend JWT required, dev only',
+    purpose:
+        'Search alumni_db for a record matching the given email (case-insensitive, trimmed). '
+        'Diagnose whether an alumni exists in alumni_db for a specific address.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"found":true,"count":1,"records":[{"alumni_id":"...","fullname":"...","email":"..."}]}',
+    uiGuidance:
+        'Enter any email — shows full alumni record if found. '
+        'Not found means the alumni_db has no matching record.',
+  ),
+  DiagnosticId.alumniSearchPrefix: BackendApiDetails(
+    featureName: 'Alumni Search by Prefix',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/alumni/search-prefix?prefix=<prefix>',
+    authRequirement: 'Backend JWT required, dev only',
+    purpose:
+        'Search alumni_db by email prefix or name fragment. '
+        'Useful when the exact email is unknown.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"count":2,"records":[{"alumni_id":"...","fullname":"...","email":"..."}]}',
+    uiGuidance:
+        'Enter a partial email or partial name. '
+        'Tap a result row to look up that alumni_id directly.',
+  ),
+  DiagnosticId.alumniLookupId: BackendApiDetails(
+    featureName: 'Alumni Lookup by ID',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/alumni/{alumni_id}',
+    authRequirement: 'Backend JWT required, dev only',
+    purpose:
+        'Fetch the full alumni record from alumni_db using a known alumni_id (ref_id).',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"found":true,"record":{"alumni_id":"...","fullname":"...","registrationstatus":"Self-Verified"}}',
+    uiGuidance:
+        'Use after a prefix search to inspect the full alumni row.',
+  ),
+  DiagnosticId.alumniLoginTrace: BackendApiDetails(
+    featureName: 'Login Mapping Trace',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/alumni/login-trace?email=<email>',
+    authRequirement: 'Backend JWT required, dev only',
+    purpose:
+        'Simulate the alumni lookup + event_users join that POST /auth/firebase performs. '
+        'Shows why a user appears as user_type=other with ref_id=NULL.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"alumni_lookup":{"found":true},"existing_event_user":{"user_type":"other","ref_id":null},'
+        '"diagnosis":{"result":"fail_alumni_exists_but_event_user_not_mapped"}}',
+    uiGuidance:
+        'Key diagnostic: shows PASS/FAIL result with reason. '
+        'fail_alumni_exists_but_event_user_not_mapped means the ON CONFLICT bug is the root cause.',
   ),
 };
 

@@ -127,7 +127,10 @@ async def _upsert_event_user(
             ON CONFLICT (firebase_uid) DO UPDATE
             SET email = EXCLUDED.email,
                 fullname = EXCLUDED.fullname,
-                last_login = now()
+                last_login = now(),
+                user_type = CASE WHEN EXCLUDED.user_type = 'alumni' THEN EXCLUDED.user_type ELSE event_users.user_type END,
+                ref_id = CASE WHEN EXCLUDED.user_type = 'alumni' THEN EXCLUDED.ref_id ELSE event_users.ref_id END,
+                graduation_year = CASE WHEN EXCLUDED.user_type = 'alumni' THEN EXCLUDED.graduation_year ELSE event_users.graduation_year END
             RETURNING firebase_uid, email, fullname, user_type, ref_id,
                       graduation_year, is_suspended
             """,

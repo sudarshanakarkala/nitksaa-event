@@ -12,8 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
-from app.database import get_pool
+from app.database import get_alumni_pool, get_pool
 from app.middleware.auth import decode_access_token
+from app.services.alumni_service import ACTIVE_ALUMNI_STATUSES
 
 router = APIRouter(prefix="/api/v1/dev/diagnostics", tags=["dev-diagnostics"])
 
@@ -1137,4 +1138,286 @@ async def run_registration_diagnostics(
         "results": results,
         "run_by": user["firebase_uid"],
         "run_at": run_ts.isoformat() + "Z",
+    }
+
+
+# ── Alumni DB Diagnostics ──────────────────────────────────────────────────────
+#
+# All endpoints below are read-only and never modify alumni_db or events_db.
+# They return 404 automatically when APP_ENV != "development" via _get_dev_user.
+
+
+def _alumni_record_to_dict(record: asyncpg.Record) -> Dict[str, Any]:
+    """Serialize an alumni row, including all standard fields."""
+    return {key: _serialize(value) for key, value in dict(record).items()}
+
+
+@router.get("/alumni/search")
+async def search_alumni_by_email(
+    email: str,
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """Search alumni_db by exact email (case-insensitive, trimmed). Read-only."""
+    normalized = email.strip().lower()
+    alumni_pool = await get_alumni_pool()
+    async with alumni_pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT alumni_id, fullname, email, phone, branch,
+                   graduationyear, registrationstatus
+            FROM alumni
+            WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
+            LIMIT 10
+            """,
+            email,
+        )
+    records = [_alumni_record_to_dict(r) for r in rows]
+    return {
+        "status": "ok",
+        "query": {
+            "email_input": email,
+            "normalized_email": normalized,
+        },
+        "found": len(records) > 0,
+        "count": len(records),
+        "records": records,
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.get("/alumni/search-prefix")
+async def search_alumni_by_prefix(
+    prefix: str,
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """Search alumni_db by email prefix or fullname fragment. Read-only."""
+    normalized = prefix.strip().lower()
+    alumni_pool = await get_alumni_pool()
+    async with alumni_pool.acquire() as conn:
+        rows = await conn.fetch(
+            """
+            SELECT alumni_id, fullname, email
+            FROM alumni
+            WHERE LOWER(email) LIKE LOWER($1 || '%')
+               OR LOWER(fullname) LIKE LOWER('%' || $1 || '%')
+            ORDER BY email ASC
+            LIMIT 50
+            """,
+            prefix.strip(),
+        )
+    records = [_alumni_record_to_dict(r) for r in rows]
+    return {
+        "status": "ok",
+        "query": {
+            "prefix_input": prefix,
+            "normalized_prefix": normalized,
+        },
+        "count": len(records),
+        "records": records,
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.get("/alumni/login-trace")
+async def trace_login_mapping(
+    email: str,
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """
+    Simulate the alumni lookup + event_users join that POST /auth/firebase performs,
+    but without a Firebase token or any writes. Diagnoses why a user may appear
+    as user_type=other with ref_id=NULL.
+    """
+    normalized = email.strip().lower()
+
+    # ── Step 1: alumni_db lookup (mirror production find_alumni_by_email logic) ──
+    alumni_pool = await get_alumni_pool()
+    async with alumni_pool.acquire() as conn:
+        alumni_row = await conn.fetchrow(
+            """
+            SELECT alumni_id, fullname, email, graduationyear, branch,
+                   registrationstatus
+            FROM alumni
+            WHERE LOWER(email) = LOWER($1)
+            LIMIT 1
+            """,
+            email,
+        )
+
+    alumni_data: Optional[Dict[str, Any]] = (
+        _alumni_record_to_dict(alumni_row) if alumni_row else None
+    )
+
+    # ── Step 2: check if email would match with TRIM (detect whitespace issue) ──
+    whitespace_mismatch = False
+    if alumni_data is None:
+        async with alumni_pool.acquire() as conn:
+            trimmed_row = await conn.fetchrow(
+                """
+                SELECT alumni_id, fullname, email, graduationyear, branch,
+                       registrationstatus
+                FROM alumni
+                WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
+                LIMIT 1
+                """,
+                email,
+            )
+        if trimmed_row is not None:
+            alumni_data = _alumni_record_to_dict(trimmed_row)
+            whitespace_mismatch = True
+
+    # ── Step 3: event_users lookup (current login state) ──
+    events_pool = await get_pool()
+    async with events_pool.acquire() as conn:
+        eu_row = await conn.fetchrow(
+            """
+            SELECT firebase_uid, email, fullname, user_type, ref_id,
+                   graduation_year, is_suspended, last_login
+            FROM event_users
+            WHERE LOWER(TRIM(email)) = LOWER(TRIM($1))
+            LIMIT 1
+            """,
+            email,
+        )
+    event_user: Optional[Dict[str, Any]] = (
+        {key: _serialize(value) for key, value in dict(eu_row).items()}
+        if eu_row
+        else None
+    )
+
+    # ── Step 4: build expected mapping ──────────────────────────────────────────
+    is_active = (
+        (alumni_data.get("registrationstatus") or "") in ACTIVE_ALUMNI_STATUSES
+        if alumni_data
+        else False
+    )
+    expected_mapping: Optional[Dict[str, Any]] = None
+    if alumni_data and is_active:
+        expected_mapping = {
+            "expected_user_type": "alumni",
+            "expected_ref_id": alumni_data["alumni_id"],
+            "expected_graduation_year": alumni_data.get("graduationyear"),
+            "is_active": True,
+        }
+    elif alumni_data and not is_active:
+        expected_mapping = {
+            "expected_user_type": "other",
+            "expected_ref_id": None,
+            "expected_graduation_year": None,
+            "is_active": False,
+        }
+
+    # ── Step 5: diagnosis ────────────────────────────────────────────────────────
+    if whitespace_mismatch:
+        diagnosis_result = "warning_email_case_or_whitespace_mismatch"
+        diagnosis_reason = (
+            "alumni found only after trimming whitespace — "
+            "production lookup (no TRIM) will fail for this email"
+        )
+    elif alumni_data is None:
+        diagnosis_result = "fail_alumni_not_found"
+        diagnosis_reason = "no alumni record matches this email in alumni_db"
+    elif not is_active:
+        diagnosis_result = "fail_alumni_inactive"
+        diagnosis_reason = (
+            f"alumni found but registrationstatus="
+            f"'{alumni_data.get('registrationstatus')}' is not active"
+        )
+    elif event_user is None:
+        diagnosis_result = "fail_event_user_missing"
+        diagnosis_reason = "alumni found and active, but no event_users row for this email"
+    elif (
+        event_user.get("user_type") != "alumni"
+        or event_user.get("ref_id") is None
+    ):
+        diagnosis_result = "fail_alumni_exists_but_event_user_not_mapped"
+        diagnosis_reason = (
+            f"alumni found and active, but event_users row has "
+            f"user_type='{event_user.get('user_type')}' "
+            f"ref_id={event_user.get('ref_id')!r}. "
+            "Root cause: ON CONFLICT in _upsert_event_user does not update "
+            "user_type/ref_id/graduation_year for existing rows."
+        )
+    else:
+        diagnosis_result = "pass_mapping_correct"
+        diagnosis_reason = "alumni found, active, and correctly mapped in event_users"
+
+    alumni_lookup_payload: Optional[Dict[str, Any]] = None
+    if alumni_data:
+        alumni_lookup_payload = {
+            "found": True,
+            "alumni_id": alumni_data.get("alumni_id"),
+            "fullname": alumni_data.get("fullname"),
+            "email": alumni_data.get("email"),
+            "graduationyear": alumni_data.get("graduationyear"),
+            "branch": alumni_data.get("branch"),
+            "registrationstatus": alumni_data.get("registrationstatus"),
+        }
+    else:
+        alumni_lookup_payload = {"found": False}
+
+    existing_eu_payload: Optional[Dict[str, Any]] = None
+    if event_user:
+        existing_eu_payload = {
+            "found": True,
+            "firebase_uid": event_user.get("firebase_uid"),
+            "email": event_user.get("email"),
+            "user_type": event_user.get("user_type"),
+            "ref_id": event_user.get("ref_id"),
+            "graduation_year": event_user.get("graduation_year"),
+            "is_suspended": event_user.get("is_suspended"),
+            "last_login": event_user.get("last_login"),
+        }
+    else:
+        existing_eu_payload = {"found": False}
+
+    return {
+        "status": "ok",
+        "query": {
+            "email_input": email,
+            "normalized_email": normalized,
+        },
+        "alumni_lookup": alumni_lookup_payload,
+        "expected_event_user_mapping": expected_mapping,
+        "existing_event_user": existing_eu_payload,
+        "diagnosis": {
+            "result": diagnosis_result,
+            "reason": diagnosis_reason,
+        },
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.get("/alumni/{alumni_id}")
+async def lookup_alumni_by_id(
+    alumni_id: str,
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """Return the full alumni row from alumni_db for a given alumni_id. Read-only."""
+    alumni_pool = await get_alumni_pool()
+    async with alumni_pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT alumni_id, fullname, email, phone, branch,
+                   graduationyear, registrationstatus, firebase_uid
+            FROM alumni
+            WHERE alumni_id = $1
+            LIMIT 1
+            """,
+            alumni_id,
+        )
+    if row is None:
+        return {
+            "status": "ok",
+            "found": False,
+            "alumni_id": alumni_id,
+            "record": None,
+            "checked_at": datetime.utcnow().isoformat() + "Z",
+        }
+    return {
+        "status": "ok",
+        "found": True,
+        "alumni_id": alumni_id,
+        "record": _alumni_record_to_dict(row),
+        "checked_at": datetime.utcnow().isoformat() + "Z",
     }
