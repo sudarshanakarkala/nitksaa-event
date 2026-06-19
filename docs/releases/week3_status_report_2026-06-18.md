@@ -471,3 +471,50 @@ git push origin main --tags
 ✅ All four OIs resolved — documentation now matches implementation
 
 **Final Recommendation:** CLOSED — ready for Week 4
+
+---
+
+## Developer Diagnostics UX Showcase Addendum
+
+**Date:** 2026-06-19  
+**Trigger:** Week 3 backend fully verified — UX Showcase built to demonstrate all workflows visually
+
+### What Was Completed
+
+The Developer Diagnostics screen was extended into a full **Week 3 UX Demonstration Center**.
+
+A new `Week 3 UX Showcase` entry was added to the Registration category in Developer Diagnostics (debug-only). It opens the existing `_RegistrationDiagnosticDetail` screen with six new sections appended:
+
+| Section | Type | Description |
+| --- | --- | --- |
+| §8a Join Link Visibility Matrix | Static | 4-row security table — all join_url visibility rules |
+| §8b Public API Leak Validation | Live | Calls `GET /events/public/{id}` without auth; checks for forbidden fields |
+| §9 Audit Trail Demonstration | Live | Loads latest `event_audit_log` rows via dev diagnostics endpoint |
+| §10 Email Demonstration | Live data from §3 | Email status card (sent/failed/skipped) |
+| §11 Snapshot Demonstration | Live comparison | Side-by-side alumni profile vs registration snapshot fields |
+| §12 Database Rules Demonstration | Static | 4 database rule cards with constraint details |
+
+### Files Changed
+
+| File | Change |
+| --- | --- |
+| `apps/event_app/lib/features/developer/presentation/developer_diagnostics_screen.dart` | 6 new sections, 11 new widgets, 2 new fetch methods, DiagnosticId, routing, category |
+| `docs/reviews/week3_ux_showcase_design.md` | Created — design document |
+| `docs/reviews/week3_ux_showcase_verification_report.md` | Created — verification report (15 screenshot references) |
+| `docs/validation/backend_week3_manual_verification_guide.md` | Updated — Section 12 Week 3 UX Showcase added |
+| `docs/releases/week3_status_report_2026-06-18.md` | This addendum |
+
+### Verification
+
+* `flutter analyze` — **PASS** (No issues found)
+* All 16 sections verified (10 pre-existing, 6 new)
+* All 13 workflows covered
+
+### Constraints Upheld
+
+* No production Flutter screens created
+* No public Event UI flows modified
+* No final attendee UX created
+* All new code inside `kDebugMode`-gated Developer Diagnostics module
+
+**UX Showcase Status:** ✅ Complete

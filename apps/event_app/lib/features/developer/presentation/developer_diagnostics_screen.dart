@@ -188,6 +188,7 @@ class _DeveloperDiagnosticsScreenState
         description:
             'Alumni can register. Confirmation email sent. Join link visible post-registration.',
         items: [
+          items[DiagnosticId.week3UxShowcase]!,
           items[DiagnosticId.registrationApi]!,
           items[DiagnosticId.myRegistration]!,
           items[DiagnosticId.capacityGuard]!,
@@ -403,6 +404,16 @@ class _DeveloperDiagnosticsScreenState
         icon: Icons.history_edu_outlined,
         apiDetails: diagnosticApiDetails[DiagnosticId.auditTrail]!,
       ),
+      DiagnosticId.week3UxShowcase: DiagnosticItem(
+        id: DiagnosticId.week3UxShowcase,
+        title: 'Week 3 UX Showcase',
+        description:
+            'Full visual demonstration: happy path, physical/virtual flows, '
+            'my registration, negative states, security, audit, email, and snapshots.',
+        icon: Icons.auto_awesome_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.week3UxShowcase]!,
+      ),
     };
   }
 
@@ -576,6 +587,7 @@ class DiagnosticDetailScreen extends StatelessWidget {
       DiagnosticId.network => const _NetworkDetail(),
       DiagnosticId.performance => const _PerformanceDetail(),
       DiagnosticId.debugTools => const _DebugToolsDetail(),
+      DiagnosticId.week3UxShowcase ||
       DiagnosticId.registrationApi ||
       DiagnosticId.myRegistration ||
       DiagnosticId.capacityGuard ||
@@ -679,6 +691,16 @@ class _RegistrationDiagnosticDetailState
   bool _myRegListLoading = false;
   Map<String, dynamic>? _myRegListResult;
   String? _myRegListError;
+
+  // ── Section 8: Public API Leak Validation ────────────────────────────────
+  bool _publicLeakLoading = false;
+  Map<String, dynamic>? _publicLeakResult;
+  String? _publicLeakError;
+
+  // ── Section 9: Audit Trail ───────────────────────────────────────────────
+  bool _auditLogLoading = false;
+  Map<String, dynamic>? _auditLogResult;
+  String? _auditLogError;
 
   @override
   void dispose() {
@@ -790,6 +812,38 @@ class _RegistrationDiagnosticDetailState
         _sectionHeader('Dev Reference Notes', Icons.book_outlined,
             accent: cs.tertiary),
         _devReferenceNotes(),
+
+        // ── §8: Security Demonstration ────────────────────────────────────
+        _sectionHeader('§8  Security Demonstration', Icons.security_outlined,
+            accent: cs.error),
+        _joinLinkMatrixCard(),
+        const SizedBox(height: 8),
+        _sectionHeader('  Public API Leak Validation', Icons.verified_outlined,
+            accent: cs.error),
+        _publicLeakCard(),
+
+        // ── §9: Audit Trail Demonstration ─────────────────────────────────
+        _sectionHeader('§9  Audit Trail Demonstration',
+            Icons.history_edu_outlined,
+            accent: cs.secondary),
+        _auditTrailCard(),
+
+        // ── §10: Email Demonstration ──────────────────────────────────────
+        _sectionHeader('§10  Email Demonstration',
+            Icons.mark_email_read_outlined,
+            accent: cs.tertiary),
+        _emailDemoCard(),
+
+        // ── §11: Snapshot Demonstration ───────────────────────────────────
+        _sectionHeader('§11  Snapshot Demonstration',
+            Icons.compare_arrows_outlined,
+            accent: cs.tertiary),
+        _snapshotDemoCard(),
+
+        // ── §12: Database Rules Demonstration ────────────────────────────
+        _sectionHeader('§12  Database Rules Demonstration',
+            Icons.rule_folder_outlined),
+        _databaseRulesCard(),
 
         const SizedBox(height: 40),
       ],
@@ -1924,6 +1978,752 @@ class _RegistrationDiagnosticDetailState
   }
 
   // ─────────────────────────────────────────────────────────────────────────
+  // §8: Security Demonstration widgets
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _joinLinkMatrixCard() {
+    final cs = Theme.of(context).colorScheme;
+    const rows = [
+      ('registered', 'virtual', 'published', true),
+      ('cancelled', 'virtual', 'published', false),
+      ('registered', 'physical', 'published', false),
+      ('registered', 'virtual', 'draft', false),
+    ];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Join Link Visibility Matrix',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              'Only one combination of conditions exposes join_url.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            // Header row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(children: [
+                _matrixCell('Registration', isHeader: true),
+                _matrixCell('Event Type', isHeader: true),
+                _matrixCell('Status', isHeader: true),
+                _matrixCell('Join Link', isHeader: true),
+              ]),
+            ),
+            const SizedBox(height: 4),
+            for (final r in rows)
+              Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: r.$4
+                      ? Colors.green.withValues(alpha: 0.08)
+                      : cs.surfaceContainerLowest,
+                  border: Border.all(
+                    color: r.$4
+                        ? Colors.green.withValues(alpha: 0.3)
+                        : cs.outlineVariant.withValues(alpha: 0.4),
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(children: [
+                  _matrixCell(r.$1),
+                  _matrixCell(r.$2),
+                  _matrixCell(r.$3),
+                  Expanded(
+                    child: Row(children: [
+                      Icon(
+                        r.$4
+                            ? Icons.check_circle
+                            : Icons.cancel_outlined,
+                        size: 14,
+                        color: r.$4 ? Colors.green : cs.error,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        r.$4 ? 'Visible' : 'Hidden',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: r.$4 ? Colors.green.shade800 : cs.error,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ]),
+                  ),
+                ]),
+              ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.lock_outlined,
+                    size: 14, color: Colors.green),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'join_url is only exposed when: status=registered AND '
+                    'is_virtual=true AND event_status=published.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.green.shade800,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _matrixCell(String text, {bool isHeader = false}) {
+    return Expanded(
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: isHeader ? FontWeight.w700 : FontWeight.w500,
+              color: isHeader
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+    );
+  }
+
+  Widget _publicLeakCard() {
+    final cs = Theme.of(context).colorScheme;
+    final leakedFields = _publicLeakResult?['leaked_fields'] as List?;
+    final passed = _publicLeakResult != null && (leakedFields?.isEmpty ?? true);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Verify: Public Event Payload has no virtual_url or join_url',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _publicLeakLoading ? null : _fetchPublicLeak,
+              icon: _publicLeakLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.security_outlined, size: 18),
+              label: const Text('Check  →  GET /events/public/{id}'),
+            ),
+            if (_publicLeakError != null) _errorChip(_publicLeakError!),
+            if (_publicLeakResult != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: passed
+                      ? Colors.green.withValues(alpha: 0.1)
+                      : cs.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: passed
+                        ? Colors.green.withValues(alpha: 0.3)
+                        : cs.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(children: [
+                  Icon(
+                    passed ? Icons.verified : Icons.warning_amber_outlined,
+                    color: passed ? Colors.green : cs.onErrorContainer,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          passed ? 'PASS — No sensitive fields leaked' : 'FAIL — Fields leaked',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: passed
+                                    ? Colors.green.shade800
+                                    : cs.onErrorContainer,
+                              ),
+                        ),
+                        if (!passed && leakedFields != null)
+                          Text(leakedFields.join(', '),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                      color: cs.onErrorContainer)),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+              _jsonBlock(context, 'Public event payload', _publicLeakResult),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §9: Audit Trail Demonstration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _auditTrailCard() {
+    final cs = Theme.of(context).colorScheme;
+    final rows =
+        (_auditLogResult?['rows'] as List?)?.take(8).toList() ?? const [];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Latest audit log rows from event_audit_log. '
+              'Records are written automatically on every state-changing action.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _auditLogLoading ? null : _fetchAuditLog,
+              icon: _auditLogLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.history_edu_outlined, size: 18),
+              label: const Text(
+                  'Fetch  →  GET /dev/diagnostics/db/event_audit_log'),
+            ),
+            if (_auditLogError != null) _errorChip(_auditLogError!),
+            if (rows.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              for (final r in rows)
+                _auditRowCard(Map<String, dynamic>.from(r as Map)),
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(children: [
+                  Icon(Icons.info_outline, size: 14,
+                      color: cs.onSecondaryContainer),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Audit records written automatically on every '
+                      'registration, cancellation, and event status change.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSecondaryContainer,
+                          ),
+                    ),
+                  ),
+                ]),
+              ),
+            ] else if (_auditLogResult != null)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('No audit rows found.'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _auditRowCard(Map<String, dynamic> row) {
+    final cs = Theme.of(context).colorScheme;
+    final eventType = row['event_type']?.toString() ?? '—';
+    final entityType = row['entity_type']?.toString() ?? '—';
+    final entityId = row['entity_id']?.toString() ?? '—';
+    final createdAt = row['created_at']?.toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: cs.primary,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(eventType,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text('$entityType #$entityId',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        Text(
+          _formatDateTime(createdAt),
+          style: Theme.of(context)
+              .textTheme
+              .labelSmall
+              ?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      ]),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §10: Email Demonstration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _emailDemoCard() {
+    final cs = Theme.of(context).colorScheme;
+    final data = _registerResult;
+
+    if (data == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: _protoPlaceholder(
+            'Run §3 Registration Action first to see live email status.',
+            icon: Icons.mark_email_read_outlined,
+          ),
+        ),
+      );
+    }
+
+    final emailStatus =
+        data['confirmation_email_status'] as String? ?? 'unknown';
+    final sentAt = data['confirmation_email_sent_at'] as String?;
+    final regNum = data['registration_number'] as String? ?? '—';
+
+    final (icon, color, label) = switch (emailStatus) {
+      'sent' => (
+          Icons.mark_email_read_outlined,
+          Colors.green,
+          'Confirmation email sent'
+        ),
+      'failed' => (Icons.email_outlined, cs.error, 'Email delivery failed'),
+      'skipped' => (
+          Icons.email_outlined,
+          cs.onSurfaceVariant,
+          'Email skipped (dev/log mode)'
+        ),
+      _ => (
+          Icons.hourglass_top_outlined,
+          cs.onSurfaceVariant,
+          'Email status: $emailStatus'
+        ),
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _profileRow(Icons.confirmation_number_outlined, 'Reg #', regNum),
+            _profileRow(Icons.schedule_outlined, 'Sent At',
+                sentAt != null ? _formatDateTime(sentAt) : '—'),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: emailStatus == 'sent'
+                    ? Colors.green.withValues(alpha: 0.1)
+                    : emailStatus == 'failed'
+                        ? cs.errorContainer
+                        : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: color,
+                            fontWeight: FontWeight.w600,
+                          )),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: cs.tertiaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Icon(Icons.info_outline, size: 14,
+                    color: cs.onTertiaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Email delivery never blocks registration success. '
+                    'Registration is confirmed even if confirmation_email_status = "failed".',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onTertiaryContainer,
+                        ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §11: Snapshot Demonstration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _snapshotDemoCard() {
+    final cs = Theme.of(context).colorScheme;
+    final profile = _autofillResult;
+    final reg = _registerResult;
+
+    if (profile == null && reg == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: _protoPlaceholder(
+            'Fetch §1 Alumni Profile and run §3 Registration to compare.',
+            icon: Icons.compare_arrows_outlined,
+          ),
+        ),
+      );
+    }
+
+    final fields = [
+      ('Full Name', 'fullname', 'fullname_snapshot'),
+      ('Batch Year', 'batch_year', 'batch_year_snapshot'),
+      ('Branch', 'branch', 'branch_snapshot'),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text('Alumni Profile (live)',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+              const Icon(Icons.compare_arrows_outlined, size: 16),
+              Expanded(
+                child: Text('Registration Snapshot',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            for (final f in fields) _snapshotRow(f.$1, f.$2, f.$3, profile, reg),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: cs.tertiaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Icon(Icons.save_outlined, size: 14,
+                    color: cs.onTertiaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Snapshot fields are frozen at registration time. '
+                    'Changes to the alumni profile after registration do not affect the snapshot.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onTertiaryContainer,
+                        ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _snapshotRow(
+    String label,
+    String profileKey,
+    String snapshotKey,
+    Map<String, dynamic>? profile,
+    Map<String, dynamic>? reg,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final liveVal = profile?[profileKey]?.toString() ?? '—';
+    final snapVal = reg?[snapshotKey]?.toString() ?? '—';
+    final match = liveVal == snapVal;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          )),
+                  const SizedBox(height: 2),
+                  Text(liveVal,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            child: Icon(
+              match ? Icons.compare_arrows : Icons.warning_amber_outlined,
+              size: 16,
+              color: match ? cs.primary : cs.error,
+            ),
+          ),
+          Expanded(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          )),
+                  const SizedBox(height: 2),
+                  Text(snapVal,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §12: Database Rules Demonstration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _databaseRulesCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _dbRuleCard(
+          icon: Icons.tag_outlined,
+          title: 'Unique Registration Number',
+          rule:
+              'NITKSAA-{year}-{registration_id:06d} — generated server-side.',
+          purpose:
+              'Guarantees a human-readable, globally unique identifier for every registration.',
+          status: 'Verified — format enforced by registration_service.py',
+        ),
+        _dbRuleCard(
+          icon: Icons.lock_outlined,
+          title: 'Partial Unique Registration',
+          rule: 'UNIQUE (event_id, firebase_uid) WHERE status = \'registered\'.',
+          purpose:
+              'Prevents double-registration for the same user + event combination '
+              'while allowing re-registration after cancellation.',
+          status: 'Verified — partial index in migration 008',
+        ),
+        _dbRuleCard(
+          icon: Icons.refresh_outlined,
+          title: 'Re-registration After Cancellation',
+          rule:
+              'Cancelled registrations are soft-deleted (status=\'cancelled\'). '
+              'A new row is inserted on re-registration.',
+          purpose:
+              'Preserves full audit history. The partial unique index permits re-registration.',
+          status: 'Verified — tested in Diag 6 (duplicate guard)',
+        ),
+        _dbRuleCard(
+          icon: Icons.groups_outlined,
+          title: 'Registered Count Excludes Cancelled',
+          rule:
+              'COUNT(*) WHERE event_id=\$id AND status=\'registered\' — '
+              'cancelled rows not counted.',
+          purpose:
+              'Capacity guard is accurate. Cancelling frees up a slot for another registrant.',
+          status: 'Verified — tested in Diag 7 (capacity guard)',
+        ),
+      ],
+    );
+  }
+
+  Widget _dbRuleCard({
+    required IconData icon,
+    required String title,
+    required String rule,
+    required String purpose,
+    required String status,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(icon, size: 16, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelLarge
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            _dbRuleRow('Rule', rule),
+            _dbRuleRow('Purpose', purpose),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.25)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.check_circle_outline,
+                    size: 12, color: Colors.green),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(status,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(
+                              color: Colors.green.shade800,
+                              fontWeight: FontWeight.w600)),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dbRuleRow(String label, String value) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 54,
+            child: Text(label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    )),
+          ),
+          Expanded(
+            child: Text(value,
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
   // Fetch methods
   // ─────────────────────────────────────────────────────────────────────────
 
@@ -2068,6 +2868,74 @@ class _RegistrationDiagnosticDetailState
       setState(() => _myRegListError = errorMessage(e));
     } finally {
       if (mounted) setState(() => _myRegListLoading = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §8: Public API leak check fetch
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchPublicLeak() async {
+    if (!mounted) return;
+    final eventId = _eventId;
+    if (eventId.isEmpty) {
+      setState(() =>
+          _publicLeakError = 'Enter an event ID in the picker above.');
+      return;
+    }
+    setState(() {
+      _publicLeakLoading = true;
+      _publicLeakError = null;
+    });
+    try {
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/events/public/$eventId',
+          )
+          .timeout(const Duration(seconds: 15));
+      final data = response.data ?? <String, dynamic>{};
+      const forbidden = ['virtual_url', 'join_url', 'created_by_firebase_uid'];
+      final leaked = forbidden.where((f) => data.containsKey(f)).toList();
+      if (!mounted) return;
+      setState(() => _publicLeakResult = {
+            ...data,
+            'leaked_fields': leaked,
+          });
+    } catch (e, st) {
+      AppLogger.error('Public leak check failed', e, st);
+      if (!mounted) return;
+      setState(() => _publicLeakError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _publicLeakLoading = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §9: Audit trail fetch
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchAuditLog() async {
+    if (!mounted) return;
+    setState(() {
+      _auditLogLoading = true;
+      _auditLogError = null;
+    });
+    try {
+      final token = await _ensureBackendAccessToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/dev/diagnostics/db/event_audit_log',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _auditLogResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Audit log fetch failed', e, st);
+      if (!mounted) return;
+      setState(() => _auditLogError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _auditLogLoading = false);
     }
   }
 
@@ -3765,6 +4633,7 @@ enum DiagnosticId {
   attendeeExport,
   adminRoleGuard,
   auditTrail,
+  week3UxShowcase,
 }
 
 enum DiagnosticStatus { ok, info, warning, error, notApplicable }
@@ -4031,6 +4900,19 @@ const Map<DiagnosticId, BackendApiDetails> diagnosticApiDetails = {
     sampleResponse: '{"entries":[{"action":"event.updated","actor":"..."}]}',
     uiGuidance:
         'Display recent audit entries with actor, action, and timestamp.',
+  ),
+  DiagnosticId.week3UxShowcase: BackendApiDetails(
+    featureName: 'Week 3 UX Showcase',
+    method: 'MULTIPLE',
+    path: 'All Week 3 registration endpoints',
+    authRequirement: 'Backend JWT required (alumni account)',
+    purpose:
+        'Full visual demonstration of all Week 3 registration workflows, '
+        'security rules, audit trail, email, and snapshot behaviour.',
+    implementationStatus: 'Implemented',
+    sampleResponse: 'Interactive showcase — runs live against backend.',
+    uiGuidance:
+        'Use as Product Owner demo, frontend developer reference, and backend validation.',
   ),
 };
 

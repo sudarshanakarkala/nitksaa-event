@@ -2050,3 +2050,59 @@ resolution plans in the open issues register.
 
 *This guide covers Week 3 deliverables only. Attendance, QR codes, waitlist, payment,
 and production Flutter registration UI are out of scope for Week 3.*
+
+---
+
+## 12. Week 3 UX Showcase
+
+**Added:** 2026-06-19  
+**Location:** Developer Diagnostics → Registration → Week 3 UX Showcase
+
+The Developer Diagnostics screen has been extended into a complete Week 3 UX Demonstration
+Center. All sections below are accessible in the same screen used for registration diagnostics.
+
+### 12.1 Access
+
+1. Build the app in debug mode: `flutter run -d chrome`
+2. Navigate to **Developer Diagnostics** (long-press the app icon or via the Foundation Ready screen)
+3. Open the **Registration** category (expanded by default)
+4. Tap **Week 3 UX Showcase** — listed first in the category
+
+### 12.2 Section Overview
+
+| Section | What to Verify |
+|---|---|
+| §0 Run All Validation | Tap "Run All Registration Diagnostics" — expect 13/13 PASS |
+| §1 Alumni Autofill | Tap "Fetch → GET /alumni/me" — profile card populates |
+| §2 Eligibility | Enter event ID 25 or 26 → "Check Eligibility" → green "eligible" banner |
+| §3 Registration | "Register (Dev)" → registration_number appears |
+| §4 Confirmation | Populated after §3 — join_url visible for event 26, hidden for event 25 |
+| §5 My Registration | Enter event ID → "Fetch My Registration" → registration card |
+| §6 My Registrations | "Fetch My Registrations" → scrollable list |
+| §7 Negative Gallery | Static — scroll through 9 error state cards |
+| Dev Notes | Static — 7 frontend developer reference rules |
+| §8a Join Link Matrix | Static table — confirm 4 rows and highlight rule |
+| §8b Public Leak | Enter event ID → "Check Public Event" → expect green PASS badge |
+| §9 Audit Trail | "Fetch Audit Log" → latest 8 rows from event_audit_log |
+| §10 Email Demo | Populated after §3 — confirm email status card |
+| §11 Snapshot Demo | Populated after §1 + §3 — side-by-side profile vs snapshot fields |
+| §12 DB Rules | Static — 4 rule cards with green verification badges |
+
+### 12.3 Expected §8b Public Leak Result
+
+Tested with event IDs 25 and 26 (both virtual and physical):
+
+```text
+PASS — No sensitive fields leaked
+(virtual_url: not present, join_url: not present, created_by_firebase_uid: not present)
+```
+
+### 12.4 Expected §9 Audit Trail
+
+After running §3 Registration, tap "Fetch Audit Log". Expect rows with `event_type` values
+such as `registration.created`, `event.status_changed` for the diagnostic test events.
+
+### 12.5 Section §11 Snapshot Notes
+
+If the alumni profile has `batch_year=null` or `branch=null`, the snapshot fields will
+also show `null` (displayed as `—`). This is expected — null fields are preserved in snapshots.
