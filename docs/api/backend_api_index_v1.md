@@ -1,3 +1,14 @@
+# DEPRECATED
+
+This document is retained for historical reference only.
+
+Use:
+- events_api_contract_v2.md
+- backend_api_index_v2.md
+- event_admin_api_usage_v2.md
+
+for all new development.
+
 # Backend API Index
 
 This index documents frontend-facing backend APIs for the NITKSAA event platform. Planned entries are listed for frontend diagnostics and UI planning only; this task does not implement new backend endpoints.
