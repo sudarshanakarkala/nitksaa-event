@@ -130,6 +130,7 @@ class _DeveloperDiagnosticsScreenState
         description:
             'Alumni can register. Confirmation email sent. Join link visible post-registration.',
         items: [
+          items[DiagnosticId.week3UxShowcase]!,
           items[DiagnosticId.registrationApi]!,
           items[DiagnosticId.myRegistration]!,
           items[DiagnosticId.capacityGuard]!,
@@ -335,6 +336,16 @@ class _DeveloperDiagnosticsScreenState
         icon: Icons.history_edu_outlined,
         apiDetails: diagnosticApiDetails[DiagnosticId.auditTrail]!,
       ),
+      DiagnosticId.week3UxShowcase: DiagnosticItem(
+        id: DiagnosticId.week3UxShowcase,
+        title: 'Week 3 UX Showcase',
+        description:
+            'Full visual demonstration: happy path, physical/virtual flows, '
+            'my registration, negative states, security, audit, email, and snapshots.',
+        icon: Icons.auto_awesome_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.week3UxShowcase]!,
+      ),
     };
   }
 
@@ -508,6 +519,13 @@ class DiagnosticDetailScreen extends StatelessWidget {
       DiagnosticId.network => const _NetworkDetail(),
       DiagnosticId.performance => const _PerformanceDetail(),
       DiagnosticId.debugTools => const _DebugToolsDetail(),
+      DiagnosticId.week3UxShowcase ||
+      DiagnosticId.registrationApi ||
+      DiagnosticId.myRegistration ||
+      DiagnosticId.capacityGuard ||
+      DiagnosticId.confirmationEmail ||
+      DiagnosticId.joinLinkVisibility =>
+        _RegistrationDiagnosticDetail(item: item),
       DiagnosticId.eventsApi ||
       DiagnosticId.eventDetailApi ||
       DiagnosticId.eventCreationApi ||
@@ -560,6 +578,2388 @@ class _ComingSoonDiagnosticDetail extends StatelessWidget {
         ),
       ],
     );
+  }
+}
+
+class _RegistrationDiagnosticDetail extends StatefulWidget {
+  const _RegistrationDiagnosticDetail({required this.item});
+
+  final DiagnosticItem item;
+
+  @override
+  State<_RegistrationDiagnosticDetail> createState() =>
+      _RegistrationDiagnosticDetailState();
+}
+
+class _RegistrationDiagnosticDetailState
+    extends State<_RegistrationDiagnosticDetail> {
+  // ── Section 0: Run All Diagnostics ──────────────────────────────────────
+  bool _loading = false;
+  String? _status;
+  Map<String, dynamic>? _diagResult;
+  DiagnosticRunState? _runState;
+  String? _backendAccessToken;
+
+  // ── Event ID picker (shared for §2, §3, §5) ─────────────────────────────
+  final TextEditingController _eventIdController = TextEditingController();
+
+  // ── Section 1: Alumni Autofill ───────────────────────────────────────────
+  bool _autofillLoading = false;
+  Map<String, dynamic>? _autofillResult;
+  String? _autofillError;
+
+  // ── Section 2: Eligibility ───────────────────────────────────────────────
+  bool _eligibilityLoading = false;
+  Map<String, dynamic>? _eligibilityResult;
+  String? _eligibilityError;
+
+  // ── Section 3: Registration Action ──────────────────────────────────────
+  bool _registerLoading = false;
+  Map<String, dynamic>? _registerResult;
+  String? _registerError;
+
+  // ── Section 5: My Registration ───────────────────────────────────────────
+  bool _myRegLoading = false;
+  Map<String, dynamic>? _myRegResult;
+  String? _myRegError;
+
+  // ── Section 6: My Registrations List ────────────────────────────────────
+  bool _myRegListLoading = false;
+  Map<String, dynamic>? _myRegListResult;
+  String? _myRegListError;
+
+  // ── Section 8: Public API Leak Validation ────────────────────────────────
+  bool _publicLeakLoading = false;
+  Map<String, dynamic>? _publicLeakResult;
+  String? _publicLeakError;
+
+  // ── Section 9: Audit Trail ───────────────────────────────────────────────
+  bool _auditLogLoading = false;
+  Map<String, dynamic>? _auditLogResult;
+  String? _auditLogError;
+
+  @override
+  void dispose() {
+    _eventIdController.dispose();
+    super.dispose();
+  }
+
+  String get _eventId => _eventIdController.text.trim();
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // build
+  // ─────────────────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return DiagnosticDetailScaffold(
+      title: widget.item.title,
+      description: widget.item.description,
+      apiDetails: widget.item.apiDetails,
+      result: _runState,
+      children: [
+        // ── Section 0: Run All Diagnostics ───────────────────────────────
+        _runAllCard(),
+        const SizedBox(height: 8),
+
+        // ── Event ID Picker ───────────────────────────────────────────────
+        _eventIdPickerCard(),
+
+        // ── Section 1: Alumni Autofill Preview ───────────────────────────
+        _sectionHeader('§1  Alumni Autofill Preview', Icons.person_pin_outlined),
+        _alumniAutofillProto(),
+        const SizedBox(height: 6),
+        OutlinedButton.icon(
+          onPressed: _autofillLoading ? null : _fetchAutofill,
+          icon: _autofillLoading
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.cloud_download_outlined, size: 18),
+          label: const Text('Fetch  →  GET /alumni/me'),
+        ),
+        if (_autofillError != null) _errorChip(_autofillError!),
+        _jsonBlock(context, 'GET /api/v1/alumni/me response', _autofillResult),
+
+        // ── Section 2: Registration Eligibility Preview ───────────────────
+        _sectionHeader('§2  Registration Eligibility Preview', Icons.rule_outlined),
+        _eligibilityProto(),
+        const SizedBox(height: 6),
+        OutlinedButton.icon(
+          onPressed: _eligibilityLoading ? null : _fetchEligibility,
+          icon: _eligibilityLoading
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.cloud_download_outlined, size: 18),
+          label: const Text('Check  →  GET /events/{id}/registration-eligibility'),
+        ),
+        if (_eligibilityError != null) _errorChip(_eligibilityError!),
+        _jsonBlock(context, 'GET /registration-eligibility response', _eligibilityResult),
+
+        // ── Section 3: Registration Action Preview ────────────────────────
+        _sectionHeader('§3  Registration Action Preview', Icons.app_registration_outlined),
+        _registerProto(),
+        const SizedBox(height: 6),
+        OutlinedButton.icon(
+          onPressed: _registerLoading ? null : _doRegister,
+          icon: _registerLoading
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.send_outlined, size: 18),
+          label: const Text('Register (Dev)  →  POST /events/{id}/register'),
+        ),
+        if (_registerError != null) _errorChip(_registerError!),
+        _jsonBlock(context, 'POST /register response', _registerResult),
+
+        // ── Section 4: Confirmation Screen Preview ────────────────────────
+        _sectionHeader('§4  Confirmation Screen Preview', Icons.check_circle_outline),
+        _confirmationProto(),
+
+        // ── Section 5: My Registration Preview ────────────────────────────
+        _sectionHeader('§5  My Registration Preview', Icons.badge_outlined),
+        _myRegistrationProto(),
+        const SizedBox(height: 6),
+        OutlinedButton.icon(
+          onPressed: _myRegLoading ? null : _fetchMyRegistration,
+          icon: _myRegLoading
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.cloud_download_outlined, size: 18),
+          label: const Text('Fetch  →  GET /events/{id}/my-registration'),
+        ),
+        if (_myRegError != null) _errorChip(_myRegError!),
+        _jsonBlock(context, 'GET /my-registration response', _myRegResult),
+
+        // ── Section 6: My Registrations List Preview ──────────────────────
+        _sectionHeader('§6  My Registrations List Preview', Icons.list_alt_outlined),
+        _myRegistrationsListProto(),
+        const SizedBox(height: 6),
+        OutlinedButton.icon(
+          onPressed: _myRegListLoading ? null : _fetchMyRegistrationsList,
+          icon: _myRegListLoading
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : const Icon(Icons.cloud_download_outlined, size: 18),
+          label: const Text('Fetch  →  GET /my/registrations'),
+        ),
+        if (_myRegListError != null) _errorChip(_myRegListError!),
+        _jsonBlock(context, 'GET /my/registrations response', _myRegListResult),
+
+        // ── Section 7: Negative State Gallery ────────────────────────────
+        _sectionHeader('§7  Negative State Gallery', Icons.block_outlined),
+        _negativeStateGallery(),
+
+        // ── Part C: Frontend Developer Reference Notes ────────────────────
+        _sectionHeader('Dev Reference Notes', Icons.book_outlined,
+            accent: cs.tertiary),
+        _devReferenceNotes(),
+
+        // ── §8: Security Demonstration ────────────────────────────────────
+        _sectionHeader('§8  Security Demonstration', Icons.security_outlined,
+            accent: cs.error),
+        _joinLinkMatrixCard(),
+        const SizedBox(height: 8),
+        _sectionHeader('  Public API Leak Validation', Icons.verified_outlined,
+            accent: cs.error),
+        _publicLeakCard(),
+
+        // ── §9: Audit Trail Demonstration ─────────────────────────────────
+        _sectionHeader('§9  Audit Trail Demonstration',
+            Icons.history_edu_outlined,
+            accent: cs.secondary),
+        _auditTrailCard(),
+
+        // ── §10: Email Demonstration ──────────────────────────────────────
+        _sectionHeader('§10  Email Demonstration',
+            Icons.mark_email_read_outlined,
+            accent: cs.tertiary),
+        _emailDemoCard(),
+
+        // ── §11: Snapshot Demonstration ───────────────────────────────────
+        _sectionHeader('§11  Snapshot Demonstration',
+            Icons.compare_arrows_outlined,
+            accent: cs.tertiary),
+        _snapshotDemoCard(),
+
+        // ── §12: Database Rules Demonstration ────────────────────────────
+        _sectionHeader('§12  Database Rules Demonstration',
+            Icons.rule_folder_outlined),
+        _databaseRulesCard(),
+
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 0: Run All Diagnostics card
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _runAllCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Backend: $backendBaseUrl'),
+            const SizedBox(height: 4),
+            Text(
+              'Runs all 13 registration diagnostics on the backend. Requires alumni account.',
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: Theme.of(context).colorScheme.onSurfaceVariant,
+                  ),
+            ),
+            const SizedBox(height: 12),
+            FilledButton.icon(
+              onPressed: _loading ? null : _runDiagnostics,
+              icon: _loading
+                  ? const SizedBox(
+                      width: 18,
+                      height: 18,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.app_registration_outlined),
+              label: const Text('Run All Registration Diagnostics'),
+            ),
+            if (_status != null) ...[
+              const SizedBox(height: 12),
+              Text(
+                _status!,
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      color: Theme.of(context).colorScheme.onSurfaceVariant,
+                    ),
+              ),
+            ],
+            if (_diagResult != null) ...[
+              const SizedBox(height: 16),
+              _resultSummary(),
+              const SizedBox(height: 12),
+              _resultList(),
+            ],
+            _jsonBlock(context, 'Raw diagnostic response', _diagResult),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _resultSummary() {
+    final passed = _diagResult?['passed'] as int? ?? 0;
+    final failed = _diagResult?['failed'] as int? ?? 0;
+    final total = _diagResult?['total'] as int? ?? 0;
+    final colorScheme = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        _pill('$passed PASS', Colors.green.withValues(alpha: 0.12), Colors.green.shade800),
+        const SizedBox(width: 8),
+        _pill(
+          '$failed FAIL',
+          failed > 0 ? colorScheme.errorContainer : colorScheme.surfaceContainerHighest,
+          failed > 0 ? colorScheme.onErrorContainer : colorScheme.onSurfaceVariant,
+        ),
+        const SizedBox(width: 8),
+        Text('of $total',
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                  color: colorScheme.onSurfaceVariant,
+                )),
+      ],
+    );
+  }
+
+  Widget _pill(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(text,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                color: fg,
+                fontWeight: FontWeight.w700,
+              )),
+    );
+  }
+
+  Widget _resultList() {
+    final results = _diagResult?['results'] as List? ?? const [];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        for (final r in results)
+          _resultCard(Map<String, dynamic>.from(r as Map)),
+      ],
+    );
+  }
+
+  Widget _resultCard(Map<String, dynamic> r) {
+    final isPassed = r['status'] == 'PASS';
+    final isFailed = r['status'] == 'FAIL';
+    final feature = r['feature'] as String? ?? '';
+    final error = r['error'] as String?;
+    final durationMs = r['duration_ms'] as int? ?? 0;
+    final response = r['response'] as Map?;
+    final colorScheme = Theme.of(context).colorScheme;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(
+                  isPassed
+                      ? Icons.check_circle_outline
+                      : isFailed
+                          ? Icons.error_outline
+                          : Icons.remove_circle_outline,
+                  color: isPassed
+                      ? Colors.green
+                      : isFailed
+                          ? colorScheme.error
+                          : colorScheme.onSurfaceVariant,
+                  size: 18,
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(feature,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelLarge
+                          ?.copyWith(fontWeight: FontWeight.w700)),
+                ),
+                DiagnosticStatusBadge(
+                  status: isPassed
+                      ? DiagnosticStatus.ok
+                      : isFailed
+                          ? DiagnosticStatus.error
+                          : DiagnosticStatus.notApplicable,
+                ),
+              ],
+            ),
+            if (response != null && response.isNotEmpty) ...[
+              const SizedBox(height: 6),
+              for (final entry in response.entries)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 2),
+                  child: Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: 130,
+                        child: Text(entry.key,
+                            style: Theme.of(context)
+                                .textTheme
+                                .bodySmall
+                                ?.copyWith(fontWeight: FontWeight.w600)),
+                      ),
+                      Expanded(
+                        child: SelectableText(entry.value?.toString() ?? 'null',
+                            style: Theme.of(context).textTheme.bodySmall),
+                      ),
+                    ],
+                  ),
+                ),
+            ],
+            if (error != null) ...[
+              const SizedBox(height: 6),
+              Text(error,
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                        color: colorScheme.error,
+                      )),
+            ],
+            const SizedBox(height: 4),
+            Text('$durationMs ms',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: colorScheme.onSurfaceVariant,
+                    )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Event ID Picker card
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _eventIdPickerCard() {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      color: cs.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(Icons.tune_outlined, size: 16, color: cs.primary),
+              const SizedBox(width: 6),
+              Text('Event ID Picker',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelLarge
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+            ]),
+            const SizedBox(height: 4),
+            Text(
+              'Used by §2 Eligibility, §3 Register, §5 My Registration.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _eventIdController,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Event ID',
+                hintText: 'Enter a published event ID',
+                border: OutlineInputBorder(),
+                isDense: true,
+                prefixIcon: Icon(Icons.tag_outlined),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Shared prototype helpers
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _sectionHeader(String text, IconData icon, {Color? accent}) {
+    final cs = Theme.of(context).colorScheme;
+    final color = accent ?? cs.primary;
+    return Padding(
+      padding: const EdgeInsets.only(top: 20, bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 20,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(text,
+                style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                      fontWeight: FontWeight.w700,
+                      color: cs.onSurface,
+                    )),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _protoFrame({required String label, required Widget child}) {
+    final cs = Theme.of(context).colorScheme;
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4),
+      decoration: BoxDecoration(
+        border: Border.all(color: cs.primary.withValues(alpha: 0.25), width: 1.5),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: const BorderRadius.vertical(top: Radius.circular(11)),
+            ),
+            child: Row(children: [
+              Icon(Icons.phone_android_outlined, size: 13, color: cs.onPrimaryContainer),
+              const SizedBox(width: 6),
+              Text('PROTOTYPE — $label',
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: cs.onPrimaryContainer,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0.5,
+                      )),
+            ]),
+          ),
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: child,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _protoHeading(String text) {
+    return Text(text,
+        style: Theme.of(context)
+            .textTheme
+            .titleMedium
+            ?.copyWith(fontWeight: FontWeight.w700));
+  }
+
+  Widget _protoPlaceholder(String text, {IconData icon = Icons.info_outline}) {
+    final cs = Theme.of(context).colorScheme;
+    return Row(
+      children: [
+        Icon(icon, size: 18, color: cs.onSurfaceVariant),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(text,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: cs.onSurfaceVariant,
+                    fontStyle: FontStyle.italic,
+                  )),
+        ),
+      ],
+    );
+  }
+
+  Widget _profileRow(IconData icon, String label, String? value) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        decoration: BoxDecoration(
+          color: cs.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Icon(icon, size: 16, color: cs.primary),
+          const SizedBox(width: 10),
+          SizedBox(
+            width: 80,
+            child: Text(label,
+                style: Theme.of(context)
+                    .textTheme
+                    .labelSmall
+                    ?.copyWith(color: cs.onSurfaceVariant)),
+          ),
+          Expanded(
+            child: Text(value ?? '—',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(fontWeight: FontWeight.w500)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  Widget _statusPill(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(text,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: fg)),
+    );
+  }
+
+  Widget _errorChip(String error) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(children: [
+          Icon(Icons.error_outline, size: 14, color: cs.onErrorContainer),
+          const SizedBox(width: 6),
+          Expanded(
+            child: SelectableText(error,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onErrorContainer)),
+          ),
+        ]),
+      ),
+    );
+  }
+
+  String _formatDateTime(String? iso) {
+    if (iso == null) return '—';
+    try {
+      final dt = DateTime.parse(iso).toLocal();
+      return '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}'
+          ' ${dt.hour.toString().padLeft(2, '0')}:${dt.minute.toString().padLeft(2, '0')}';
+    } catch (_) {
+      return iso;
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 1: Alumni Autofill Preview
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _alumniAutofillProto() {
+    // GET /alumni/me returns the alumni object directly (no "alumni" wrapper key)
+    final data = _autofillResult;
+    final cs = Theme.of(context).colorScheme;
+    return _protoFrame(
+      label: 'Profile Autofill Screen',
+      child: data != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _protoHeading('Confirm Your Profile'),
+                const SizedBox(height: 4),
+                Text(
+                  'Pre-filled from NITKSAA alumni records. Read-only for Week 3.',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant),
+                ),
+                const SizedBox(height: 12),
+                _profileRow(Icons.person_outline, 'Name', data['fullname'] as String?),
+                _profileRow(Icons.email_outlined, 'Email', data['email'] as String?),
+                _profileRow(Icons.phone_outlined, 'Phone', data['phone'] as String?),
+                _profileRow(Icons.school_outlined, 'Batch', data['batch_year']?.toString()),
+                _profileRow(Icons.business_outlined, 'Branch', data['branch'] as String?),
+                _profileRow(Icons.verified_outlined, 'Status',
+                    data['is_active'] == true ? 'Active' : 'Inactive'),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: null,
+                  child: const Text('Confirm & Continue to Register'),
+                ),
+              ],
+            )
+          : _protoPlaceholder(
+              'Press "Fetch Alumni Profile" to load real profile data.',
+              icon: Icons.person_search_outlined,
+            ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 2: Registration Eligibility Preview
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _eligibilityProto() {
+    // GET /events/{id}/registration-eligibility returns flat:
+    // {event_id, eligibility_status: "eligible"|"already_registered"|..., message, registered_count, capacity}
+    final data = _eligibilityResult;
+    final cs = Theme.of(context).colorScheme;
+    final eligStatus = data?['eligibility_status'] as String?;
+
+    return _protoFrame(
+      label: 'Event Detail — Registration State',
+      child: data != null
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _protoHeading('Event ID: ${data['event_id']}'),
+                const SizedBox(height: 6),
+                Row(children: [
+                  _statusPill(
+                    '${data['registered_count']}/${data['capacity'] ?? '∞'} registered',
+                    cs.surfaceContainerHighest,
+                    cs.onSurfaceVariant,
+                  ),
+                ]),
+                const SizedBox(height: 12),
+                _eligibilityBanner(eligStatus, data['message'] as String? ?? ''),
+                const SizedBox(height: 12),
+                FilledButton(
+                  onPressed: null,
+                  child: Text(_eligibilityCta(eligStatus)),
+                ),
+              ],
+            )
+          : _protoPlaceholder(
+              'Enter an event ID above and press "Check Eligibility".',
+              icon: Icons.rule_outlined,
+            ),
+    );
+  }
+
+  Widget _eligibilityBanner(String? eligStatus, String message) {
+    final cs = Theme.of(context).colorScheme;
+    final (bg, fg, icon) = _uiStateStyle(eligStatus, cs);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Row(children: [
+        Icon(icon, size: 16, color: fg),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Text(message,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                    color: fg,
+                    fontWeight: FontWeight.w500,
+                  )),
+        ),
+      ]),
+    );
+  }
+
+  // Maps eligibility_status from the actual API (v2) to visual style.
+  // v2 values: eligible, already_registered, full, closed, not_open_yet, ineligible
+  // Note: POST /register uses different detail strings (event_full, registration_closed,
+  // registration_not_open_yet) — these are HTTP error codes, not eligibility_status values.
+  (Color, Color, IconData) _uiStateStyle(String? eligStatus, ColorScheme cs) {
+    return switch (eligStatus) {
+      'eligible' => (
+          Colors.green.withValues(alpha: 0.12),
+          Colors.green.shade800,
+          Icons.check_circle_outline,
+        ),
+      'already_registered' => (
+          cs.secondaryContainer,
+          cs.onSecondaryContainer,
+          Icons.check_circle,
+        ),
+      'full' => (cs.errorContainer, cs.onErrorContainer, Icons.do_not_disturb_outlined),
+      'closed' => (cs.errorContainer, cs.onErrorContainer, Icons.lock_clock_outlined),
+      'not_open_yet' => (
+          cs.tertiaryContainer,
+          cs.onTertiaryContainer,
+          Icons.hourglass_top_outlined,
+        ),
+      _ => (cs.surfaceContainerHighest, cs.onSurfaceVariant, Icons.info_outline),
+    };
+  }
+
+  String _eligibilityCta(String? eligStatus) {
+    return switch (eligStatus) {
+      'eligible' => 'Register',
+      'already_registered' => 'View My Registration',
+      'full' => 'Event Full',
+      'closed' => 'Registration Closed',
+      'not_open_yet' => 'Registration Not Open Yet',
+      _ => 'Check Eligibility',
+    };
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 3: Registration Action Preview
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _registerProto() {
+    // POST /events/{id}/register returns flat response:
+    // {registration_id, registration_number, status, fullname_snapshot, email_snapshot,
+    //  batch_year_snapshot, branch_snapshot, join_url, confirmation_email_status, event: {...}}
+    final data = _registerResult;
+    final regNum = data?['registration_number'] as String?;
+    final cs = Theme.of(context).colorScheme;
+
+    return _protoFrame(
+      label: 'Register for Event',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _protoHeading('Confirm & Register'),
+          const SizedBox(height: 4),
+          Text(
+            'Profile pre-filled from NITKSAA alumni records. Tap Register to confirm.',
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: cs.onSurfaceVariant),
+          ),
+          const SizedBox(height: 12),
+          if (data != null) ...[
+            _profileRow(Icons.person_outline, 'Name', data['fullname_snapshot'] as String?),
+            _profileRow(Icons.email_outlined, 'Email', data['email_snapshot'] as String?),
+            _profileRow(Icons.school_outlined, 'Batch', data['batch_year_snapshot']?.toString()),
+            _profileRow(Icons.business_outlined, 'Branch', data['branch_snapshot'] as String?),
+          ] else ...[
+            _protoPlaceholder('Alumni profile will appear here after §1 fetch.'),
+          ],
+          const SizedBox(height: 8),
+          if (regNum == null)
+            FilledButton(onPressed: null, child: const Text('Register'))
+          else
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                const Icon(Icons.check_circle, color: Colors.green, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Registered: $regNum',
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w600,
+                          color: Colors.green.shade800,
+                        ),
+                  ),
+                ),
+              ]),
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 4: Confirmation Screen Preview
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _confirmationProto() {
+    // POST /events/{id}/register returns flat:
+    // {registration_number, status, join_url, confirmation_email_status, event: {is_virtual, ...}}
+    final data = _registerResult;
+    final cs = Theme.of(context).colorScheme;
+
+    if (data == null) {
+      return _protoFrame(
+        label: 'Registration Confirmation Screen',
+        child: _protoPlaceholder(
+          'Run §3 Registration Action first to see the live confirmation.',
+          icon: Icons.check_circle_outline,
+        ),
+      );
+    }
+
+    final regNum = data['registration_number'] as String? ?? '—';
+    final joinUrl = data['join_url'] as String?;
+    final emailStatusVal = data['confirmation_email_status'] as String? ?? 'unknown';
+    final event = data['event'] as Map?;
+    final isVirtual = event?['is_virtual'] == true;
+    final secondaryMsg = isVirtual && joinUrl != null
+        ? 'Join link is now available for this webinar.'
+        : 'Your registration number is $regNum.';
+
+    return _protoFrame(
+      label: 'Registration Confirmation Screen',
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          const Icon(Icons.check_circle, color: Colors.green, size: 48),
+          const SizedBox(height: 8),
+          Text(
+            "You're registered.",
+            style: Theme.of(context)
+                .textTheme
+                .titleLarge
+                ?.copyWith(fontWeight: FontWeight.w700),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 4),
+          Text(
+            secondaryMsg,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: cs.onSurfaceVariant),
+            textAlign: TextAlign.center,
+          ),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            decoration: BoxDecoration(
+              color: cs.primaryContainer,
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Column(children: [
+              Text('Registration Number',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: cs.onPrimaryContainer)),
+              const SizedBox(height: 4),
+              SelectableText(
+                regNum,
+                style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                      fontWeight: FontWeight.w800,
+                      color: cs.onPrimaryContainer,
+                      letterSpacing: 1.2,
+                    ),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 12),
+          if (isVirtual && joinUrl != null) ...[
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: cs.secondaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Icon(Icons.video_call_outlined, color: cs.onSecondaryContainer, size: 20),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Join Link Available',
+                          style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: cs.onSecondaryContainer,
+                              )),
+                      SelectableText(joinUrl,
+                          style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                color: cs.onSecondaryContainer,
+                              )),
+                    ],
+                  ),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 8),
+          ],
+          _emailStatusRow(emailStatusVal),
+          const SizedBox(height: 12),
+          OutlinedButton.icon(
+            onPressed: null,
+            icon: const Icon(Icons.badge_outlined),
+            label: const Text('View My Registration'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _emailStatusRow(String status) {
+    final cs = Theme.of(context).colorScheme;
+    final (icon, color, text) = switch (status) {
+      'sent' => (Icons.mark_email_read_outlined, Colors.green, 'Confirmation email sent'),
+      'failed' => (
+          Icons.email_outlined,
+          cs.error,
+          'Email could not be sent — save your registration number',
+        ),
+      'skipped' => (Icons.email_outlined, cs.onSurfaceVariant, 'Email skipped (dev mode)'),
+      _ => (Icons.hourglass_top_outlined, cs.onSurfaceVariant, 'Email status: $status'),
+    };
+    return Row(children: [
+      Icon(icon, size: 16, color: color),
+      const SizedBox(width: 6),
+      Expanded(
+        child: Text(text,
+            style: Theme.of(context).textTheme.bodySmall?.copyWith(color: color)),
+      ),
+    ]);
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 5: My Registration Preview
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _myRegistrationProto() {
+    // GET /events/{id}/my-registration returns flat (same shape as register response):
+    // {registration_number, status, registered_at, join_url, event: {is_virtual, location_text, title}}
+    final data = _myRegResult;
+    final event = data?['event'] as Map?;
+    final isRegistered = data?['status'] == 'registered';
+    final cs = Theme.of(context).colorScheme;
+
+    return _protoFrame(
+      label: 'My Registration Detail',
+      child: (data != null && isRegistered)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _protoHeading(event?['title'] as String? ?? 'Event'),
+                const SizedBox(height: 12),
+                _profileRow(Icons.confirmation_number_outlined, 'Reg #',
+                    data['registration_number'] as String?),
+                _profileRow(Icons.event_outlined, 'Status', data['status'] as String?),
+                _profileRow(Icons.schedule_outlined, 'Registered',
+                    _formatDateTime(data['registered_at'] as String?)),
+                if (event?['is_virtual'] == true) ...[
+                  const SizedBox(height: 8),
+                  if ((data['join_url'] as String?) != null)
+                    Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: cs.secondaryContainer,
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(children: [
+                        Icon(Icons.video_call_outlined,
+                            color: cs.onSecondaryContainer, size: 18),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text('Join Link',
+                                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                        color: cs.onSecondaryContainer,
+                                      )),
+                              SelectableText(data['join_url'] as String,
+                                  style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                        color: cs.onSecondaryContainer,
+                                      )),
+                            ],
+                          ),
+                        ),
+                      ]),
+                    )
+                  else
+                    _protoPlaceholder('Join link not yet available.',
+                        icon: Icons.video_call_outlined),
+                ] else if (event?['location_text'] != null) ...[
+                  _profileRow(Icons.location_on_outlined, 'Venue',
+                      event!['location_text'] as String?),
+                ],
+              ],
+            )
+          : _protoPlaceholder(
+              data != null
+                  ? 'Not registered for this event.'
+                  : 'Enter event ID above and press "Fetch My Registration".',
+              icon: Icons.badge_outlined,
+            ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 6: My Registrations List Preview
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _myRegistrationsListProto() {
+    final list = _myRegListResult?['registrations'] as List?;
+    final total = _myRegListResult?['total'] as int?;
+
+    return _protoFrame(
+      label: 'My Registrations List',
+      child: (list != null && list.isNotEmpty)
+          ? Column(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                _protoHeading('My Registrations'),
+                if (total != null) ...[
+                  const SizedBox(height: 2),
+                  Text('$total registration(s) found',
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+                ],
+                const SizedBox(height: 12),
+                for (final item in list)
+                  _registrationListCard(Map<String, dynamic>.from(item as Map)),
+              ],
+            )
+          : _protoPlaceholder(
+              _myRegListResult != null
+                  ? 'No registrations found.'
+                  : 'Press "Fetch My Registrations" to load the list.',
+              icon: Icons.list_alt_outlined,
+            ),
+    );
+  }
+
+  Widget _registrationListCard(Map<String, dynamic> item) {
+    final cs = Theme.of(context).colorScheme;
+    final event = item['event'] as Map? ?? {};
+    // join_url is at top level of each registration item (not under an "access" key)
+    final isVirtual = event['is_virtual'] == true;
+    final joinUrl = item['join_url'] as String?;
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text(event['title'] as String? ?? 'Event',
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelLarge
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+              _statusPill(
+                isVirtual ? 'Virtual' : 'Physical',
+                isVirtual ? cs.secondaryContainer : cs.tertiaryContainer,
+                isVirtual ? cs.onSecondaryContainer : cs.onTertiaryContainer,
+              ),
+            ]),
+            const SizedBox(height: 4),
+            Text(item['registration_number'] as String? ?? '—',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                      fontFamily: 'monospace',
+                      color: cs.primary,
+                    )),
+            const SizedBox(height: 4),
+            Text(_formatDateTime(item['registered_at'] as String?),
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant)),
+            if (isVirtual && joinUrl != null) ...[
+              const SizedBox(height: 6),
+              Row(children: [
+                Icon(Icons.video_call_outlined, size: 14, color: cs.secondary),
+                const SizedBox(width: 4),
+                Expanded(
+                  child: SelectableText(joinUrl,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(color: cs.secondary)),
+                ),
+              ]),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 7: Negative State Gallery
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _negativeStateGallery() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        Text(
+          'Static reference cards for all error states. No API call needed.',
+          style: Theme.of(context)
+              .textTheme
+              .bodySmall
+              ?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+        const SizedBox(height: 12),
+        _negativeCard('alumni_only', Icons.group_off_outlined,
+            'Only NITKSAA alumni can register for this event. '
+            '(POST error detail="alumni_only"; eligibility returns eligibility_status="ineligible")',
+            'Contact Support',
+            isError: true),
+        _negativeCard('alumni_not_active', Icons.person_off_outlined,
+            'Your alumni profile is not active. Please contact support. '
+            '(POST error detail="alumni_not_active"; eligibility returns eligibility_status="ineligible")',
+            'Contact Support',
+            isError: true),
+        _negativeCard('already_registered', Icons.check_circle,
+            "You're already registered for this event. "
+            '(POST error detail="already_registered"; eligibility returns eligibility_status="already_registered")',
+            'View My Registration'),
+        _negativeCard('event_full', Icons.do_not_disturb_outlined,
+            'This event is full. No more registrations accepted. '
+            '(POST error detail="event_full"; eligibility returns eligibility_status="full")',
+            'Register button disabled',
+            isError: true),
+        _negativeCard('registration_closed', Icons.lock_clock_outlined,
+            'Registration is closed for this event. '
+            '(POST error detail="registration_closed"; eligibility returns eligibility_status="closed")',
+            'Register button disabled',
+            isError: true),
+        _negativeCard('registration_not_open_yet', Icons.hourglass_top_outlined,
+            'Registration is not open yet. Check back later. '
+            '(POST error detail="registration_not_open_yet"; eligibility returns eligibility_status="not_open_yet")',
+            'Register button disabled',
+            isWarning: true),
+        _negativeCard('event_not_published', Icons.event_busy_outlined,
+            'This event is not available for registration.',
+            'N/A',
+            isError: true),
+        _negativeCard('confirm_profile_required', Icons.warning_amber_outlined,
+            'Please confirm your profile before registering.',
+            'Confirm Profile',
+            isWarning: true),
+        _negativeCard('email_failed (non-blocking)', Icons.email_outlined,
+            "You're registered. Confirmation email could not be sent. Please save your registration number.",
+            'Save Registration Number',
+            isWarning: true),
+      ],
+    );
+  }
+
+  Widget _negativeCard(
+    String errorCode,
+    IconData icon,
+    String message,
+    String cta, {
+    bool isError = false,
+    bool isWarning = false,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    final (bg, fg) = isError
+        ? (cs.errorContainer, cs.onErrorContainer)
+        : isWarning
+            ? (cs.tertiaryContainer, cs.onTertiaryContainer)
+            : (cs.secondaryContainer, cs.onSecondaryContainer);
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
+              decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(6)),
+              child: Text(errorCode,
+                  style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                        color: fg,
+                        fontWeight: FontWeight.w700,
+                        fontFamily: 'monospace',
+                      )),
+            ),
+            const SizedBox(height: 8),
+            Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(icon,
+                  size: 18,
+                  color: isError
+                      ? cs.error
+                      : isWarning
+                          ? cs.tertiary
+                          : cs.secondary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(message, style: Theme.of(context).textTheme.bodySmall),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            Text('CTA: $cta',
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontStyle: FontStyle.italic,
+                    )),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Part C: Frontend Developer Reference Notes
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _devReferenceNotes() {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      color: cs.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text('Frontend Developer Reference Notes',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 12),
+            _refNote('1. Profile autofill',
+                'Call GET /alumni/me after login. Fields are read-only for Week 3. '
+                'Display with a confirm button before allowing registration.'),
+            _refNote('2. Registration flow order',
+                '① GET /alumni/me → autofill profile\n'
+                '② GET /events/{id}/registration-eligibility → check eligibility_status\n'
+                '③ POST /events/{id}/register — body: {"attendee_note": "optional"}'),
+            _refNote('3. Confirmation screen',
+                'Show registration_number prominently in a pill/chip. '
+                'Display join_url for virtual events. '
+                'Show email status as a secondary non-blocking message.'),
+            _refNote('4. join_url security rule',
+                'join_url only appears in authenticated user endpoints '
+                '(/my-registration, /my/registrations). '
+                'Never in the public events API. Never in the virtual_url field.'),
+            _refNote('5. Error codes → UI state (v2 values)',
+                'POST detail "alumni_only" / eligibility "ineligible" → "Alumni only" message\n'
+                'POST detail "alumni_not_active" / eligibility "ineligible" → "Contact support"\n'
+                'POST detail "event_full" / eligibility "full" → disabled register button\n'
+                'POST detail "registration_closed" / eligibility "closed" → disabled register button\n'
+                'POST detail "registration_not_open_yet" / eligibility "not_open_yet" → disabled register button\n'
+                'POST detail "already_registered" / eligibility "already_registered" → "View Registration" CTA\n'
+                'eligibility "ineligible" → read message field to distinguish alumni_only vs alumni_not_active'),
+            _refNote('6. Email failure handling',
+                'Never block the UI on email failure. Registration is confirmed even if '
+                'confirmation_email_status = "failed". '
+                'Show a banner asking the user to save their number.'),
+            _refNote('7. Week 3 scope',
+                'Physical + virtual registration only. '
+                'No waitlist, no payment, no QR codes, no attendance. '
+                'Add-to-calendar payload is in the response but .ics generation is deferred.'),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _refNote(String heading, String body) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(heading,
+              style: Theme.of(context)
+                  .textTheme
+                  .labelMedium
+                  ?.copyWith(fontWeight: FontWeight.w700, color: cs.primary)),
+          const SizedBox(height: 2),
+          Text(body,
+              style: Theme.of(context).textTheme.bodySmall?.copyWith(height: 1.5)),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §8: Security Demonstration widgets
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _joinLinkMatrixCard() {
+    final cs = Theme.of(context).colorScheme;
+    const rows = [
+      ('registered', 'virtual', 'published', true),
+      ('cancelled', 'virtual', 'published', false),
+      ('registered', 'physical', 'published', false),
+      ('registered', 'virtual', 'draft', false),
+    ];
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text('Join Link Visibility Matrix',
+                style: Theme.of(context)
+                    .textTheme
+                    .titleSmall
+                    ?.copyWith(fontWeight: FontWeight.w700)),
+            const SizedBox(height: 4),
+            Text(
+              'Only one combination of conditions exposes join_url.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 12),
+            // Header row
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Row(children: [
+                _matrixCell('Registration', isHeader: true),
+                _matrixCell('Event Type', isHeader: true),
+                _matrixCell('Status', isHeader: true),
+                _matrixCell('Join Link', isHeader: true),
+              ]),
+            ),
+            const SizedBox(height: 4),
+            for (final r in rows)
+              Container(
+                margin: const EdgeInsets.only(bottom: 4),
+                padding:
+                    const EdgeInsets.symmetric(horizontal: 8, vertical: 8),
+                decoration: BoxDecoration(
+                  color: r.$4
+                      ? Colors.green.withValues(alpha: 0.08)
+                      : cs.surfaceContainerLowest,
+                  border: Border.all(
+                    color: r.$4
+                        ? Colors.green.withValues(alpha: 0.3)
+                        : cs.outlineVariant.withValues(alpha: 0.4),
+                  ),
+                  borderRadius: BorderRadius.circular(6),
+                ),
+                child: Row(children: [
+                  _matrixCell(r.$1),
+                  _matrixCell(r.$2),
+                  _matrixCell(r.$3),
+                  Expanded(
+                    child: Row(children: [
+                      Icon(
+                        r.$4
+                            ? Icons.check_circle
+                            : Icons.cancel_outlined,
+                        size: 14,
+                        color: r.$4 ? Colors.green : cs.error,
+                      ),
+                      const SizedBox(width: 4),
+                      Text(
+                        r.$4 ? 'Visible' : 'Hidden',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: r.$4 ? Colors.green.shade800 : cs.error,
+                              fontWeight: FontWeight.w700,
+                            ),
+                      ),
+                    ]),
+                  ),
+                ]),
+              ),
+            const SizedBox(height: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(8),
+                border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.3)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.lock_outlined,
+                    size: 14, color: Colors.green),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'join_url is only exposed when: status=registered AND '
+                    'is_virtual=true AND event_status=published.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: Colors.green.shade800,
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _matrixCell(String text, {bool isHeader = false}) {
+    return Expanded(
+      child: Text(
+        text,
+        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+              fontWeight: isHeader ? FontWeight.w700 : FontWeight.w500,
+              color: isHeader
+                  ? Theme.of(context).colorScheme.onSurface
+                  : Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+      ),
+    );
+  }
+
+  Widget _publicLeakCard() {
+    final cs = Theme.of(context).colorScheme;
+    final leakedFields = _publicLeakResult?['leaked_fields'] as List?;
+    final passed = _publicLeakResult != null && (leakedFields?.isEmpty ?? true);
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Verify: Public Event Payload has no virtual_url or join_url',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _publicLeakLoading ? null : _fetchPublicLeak,
+              icon: _publicLeakLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.security_outlined, size: 18),
+              label: const Text('Check  →  GET /events/public/{id}'),
+            ),
+            if (_publicLeakError != null) _errorChip(_publicLeakError!),
+            if (_publicLeakResult != null) ...[
+              const SizedBox(height: 12),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: passed
+                      ? Colors.green.withValues(alpha: 0.1)
+                      : cs.errorContainer,
+                  borderRadius: BorderRadius.circular(8),
+                  border: Border.all(
+                    color: passed
+                        ? Colors.green.withValues(alpha: 0.3)
+                        : cs.error.withValues(alpha: 0.3),
+                  ),
+                ),
+                child: Row(children: [
+                  Icon(
+                    passed ? Icons.verified : Icons.warning_amber_outlined,
+                    color: passed ? Colors.green : cs.onErrorContainer,
+                    size: 20,
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          passed ? 'PASS — No sensitive fields leaked' : 'FAIL — Fields leaked',
+                          style: Theme.of(context)
+                              .textTheme
+                              .labelMedium
+                              ?.copyWith(
+                                fontWeight: FontWeight.w700,
+                                color: passed
+                                    ? Colors.green.shade800
+                                    : cs.onErrorContainer,
+                              ),
+                        ),
+                        if (!passed && leakedFields != null)
+                          Text(leakedFields.join(', '),
+                              style: Theme.of(context)
+                                  .textTheme
+                                  .bodySmall
+                                  ?.copyWith(
+                                      color: cs.onErrorContainer)),
+                      ],
+                    ),
+                  ),
+                ]),
+              ),
+              _jsonBlock(context, 'Public event payload', _publicLeakResult),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §9: Audit Trail Demonstration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _auditTrailCard() {
+    final cs = Theme.of(context).colorScheme;
+    final rows =
+        (_auditLogResult?['rows'] as List?)?.take(8).toList() ?? const [];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Text(
+              'Latest audit log rows from event_audit_log. '
+              'Records are written automatically on every state-changing action.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            const SizedBox(height: 10),
+            OutlinedButton.icon(
+              onPressed: _auditLogLoading ? null : _fetchAuditLog,
+              icon: _auditLogLoading
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                  : const Icon(Icons.history_edu_outlined, size: 18),
+              label: const Text(
+                  'Fetch  →  GET /dev/diagnostics/db/event_audit_log'),
+            ),
+            if (_auditLogError != null) _errorChip(_auditLogError!),
+            if (rows.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              for (final r in rows)
+                _auditRowCard(Map<String, dynamic>.from(r as Map)),
+              Container(
+                margin: const EdgeInsets.only(top: 4),
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                decoration: BoxDecoration(
+                  color: cs.secondaryContainer,
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(children: [
+                  Icon(Icons.info_outline, size: 14,
+                      color: cs.onSecondaryContainer),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      'Audit records written automatically on every '
+                      'registration, cancellation, and event status change.',
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: cs.onSecondaryContainer,
+                          ),
+                    ),
+                  ),
+                ]),
+              ),
+            ] else if (_auditLogResult != null)
+              const Padding(
+                padding: EdgeInsets.only(top: 8),
+                child: Text('No audit rows found.'),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _auditRowCard(Map<String, dynamic> row) {
+    final cs = Theme.of(context).colorScheme;
+    final eventType = row['event_type']?.toString() ?? '—';
+    final entityType = row['entity_type']?.toString() ?? '—';
+    final entityId = row['entity_id']?.toString() ?? '—';
+    final createdAt = row['created_at']?.toString();
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 6),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: cs.surfaceContainerHighest,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(children: [
+        Container(
+          width: 8,
+          height: 8,
+          decoration: BoxDecoration(
+            color: cs.primary,
+            shape: BoxShape.circle,
+          ),
+        ),
+        const SizedBox(width: 10),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(eventType,
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelMedium
+                      ?.copyWith(fontWeight: FontWeight.w700)),
+              const SizedBox(height: 2),
+              Text('$entityType #$entityId',
+                  style: Theme.of(context)
+                      .textTheme
+                      .bodySmall
+                      ?.copyWith(color: cs.onSurfaceVariant)),
+            ],
+          ),
+        ),
+        Text(
+          _formatDateTime(createdAt),
+          style: Theme.of(context)
+              .textTheme
+              .labelSmall
+              ?.copyWith(color: cs.onSurfaceVariant),
+        ),
+      ]),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §10: Email Demonstration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _emailDemoCard() {
+    final cs = Theme.of(context).colorScheme;
+    final data = _registerResult;
+
+    if (data == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: _protoPlaceholder(
+            'Run §3 Registration Action first to see live email status.',
+            icon: Icons.mark_email_read_outlined,
+          ),
+        ),
+      );
+    }
+
+    final emailStatus =
+        data['confirmation_email_status'] as String? ?? 'unknown';
+    final sentAt = data['confirmation_email_sent_at'] as String?;
+    final regNum = data['registration_number'] as String? ?? '—';
+
+    final (icon, color, label) = switch (emailStatus) {
+      'sent' => (
+          Icons.mark_email_read_outlined,
+          Colors.green,
+          'Confirmation email sent'
+        ),
+      'failed' => (Icons.email_outlined, cs.error, 'Email delivery failed'),
+      'skipped' => (
+          Icons.email_outlined,
+          cs.onSurfaceVariant,
+          'Email skipped (dev/log mode)'
+        ),
+      _ => (
+          Icons.hourglass_top_outlined,
+          cs.onSurfaceVariant,
+          'Email status: $emailStatus'
+        ),
+    };
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _profileRow(Icons.confirmation_number_outlined, 'Reg #', regNum),
+            _profileRow(Icons.schedule_outlined, 'Sent At',
+                sentAt != null ? _formatDateTime(sentAt) : '—'),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: emailStatus == 'sent'
+                    ? Colors.green.withValues(alpha: 0.1)
+                    : emailStatus == 'failed'
+                        ? cs.errorContainer
+                        : cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Icon(icon, color: color, size: 18),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Text(label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: color,
+                            fontWeight: FontWeight.w600,
+                          )),
+                ),
+              ]),
+            ),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: cs.tertiaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Icon(Icons.info_outline, size: 14,
+                    color: cs.onTertiaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Email delivery never blocks registration success. '
+                    'Registration is confirmed even if confirmation_email_status = "failed".',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onTertiaryContainer,
+                        ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §11: Snapshot Demonstration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _snapshotDemoCard() {
+    final cs = Theme.of(context).colorScheme;
+    final profile = _autofillResult;
+    final reg = _registerResult;
+
+    if (profile == null && reg == null) {
+      return Card(
+        child: Padding(
+          padding: const EdgeInsets.all(16),
+          child: _protoPlaceholder(
+            'Fetch §1 Alumni Profile and run §3 Registration to compare.',
+            icon: Icons.compare_arrows_outlined,
+          ),
+        ),
+      );
+    }
+
+    final fields = [
+      ('Full Name', 'fullname', 'fullname_snapshot'),
+      ('Batch Year', 'batch_year', 'batch_year_snapshot'),
+      ('Branch', 'branch', 'branch_snapshot'),
+    ];
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Row(children: [
+              Expanded(
+                child: Text('Alumni Profile (live)',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+              const Icon(Icons.compare_arrows_outlined, size: 16),
+              Expanded(
+                child: Text('Registration Snapshot',
+                    textAlign: TextAlign.center,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelMedium
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+            ]),
+            const SizedBox(height: 12),
+            for (final f in fields) _snapshotRow(f.$1, f.$2, f.$3, profile, reg),
+            const SizedBox(height: 10),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+              decoration: BoxDecoration(
+                color: cs.tertiaryContainer,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(children: [
+                Icon(Icons.save_outlined, size: 14,
+                    color: cs.onTertiaryContainer),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text(
+                    'Snapshot fields are frozen at registration time. '
+                    'Changes to the alumni profile after registration do not affect the snapshot.',
+                    style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          color: cs.onTertiaryContainer,
+                        ),
+                  ),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _snapshotRow(
+    String label,
+    String profileKey,
+    String snapshotKey,
+    Map<String, dynamic>? profile,
+    Map<String, dynamic>? reg,
+  ) {
+    final cs = Theme.of(context).colorScheme;
+    final liveVal = profile?[profileKey]?.toString() ?? '—';
+    final snapVal = reg?[snapshotKey]?.toString() ?? '—';
+    final match = liveVal == snapVal;
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 8),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Expanded(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.surfaceContainerHighest,
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          )),
+                  const SizedBox(height: 2),
+                  Text(liveVal,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 8),
+            child: Icon(
+              match ? Icons.compare_arrows : Icons.warning_amber_outlined,
+              size: 16,
+              color: match ? cs.primary : cs.error,
+            ),
+          ),
+          Expanded(
+            child: Container(
+              padding:
+                  const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+              decoration: BoxDecoration(
+                color: cs.primaryContainer.withValues(alpha: 0.4),
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(label,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            color: cs.onSurfaceVariant,
+                          )),
+                  const SizedBox(height: 2),
+                  Text(snapVal,
+                      style: Theme.of(context)
+                          .textTheme
+                          .bodySmall
+                          ?.copyWith(fontWeight: FontWeight.w600)),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §12: Database Rules Demonstration
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Widget _databaseRulesCard() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        _dbRuleCard(
+          icon: Icons.tag_outlined,
+          title: 'Unique Registration Number',
+          rule:
+              'NITKSAA-{year}-{registration_id:06d} — generated server-side.',
+          purpose:
+              'Guarantees a human-readable, globally unique identifier for every registration.',
+          status: 'Verified — format enforced by registration_service.py',
+        ),
+        _dbRuleCard(
+          icon: Icons.lock_outlined,
+          title: 'Partial Unique Registration',
+          rule: 'UNIQUE (event_id, firebase_uid) WHERE status = \'registered\'.',
+          purpose:
+              'Prevents double-registration for the same user + event combination '
+              'while allowing re-registration after cancellation.',
+          status: 'Verified — partial index in migration 008',
+        ),
+        _dbRuleCard(
+          icon: Icons.refresh_outlined,
+          title: 'Re-registration After Cancellation',
+          rule:
+              'Cancelled registrations are soft-deleted (status=\'cancelled\'). '
+              'A new row is inserted on re-registration.',
+          purpose:
+              'Preserves full audit history. The partial unique index permits re-registration.',
+          status: 'Verified — tested in Diag 6 (duplicate guard)',
+        ),
+        _dbRuleCard(
+          icon: Icons.groups_outlined,
+          title: 'Registered Count Excludes Cancelled',
+          rule:
+              'COUNT(*) WHERE event_id=\$id AND status=\'registered\' — '
+              'cancelled rows not counted.',
+          purpose:
+              'Capacity guard is accurate. Cancelling frees up a slot for another registrant.',
+          status: 'Verified — tested in Diag 7 (capacity guard)',
+        ),
+      ],
+    );
+  }
+
+  Widget _dbRuleCard({
+    required IconData icon,
+    required String title,
+    required String rule,
+    required String purpose,
+    required String status,
+  }) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(children: [
+              Icon(icon, size: 16, color: cs.primary),
+              const SizedBox(width: 8),
+              Expanded(
+                child: Text(title,
+                    style: Theme.of(context)
+                        .textTheme
+                        .labelLarge
+                        ?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+            ]),
+            const SizedBox(height: 6),
+            _dbRuleRow('Rule', rule),
+            _dbRuleRow('Purpose', purpose),
+            const SizedBox(height: 4),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: Colors.green.withValues(alpha: 0.1),
+                borderRadius: BorderRadius.circular(6),
+                border: Border.all(
+                    color: Colors.green.withValues(alpha: 0.25)),
+              ),
+              child: Row(children: [
+                const Icon(Icons.check_circle_outline,
+                    size: 12, color: Colors.green),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(status,
+                      style: Theme.of(context)
+                          .textTheme
+                          .labelSmall
+                          ?.copyWith(
+                              color: Colors.green.shade800,
+                              fontWeight: FontWeight.w600)),
+                ),
+              ]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _dbRuleRow(String label, String value) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 4),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          SizedBox(
+            width: 54,
+            child: Text(label,
+                style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                      color: cs.onSurfaceVariant,
+                      fontWeight: FontWeight.w700,
+                    )),
+          ),
+          Expanded(
+            child: Text(value,
+                style: Theme.of(context).textTheme.bodySmall),
+          ),
+        ],
+      ),
+    );
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Fetch methods
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchAutofill() async {
+    if (!mounted) return;
+    setState(() {
+      _autofillLoading = true;
+      _autofillError = null;
+    });
+    try {
+      final token = await _ensureBackendAccessToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/alumni/me',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _autofillResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Alumni autofill fetch failed', e, st);
+      if (!mounted) return;
+      setState(() => _autofillError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _autofillLoading = false);
+    }
+  }
+
+  Future<void> _fetchEligibility() async {
+    if (!mounted) return;
+    final eventId = _eventId;
+    if (eventId.isEmpty) {
+      setState(() => _eligibilityError = 'Enter an event ID in the picker above.');
+      return;
+    }
+    setState(() {
+      _eligibilityLoading = true;
+      _eligibilityError = null;
+    });
+    try {
+      final token = await _ensureBackendAccessToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/events/$eventId/registration-eligibility',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _eligibilityResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Eligibility fetch failed', e, st);
+      if (!mounted) return;
+      setState(() => _eligibilityError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _eligibilityLoading = false);
+    }
+  }
+
+  Future<void> _doRegister() async {
+    if (!mounted) return;
+    final eventId = _eventId;
+    if (eventId.isEmpty) {
+      setState(() => _registerError = 'Enter an event ID in the picker above.');
+      return;
+    }
+    setState(() {
+      _registerLoading = true;
+      _registerError = null;
+    });
+    try {
+      final token = await _ensureBackendAccessToken();
+      final response = await devDio
+          .post<Map<String, dynamic>>(
+            '/api/v1/events/$eventId/register',
+            data: {
+              'confirm_profile': true,
+              'attendee_note': 'Dev diagnostics prototype test',
+            },
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 30));
+      if (!mounted) return;
+      setState(() => _registerResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Registration action failed', e, st);
+      if (!mounted) return;
+      setState(() => _registerError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _registerLoading = false);
+    }
+  }
+
+  Future<void> _fetchMyRegistration() async {
+    if (!mounted) return;
+    final eventId = _eventId;
+    if (eventId.isEmpty) {
+      setState(() => _myRegError = 'Enter an event ID in the picker above.');
+      return;
+    }
+    setState(() {
+      _myRegLoading = true;
+      _myRegError = null;
+    });
+    try {
+      final token = await _ensureBackendAccessToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/events/$eventId/my-registration',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _myRegResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('My registration fetch failed', e, st);
+      if (!mounted) return;
+      setState(() => _myRegError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _myRegLoading = false);
+    }
+  }
+
+  Future<void> _fetchMyRegistrationsList() async {
+    if (!mounted) return;
+    setState(() {
+      _myRegListLoading = true;
+      _myRegListError = null;
+    });
+    try {
+      final token = await _ensureBackendAccessToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/my/registrations',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _myRegListResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('My registrations list fetch failed', e, st);
+      if (!mounted) return;
+      setState(() => _myRegListError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _myRegListLoading = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §8: Public API leak check fetch
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchPublicLeak() async {
+    if (!mounted) return;
+    final eventId = _eventId;
+    if (eventId.isEmpty) {
+      setState(() =>
+          _publicLeakError = 'Enter an event ID in the picker above.');
+      return;
+    }
+    setState(() {
+      _publicLeakLoading = true;
+      _publicLeakError = null;
+    });
+    try {
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/events/public/$eventId',
+          )
+          .timeout(const Duration(seconds: 15));
+      final data = response.data ?? <String, dynamic>{};
+      const forbidden = ['virtual_url', 'join_url', 'created_by_firebase_uid'];
+      final leaked = forbidden.where((f) => data.containsKey(f)).toList();
+      if (!mounted) return;
+      setState(() => _publicLeakResult = {
+            ...data,
+            'leaked_fields': leaked,
+          });
+    } catch (e, st) {
+      AppLogger.error('Public leak check failed', e, st);
+      if (!mounted) return;
+      setState(() => _publicLeakError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _publicLeakLoading = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // §9: Audit trail fetch
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _fetchAuditLog() async {
+    if (!mounted) return;
+    setState(() {
+      _auditLogLoading = true;
+      _auditLogError = null;
+    });
+    try {
+      final token = await _ensureBackendAccessToken();
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/dev/diagnostics/db/event_audit_log',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      setState(() => _auditLogResult = response.data);
+    } catch (e, st) {
+      AppLogger.error('Audit log fetch failed', e, st);
+      if (!mounted) return;
+      setState(() => _auditLogError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _auditLogLoading = false);
+    }
+  }
+
+  // ─────────────────────────────────────────────────────────────────────────
+  // Section 0: Run All diagnostics
+  // ─────────────────────────────────────────────────────────────────────────
+
+  Future<void> _runDiagnostics() async {
+    setState(() {
+      _loading = true;
+      _status = 'Authenticating...';
+      _diagResult = null;
+    });
+
+    try {
+      final token = await _ensureBackendAccessToken();
+
+      setState(() => _status = 'Running registration diagnostics (may take ~10s)...');
+
+      final response = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/dev/diagnostics/registrations',
+            options: Options(headers: {'Authorization': 'Bearer $token'}),
+          )
+          .timeout(const Duration(seconds: 90));
+
+      final data = response.data ?? <String, dynamic>{};
+      final passed = data['passed'] as int? ?? 0;
+      final failed = data['failed'] as int? ?? 0;
+      final total = data['total'] as int? ?? 0;
+
+      if (!mounted) return;
+      setState(() {
+        _diagResult = data;
+        _status = 'Completed: $passed/$total passed, $failed failed.';
+        _runState = DiagnosticRunState(
+          status: failed == 0 ? DiagnosticStatus.ok : DiagnosticStatus.warning,
+          lastRun: DateTime.now(),
+        );
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error('Registration diagnostic failed', error, stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _status = 'Failed: ${errorMessage(error)}';
+        _runState = DiagnosticRunState(
+          status: DiagnosticStatus.error,
+          lastRun: DateTime.now(),
+        );
+      });
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  Future<String> _ensureBackendAccessToken() async {
+    final existing = _backendAccessToken;
+    if (existing != null && existing.isNotEmpty) return existing;
+
+    // Prefer the stored session so alumni don't need to re-authenticate
+    final store = AuthSessionStore();
+    final session = await store.load();
+    if (session != null && session.accessToken.isNotEmpty) {
+      if (mounted) setState(() => _backendAccessToken = session.accessToken);
+      return session.accessToken;
+    }
+
+    // Fall back to a fresh Firebase token exchange
+    final user = FirebaseAuth.instance.currentUser;
+    if (user == null) {
+      throw StateError(
+        'Not signed in. Complete the Backend Auth diagnostic first.',
+      );
+    }
+    final firebaseToken = await user.getIdToken(true);
+    if (firebaseToken == null || firebaseToken.isEmpty) {
+      throw StateError('Firebase ID token unavailable.');
+    }
+    final resp = await devDio.post<Map<String, dynamic>>(
+      '/api/v1/auth/firebase',
+      data: {'token': firebaseToken},
+    );
+    final accessToken = resp.data?['access_token'] as String?;
+    if (accessToken == null || accessToken.isEmpty) {
+      throw StateError('Backend access token exchange failed.');
+    }
+    if (mounted) setState(() => _backendAccessToken = accessToken);
+    return accessToken;
   }
 }
 
@@ -2188,6 +4588,7 @@ enum DiagnosticId {
   attendeeExport,
   adminRoleGuard,
   auditTrail,
+  week3UxShowcase,
 }
 
 enum DiagnosticStatus { ok, info, warning, error, notApplicable }
@@ -2454,6 +4855,19 @@ const Map<DiagnosticId, BackendApiDetails> diagnosticApiDetails = {
     sampleResponse: '{"entries":[{"action":"event.updated","actor":"..."}]}',
     uiGuidance:
         'Display recent audit entries with actor, action, and timestamp.',
+  ),
+  DiagnosticId.week3UxShowcase: BackendApiDetails(
+    featureName: 'Week 3 UX Showcase',
+    method: 'MULTIPLE',
+    path: 'All Week 3 registration endpoints',
+    authRequirement: 'Backend JWT required (alumni account)',
+    purpose:
+        'Full visual demonstration of all Week 3 registration workflows, '
+        'security rules, audit trail, email, and snapshot behaviour.',
+    implementationStatus: 'Implemented',
+    sampleResponse: 'Interactive showcase — runs live against backend.',
+    uiGuidance:
+        'Use as Product Owner demo, frontend developer reference, and backend validation.',
   ),
 };
 
