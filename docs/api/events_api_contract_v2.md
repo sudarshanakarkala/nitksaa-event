@@ -46,8 +46,8 @@ Authorization: Bearer <backend_access_token>
 ```
 
 Obtain the backend access token by:
-1. Firebase sign-in → `idToken`
-2. `POST /api/v1/auth/firebase` with `{"idToken": "..."}` → `{"access_token": "..."}`
+1. Firebase sign-in → Firebase returns an `idToken` in its own response
+2. `POST /api/v1/auth/firebase` with `{"token": "<firebase_id_token>"}` → `{"access_token": "..."}`
 
 Public event endpoints do not require authentication.
 
@@ -345,9 +345,40 @@ virtual but the join URL is only available after registration.
 
 ### GET /api/v1/events/public/{event_id}
 
-Returns a single published event. Same shape as the list item above.
+Returns a single published event wrapped in an `event` key.
 
-**Security invariant verified:** `virtual_url` key is absent from the response object.
+> **Response shape difference from list:** The list endpoint returns `{"events": [...], "total": ...}`.
+> The detail endpoint returns `{"event": {...}}` — the event object is nested one level deeper.
+
+**Response shape:**
+
+```json
+{
+  "event": {
+    "event_id": 26,
+    "title": "Webinar Demo",
+    "description": "...",
+    "status": "published",
+    "is_virtual": true,
+    "location_text": null,
+    "location_maps_url": null,
+    "start_datetime": "...",
+    "end_datetime": "...",
+    "timezone": "Asia/Kolkata",
+    "capacity": 100,
+    "registered_count": 1,
+    "registration_opens_at": null,
+    "registration_closes_at": null,
+    "registration_status": "open",
+    "sessions": [],
+    "speakers": []
+  }
+}
+```
+
+**To access event fields in frontend code:** read from `response.event.<field>`, not `response.<field>` directly.
+
+**Security invariant verified:** `virtual_url` key is absent from both the outer object and the nested `event` object.
 
 ---
 

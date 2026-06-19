@@ -1,3 +1,14 @@
+# DEPRECATED
+
+This document is retained for historical reference only.
+
+Use:
+- events_api_contract_v2.md
+- backend_api_index_v2.md
+- event_admin_api_usage_v2.md
+
+for all new development.
+
 # Event Admin API Usage
 
 Frontend: `admin/event_admin/`
