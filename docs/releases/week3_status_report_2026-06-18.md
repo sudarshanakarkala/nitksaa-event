@@ -518,3 +518,76 @@ A new `Week 3 UX Showcase` entry was added to the Registration category in Devel
 * All new code inside `kDebugMode`-gated Developer Diagnostics module
 
 **UX Showcase Status:** ✅ Complete
+
+---
+
+## Pending Items Addendum
+
+**Date:** 2026-06-19  
+**Trigger:** Post-showcase verification identified two integration gaps that remain unresolved before production readiness.
+
+---
+
+### PI-01 — Confirmation Email Not Sending Real Emails
+
+**Status:** ⏳ Pending
+
+**Current State:**
+
+`EMAIL_MODE` is not set in `.env`. The config default is `"log"`, which means `send_confirmation_email()` writes to the Python logger and returns `status='sent'` without ever dispatching an email. No SMTP credentials (`SMTP_USER`, `SMTP_PASSWORD`) are configured.
+
+**Impact:**
+
+Registrants receive no confirmation email. The audit log records `confirmation_email_sent` but no email is delivered. UC-11 (Confirmation Email Status) passes in diagnostics only because the log-mode always returns `status='sent'`.
+
+**What Is Needed:**
+
+* Set `EMAIL_MODE=send` in `.env` / production environment
+* Configure `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `EMAIL_FROM`, `EMAIL_REPLY_TO`
+* Verify SMTP provider (e.g. Gmail App Password, SendGrid, AWS SES, Mailgun)
+* End-to-end test: register → actual email received in inbox
+
+**Files Involved:**
+
+* `backend/app/services/email_service.py` — SMTP send path already implemented, awaiting config
+* `backend/app/config.py` — `email_mode`, `smtp_*` settings defined
+* `backend/.env` — missing `EMAIL_MODE`, `SMTP_USER`, `SMTP_PASSWORD`
+
+---
+
+### PI-02 — Alumni DB Connected to Local Dev Copy, Not Production
+
+**Status:** ⏳ Pending
+
+**Current State:**
+
+`ALUMNI_DB_URL` in `.env` is set to `postgresql://ananth@localhost:5432/alumni_db`. This is a local development PostgreSQL instance, not the real NITKSAA production alumni database. The alumni service code (`alumni_service.py`) is correct and production-ready, but it is querying local data.
+
+**Impact:**
+
+* Alumni login verification resolves against locally seeded test data only
+* Real NITKSAA members who log in with their registered email may not be matched as alumni
+* The `user_type='other'` / `ref_id=NULL` stale-row bug (fixed 2026-06-19 in `_upsert_event_user`) cannot be fully validated until real alumni records are available
+* Registration eligibility checks (`is_alumni_active`) depend on real `registrationstatus` values
+
+**What Is Needed:**
+
+* Obtain connection credentials for the real NITKSAA alumni PostgreSQL database
+* Set `ALUMNI_DB_URL` to the production/staging alumni DB DSN
+* Verify `find_alumni_by_email` returns expected results for known NITKSAA members
+* Re-run login-trace diagnostics (`GET /alumni/login-trace`) against real alumni emails
+
+**Files Involved:**
+
+* `backend/app/services/alumni_service.py` — queries `alumni` table; no code change needed
+* `backend/app/database.py` — `get_alumni_pool()` uses `ALUMNI_DB_URL`
+* `backend/.env` — `ALUMNI_DB_URL` must be updated to production DSN
+
+---
+
+### Pending Items Summary
+
+| ID | Item | Blocker for Production? |
+| --- | --- | --- |
+| PI-01 | Real email delivery via SMTP not wired | Yes — registrants receive no confirmation |
+| PI-02 | Alumni DB pointing at local dev copy | Yes — alumni identity resolution uses test data only |

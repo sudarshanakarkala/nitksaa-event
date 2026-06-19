@@ -594,6 +594,7 @@ Developer Diagnostics is available only in `APP_ENV=development` (backend) and `
 | Event Management | Events API Test, Event Detail API Test, Event Creation API Test, Event Publish Test | Placeholder (Week 3+) |
 | Registration | **Week 3 UX Showcase**, Registration Flow Test, My Registration Test, Capacity Guard Test, Confirmation Email Status, Join Link Visibility Test | Implemented |
 | Admin / Attendees | Attendee List API Test, Attendee Export Test, Admin Role Guard Test, Audit Trail Test | Placeholder (Week 4) |
+| **Alumni Database** | Search by Email, Search by Prefix, Lookup by Alumni ID, Login Mapping Trace | **Implemented** |
 
 ### Backend: Dev Diagnostics Endpoints
 
@@ -605,6 +606,10 @@ All at `/api/v1/dev/diagnostics/` — return `404` when `APP_ENV != "development
 | `GET /db/{table_name}` | Inspect rows from a supported table |
 | `GET /auth/me` | Auth check — current user from event_users |
 | `GET /registrations` | Run 13-check registration diagnostics suite |
+| `GET /alumni/search?email=` | Search alumni_db by exact email (case-insensitive, TRIM) |
+| `GET /alumni/search-prefix?prefix=` | Search alumni_db by email prefix or name fragment |
+| `GET /alumni/{alumni_id}` | Full row lookup from alumni_db by alumni_id |
+| `GET /alumni/login-trace?email=` | Trace alumni_db → event_users login mapping; diagnose user_type=other root cause |
 
 ### 13-Check Registration Diagnostics Suite
 

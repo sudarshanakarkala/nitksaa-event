@@ -482,6 +482,7 @@ graph TD
     DD --> EVENTS["Event Management"]
     DD --> REG["Registration"]
     DD --> ADMIN["Admin / Attendees"]
+    DD --> ALUMNICAT["Alumni Database"]
 
     GEN --> G1["Foundation Status\nFirebase, Hive, Router"]
     GEN --> G2["Logger Test\nEmit test logs"]
@@ -513,6 +514,15 @@ graph TD
     ADMIN --> ADM2["Attendee Export Test ⏳"]
     ADMIN --> ADM3["Admin Role Guard Test ⏳"]
     ADMIN --> ADM4["Audit Trail Test ⏳"]
+
+    ALUMNICAT --> AL1["Search by Email\nGET /alumni/search?email="]
+    ALUMNICAT --> AL2["Search by Prefix\nGET /alumni/search-prefix?prefix="]
+    ALUMNICAT --> AL3["Lookup by Alumni ID\nGET /alumni/{alumni_id}"]
+    ALUMNICAT --> AL4["Login Mapping Trace\nGET /alumni/login-trace?email="]
+
+    AL4 --> DIAG1["alumni_db lookup"]
+    AL4 --> DIAG2["event_users lookup"]
+    AL4 --> DIAG3["PASS / FAIL diagnosis"]
 
     W3 --> S0["§0 Run All (13 checks)"]
     W3 --> S1["§1 Alumni Autofill"]
