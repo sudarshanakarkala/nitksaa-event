@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../auth/services/auth_controller.dart';
 import '../providers/event_detail_provider.dart';
@@ -24,6 +25,25 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   void dispose() {
     _notesController.dispose();
     super.dispose();
+  }
+
+  Future<void> _launchUrl(String urlString) async {
+    final Uri url = Uri.parse(urlString);
+    try {
+      if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(content: Text('Could not launch $urlString')),
+          );
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error launching link: $e')),
+        );
+      }
+    }
   }
 
   @override
@@ -189,6 +209,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       event.isVirtual ? CupertinoIcons.videocam : CupertinoIcons.location,
                       event.locationText ?? (event.isVirtual ? 'Virtual Zoom Link' : 'To Be Decided'),
                       textSecondary,
+                      onTap: (event.locationMapsUrl != null && event.locationMapsUrl!.isNotEmpty)
+                          ? () => _launchUrl(event.locationMapsUrl!)
+                          : null,
                     ),
                     const SizedBox(height: 16),
                     _buildCupertinoDivider(isDark),
@@ -333,18 +356,35 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
-  Widget _buildCupertinoMetaRow(IconData icon, String text, Color color) {
+  Widget _buildCupertinoMetaRow(IconData icon, String text, Color color, {VoidCallback? onTap}) {
+    final textWidget = Text(
+      text,
+      style: TextStyle(
+        fontSize: 13,
+        color: onTap != null ? const Color(0xFFC9952A) : color,
+        decoration: onTap != null ? TextDecoration.underline : null,
+      ),
+    );
+
+    final row = Row(
+      children: [
+        Icon(icon, size: 16, color: const Color(0xFFC9952A)),
+        const SizedBox(width: 8),
+        Expanded(
+          child: textWidget,
+        ),
+      ],
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: const Color(0xFFC9952A)),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(text, style: TextStyle(fontSize: 13, color: color)),
-          ),
-        ],
-      ),
+      child: onTap != null
+          ? GestureDetector(
+              onTap: onTap,
+              behavior: HitTestBehavior.opaque,
+              child: row,
+            )
+          : row,
     );
   }
 
@@ -453,7 +493,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 ),
                 const SizedBox(width: 32),
                 Expanded(
-                  flex: 2,
+                  flex: 1,
                   child: Card(
                     elevation: 4,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -524,6 +564,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               _buildMaterialMetaRow(
                 event.isVirtual ? Icons.videocam : Icons.location_on,
                 event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
+                onTap: (event.locationMapsUrl != null && event.locationMapsUrl!.isNotEmpty)
+                    ? () => _launchUrl(event.locationMapsUrl!)
+                    : null,
               ),
               const SizedBox(height: 16),
               const Divider(),
@@ -554,18 +597,35 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     }
   }
 
-  Widget _buildMaterialMetaRow(IconData icon, String text) {
+  Widget _buildMaterialMetaRow(IconData icon, String text, {VoidCallback? onTap}) {
+    final textWidget = Text(
+      text,
+      style: TextStyle(
+        fontSize: 14,
+        color: onTap != null ? const Color(0xFFC9952A) : null,
+        decoration: onTap != null ? TextDecoration.underline : null,
+      ),
+    );
+
+    final row = Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFFC9952A)),
+        const SizedBox(width: 10),
+        Expanded(
+          child: textWidget,
+        ),
+      ],
+    );
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 8.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFFC9952A)),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Text(text, style: const TextStyle(fontSize: 14)),
-          ),
-        ],
-      ),
+      child: onTap != null
+          ? InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(4),
+              child: row,
+            )
+          : row,
     );
   }
 
@@ -579,21 +639,41 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         _buildMetaGridItem(
           event.isVirtual ? Icons.videocam : Icons.location_on,
           event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
+          onTap: (event.locationMapsUrl != null && event.locationMapsUrl!.isNotEmpty)
+              ? () => _launchUrl(event.locationMapsUrl!)
+              : null,
         ),
       ],
     );
   }
 
-  Widget _buildMetaGridItem(IconData icon, String text) {
+  Widget _buildMetaGridItem(IconData icon, String text, {VoidCallback? onTap}) {
+    final textWidget = Text(
+      text,
+      style: TextStyle(
+        fontSize: 14,
+        color: onTap != null ? const Color(0xFFC9952A) : null,
+        decoration: onTap != null ? TextDecoration.underline : null,
+      ),
+    );
+
+    final row = Row(
+      children: [
+        Icon(icon, size: 18, color: const Color(0xFFC9952A)),
+        const SizedBox(width: 8),
+        Expanded(child: textWidget),
+      ],
+    );
+
     return SizedBox(
       width: 250,
-      child: Row(
-        children: [
-          Icon(icon, size: 18, color: const Color(0xFFC9952A)),
-          const SizedBox(width: 8),
-          Expanded(child: Text(text, style: const TextStyle(fontSize: 14))),
-        ],
-      ),
+      child: onTap != null
+          ? InkWell(
+              onTap: onTap,
+              borderRadius: BorderRadius.circular(4),
+              child: row,
+            )
+          : row,
     );
   }
 
