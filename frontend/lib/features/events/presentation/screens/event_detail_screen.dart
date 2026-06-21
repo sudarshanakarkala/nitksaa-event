@@ -977,7 +977,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           width: double.infinity,
           child: CupertinoButton(
             color: const Color(0xFFC9952A),
-            onPressed: () => _showRegistrationForm(isIOS: true),
+            onPressed: () => _showRegistrationForm(event, state, isIOS: true),
             child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
           ),
         );
@@ -991,7 +991,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: () => _showRegistrationForm(isIOS: false),
+            onPressed: () => _showRegistrationForm(event, state, isIOS: false),
             child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         );
@@ -1011,86 +1011,314 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return ctaWidget;
   }
 
-  void _showRegistrationForm({required bool isIOS}) {
+  void _showRegistrationForm(AppEvent event, EventDetailState state, {required bool isIOS}) {
     _notesController.clear();
     final auth = ref.read(authControllerProvider);
-    final userFullName = auth.session?.fullname ?? '';
-    final userEmail = auth.session?.email ?? '';
 
     if (isIOS) {
       showCupertinoModalPopup(
         context: context,
-        builder: (context) => CupertinoActionSheet(
-          title: const Text('Confirm Registration'),
-          message: Column(
-            children: [
-              Text('Name: $userFullName'),
-              Text('Email: $userEmail'),
-              const SizedBox(height: 12),
-              CupertinoTextField(
-                controller: _notesController,
-                placeholder: 'Add any attendee notes (optional)',
-                padding: const EdgeInsets.all(12),
+        builder: (context) {
+          final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
+          final bg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7);
+          final barBg = isDark ? const Color(0xFF2C2C2E) : Colors.white;
+          final textPrimary = isDark ? Colors.white : Colors.black;
+
+          return Material(
+            color: Colors.transparent,
+            child: Container(
+              height: MediaQuery.of(context).size.height * 0.85,
+              decoration: BoxDecoration(
+                color: bg,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(16),
+                  topRight: Radius.circular(16),
+                ),
               ),
-            ],
-          ),
-          actions: [
-            CupertinoActionSheetAction(
-              onPressed: () async {
-                Navigator.pop(context);
-                await _submitRegistration();
-              },
-              child: const Text('Confirm', style: TextStyle(color: Color(0xFFC9952A))),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+                    decoration: BoxDecoration(
+                      color: barBg,
+                      border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.black12, width: 0.5)),
+                      borderRadius: const BorderRadius.only(
+                        topLeft: Radius.circular(16),
+                        topRight: Radius.circular(16),
+                      ),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        CupertinoButton(
+                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                          child: const Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(CupertinoIcons.left_chevron, size: 18, color: Color(0xFFC9952A)),
+                              SizedBox(width: 4),
+                              Text('Back', style: TextStyle(color: Color(0xFFC9952A), fontSize: 15)),
+                            ],
+                          ),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                        Text(
+                          'Register',
+                          style: TextStyle(
+                            fontSize: 17,
+                            fontWeight: FontWeight.bold,
+                            color: textPrimary,
+                          ),
+                        ),
+                        const SizedBox(width: 60),
+                      ],
+                    ),
+                  ),
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(20.0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          _buildEventHeader(event, isDark),
+                          _buildReadOnlyField('Badge name', state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? '', isDark),
+                          _buildReadOnlyField('Email', state.alumniProfile?['email'] ?? auth.session?.email ?? '', isDark),
+                          _buildReadOnlyField('Phone', state.alumniProfile?['phone'] ?? '', isDark),
+                          _buildEditableField('Notes (optional)', _notesController, 'Dietary preferences, accessibility needs…', isDark),
+                          const SizedBox(height: 20),
+                          SizedBox(
+                            width: double.infinity,
+                            child: CupertinoButton(
+                              color: const Color(0xFFC9952A),
+                              onPressed: () async {
+                                Navigator.pop(context);
+                                await _submitRegistration();
+                              },
+                              child: const Text('Confirm registration', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                          _buildInfoBox(isDark),
+                          const SizedBox(height: 32),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
+              ),
             ),
-          ],
-          cancelButton: CupertinoActionSheetAction(
-            isDefaultAction: true,
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-        ),
+          );
+        },
       );
     } else {
       showDialog(
         context: context,
-        builder: (context) => AlertDialog(
-          title: const Text('Register for Event'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text('Name: $userFullName', style: const TextStyle(fontWeight: FontWeight.w500)),
-              const SizedBox(height: 4),
-              Text('Email: $userEmail', style: const TextStyle(fontWeight: FontWeight.w500)),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _notesController,
-                decoration: const InputDecoration(
-                  labelText: 'Attendee Notes (optional)',
-                  hintText: 'Dietary preferences, accessibility needs…',
-                  border: OutlineInputBorder(),
+        builder: (context) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return Dialog(
+            backgroundColor: isDark ? const Color(0xFF131E30) : Colors.white,
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 500),
+              padding: const EdgeInsets.all(24.0),
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Text(
+                          'Register for Event',
+                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(context),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    _buildEventHeader(event, isDark),
+                    _buildReadOnlyField('Badge name', state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? '', isDark),
+                    _buildReadOnlyField('Email', state.alumniProfile?['email'] ?? auth.session?.email ?? '', isDark),
+                    _buildReadOnlyField('Phone', state.alumniProfile?['phone'] ?? '', isDark),
+                    _buildEditableField('Notes (optional)', _notesController, 'Dietary preferences, accessibility needs…', isDark),
+                    const SizedBox(height: 20),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: const Color(0xFF0D1B3E),
+                          foregroundColor: Colors.white,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                        ),
+                        onPressed: () async {
+                          Navigator.pop(context);
+                          await _submitRegistration();
+                        },
+                        child: const Text('Confirm registration', style: TextStyle(fontWeight: FontWeight.bold)),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
+                    _buildInfoBox(isDark),
+                  ],
                 ),
-                maxLines: 2,
               ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
             ),
-            ElevatedButton(
-              style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFF0D1B3E), foregroundColor: Colors.white),
-              onPressed: () async {
-                Navigator.pop(context);
-                await _submitRegistration();
-              },
-              child: const Text('Confirm'),
-            ),
-          ],
-        ),
+          );
+        },
       );
     }
+  }
+
+  Widget _buildReadOnlyField(String label, String value, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+            ),
+          ),
+          const SizedBox(height: 6),
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(
+                color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+              ),
+            ),
+            child: Text(
+              value.isNotEmpty ? value : '—',
+              style: TextStyle(
+                fontSize: 14,
+                color: isDark ? Colors.white70 : Colors.black87,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEditableField(String label, TextEditingController controller, String hint, bool isDark) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+            ),
+          ),
+          const SizedBox(height: 6),
+          TextField(
+            controller: controller,
+            maxLines: 3,
+            style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black),
+            decoration: InputDecoration(
+              hintText: hint,
+              hintStyle: TextStyle(fontSize: 13, color: isDark ? Colors.white38 : Colors.black38),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Color(0xFFC9952A),
+                  width: 1.5,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInfoBox(bool isDark) {
+    final infoBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF3FA);
+    final infoText = isDark ? const Color(0xFF8B9AB8) : const Color(0xFF5A6A8A);
+    
+    return Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: infoBg,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(Icons.info_outline, size: 16, color: infoText),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Text(
+              "You'll receive a confirmation email. Your QR badge will appear in My Events.",
+              style: TextStyle(
+                fontSize: 12,
+                height: 1.4,
+                color: infoText,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEventHeader(AppEvent event, bool isDark) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          event.title,
+          style: TextStyle(
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+            color: isDark ? Colors.white : const Color(0xFF0D1B3E),
+          ),
+        ),
+        const SizedBox(height: 6),
+        Text(
+          '${_formatDate(event.startDatetime)} · ${_formatTime(event.startDatetime, event.endDatetime)}',
+          style: TextStyle(
+            fontSize: 12,
+            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+          ),
+        ),
+        const SizedBox(height: 16),
+        const Divider(height: 1),
+        const SizedBox(height: 16),
+      ],
+    );
   }
 
   Future<void> _submitRegistration() async {

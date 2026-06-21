@@ -91,6 +91,14 @@ class EventsRepository {
     );
     return response.data ?? <String, dynamic>{};
   }
+
+  Future<Map<String, dynamic>> getAlumniProfile(String accessToken) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/alumni/me',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return response.data ?? <String, dynamic>{};
+  }
 }
 
 final eventsRepositoryProvider = Provider<EventsRepository>((ref) {

@@ -12,6 +12,7 @@ class EventDetailState {
     this.eligibilityMessage,
     this.myRegistration,
     this.isRegistering = false,
+    this.alumniProfile,
   });
 
   final AppEvent? event;
@@ -21,6 +22,7 @@ class EventDetailState {
   final String? eligibilityMessage;
   final Map<String, dynamic>? myRegistration;
   final bool isRegistering;
+  final Map<String, dynamic>? alumniProfile;
 
   EventDetailState copyWith({
     AppEvent? event,
@@ -30,6 +32,7 @@ class EventDetailState {
     String? eligibilityMessage,
     Map<String, dynamic>? myRegistration,
     bool? isRegistering,
+    Map<String, dynamic>? alumniProfile,
     bool clearRegistration = false,
   }) {
     return EventDetailState(
@@ -40,6 +43,7 @@ class EventDetailState {
       eligibilityMessage: eligibilityMessage ?? this.eligibilityMessage,
       myRegistration: clearRegistration ? null : (myRegistration ?? this.myRegistration),
       isRegistering: isRegistering ?? this.isRegistering,
+      alumniProfile: alumniProfile ?? this.alumniProfile,
     );
   }
 }
@@ -78,6 +82,14 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
           state = state.copyWith(myRegistration: reg);
         } catch (_) {
           // If registration fails, fallback
+        }
+
+        // Fetch alumni profile details
+        try {
+          final profile = await _repository.getAlumniProfile(token);
+          state = state.copyWith(alumniProfile: profile);
+        } catch (_) {
+          // If profile fails, fallback
         }
       }
       
