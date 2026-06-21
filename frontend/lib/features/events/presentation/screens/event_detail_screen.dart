@@ -839,9 +839,32 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   // REGISTRATION BUTTONS & DIALOG FLOWS
   // ==========================================
   Widget _buildRegistrationCTA(EventDetailState state, {required bool isIOS}) {
+    final event = state.event;
+    if (event == null) return const SizedBox.shrink();
+
+    Widget? countdownWidget;
+    if (event.registrationStatus == 'open' && event.registrationClosesAt != null) {
+      countdownWidget = _buildCountdownSection(
+        title: 'Registration closes in',
+        countdown: _formatRemainingTime(event.registrationClosesAt!),
+        dateLabel: 'Last date to register',
+        dateValue: _formatDateTime(event.registrationClosesAt!),
+        isIOS: isIOS,
+      );
+    } else if (event.registrationStatus != 'open' && event.registrationOpensAt != null) {
+      countdownWidget = _buildCountdownSection(
+        title: 'Registration opens in',
+        countdown: _formatRemainingTime(event.registrationOpensAt!),
+        dateLabel: 'Registration opening on',
+        dateValue: _formatDateTime(event.registrationOpensAt!),
+        isIOS: isIOS,
+      );
+    }
+
+    Widget ctaWidget;
     if (state.myRegistration != null) {
       final regNo = state.myRegistration!['registration_number'] ?? '';
-      return Container(
+      ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -872,10 +895,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ],
         ),
       );
-    }
-
-    if (state.eligibilityStatus == 'already_registered') {
-      return Container(
+    } else if (state.eligibilityStatus == 'already_registered') {
+      ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -889,10 +910,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ),
       );
-    }
-
-    if (state.eligibilityStatus == 'full') {
-      return Container(
+    } else if (state.eligibilityStatus == 'full') {
+      ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -906,10 +925,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ),
       );
-    }
-
-    if (state.eligibilityStatus == 'closed') {
-      return Container(
+    } else if (state.eligibilityStatus == 'closed') {
+      ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -923,10 +940,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ),
       );
-    }
-
-    if (state.eligibilityStatus == 'not_open_yet') {
-      return Container(
+    } else if (state.eligibilityStatus == 'not_open_yet') {
+      ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -940,10 +955,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ),
       );
-    }
-
-    if (state.eligibilityStatus == 'ineligible') {
-      return Container(
+    } else if (state.eligibilityStatus == 'ineligible') {
+      ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
@@ -957,33 +970,45 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ),
       );
+    } else {
+      // Default eligible: show Register button
+      if (isIOS) {
+        ctaWidget = SizedBox(
+          width: double.infinity,
+          child: CupertinoButton(
+            color: const Color(0xFFC9952A),
+            onPressed: () => _showRegistrationForm(isIOS: true),
+            child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+          ),
+        );
+      } else {
+        ctaWidget = SizedBox(
+          width: double.infinity,
+          child: ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF0D1B3E),
+              foregroundColor: Colors.white,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+            ),
+            onPressed: () => _showRegistrationForm(isIOS: false),
+            child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold)),
+          ),
+        );
+      }
     }
 
-    // Default eligible: show Register button
-    if (isIOS) {
-      return SizedBox(
-        width: double.infinity,
-        child: CupertinoButton(
-          color: const Color(0xFFC9952A),
-          onPressed: () => _showRegistrationForm(isIOS: true),
-          child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
-        ),
-      );
-    } else {
-      return SizedBox(
-        width: double.infinity,
-        child: ElevatedButton(
-          style: ElevatedButton.styleFrom(
-            backgroundColor: const Color(0xFF0D1B3E),
-            foregroundColor: Colors.white,
-            padding: const EdgeInsets.symmetric(vertical: 16),
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-          ),
-          onPressed: () => _showRegistrationForm(isIOS: false),
-          child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold)),
-        ),
+    if (countdownWidget != null) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          countdownWidget,
+          const SizedBox(height: 16),
+          ctaWidget,
+        ],
       );
     }
+    return ctaWidget;
   }
 
   void _showRegistrationForm({required bool isIOS}) {
@@ -1107,5 +1132,89 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       return formatSingle(start);
     }
     return '${formatSingle(start)} – ${formatSingle(end)}';
+  }
+
+  String _formatDateTime(DateTime dt) {
+    return '${_formatDate(dt)} at ${_formatTime(dt, null)}';
+  }
+
+  String _formatRemainingTime(DateTime target) {
+    final now = DateTime.now();
+    final difference = target.difference(now);
+    if (difference.isNegative) {
+      return '00 Days: 00 hours: 00 Minutes';
+    }
+    final days = difference.inDays;
+    final hours = difference.inHours % 24;
+    final minutes = difference.inMinutes % 60;
+    return '${days.toString().padLeft(2, '0')} Days: ${hours.toString().padLeft(2, '0')} hours: ${minutes.toString().padLeft(2, '0')} Minutes';
+  }
+
+  Widget _buildCountdownSection({
+    required String title,
+    required String countdown,
+    required String dateLabel,
+    required String dateValue,
+    required bool isIOS,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final cardBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC);
+    final borderColor = const Color(0xFFC9952A).withOpacity(0.3);
+    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
+    final subTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: borderColor, width: 1.5),
+        boxShadow: [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 6,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Text(
+            title,
+            style: const TextStyle(
+              fontSize: 14,
+              fontWeight: FontWeight.w600,
+              color: Color(0xFFC9952A),
+              letterSpacing: 0.5,
+            ),
+          ),
+          const SizedBox(height: 8),
+          Text(
+            countdown,
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 18,
+              fontWeight: FontWeight.bold,
+              color: textColor,
+              fontFamily: 'monospace',
+            ),
+          ),
+          const SizedBox(height: 8),
+          const Divider(height: 1, thickness: 0.5),
+          const SizedBox(height: 8),
+          Text(
+            '$dateLabel: $dateValue',
+            textAlign: TextAlign.center,
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: subTextColor,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
