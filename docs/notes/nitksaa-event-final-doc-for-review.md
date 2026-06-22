@@ -33,7 +33,7 @@ https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/api/swagger_te
 
 ### Week 3 — Manual Verification Guide v2
 
-https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/validation/backend_week3_manual_verification_guide_v2.md
+https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/validation/old/backend_week3_manual_verification_guide_v2.md
 
 ### Week 3 — Backend Status
 https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/releases/week3_status_report_2026-06-18.md
