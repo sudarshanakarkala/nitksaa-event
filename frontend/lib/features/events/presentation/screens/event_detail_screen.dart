@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
@@ -431,7 +432,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Expanded(
-                  flex: 3,
+                  flex: 7,
                   child: SingleChildScrollView(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -493,26 +494,28 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 ),
                 const SizedBox(width: 32),
                 Expanded(
-                  flex: 1,
+                  flex: 3,
                   child: Card(
                     elevation: 4,
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                     color: isDark ? const Color(0xFF131E30) : Colors.white,
-                    child: Padding(
-                      padding: const EdgeInsets.all(24.0),
-                      child: Column(
-                        mainAxisSize: MainAxisSize.min,
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text(
-                            'Registration',
-                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildCapacityBar(event, isDark),
-                          const SizedBox(height: 24),
-                          _buildRegistrationCTA(state, isIOS: false),
-                        ],
+                    child: SingleChildScrollView(
+                      child: Padding(
+                        padding: const EdgeInsets.all(16.0),
+                        child: Column(
+                          mainAxisSize: MainAxisSize.min,
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            const Text(
+                              'Registration',
+                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+                            ),
+                            const SizedBox(height: 12),
+                            _buildCapacityBar(event, isDark),
+                            const SizedBox(height: 16),
+                            _buildRegistrationCTA(state, isIOS: false),
+                          ],
+                        ),
                       ),
                     ),
                   ),
@@ -864,51 +867,65 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     Widget ctaWidget;
     if (state.myRegistration != null) {
       final regNo = state.myRegistration!['registration_number'] ?? '';
-      ctaWidget = Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFD9F4E8),
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF1B5C3A).withOpacity(0.2)),
-        ),
-        child: Column(
-          children: [
-            const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
+      ctaWidget = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFD9F4E8),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFF1B5C3A).withOpacity(0.2)),
+            ),
+            child: Column(
               children: [
-                Icon(Icons.check_circle, color: Color(0xFF1B5C3A), size: 20),
-                SizedBox(width: 8),
-                Text(
-                  'Registered Successfully',
-                  style: TextStyle(color: Color(0xFF1B5C3A), fontWeight: FontWeight.bold),
+                const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.check_circle, color: Color(0xFF1B5C3A), size: 20),
+                    SizedBox(width: 8),
+                    Text(
+                      'Registered Successfully',
+                      style: TextStyle(color: Color(0xFF1B5C3A), fontWeight: FontWeight.bold),
+                    ),
+                  ],
                 ),
+                if (regNo.isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Badge #: $regNo',
+                    style: const TextStyle(color: Color(0xFF1B5C3A), fontSize: 12),
+                  ),
+                ]
               ],
             ),
-            if (regNo.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                'Badge #: $regNo',
-                style: const TextStyle(color: Color(0xFF1B5C3A), fontSize: 12),
-              ),
-            ]
-          ],
-        ),
+          ),
+          const SizedBox(height: 16),
+          _buildQRBadgeSection(state, event, isIOS),
+        ],
       );
     } else if (state.eligibilityStatus == 'already_registered') {
-      ctaWidget = Container(
-        width: double.infinity,
-        padding: const EdgeInsets.all(12),
-        decoration: BoxDecoration(
-          color: const Color(0xFFDDEEFF),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: const Center(
-          child: Text(
-            'You are registered for this event.',
-            style: TextStyle(color: Color(0xFF1B5C9B), fontWeight: FontWeight.bold),
+      ctaWidget = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFDDEEFF),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: const Center(
+              child: Text(
+                'You are registered for this event.',
+                style: TextStyle(color: Color(0xFF1B5C9B), fontWeight: FontWeight.bold),
+              ),
+            ),
           ),
-        ),
+          const SizedBox(height: 16),
+          _buildQRBadgeSection(state, event, isIOS),
+        ],
       );
     } else if (state.eligibilityStatus == 'full') {
       ctaWidget = Container(
@@ -1426,23 +1443,281 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               fontSize: 18,
               fontWeight: FontWeight.bold,
               color: textColor,
-              fontFamily: 'monospace',
+            fontFamily: 'monospace',
+          ),
+        ),
+        const SizedBox(height: 8),
+        const Divider(height: 1, thickness: 0.5),
+        const SizedBox(height: 8),
+        Text(
+          '$dateLabel: $dateValue',
+          textAlign: TextAlign.center,
+          style: TextStyle(
+            fontSize: 12,
+            fontWeight: FontWeight.w500,
+            color: subTextColor,
+          ),
+        ),
+      ],
+    ),
+  );
+}
+
+  Widget _buildQRBadgeSection(EventDetailState state, AppEvent event, bool isIOS) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final infoBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF3FA);
+    final infoTextColor = isDark ? const Color(0xFF8B9AB8) : const Color(0xFF5A6A8A);
+    final regNo = state.myRegistration?['registration_number'] ?? '';
+
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final useVerticalLayout = constraints.maxWidth < 340;
+
+        final viewButton = isIOS
+            ? CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: const Color(0xFF0D1B3E),
+                borderRadius: BorderRadius.circular(10),
+                onPressed: () => _showQRBadgeDialog(event, regNo, state),
+                child: const Text(
+                  'View QR badge',
+                  style: TextStyle(
+                    color: Colors.white,
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              )
+            : ElevatedButton(
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF0D1B3E),
+                  foregroundColor: Colors.white,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: () => _showQRBadgeDialog(event, regNo, state),
+                child: const Text(
+                  'View QR badge',
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 14,
+                  ),
+                ),
+              );
+
+        final eventsButton = isIOS
+            ? CupertinoButton(
+                padding: const EdgeInsets.symmetric(vertical: 14),
+                color: Colors.transparent,
+                borderRadius: BorderRadius.circular(10),
+                onPressed: () {
+                  context.go(AppRoutes.home);
+                },
+                child: Container(
+                  width: double.infinity,
+                  alignment: Alignment.center,
+                  decoration: BoxDecoration(
+                    border: Border.all(
+                      color: isDark ? Colors.white30 : Colors.black26,
+                      width: 1,
+                    ),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text(
+                    'Go to My Events',
+                    style: TextStyle(
+                      color: isDark ? Colors.white : const Color(0xFF0D1B3E),
+                      fontWeight: FontWeight.w600,
+                      fontSize: 14,
+                    ),
+                  ),
+                ),
+              )
+            : OutlinedButton(
+                style: OutlinedButton.styleFrom(
+                  foregroundColor: isDark ? Colors.white : const Color(0xFF0D1B3E),
+                  side: BorderSide(
+                    color: isDark ? Colors.white30 : Colors.black26,
+                    width: 1,
+                  ),
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  elevation: 0,
+                ),
+                onPressed: () {
+                  context.go(AppRoutes.home);
+                },
+                child: const Text(
+                  'Go to My Events',
+                  style: TextStyle(
+                    fontWeight: FontWeight.w600,
+                    fontSize: 14,
+                  ),
+                ),
+              );
+
+        Widget buttonsWidget;
+        if (useVerticalLayout) {
+          buttonsWidget = Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              viewButton,
+              const SizedBox(height: 12),
+              eventsButton,
+            ],
+          );
+        } else {
+          buttonsWidget = Row(
+            children: [
+              Expanded(child: viewButton),
+              const SizedBox(width: 12),
+              Expanded(child: eventsButton),
+            ],
+          );
+        }
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: infoBg,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                'Your QR badge is ready in My Events — present it at the venue for check-in.',
+                style: TextStyle(
+                  fontSize: 13,
+                  height: 1.4,
+                  color: infoTextColor,
+                ),
+              ),
+            ),
+            const SizedBox(height: 16),
+            buttonsWidget,
+          ],
+        );
+      },
+    );
+  }
+
+  void _showQRBadgeDialog(AppEvent event, String regNo, EventDetailState state) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final auth = ref.read(authControllerProvider);
+    final userName = state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? 'Attendee';
+    final email = state.alumniProfile?['email'] ?? auth.session?.email ?? '';
+
+    showDialog(
+      context: context,
+      builder: (context) {
+        return Dialog(
+          backgroundColor: isDark ? const Color(0xFF131E30) : Colors.white,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+          child: Padding(
+            padding: const EdgeInsets.all(24.0),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Your Event Badge',
+                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? const Color(0xFF0D1B3E) : const Color(0xFFF4F6F9),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: Column(
+                    children: [
+                      Text(
+                        event.title,
+                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                        textAlign: TextAlign.center,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        userName,
+                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                      ),
+                      if (email.isNotEmpty) ...[
+                        const SizedBox(height: 4),
+                        Text(
+                          email,
+                          style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
+                        ),
+                      ],
+                      const SizedBox(height: 16),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(8),
+                        child: Image.network(
+                          'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${Uri.encodeComponent(regNo.isNotEmpty ? regNo : "Event-${event.eventId}")}',
+                          width: 200,
+                          height: 200,
+                          loadingBuilder: (context, child, loadingProgress) {
+                            if (loadingProgress == null) return child;
+                            return Container(
+                              width: 200,
+                              height: 200,
+                              color: Colors.white,
+                              child: const Center(
+                                child: CircularProgressIndicator(),
+                              ),
+                            );
+                          },
+                          errorBuilder: (context, error, stackTrace) {
+                            return Container(
+                              width: 200,
+                              height: 200,
+                              color: Colors.white,
+                              child: const Column(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.qr_code, size: 80, color: Colors.black),
+                                  SizedBox(height: 8),
+                                  Text(
+                                    'QR Code Offline',
+                                    style: TextStyle(color: Colors.black, fontSize: 12),
+                                  ),
+                                ],
+                              ),
+                            );
+                          },
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      if (regNo.isNotEmpty)
+                        Text(
+                          'Badge Number: $regNo',
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
             ),
           ),
-          const SizedBox(height: 8),
-          const Divider(height: 1, thickness: 0.5),
-          const SizedBox(height: 8),
-          Text(
-            '$dateLabel: $dateValue',
-            textAlign: TextAlign.center,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: subTextColor,
-            ),
-          ),
-        ],
-      ),
+        );
+      },
     );
   }
 }
+
