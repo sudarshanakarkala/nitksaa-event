@@ -94,14 +94,15 @@ Implemented:
 ```http
 POST /api/v1/events/{event_id}/register
 
-DELETE /api/v1/events/{event_id}/register
-
-GET /api/v1/events/{event_id}/registrations
+GET /api/v1/events/{event_id}/my-registration
 
 GET /api/v1/my/registrations
 
 GET /api/v1/events/{event_id}/registration-eligibility
 ```
+
+> **Note:** `DELETE /api/v1/events/{event_id}/register` (cancellation) is NOT implemented.
+> This was incorrectly listed in an earlier draft. It is deferred to Week 5+.
 
 ### Features
 

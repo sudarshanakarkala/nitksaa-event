@@ -1,9 +1,13 @@
 # Backend API Index v2
 
-**Version:** 2.0  
-**Date:** 2026-06-19  
-**Status:** AUTHORITATIVE — supersedes `backend_api_index_v1.md`  
-**Source of truth:** `backend/app/api/` — actual router implementations
+**Version:** 2.0
+**Date:** 2026-06-19
+**Status:** SUPERSEDED by `backend_api_index_v3.md` (2026-06-24)
+**Known issues in this version:** Admin attendee paths in "Week 4 Planned" section are wrong
+(`/api/v1/events/{id}/attendees` should be `/api/v1/admin/events/{id}/attendees`).
+Use v3 for all new development.
+
+---
 
 > `backend_api_index_v1.md` is retained for historical reference only. All entries in v1 that
 > were marked "Planned / Placeholder" have either been implemented (see below) or remain planned
