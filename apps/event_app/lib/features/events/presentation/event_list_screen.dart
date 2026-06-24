@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
@@ -59,12 +61,15 @@ class _EventListScreenState extends State<EventListScreen>
     });
 
     try {
-      final events = await _eventService.listEvents(period);
+      final events = await _eventService
+          .listEvents(period)
+          .timeout(const Duration(seconds: 10));
       if (!mounted) return;
       setState(() {
         _states[period] = _EventListState(events: events, hasLoaded: true);
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      debugPrint('[EventList] load error ($period): $error\n$stackTrace');
       if (!mounted) return;
       setState(() {
         _states[period] = _states[period]!.copyWith(
@@ -197,7 +202,20 @@ class _EventCard extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
-                    child: Text(event.title, style: textTheme.titleLarge),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(event.title, style: textTheme.titleLarge),
+                        const SizedBox(height: 2),
+                        Text(
+                          'ID: ${event.eventId}',
+                          style: textTheme.labelSmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                            fontFamily: 'monospace',
+                          ),
+                        ),
+                      ],
+                    ),
                   ),
                   const SizedBox(width: 12),
                   _Badge(
@@ -368,7 +386,15 @@ class _EventListState {
 }
 
 String _errorMessage(Object error) {
+  if (error is TimeoutException) {
+    return 'Request timed out. Check your connection and retry.';
+  }
   if (error is DioException) {
+    if (error.type == DioExceptionType.connectionTimeout ||
+        error.type == DioExceptionType.receiveTimeout ||
+        error.type == DioExceptionType.sendTimeout) {
+      return 'Request timed out. Check your connection and retry.';
+    }
     if (error.response?.statusCode != null) {
       return 'The server returned ${error.response!.statusCode}. Please retry.';
     }

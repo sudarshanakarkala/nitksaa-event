@@ -84,26 +84,26 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
     }
   }
 
-  void _register() {
-    final authenticated =
-        widget.isAuthenticated?.call() ??
-        AuthController.instance.isAuthenticated;
-    if (!authenticated) {
-      if (widget.onLoginRequired != null) {
-        widget.onLoginRequired!();
-      } else {
-        context.go(AppRoutes.login);
-      }
-      return;
-    }
+  bool get _isAuth =>
+      widget.isAuthenticated?.call() ?? AuthController.instance.isAuthenticated;
 
-    ScaffoldMessenger.of(context)
-      ..hideCurrentSnackBar()
-      ..showSnackBar(
-        const SnackBar(
-          content: Text('Registration will be available in Week 3.'),
-        ),
-      );
+  void _goLogin() {
+    if (widget.onLoginRequired != null) {
+      widget.onLoginRequired!();
+    } else {
+      context.push(AppRoutes.login);
+    }
+  }
+
+  void _goRegister(PublicEventDetail event) {
+    final encodedTitle = Uri.encodeComponent(event.title);
+    context.push(
+      '${AppRoutes.events}/${event.eventId}/register?title=$encodedTitle',
+    );
+  }
+
+  void _goMyRegistrations() {
+    context.push(AppRoutes.myRegistrations);
   }
 
   @override
@@ -163,22 +163,130 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          if (event.status == 'cancelled') _CancelledBanner(),
+          if (event.status == 'cancelled') const SizedBox(height: 16),
           _EventSummaryCard(event: event),
           const SizedBox(height: 16),
           _EventInformationCard(event: event),
           const SizedBox(height: 16),
           _SpeakersCard(speakers: event.speakers),
           const SizedBox(height: 24),
-          AppPrimaryButton(
-            label: 'Register',
-            icon: Icons.how_to_reg_outlined,
-            onPressed: _register,
+          _RegistrationCta(
+            event: event,
+            isAuthenticated: _isAuth,
+            onLogin: _goLogin,
+            onRegister: () => _goRegister(event),
+            onViewRegistrations: _goMyRegistrations,
           ),
         ],
       ),
     );
   }
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Registration CTA widget
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _RegistrationCta extends StatelessWidget {
+  const _RegistrationCta({
+    required this.event,
+    required this.isAuthenticated,
+    required this.onLogin,
+    required this.onRegister,
+    required this.onViewRegistrations,
+  });
+
+  final PublicEventDetail event;
+  final bool isAuthenticated;
+  final VoidCallback onLogin;
+  final VoidCallback onRegister;
+  final VoidCallback onViewRegistrations;
+
+  @override
+  Widget build(BuildContext context) {
+    if (event.status == 'cancelled') {
+      return AppSecondaryButton(
+        label: 'Registration Unavailable',
+        icon: Icons.block_outlined,
+        onPressed: null,
+      );
+    }
+
+    if (!isAuthenticated) {
+      return AppPrimaryButton(
+        label: 'Sign in to Register',
+        icon: Icons.login_outlined,
+        onPressed: onLogin,
+      );
+    }
+
+    return switch (event.registrationStatus) {
+      'open' => AppPrimaryButton(
+          label: 'Register',
+          icon: Icons.how_to_reg_outlined,
+          onPressed: onRegister,
+        ),
+      'full' => AppSecondaryButton(
+          label: 'Event Full',
+          icon: Icons.people_outline,
+          onPressed: null,
+        ),
+      'closed' => AppSecondaryButton(
+          label: 'Registration Closed',
+          icon: Icons.lock_outline,
+          onPressed: null,
+        ),
+      'not_open_yet' => AppSecondaryButton(
+          label: 'Registration Opens Soon',
+          icon: Icons.schedule_outlined,
+          onPressed: null,
+        ),
+      _ => AppSecondaryButton(
+          label: 'Registration Unavailable',
+          icon: Icons.block_outlined,
+          onPressed: null,
+        ),
+    };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Cancelled banner
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _CancelledBanner extends StatelessWidget {
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      color: cs.errorContainer,
+      elevation: 0,
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        child: Row(
+          children: [
+            Icon(Icons.cancel_outlined, color: cs.onErrorContainer, size: 20),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(
+                'This event has been cancelled.',
+                style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                      color: cs.onErrorContainer,
+                      fontWeight: FontWeight.w600,
+                    ),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Existing cards (unchanged)
+// ─────────────────────────────────────────────────────────────────────────────
 
 class _EventSummaryCard extends StatelessWidget {
   const _EventSummaryCard({required this.event});

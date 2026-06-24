@@ -88,3 +88,50 @@ class RegistrationEligibilityResponse(BaseModel):
 class MyRegistrationsListResponse(BaseModel):
     registrations: List[RegistrationResponse]
     total: int
+
+
+# ── Admin: attendee management schemas ────────────────────────────────────────
+
+class AdminAttendeeItem(BaseModel):
+    """One row in the admin attendee list (status='registered' only)."""
+
+    registration_id: int
+    registration_number: Optional[str] = None
+    fullname_snapshot: Optional[str] = None
+    email_snapshot: Optional[str] = None
+    phone_snapshot: Optional[str] = None
+    batch_year_snapshot: Optional[int] = None
+    branch_snapshot: Optional[str] = None
+    registered_at: datetime
+    status: str
+    confirmation_email_status: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AdminAttendeeListResponse(BaseModel):
+    attendees: List[AdminAttendeeItem]
+    total: int
+    page: int
+    per_page: int
+
+
+class AdminRegistrationItem(BaseModel):
+    """One row in the admin registrations audit view (all statuses)."""
+
+    registration_id: int
+    registration_number: Optional[str] = None
+    fullname_snapshot: Optional[str] = None
+    email_snapshot: Optional[str] = None
+    status: str
+    registered_at: datetime
+    cancelled_at: Optional[datetime] = None
+
+    model_config = {"from_attributes": True}
+
+
+class AdminRegistrationListResponse(BaseModel):
+    registrations: List[AdminRegistrationItem]
+    total: int
+    page: int
+    per_page: int

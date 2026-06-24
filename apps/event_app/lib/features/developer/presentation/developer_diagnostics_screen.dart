@@ -14,6 +14,7 @@ import '../../../core/app_state.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../routes/app_routes.dart';
 import '../../../theme/theme_provider.dart';
+import '../../auth/services/auth_controller.dart';
 import '../../auth/services/auth_session_store.dart';
 import '../../auth/services/google_sign_in_initializer.dart';
 
@@ -30,7 +31,6 @@ class _DeveloperDiagnosticsScreenState
   final Map<DiagnosticId, DiagnosticRunState> _runState = {};
 
   bool _runningAll = false;
-  bool _runningPublicEventsApi = false;
   bool _exporting = false;
   bool _clearing = false;
 
@@ -54,17 +54,21 @@ class _DeveloperDiagnosticsScreenState
         padding: const EdgeInsets.fromLTRB(16, 16, 16, 32),
         children: [
           const _ProductionWarningBanner(),
-          const SizedBox(height: 20),
+          const SizedBox(height: 12),
+          _QaSummaryCard(
+            categories: categories,
+            runState: _runState,
+          ),
+          const SizedBox(height: 12),
           const DiagnosticSectionHeader(title: 'Quick Actions'),
           _QuickActionsCard(
             runningAll: _runningAll,
-            runningPublicEventsApi: _runningPublicEventsApi,
             exporting: _exporting,
             clearing: _clearing,
             onOpenEvents: _openEvents,
-            onOpenEventListingTest: _openEventListingTest,
-            onOpenEventDetailTest: _openEventDetailTest,
-            onRunPublicEventsApiTest: _runPublicEventsApiTest,
+            onRunEventDiag: _openEventDiagnostics,
+            onRunRegDiag: _openRegistrationDiagnostics,
+            onRunAdminDiag: _openAdminDiagnostics,
             onRunAll: _runAllDiagnostics,
             onExport: _exportDiagnosticReport,
             onClear: _clearCachedData,
@@ -86,54 +90,19 @@ class _DeveloperDiagnosticsScreenState
     context.go(AppRoutes.events);
   }
 
-  void _openEventListingTest() {
-    context.go(AppRoutes.events);
+  void _openEventDiagnostics() {
+    final items = _diagnosticItems(ref.read(themeProvider));
+    _openDetail(items[DiagnosticId.eventsApi]!);
   }
 
-  void _openEventDetailTest() {
-    const configuredId = int.fromEnvironment(
-      'DEV_TEST_EVENT_ID',
-      defaultValue: 1,
-    );
-    context.go(AppRoutes.eventDetail(configuredId));
+  void _openRegistrationDiagnostics() {
+    final items = _diagnosticItems(ref.read(themeProvider));
+    _openDetail(items[DiagnosticId.registrationApi]!);
   }
 
-  Future<void> _runPublicEventsApiTest() async {
-    setState(() => _runningPublicEventsApi = true);
-    try {
-      final response = await devDio.get<Map<String, dynamic>>(
-        '/api/v1/events/public',
-        queryParameters: const {'period': 'upcoming'},
-      ).timeout(const Duration(seconds: 15));
-      final events = response.data?['events'];
-      final count = events is List ? events.length : 0;
-      if (!mounted) return;
-      setState(() {
-        _runState[DiagnosticId.eventsApi] = DiagnosticRunState(
-          status: DiagnosticStatus.ok,
-          lastRun: DateTime.now(),
-        );
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Public Events API returned $count event(s).')),
-      );
-    } catch (error, stackTrace) {
-      AppLogger.error('Public Events API diagnostic failed', error, stackTrace);
-      if (!mounted) return;
-      setState(() {
-        _runState[DiagnosticId.eventsApi] = DiagnosticRunState(
-          status: DiagnosticStatus.error,
-          lastRun: DateTime.now(),
-        );
-      });
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Public Events API failed: ${errorMessage(error)}'),
-        ),
-      );
-    } finally {
-      if (mounted) setState(() => _runningPublicEventsApi = false);
-    }
+  void _openAdminDiagnostics() {
+    final items = _diagnosticItems(ref.read(themeProvider));
+    _openDetail(items[DiagnosticId.attendeeListApi]!);
   }
 
   List<DiagnosticCategory> _diagnosticCategories(ThemeMode mode) {
@@ -186,25 +155,27 @@ class _DeveloperDiagnosticsScreenState
       DiagnosticCategory(
         title: 'Registration',
         description:
-            'Alumni can register. Confirmation email sent. Join link visible post-registration.',
+            'Alumni can register. Full flow: alumni profile, eligibility, register, my-registration, '
+            'duplicate guard, capacity, join link, email, audit. '
+            'Capacity guard and email checks are part of full registration diagnostics.',
         items: [
           items[DiagnosticId.week3UxShowcase]!,
           items[DiagnosticId.registrationApi]!,
           items[DiagnosticId.myRegistration]!,
-          items[DiagnosticId.capacityGuard]!,
-          items[DiagnosticId.confirmationEmail]!,
-          items[DiagnosticId.joinLinkVisibility]!,
         ],
       ),
       DiagnosticCategory(
         title: 'Admin / Attendees',
         description:
-            'Admin can manage attendees. Full end-to-end stable. Demo-ready.',
+            'Phase 2 implemented. Admin can view, search, filter, export attendees, '
+            'audit registrations, and run UC-01–UC-10 full diagnostics.',
         items: [
           items[DiagnosticId.attendeeListApi]!,
+          items[DiagnosticId.attendeeSearchTest]!,
+          items[DiagnosticId.attendeeBatchFilter]!,
           items[DiagnosticId.attendeeExport]!,
-          items[DiagnosticId.adminRoleGuard]!,
           items[DiagnosticId.auditTrail]!,
+          items[DiagnosticId.adminRoleGuard]!,
         ],
       ),
       DiagnosticCategory(
@@ -315,32 +286,44 @@ class _DeveloperDiagnosticsScreenState
         initialStatus: DiagnosticStatus.info,
         apiDetails: diagnosticApiDetails[DiagnosticId.debugTools]!,
       ),
-      DiagnosticId.eventsApi: DiagnosticItem.placeholder(
+      DiagnosticId.eventsApi: DiagnosticItem(
         id: DiagnosticId.eventsApi,
-        title: 'Events API Test',
-        description: 'Coming soon: list and browse events API validation.',
-        icon: Icons.event_outlined,
+        title: 'Public Events API Test',
+        description:
+            'Calls GET /api/v1/events/public?period=upcoming. Verifies 200, events array, '
+            'and that virtual_url/join_url are not exposed publicly.',
+        icon: Icons.public_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.eventsApi]!,
       ),
-      DiagnosticId.eventDetailApi: DiagnosticItem.placeholder(
+      DiagnosticId.eventDetailApi: DiagnosticItem(
         id: DiagnosticId.eventDetailApi,
         title: 'Event Detail API Test',
-        description: 'Coming soon: event detail endpoint validation.',
+        description:
+            'Calls GET /api/v1/events/public/{event_id}. Uses Event ID picker. '
+            'Verifies title, status present and virtual_url not leaked in public payload.',
         icon: Icons.event_note_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.eventDetailApi]!,
       ),
-      DiagnosticId.eventCreationApi: DiagnosticItem.placeholder(
+      DiagnosticId.eventCreationApi: DiagnosticItem(
         id: DiagnosticId.eventCreationApi,
-        title: 'Event Creation API Test',
-        description: 'Coming soon: staff event creation API validation.',
-        icon: Icons.add_box_outlined,
+        title: 'Event List API Test',
+        description:
+            'Calls GET /api/v1/events?page=1&per_page=20 (admin auth). '
+            'Verifies 200, total field, and events array present.',
+        icon: Icons.list_alt_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.eventCreationApi]!,
       ),
-      DiagnosticId.eventPublish: DiagnosticItem.placeholder(
+      DiagnosticId.eventPublish: DiagnosticItem(
         id: DiagnosticId.eventPublish,
-        title: 'Event Publish/Unpublish Test',
-        description: 'Coming soon: event visibility workflow validation.',
-        icon: Icons.published_with_changes_outlined,
+        title: 'Event Admin Detail Test',
+        description:
+            'Calls GET /api/v1/events/{event_id} (admin auth). Uses Event ID picker. '
+            'Verifies admin can see full details including status and capacity.',
+        icon: Icons.manage_search_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.eventPublish]!,
       ),
       DiagnosticId.registrationApi: DiagnosticItem(
@@ -388,32 +371,65 @@ class _DeveloperDiagnosticsScreenState
         initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.joinLinkVisibility]!,
       ),
-      DiagnosticId.attendeeListApi: DiagnosticItem.placeholder(
+      DiagnosticId.attendeeListApi: DiagnosticItem(
         id: DiagnosticId.attendeeListApi,
         title: 'Attendee List API Test',
-        description: 'Coming soon: admin attendee list API validation.',
+        description:
+            'Calls GET /api/v1/admin/events/{id}/attendees?page=1&per_page=20. '
+            'Verifies 200, attendees array, and no join_url/virtual_url leakage. '
+            'All rows must have status=registered.',
         icon: Icons.people_alt_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.attendeeListApi]!,
       ),
-      DiagnosticId.attendeeExport: DiagnosticItem.placeholder(
+      DiagnosticId.attendeeSearchTest: DiagnosticItem(
+        id: DiagnosticId.attendeeSearchTest,
+        title: 'Attendee Search Test',
+        description:
+            'Calls GET /admin/events/{id}/attendees?search={term}. '
+            'Verifies filtered result does not crash and returns array.',
+        icon: Icons.search_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.attendeeSearchTest]!,
+      ),
+      DiagnosticId.attendeeBatchFilter: DiagnosticItem(
+        id: DiagnosticId.attendeeBatchFilter,
+        title: 'Batch Year Filter Test',
+        description:
+            'Calls GET /admin/events/{id}/attendees?batch_year={year}. '
+            'Verifies rows match batch year when filter is applied.',
+        icon: Icons.filter_list_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.attendeeBatchFilter]!,
+      ),
+      DiagnosticId.attendeeExport: DiagnosticItem(
         id: DiagnosticId.attendeeExport,
         title: 'Attendee Export Test',
-        description: 'Coming soon: attendee export workflow validation.',
+        description:
+            'Calls GET /api/v1/admin/events/{id}/attendees/export. '
+            'Verifies CSV response contains all 8 required columns and no virtual_url/qr_token.',
         icon: Icons.download_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.attendeeExport]!,
       ),
-      DiagnosticId.adminRoleGuard: DiagnosticItem.placeholder(
+      DiagnosticId.adminRoleGuard: DiagnosticItem(
         id: DiagnosticId.adminRoleGuard,
-        title: 'Admin Role Guard Test',
-        description: 'Coming soon: admin-only access guard validation.',
+        title: 'Admin Attendee Full Diagnostics',
+        description:
+            'Calls GET /api/v1/dev/diagnostics/attendees?event_id={id}. '
+            'Runs UC-01 through UC-10 and displays full pass/fail results.',
         icon: Icons.admin_panel_settings_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.adminRoleGuard]!,
       ),
-      DiagnosticId.auditTrail: DiagnosticItem.placeholder(
+      DiagnosticId.auditTrail: DiagnosticItem(
         id: DiagnosticId.auditTrail,
-        title: 'Audit Trail Test',
-        description: 'Coming soon: audit trail write/read validation.',
+        title: 'Registration Audit Test',
+        description:
+            'Calls GET /api/v1/admin/events/{id}/registrations?page=1&per_page=20. '
+            'Verifies cancelled rows visible, all status values preserved.',
         icon: Icons.history_edu_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.auditTrail]!,
       ),
       DiagnosticId.week3UxShowcase: DiagnosticItem(
@@ -648,12 +664,15 @@ class DiagnosticDetailScreen extends StatelessWidget {
       DiagnosticId.eventsApi ||
       DiagnosticId.eventDetailApi ||
       DiagnosticId.eventCreationApi ||
-      DiagnosticId.eventPublish ||
+      DiagnosticId.eventPublish =>
+        _EventManagementDiagnosticDetail(item: item),
       DiagnosticId.attendeeListApi ||
+      DiagnosticId.attendeeSearchTest ||
+      DiagnosticId.attendeeBatchFilter ||
       DiagnosticId.attendeeExport ||
       DiagnosticId.adminRoleGuard ||
       DiagnosticId.auditTrail =>
-        _ComingSoonDiagnosticDetail(item: item),
+        _AdminAttendeeDiagnosticDetail(item: item),
       DiagnosticId.alumniSearchEmail ||
       DiagnosticId.alumniSearchPrefix ||
       DiagnosticId.alumniLookupId ||
@@ -1630,40 +1649,1254 @@ class _AlumniDiagnosticDetailState extends State<_AlumniDiagnosticDetail> {
   }
 }
 
-class _ComingSoonDiagnosticDetail extends StatelessWidget {
-  const _ComingSoonDiagnosticDetail({required this.item});
+// ─────────────────────────────────────────────────────────────────────────────
+// Event Management Diagnostic Detail
+// ─────────────────────────────────────────────────────────────────────────────
 
+class _EventManagementDiagnosticDetail extends StatefulWidget {
+  const _EventManagementDiagnosticDetail({required this.item});
   final DiagnosticItem item;
+
+  @override
+  State<_EventManagementDiagnosticDetail> createState() =>
+      _EventManagementDiagnosticDetailState();
+}
+
+class _EventManagementDiagnosticDetailState
+    extends State<_EventManagementDiagnosticDetail> {
+  final TextEditingController _eventIdController = TextEditingController();
+
+  bool _publicEventsLoading = false;
+  Map<String, dynamic>? _publicEventsResult;
+  String? _publicEventsError;
+
+  bool _eventListLoading = false;
+  Map<String, dynamic>? _eventListResult;
+  String? _eventListError;
+
+  bool _eventDetailLoading = false;
+  Map<String, dynamic>? _eventDetailResult;
+  String? _eventDetailError;
+
+  bool _adminDetailLoading = false;
+  Map<String, dynamic>? _adminDetailResult;
+  String? _adminDetailError;
+
+  @override
+  void dispose() {
+    _eventIdController.dispose();
+    super.dispose();
+  }
+
+  String get _eventId => _eventIdController.text.trim();
+
+  Future<void> _runPublicEventsTest() async {
+    setState(() {
+      _publicEventsLoading = true;
+      _publicEventsError = null;
+      _publicEventsResult = null;
+    });
+    try {
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/events/public',
+            queryParameters: {'period': 'upcoming'},
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      final events = data['events'] as List? ?? [];
+      final leaked = events.any((e) {
+        final m = e as Map;
+        return m.containsKey('virtual_url') || m.containsKey('join_url');
+      });
+      setState(() => _publicEventsResult = {
+            ...data,
+            '_meta': {
+              'event_count': events.length,
+              'virtual_url_leaked': leaked,
+              'verification':
+                  leaked ? 'FAIL: virtual_url/join_url in public response' : 'PASS',
+            },
+          });
+    } catch (e, st) {
+      AppLogger.error('Public events test failed', e, st);
+      if (!mounted) return;
+      setState(() => _publicEventsError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _publicEventsLoading = false);
+    }
+  }
+
+  Future<void> _runEventListTest() async {
+    setState(() {
+      _eventListLoading = true;
+      _eventListError = null;
+      _eventListResult = null;
+    });
+    try {
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/events',
+            queryParameters: {'page': 1, 'per_page': 20},
+            options: Options(headers: {'X-Dev-User': 'admin'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      setState(() => _eventListResult = {
+            ...data,
+            '_meta': {
+              'total': data['total'],
+              'events_count': (data['events'] as List?)?.length ?? 0,
+              'verification':
+                  (data.containsKey('total') && data.containsKey('events'))
+                      ? 'PASS'
+                      : 'FAIL: missing total or events fields',
+            },
+          });
+    } catch (e, st) {
+      AppLogger.error('Event list test failed', e, st);
+      if (!mounted) return;
+      setState(() => _eventListError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _eventListLoading = false);
+    }
+  }
+
+  Future<void> _runEventDetailTest() async {
+    final id = _eventId;
+    if (id.isEmpty) {
+      setState(() => _eventDetailError = 'Enter Event ID in the picker first.');
+      return;
+    }
+    setState(() {
+      _eventDetailLoading = true;
+      _eventDetailError = null;
+      _eventDetailResult = null;
+    });
+    try {
+      final resp = await devDio
+          .get<Map<String, dynamic>>('/api/v1/events/public/$id')
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      final leaked = data.containsKey('virtual_url') || data.containsKey('join_url');
+      setState(() => _eventDetailResult = {
+            ...data,
+            '_meta': {
+              'has_title': data.containsKey('title'),
+              'has_status': data.containsKey('status'),
+              'virtual_url_leaked': leaked,
+              'verification': leaked
+                  ? 'FAIL: virtual_url/join_url leaked in public detail'
+                  : 'PASS',
+            },
+          });
+    } catch (e, st) {
+      AppLogger.error('Event detail test failed', e, st);
+      if (!mounted) return;
+      setState(() => _eventDetailError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _eventDetailLoading = false);
+    }
+  }
+
+  Future<void> _runAdminDetailTest() async {
+    final id = _eventId;
+    if (id.isEmpty) {
+      setState(() => _adminDetailError = 'Enter Event ID in the picker first.');
+      return;
+    }
+    setState(() {
+      _adminDetailLoading = true;
+      _adminDetailError = null;
+      _adminDetailResult = null;
+    });
+    try {
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/events/$id',
+            options: Options(headers: {'X-Dev-User': 'admin'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      setState(() => _adminDetailResult = {
+            ...data,
+            '_meta': {
+              'has_status': data.containsKey('status'),
+              'has_capacity': data.containsKey('capacity'),
+              'verification':
+                  (data.containsKey('event_id') && data.containsKey('status'))
+                      ? 'PASS'
+                      : 'FAIL: missing event_id or status',
+            },
+          });
+    } catch (e, st) {
+      AppLogger.error('Admin event detail test failed', e, st);
+      if (!mounted) return;
+      setState(() => _adminDetailError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _adminDetailLoading = false);
+    }
+  }
+
+  Widget _sectionHeader(String text, IconData icon) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 20, bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 20,
+            decoration: BoxDecoration(
+              color: cs.primary,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Icon(icon, size: 16, color: cs.primary),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _errorChip(String error) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, size: 14, color: cs.onErrorContainer),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SelectableText(
+                error,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _runButton(String label, bool loading, VoidCallback? onPressed) {
+    return OutlinedButton.icon(
+      onPressed: loading ? null : onPressed,
+      icon: loading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.cloud_sync_outlined, size: 18),
+      label: Text(label),
+    );
+  }
+
+  Widget _eventIdPickerCard() {
+    return _SmartEventSelectorCard(
+      controller: _eventIdController,
+    );
+  }
 
   @override
   Widget build(BuildContext context) {
     return DiagnosticDetailScaffold(
-      title: item.title,
-      description: item.description,
-      apiDetails: item.apiDetails,
-      result: const DiagnosticRunState(status: DiagnosticStatus.notApplicable),
+      title: 'Event Management Diagnostics',
+      description:
+          'Run all event management API tests. §1 and §2 require no auth. '
+          '§3 and §4 use the Event ID picker.',
+      apiDetails: widget.item.apiDetails,
       children: [
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
+        _eventIdPickerCard(),
+        _sectionHeader('§1  Public Events API', Icons.public_outlined),
+        Text(
+          'GET /api/v1/events/public?period=upcoming  ·  No auth required',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /events/public', _publicEventsLoading,
+            _runPublicEventsTest),
+        if (_publicEventsError != null) _errorChip(_publicEventsError!),
+        _jsonBlock(context, 'Public events response', _publicEventsResult),
+        _sectionHeader(
+            '§2  Event List API (Admin)', Icons.list_alt_outlined),
+        Text(
+          'GET /api/v1/events?page=1&per_page=20  ·  Admin JWT required',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /events (admin)', _eventListLoading,
+            _runEventListTest),
+        if (_eventListError != null) _errorChip(_eventListError!),
+        _jsonBlock(context, 'Event list response', _eventListResult),
+        _sectionHeader(
+            '§3  Event Detail API (Public)', Icons.event_note_outlined),
+        Text(
+          'GET /api/v1/events/public/{event_id}  ·  No auth  ·  Uses Event ID picker',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /events/public/{id}', _eventDetailLoading,
+            _runEventDetailTest),
+        if (_eventDetailError != null) _errorChip(_eventDetailError!),
+        _jsonBlock(context, 'Event detail response', _eventDetailResult),
+        _sectionHeader(
+            '§4  Event Admin Detail', Icons.manage_search_outlined),
+        Text(
+          'GET /api/v1/events/{event_id}  ·  Admin JWT required  ·  Uses Event ID picker',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /events/{id} (admin)', _adminDetailLoading,
+            _runAdminDetailTest),
+        if (_adminDetailError != null) _errorChip(_adminDetailError!),
+        _jsonBlock(context, 'Admin event detail response', _adminDetailResult),
+        const SizedBox(height: 40),
+      ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Admin / Attendees Diagnostic Detail
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _AdminAttendeeDiagnosticDetail extends StatefulWidget {
+  const _AdminAttendeeDiagnosticDetail({required this.item});
+  final DiagnosticItem item;
+
+  @override
+  State<_AdminAttendeeDiagnosticDetail> createState() =>
+      _AdminAttendeeDiagnosticDetailState();
+}
+
+class _AdminAttendeeDiagnosticDetailState
+    extends State<_AdminAttendeeDiagnosticDetail> {
+  final TextEditingController _eventIdController = TextEditingController();
+  final TextEditingController _searchController = TextEditingController();
+  final TextEditingController _batchYearController = TextEditingController();
+
+  bool _listLoading = false;
+  Map<String, dynamic>? _listResult;
+  String? _listError;
+
+  bool _searchLoading = false;
+  Map<String, dynamic>? _searchResult;
+  String? _searchError;
+
+  bool _batchLoading = false;
+  Map<String, dynamic>? _batchResult;
+  String? _batchError;
+
+  bool _exportLoading = false;
+  String? _exportResult;
+  String? _exportError;
+
+  bool _auditLoading = false;
+  Map<String, dynamic>? _auditResult;
+  String? _auditError;
+
+  bool _fullDiagLoading = false;
+  Map<String, dynamic>? _fullDiagResult;
+  String? _fullDiagError;
+  String? _fullDiagStatus;
+
+  @override
+  void dispose() {
+    _eventIdController.dispose();
+    _searchController.dispose();
+    _batchYearController.dispose();
+    super.dispose();
+  }
+
+  String get _eventId => _eventIdController.text.trim();
+
+  Future<void> _runAttendeeList() async {
+    final id = _eventId;
+    if (id.isEmpty) {
+      setState(() => _listError = 'Enter Event ID in the picker first.');
+      return;
+    }
+    setState(() {
+      _listLoading = true;
+      _listError = null;
+      _listResult = null;
+    });
+    try {
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/admin/events/$id/attendees',
+            queryParameters: {'page': 1, 'per_page': 20},
+            options: Options(headers: {'X-Dev-User': 'admin'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      final attendees = data['attendees'] as List? ?? [];
+      final leaked = attendees.any((a) {
+        final m = a as Map;
+        return m.containsKey('virtual_url') || m.containsKey('join_url');
+      });
+      final onlyRegistered = attendees.isEmpty ||
+          attendees.every((a) => (a as Map)['status'] == 'registered');
+      setState(() => _listResult = {
+            ...data,
+            '_meta': {
+              'total': data['total'],
+              'attendees_returned': attendees.length,
+              'virtual_url_leaked': leaked,
+              'all_status_registered': onlyRegistered,
+              'verification':
+                  (!leaked && onlyRegistered) ? 'PASS' : 'FAIL',
+            },
+          });
+    } catch (e, st) {
+      AppLogger.error('Attendee list test failed', e, st);
+      if (!mounted) return;
+      setState(() => _listError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _listLoading = false);
+    }
+  }
+
+  Future<void> _runAttendeeSearch() async {
+    final id = _eventId;
+    if (id.isEmpty) {
+      setState(() => _searchError = 'Enter Event ID in the picker first.');
+      return;
+    }
+    setState(() {
+      _searchLoading = true;
+      _searchError = null;
+      _searchResult = null;
+    });
+    try {
+      final search = _searchController.text.trim();
+      final params = <String, dynamic>{'page': 1, 'per_page': 20};
+      if (search.isNotEmpty) params['search'] = search;
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/admin/events/$id/attendees',
+            queryParameters: params,
+            options: Options(headers: {'X-Dev-User': 'admin'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      setState(() => _searchResult = {
+            ...data,
+            '_meta': {
+              'search_term': search.isEmpty ? '(none — returns all)' : search,
+              'results_count': (data['attendees'] as List?)?.length ?? 0,
+              'total': data['total'],
+              'verification':
+                  data.containsKey('attendees') ? 'PASS' : 'FAIL',
+            },
+          });
+    } catch (e, st) {
+      AppLogger.error('Attendee search test failed', e, st);
+      if (!mounted) return;
+      setState(() => _searchError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _searchLoading = false);
+    }
+  }
+
+  Future<void> _runBatchFilter() async {
+    final id = _eventId;
+    if (id.isEmpty) {
+      setState(() => _batchError = 'Enter Event ID in the picker first.');
+      return;
+    }
+    setState(() {
+      _batchLoading = true;
+      _batchError = null;
+      _batchResult = null;
+    });
+    try {
+      final batchYear = _batchYearController.text.trim();
+      final params = <String, dynamic>{'page': 1, 'per_page': 20};
+      if (batchYear.isNotEmpty) {
+        params['batch_year'] = int.tryParse(batchYear) ?? batchYear;
+      }
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/admin/events/$id/attendees',
+            queryParameters: params,
+            options: Options(headers: {'X-Dev-User': 'admin'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      final attendees = data['attendees'] as List? ?? [];
+      final allMatch = batchYear.isEmpty ||
+          attendees.every((a) =>
+              (a as Map)['batch_year_snapshot']?.toString() == batchYear);
+      setState(() => _batchResult = {
+            ...data,
+            '_meta': {
+              'batch_year_filter': batchYear.isEmpty ? '(none)' : batchYear,
+              'results_count': attendees.length,
+              'all_match_batch': allMatch,
+              'verification': allMatch
+                  ? 'PASS'
+                  : 'FAIL: some rows have different batch_year',
+            },
+          });
+    } catch (e, st) {
+      AppLogger.error('Batch filter test failed', e, st);
+      if (!mounted) return;
+      setState(() => _batchError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _batchLoading = false);
+    }
+  }
+
+  Future<void> _runAttendeeExport() async {
+    final id = _eventId;
+    if (id.isEmpty) {
+      setState(() => _exportError = 'Enter Event ID in the picker first.');
+      return;
+    }
+    setState(() {
+      _exportLoading = true;
+      _exportError = null;
+      _exportResult = null;
+    });
+    try {
+      final resp = await devDio
+          .get<String>(
+            '/api/v1/admin/events/$id/attendees/export',
+            options: Options(
+              headers: {'X-Dev-User': 'admin'},
+              responseType: ResponseType.plain,
+            ),
+          )
+          .timeout(const Duration(seconds: 30));
+      if (!mounted) return;
+      final csv = resp.data ?? '';
+      final lines = csv.split('\n');
+      final header = lines.isNotEmpty ? lines[0].replaceAll('﻿', '') : '';
+      const expected = [
+        'registration_number',
+        'fullname_snapshot',
+        'email_snapshot',
+        'batch_year_snapshot',
+        'branch_snapshot',
+        'phone_snapshot',
+        'registered_at',
+        'status',
+      ];
+      final hasAllCols = expected.every((col) => header.contains(col));
+      final hasLeaked = header.contains('virtual_url') ||
+          header.contains('join_url') ||
+          header.contains('qr_token');
+      final dataRows =
+          lines.where((l) => l.trim().isNotEmpty).length - 1;
+      setState(() => _exportResult =
+          'Header: $header\n\nData rows (excl. header): ${dataRows < 0 ? 0 : dataRows}\n\n'
+          'All 8 required columns: ${hasAllCols ? "PASS ✓" : "FAIL ✗"}\n'
+          'No sensitive fields leaked: ${!hasLeaked ? "PASS ✓" : "FAIL ✗"}');
+    } catch (e, st) {
+      AppLogger.error('Attendee export test failed', e, st);
+      if (!mounted) return;
+      setState(() => _exportError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _exportLoading = false);
+    }
+  }
+
+  Future<void> _runAudit() async {
+    final id = _eventId;
+    if (id.isEmpty) {
+      setState(() => _auditError = 'Enter Event ID in the picker first.');
+      return;
+    }
+    setState(() {
+      _auditLoading = true;
+      _auditError = null;
+      _auditResult = null;
+    });
+    try {
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/admin/events/$id/registrations',
+            queryParameters: {'page': 1, 'per_page': 20},
+            options: Options(headers: {'X-Dev-User': 'admin'}),
+          )
+          .timeout(const Duration(seconds: 15));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      final regs = data['registrations'] as List? ?? [];
+      final statuses =
+          regs.map((r) => (r as Map)['status']).toSet().toList();
+      setState(() => _auditResult = {
+            ...data,
+            '_meta': {
+              'total': data['total'],
+              'returned': regs.length,
+              'statuses_found': statuses.toString(),
+              'verification':
+                  data.containsKey('registrations') ? 'PASS' : 'FAIL',
+            },
+          });
+    } catch (e, st) {
+      AppLogger.error('Registration audit test failed', e, st);
+      if (!mounted) return;
+      setState(() => _auditError = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _auditLoading = false);
+    }
+  }
+
+  Future<void> _runFullDiagnostics() async {
+    final id = _eventId;
+    if (id.isEmpty) {
+      setState(() => _fullDiagError = 'Enter Event ID in the picker first.');
+      return;
+    }
+    setState(() {
+      _fullDiagLoading = true;
+      _fullDiagError = null;
+      _fullDiagResult = null;
+      _fullDiagStatus = 'Running UC-01 through UC-10 (may take ~10s)...';
+    });
+    try {
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            '/api/v1/dev/diagnostics/attendees',
+            queryParameters: {'event_id': id},
+            options: Options(headers: {'X-Dev-User': 'admin'}),
+          )
+          .timeout(const Duration(seconds: 60));
+      if (!mounted) return;
+      final data = resp.data ?? <String, dynamic>{};
+      final passed = data['passed'] as int? ?? 0;
+      final failed = data['failed'] as int? ?? 0;
+      final total = data['total'] as int? ?? 0;
+      setState(() {
+        _fullDiagResult = data;
+        _fullDiagError = null;
+        _fullDiagStatus =
+            'Completed: $passed/$total passed, $failed failed.';
+      });
+    } catch (e, st) {
+      AppLogger.error('Admin attendee full diagnostics failed', e, st);
+      if (!mounted) return;
+      setState(() {
+        _fullDiagStatus = 'Failed: ${errorMessage(e)}';
+        _fullDiagError = errorMessage(e);
+      });
+    } finally {
+      if (mounted) setState(() => _fullDiagLoading = false);
+    }
+  }
+
+  Widget _sectionHeader(String text, IconData icon, {Color? accent}) {
+    final cs = Theme.of(context).colorScheme;
+    final color = accent ?? cs.primary;
+    return Padding(
+      padding: const EdgeInsets.only(top: 20, bottom: 8),
+      child: Row(
+        children: [
+          Container(
+            width: 3,
+            height: 20,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 10),
+          Icon(icon, size: 16, color: color),
+          const SizedBox(width: 6),
+          Expanded(
+            child: Text(
+              text,
+              style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                    fontWeight: FontWeight.w700,
+                    color: cs.onSurface,
+                  ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _errorChip(String error) {
+    final cs = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.only(top: 6, bottom: 2),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+        decoration: BoxDecoration(
+          color: cs.errorContainer,
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.error_outline, size: 14, color: cs.onErrorContainer),
+            const SizedBox(width: 6),
+            Expanded(
+              child: SelectableText(
+                error,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onErrorContainer),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _runButton(String label, bool loading, VoidCallback? onPressed) {
+    return OutlinedButton.icon(
+      onPressed: loading ? null : onPressed,
+      icon: loading
+          ? const SizedBox(
+              width: 16,
+              height: 16,
+              child: CircularProgressIndicator(strokeWidth: 2),
+            )
+          : const Icon(Icons.cloud_sync_outlined, size: 18),
+      label: Text(label),
+    );
+  }
+
+  Widget _plainTextBlock(String title, String? value) {
+    if (value == null) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 12),
+      child: ExpansionTile(
+        tilePadding: EdgeInsets.zero,
+        initiallyExpanded: true,
+        title: Text(title,
+            style: Theme.of(context).textTheme.labelLarge),
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              border: Border.all(
+                  color: Theme.of(context).colorScheme.outlineVariant),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: SelectableText(
+              value,
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(fontFamily: 'monospace'),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _pill(String text, Color bg, Color fg) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration: BoxDecoration(
+          color: bg, borderRadius: BorderRadius.circular(999)),
+      child: Text(
+        text,
+        style: Theme.of(context)
+            .textTheme
+            .labelSmall
+            ?.copyWith(color: fg, fontWeight: FontWeight.w700),
+      ),
+    );
+  }
+
+  Widget _ucResultCard(Map<String, dynamic> r) {
+    final isPassed = r['status'] == 'PASS';
+    final uc = r['uc'] as String? ?? '';
+    final name = r['name'] as String? ?? r['feature'] as String? ?? '';
+    final error = r['error'] as String?;
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      margin: const EdgeInsets.only(bottom: 6),
+      elevation: 0,
+      color: isPassed
+          ? Colors.green.withValues(alpha: 0.05)
+          : cs.errorContainer.withValues(alpha: 0.3),
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(8),
+        side: BorderSide(
+          color: isPassed
+              ? Colors.green.withValues(alpha: 0.2)
+              : cs.error.withValues(alpha: 0.3),
+        ),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
               children: [
                 Icon(
-                  Icons.construction_outlined,
-                  color: Theme.of(context).colorScheme.primary,
+                  isPassed
+                      ? Icons.check_circle_outline
+                      : Icons.error_outline,
+                  color: isPassed ? Colors.green : cs.error,
+                  size: 18,
                 ),
-                const SizedBox(width: 12),
-                const Expanded(
-                  child: Text(
-                    'This diagnostic will be enabled when the related API is implemented.',
+                const SizedBox(width: 8),
+                if (uc.isNotEmpty) ...[
+                  Container(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: isPassed
+                          ? Colors.green.withValues(alpha: 0.12)
+                          : cs.errorContainer,
+                      borderRadius: BorderRadius.circular(4),
+                    ),
+                    child: Text(
+                      uc,
+                      style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                            fontWeight: FontWeight.w700,
+                            color: isPassed
+                                ? Colors.green.shade800
+                                : cs.onErrorContainer,
+                          ),
+                    ),
                   ),
+                  const SizedBox(width: 8),
+                ],
+                Expanded(
+                  child: Text(
+                    name,
+                    style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                          fontWeight: FontWeight.w500,
+                        ),
+                  ),
+                ),
+                DiagnosticStatusBadge(
+                  status: isPassed
+                      ? DiagnosticStatus.ok
+                      : DiagnosticStatus.error,
                 ),
               ],
             ),
+            if (error != null) ...[
+              const SizedBox(height: 4),
+              Text(
+                error,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.error),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _eventIdPickerCard() {
+    return _SmartEventSelectorCard(
+      controller: _eventIdController,
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final passed = _fullDiagResult?['passed'] as int? ?? 0;
+    final failed = _fullDiagResult?['failed'] as int? ?? 0;
+    final total = _fullDiagResult?['total'] as int? ?? 0;
+    final results = _fullDiagResult?['results'] as List? ?? [];
+    final cs = Theme.of(context).colorScheme;
+
+    return DiagnosticDetailScaffold(
+      title: 'Admin / Attendees Diagnostics',
+      description:
+          'Run attendee management API tests. Enter Event ID in the picker, '
+          'then run individual tests or §6 Full Diagnostics for UC-01–UC-10.',
+      apiDetails: widget.item.apiDetails,
+      children: [
+        _eventIdPickerCard(),
+
+        // §1 Attendee List
+        _sectionHeader('§1  Attendee List', Icons.people_alt_outlined),
+        Text(
+          'GET /api/v1/admin/events/{id}/attendees?page=1&per_page=20  ·  Admin JWT',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /attendees', _listLoading, _runAttendeeList),
+        if (_listError != null) _errorChip(_listError!),
+        _jsonBlock(context, 'Attendee list response', _listResult),
+
+        // §2 Attendee Search
+        _sectionHeader('§2  Attendee Search', Icons.search_outlined),
+        Text(
+          'GET /admin/events/{id}/attendees?search={term}  ·  Admin JWT',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _searchController,
+          decoration: const InputDecoration(
+            labelText: 'Search term (optional — blank returns all)',
+            border: OutlineInputBorder(),
+            isDense: true,
+            prefixIcon: Icon(Icons.search_outlined),
           ),
         ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /attendees?search=...', _searchLoading,
+            _runAttendeeSearch),
+        if (_searchError != null) _errorChip(_searchError!),
+        _jsonBlock(context, 'Search results', _searchResult),
+
+        // §3 Batch Year Filter
+        _sectionHeader('§3  Batch Year Filter', Icons.filter_list_outlined),
+        Text(
+          'GET /admin/events/{id}/attendees?batch_year={year}  ·  Admin JWT',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 8),
+        TextField(
+          controller: _batchYearController,
+          keyboardType: TextInputType.number,
+          decoration: const InputDecoration(
+            labelText: 'Batch year (e.g. 2005 — blank returns all)',
+            border: OutlineInputBorder(),
+            isDense: true,
+            prefixIcon: Icon(Icons.school_outlined),
+          ),
+        ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /attendees?batch_year=...', _batchLoading,
+            _runBatchFilter),
+        if (_batchError != null) _errorChip(_batchError!),
+        _jsonBlock(context, 'Batch filter results', _batchResult),
+
+        // §4 Attendee Export
+        _sectionHeader('§4  Attendee Export (CSV)', Icons.download_outlined),
+        Text(
+          'GET /api/v1/admin/events/{id}/attendees/export  ·  Admin JWT  ·  Checks CSV headers',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /attendees/export', _exportLoading,
+            _runAttendeeExport),
+        if (_exportError != null) _errorChip(_exportError!),
+        _plainTextBlock('CSV export verification', _exportResult),
+
+        // §5 Registration Audit
+        _sectionHeader(
+            '§5  Registration Audit', Icons.history_edu_outlined),
+        Text(
+          'GET /api/v1/admin/events/{id}/registrations?page=1&per_page=20  ·  Admin JWT',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        _runButton('Run  →  GET /registrations (audit)', _auditLoading,
+            _runAudit),
+        if (_auditError != null) _errorChip(_auditError!),
+        _jsonBlock(context, 'Registration audit response', _auditResult),
+
+        // §6 Full Admin Diagnostics
+        _sectionHeader(
+          '§6  Full Admin Diagnostics (UC-01–UC-10)',
+          Icons.admin_panel_settings_outlined,
+          accent: cs.secondary,
+        ),
+        Text(
+          'GET /api/v1/dev/diagnostics/attendees?event_id={id}  ·  Admin JWT',
+          style: Theme.of(context).textTheme.bodySmall,
+        ),
+        const SizedBox(height: 6),
+        FilledButton.icon(
+          onPressed: _fullDiagLoading ? null : _runFullDiagnostics,
+          icon: _fullDiagLoading
+              ? const SizedBox(
+                  width: 18,
+                  height: 18,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.admin_panel_settings_outlined),
+          label: const Text('Run Full Diagnostics  →  UC-01 through UC-10'),
+        ),
+        if (_fullDiagStatus != null) ...[
+          const SizedBox(height: 8),
+          Text(
+            _fullDiagStatus!,
+            style: Theme.of(context)
+                .textTheme
+                .bodySmall
+                ?.copyWith(color: cs.onSurfaceVariant),
+          ),
+        ],
+        if (_fullDiagResult != null) ...[
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              _pill(
+                '$passed PASS',
+                Colors.green.withValues(alpha: 0.12),
+                Colors.green.shade800,
+              ),
+              const SizedBox(width: 8),
+              _pill(
+                '$failed FAIL',
+                failed > 0 ? cs.errorContainer : cs.surfaceContainerHighest,
+                failed > 0 ? cs.onErrorContainer : cs.onSurfaceVariant,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                'of $total',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          ...results.map(
+              (r) => _ucResultCard(Map<String, dynamic>.from(r as Map))),
+        ],
+        if (_fullDiagError != null) _errorChip(_fullDiagError!),
+        _jsonBlock(context, 'Raw diagnostic response', _fullDiagResult),
+
+        const SizedBox(height: 40),
       ],
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Smart Event Selector Card — loads events from admin API, drives the picker
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _SmartEventSelectorCard extends StatefulWidget {
+  const _SmartEventSelectorCard({
+    required this.controller,
+  });
+
+  final TextEditingController controller;
+
+  @override
+  State<_SmartEventSelectorCard> createState() =>
+      _SmartEventSelectorCardState();
+}
+
+class _SmartEventSelectorCardState extends State<_SmartEventSelectorCard> {
+  bool _loading = false;
+  List<Map<String, dynamic>> _events = [];
+  String? _error;
+  int? _selectedId;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+    });
+    try {
+      final resp = await devDio.get<Map<String, dynamic>>(
+        '/api/v1/events',
+        queryParameters: {'page': 1, 'per_page': 50},
+        options: Options(headers: {'X-Dev-User': 'admin'}),
+      );
+      final list = resp.data?['events'] as List? ?? [];
+      if (!mounted) return;
+      final events = list
+          .whereType<Map>()
+          .map((e) => Map<String, dynamic>.from(e))
+          .toList();
+      setState(() {
+        _events = events;
+        _loading = false;
+      });
+      // Auto-select if controller already has a value
+      final existing = int.tryParse(widget.controller.text.trim());
+      if (existing != null && events.any((e) => e['event_id'] == existing)) {
+        setState(() => _selectedId = existing);
+      } else if (events.isNotEmpty) {
+        // Auto-select the first published event
+        final first = events.firstWhere(
+          (e) => e['status'] == 'published',
+          orElse: () => events.first,
+        );
+        final id = first['event_id'] as int?;
+        if (id != null) {
+          setState(() => _selectedId = id);
+          widget.controller.text = id.toString();
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _loading = false;
+        _error = errorMessage(e);
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    return Card(
+      color: cs.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.tune_outlined, size: 16, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  'Event Selector',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelLarge
+                      ?.copyWith(fontWeight: FontWeight.w700),
+                ),
+                const Spacer(),
+                if (_loading)
+                  const SizedBox(
+                      width: 14,
+                      height: 14,
+                      child: CircularProgressIndicator(strokeWidth: 2))
+                else
+                  IconButton(
+                    icon: const Icon(Icons.refresh, size: 16),
+                    tooltip: 'Reload events',
+                    onPressed: _load,
+                    visualDensity: VisualDensity.compact,
+                    padding: EdgeInsets.zero,
+                  ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'Select an event from the dropdown or enter an ID manually.',
+              style: Theme.of(context)
+                  .textTheme
+                  .bodySmall
+                  ?.copyWith(color: cs.onSurfaceVariant),
+            ),
+            if (_error != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'Could not load events: $_error',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.error),
+              ),
+            ],
+            if (_events.isEmpty && !_loading && _error == null) ...[
+              const SizedBox(height: 8),
+              Text(
+                'No events found. Create and publish an event in the Admin Portal first.',
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: cs.onSurfaceVariant),
+              ),
+            ],
+            if (_events.isNotEmpty) ...[
+              const SizedBox(height: 12),
+              InputDecorator(
+                decoration: const InputDecoration(
+                  labelText: 'Select Event',
+                  border: OutlineInputBorder(),
+                  isDense: true,
+                  contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                ),
+                child: DropdownButton<int>(
+                  value: _selectedId,
+                  isExpanded: true,
+                  underline: const SizedBox.shrink(),
+                  isDense: true,
+                  items: _events.map((e) {
+                    final id = e['event_id'] as int?;
+                    final title = e['title']?.toString() ?? 'Event $id';
+                    final status = e['status']?.toString() ?? '';
+                    final isVirtual = e['is_virtual'] as bool? ?? false;
+                    final count = e['registered_count']?.toString() ?? '0';
+                    final cap = e['capacity']?.toString() ?? '∞';
+                    return DropdownMenuItem<int>(
+                      value: id,
+                      child: Text(
+                        '[$id] $title  ·  $status  ·  ${isVirtual ? 'Virtual' : 'Physical'}  ·  $count/$cap',
+                        overflow: TextOverflow.ellipsis,
+                        style: Theme.of(context).textTheme.bodySmall,
+                      ),
+                    );
+                  }).toList(),
+                  onChanged: (id) {
+                    if (id == null) return;
+                    setState(() => _selectedId = id);
+                    widget.controller.text = id.toString();
+                  },
+                ),
+              ),
+            ],
+            const SizedBox(height: 12),
+            TextField(
+              controller: widget.controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Event ID (manual override)',
+                hintText: 'Type to override dropdown selection',
+                border: OutlineInputBorder(),
+                isDense: true,
+                prefixIcon: Icon(Icons.tag_outlined),
+              ),
+              onChanged: (v) {
+                final id = int.tryParse(v.trim());
+                if (id != null && id != _selectedId) {
+                  setState(() => _selectedId = id);
+                }
+              },
+            ),
+          ],
+        ),
+      ),
     );
   }
 }
@@ -5653,6 +6886,8 @@ enum DiagnosticId {
   confirmationEmail,
   joinLinkVisibility,
   attendeeListApi,
+  attendeeSearchTest,
+  attendeeBatchFilter,
   attendeeExport,
   adminRoleGuard,
   auditTrail,
@@ -5792,48 +7027,56 @@ const Map<DiagnosticId, BackendApiDetails> diagnosticApiDetails = {
     uiGuidance: 'Keep destructive debug actions explicit and debug-only.',
   ),
   DiagnosticId.eventsApi: BackendApiDetails(
-    featureName: 'Events API Test',
+    featureName: 'Public Events API Test',
     method: 'GET',
-    path: '/api/v1/events',
-    authRequirement: 'No',
-    purpose: 'Public published event listing.',
-    implementationStatus: 'Planned / Placeholder',
+    path: '/api/v1/events/public?period=upcoming',
+    authRequirement: 'None (public endpoint)',
+    purpose:
+        'Verify public event listing: 200 response, events array present, '
+        'virtual_url and join_url NOT exposed in public payload.',
+    implementationStatus: 'Implemented',
     sampleResponse:
-        '{"events":[{"id":"...","slug":"annual-meet","title":"Annual Meet","starts_at":"2026-06-30T10:00:00Z"}]}',
-    uiGuidance: 'Event list screen with upcoming/past tabs.',
+        '{"events":[{"event_id":1,"title":"Annual Meet","status":"published"}],"total":1}',
+    uiGuidance: 'Event list screen with upcoming/past tabs. No auth header needed.',
   ),
   DiagnosticId.eventDetailApi: BackendApiDetails(
     featureName: 'Event Detail API Test',
     method: 'GET',
-    path: '/api/v1/events/{slug}',
-    authRequirement: 'No',
-    purpose: 'Public event detail.',
-    implementationStatus: 'Planned / Placeholder',
+    path: '/api/v1/events/public/{event_id}',
+    authRequirement: 'None (public endpoint)',
+    purpose:
+        'Verify public event detail: title, status, start/end present. '
+        'virtual_url must NOT appear in public detail response.',
+    implementationStatus: 'Implemented',
     sampleResponse:
-        '{"slug":"annual-meet","title":"Annual Meet","location":"NITK","speakers":[],"registration_open":true}',
-    uiGuidance:
-        'Event detail page with title, date, location, speakers, registration CTA.',
+        '{"event_id":1,"title":"Annual Meet","status":"published","start_datetime":"..."}',
+    uiGuidance: 'Use Event ID picker. Run to verify no virtual_url leak.',
   ),
   DiagnosticId.eventCreationApi: BackendApiDetails(
-    featureName: 'Event Creation API Test',
-    method: 'POST',
-    path: '/api/v1/events',
-    authRequirement: 'Admin/Coordinator required',
-    purpose: 'Staff creates event.',
-    implementationStatus: 'Planned / Placeholder',
-    sampleResponse: '{"id":"...","status":"draft","title":"New Event"}',
-    uiGuidance: 'Admin event creation form.',
+    featureName: 'Event List API Test',
+    method: 'GET',
+    path: '/api/v1/events?page=1&per_page=20',
+    authRequirement: 'Admin JWT required',
+    purpose:
+        'Admin-authenticated event listing. Verifies total field and events array '
+        'are present in paginated response.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"events":[{"event_id":1,"title":"Annual Meet","status":"published"}],"total":1,"page":1,"per_page":20}',
+    uiGuidance: 'Requires completed Backend Auth diagnostic to get token.',
   ),
   DiagnosticId.eventPublish: BackendApiDetails(
-    featureName: 'Event Publish/Unpublish Test',
-    method: 'PATCH',
-    path: '/api/v1/events/{id}/status',
-    authRequirement: 'Admin/Coordinator required',
-    purpose: 'Publish/unpublish event.',
-    implementationStatus: 'Planned / Placeholder',
-    sampleResponse: '{"id":"...","status":"published"}',
-    uiGuidance:
-        'Use explicit publish/unpublish action with current status chip.',
+    featureName: 'Event Admin Detail Test',
+    method: 'GET',
+    path: '/api/v1/events/{event_id}',
+    authRequirement: 'Admin JWT required',
+    purpose:
+        'Admin detail endpoint for a specific event. Verifies admin can see '
+        'full details including status, capacity, virtual_url (if virtual).',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"event_id":1,"title":"Annual Meet","status":"published","capacity":100,"is_virtual":false}',
+    uiGuidance: 'Use Event ID picker. Requires admin JWT.',
   ),
   DiagnosticId.registrationApi: BackendApiDetails(
     featureName: 'Registration API Test',
@@ -5889,44 +7132,83 @@ const Map<DiagnosticId, BackendApiDetails> diagnosticApiDetails = {
   DiagnosticId.attendeeListApi: BackendApiDetails(
     featureName: 'Attendee List API Test',
     method: 'GET',
-    path: '/api/v1/events/{id}/attendees',
-    authRequirement: 'Admin/Coordinator required',
-    purpose: 'Admin views registered attendees.',
-    implementationStatus: 'Planned / Placeholder',
+    path: '/api/v1/admin/events/{event_id}/attendees?page=1&per_page=20',
+    authRequirement: 'Admin JWT required',
+    purpose:
+        'Admin views registered attendees. Verifies 200, attendees array, total, '
+        'and that no join_url/virtual_url appears. All rows status=registered.',
+    implementationStatus: 'Implemented',
     sampleResponse:
-        '{"attendees":[{"name":"...","email":"...","status":"confirmed"}]}',
-    uiGuidance: 'Admin attendee table with search/filter controls.',
+        '{"attendees":[{"registration_id":1,"fullname_snapshot":"...","status":"registered"}],"total":1,"page":1,"per_page":20}',
+    uiGuidance: 'Admin attendee table. Requires Event ID picker and admin JWT.',
+  ),
+  DiagnosticId.attendeeSearchTest: BackendApiDetails(
+    featureName: 'Attendee Search Test',
+    method: 'GET',
+    path: '/api/v1/admin/events/{event_id}/attendees?search={term}',
+    authRequirement: 'Admin JWT required',
+    purpose:
+        'ILIKE search on fullname_snapshot. Verifies filtered result '
+        'does not crash and returns attendees array.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"attendees":[{"fullname_snapshot":"John Doe","status":"registered"}],"total":1}',
+    uiGuidance: 'Enter search term in the search field then run.',
+  ),
+  DiagnosticId.attendeeBatchFilter: BackendApiDetails(
+    featureName: 'Batch Year Filter Test',
+    method: 'GET',
+    path: '/api/v1/admin/events/{event_id}/attendees?batch_year={year}',
+    authRequirement: 'Admin JWT required',
+    purpose:
+        'Exact batch_year_snapshot filter. Verifies returned rows '
+        'all match the requested batch year.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"attendees":[{"batch_year_snapshot":2005,"status":"registered"}],"total":1}',
+    uiGuidance: 'Enter a batch year (e.g. 2005) in the batch year field then run.',
   ),
   DiagnosticId.attendeeExport: BackendApiDetails(
     featureName: 'Attendee Export Test',
     method: 'GET',
-    path: '/api/v1/events/{id}/attendees/export',
-    authRequirement: 'Admin/Coordinator required',
-    purpose: 'Export CSV.',
-    implementationStatus: 'Planned / Placeholder',
-    sampleResponse: 'text/csv attendee export stream.',
-    uiGuidance: 'Use a download/export icon action in admin attendee tools.',
+    path: '/api/v1/admin/events/{event_id}/attendees/export',
+    authRequirement: 'Admin JWT required',
+    purpose:
+        'CSV export of active attendees. Verifies CSV headers contain all 8 required columns '
+        'and no virtual_url, join_url, or qr_token is present.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        'registration_number,fullname_snapshot,email_snapshot,batch_year_snapshot,branch_snapshot,phone_snapshot,registered_at,status',
+    uiGuidance:
+        'Response is text/csv with UTF-8 BOM. Header row checked for required 8 columns.',
   ),
   DiagnosticId.adminRoleGuard: BackendApiDetails(
-    featureName: 'Admin Role Guard Test',
-    method: 'VARIES',
-    path: 'protected admin/event endpoints',
-    authRequirement: 'Admin/Coordinator required',
-    purpose: 'Verify unauthorized users get 403.',
-    implementationStatus: 'Planned / Placeholder',
-    sampleResponse: '{"detail":"forbidden"}',
-    uiGuidance: 'Show access denied state and avoid rendering admin controls.',
+    featureName: 'Admin Attendee Full Diagnostics',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/attendees?event_id={event_id}',
+    authRequirement: 'Admin JWT required (dev endpoint)',
+    purpose:
+        'Runs UC-01 through UC-10 on the attendee management implementation: '
+        'list, search, batch filter, pagination, export, cancelled hidden, '
+        'cancelled in registrations, admin guard, 404, empty state.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"passed":10,"failed":0,"total":10,"results":[{"feature":"UC-01 Attendees visible","status":"PASS"}]}',
+    uiGuidance:
+        'UC-01–UC-10 verification. Requires Event ID picker and admin JWT.',
   ),
   DiagnosticId.auditTrail: BackendApiDetails(
-    featureName: 'Audit Trail Test',
+    featureName: 'Registration Audit Test',
     method: 'GET',
-    path: '/api/v1/dev/diagnostics/audit or future admin audit endpoint',
-    authRequirement: 'Admin/dev required',
-    purpose: 'Verify state-changing actions are recorded.',
-    implementationStatus: 'Planned / Placeholder',
-    sampleResponse: '{"entries":[{"action":"event.updated","actor":"..."}]}',
-    uiGuidance:
-        'Display recent audit entries with actor, action, and timestamp.',
+    path: '/api/v1/admin/events/{event_id}/registrations?page=1&per_page=20',
+    authRequirement: 'Admin JWT required',
+    purpose:
+        'Audit view: all registration statuses including cancelled. '
+        'Verifies registrations array, total, and that cancelled rows are visible.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"registrations":[{"registration_id":1,"status":"registered"},{"registration_id":2,"status":"cancelled"}],"total":2}',
+    uiGuidance: 'Shows all statuses. Unlike attendees list, cancelled rows appear here.',
   ),
   DiagnosticId.week3UxShowcase: BackendApiDetails(
     featureName: 'Week 3 UX Showcase',
@@ -6439,26 +7721,24 @@ class DiagnosticSectionHeader extends StatelessWidget {
 class _QuickActionsCard extends StatelessWidget {
   const _QuickActionsCard({
     required this.runningAll,
-    required this.runningPublicEventsApi,
     required this.exporting,
     required this.clearing,
     required this.onOpenEvents,
-    required this.onOpenEventListingTest,
-    required this.onOpenEventDetailTest,
-    required this.onRunPublicEventsApiTest,
+    required this.onRunEventDiag,
+    required this.onRunRegDiag,
+    required this.onRunAdminDiag,
     required this.onRunAll,
     required this.onExport,
     required this.onClear,
   });
 
   final bool runningAll;
-  final bool runningPublicEventsApi;
   final bool exporting;
   final bool clearing;
   final VoidCallback onOpenEvents;
-  final VoidCallback onOpenEventListingTest;
-  final VoidCallback onOpenEventDetailTest;
-  final VoidCallback onRunPublicEventsApiTest;
+  final VoidCallback onRunEventDiag;
+  final VoidCallback onRunRegDiag;
+  final VoidCallback onRunAdminDiag;
   final VoidCallback onRunAll;
   final VoidCallback onExport;
   final VoidCallback onClear;
@@ -6472,84 +7752,44 @@ class _QuickActionsCard extends StatelessWidget {
         // ── Navigate ──────────────────────────────────────────────────────────
         _sectionLabel(context, 'Navigate'),
         const SizedBox(height: 8),
-        IntrinsicHeight(
-          child: Row(
-            children: [
-              Expanded(
-                child: _navTile(
-                  context,
-                  icon: Icons.event_outlined,
-                  label: 'Events',
-                  onTap: onOpenEvents,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _navTile(
-                  context,
-                  icon: Icons.view_list_outlined,
-                  label: 'Event List',
-                  onTap: onOpenEventListingTest,
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(
-                child: _navTile(
-                  context,
-                  icon: Icons.event_note_outlined,
-                  label: 'Event Detail',
-                  onTap: onOpenEventDetailTest,
-                ),
-              ),
-            ],
+        SizedBox(
+          width: double.infinity,
+          child: _navTile(
+            context,
+            icon: Icons.event_outlined,
+            label: 'Open Events',
+            onTap: onOpenEvents,
           ),
         ),
+        const SizedBox(height: 8),
+        _adminPortalLinks(context),
         const SizedBox(height: 16),
         // ── Run ───────────────────────────────────────────────────────────────
         _sectionLabel(context, 'Run'),
         const SizedBox(height: 8),
-        // Public Events API — secondary test action
-        Material(
-          color: colorScheme.surfaceContainerHighest,
-          borderRadius: BorderRadius.circular(12),
-          child: InkWell(
-            onTap: runningPublicEventsApi ? null : onRunPublicEventsApiTest,
-            borderRadius: BorderRadius.circular(12),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-              child: Row(
-                children: [
-                  if (runningPublicEventsApi)
-                    const SizedBox(
-                      width: 20,
-                      height: 20,
-                      child: CircularProgressIndicator(strokeWidth: 2),
-                    )
-                  else
-                    Icon(
-                      Icons.cloud_sync_outlined,
-                      size: 20,
-                      color: colorScheme.onSurfaceVariant,
-                    ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: Text(
-                      'Public Events API Test',
-                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                            fontWeight: FontWeight.w600,
-                            color: colorScheme.onSurface,
-                          ),
-                    ),
-                  ),
-                  Icon(
-                    Icons.arrow_forward_ios,
-                    size: 14,
-                    color: colorScheme.onSurfaceVariant,
-                  ),
-                ],
-              ),
-            ),
-          ),
+        // Section diagnostics — three compact action rows
+        _sectionRunButton(
+          context,
+          icon: Icons.event_outlined,
+          label: 'Run Event Diagnostics',
+          sublabel: 'Public, list, detail, admin detail',
+          onTap: onRunEventDiag,
+        ),
+        const SizedBox(height: 6),
+        _sectionRunButton(
+          context,
+          icon: Icons.app_registration_outlined,
+          label: 'Run Registration Diagnostics',
+          sublabel: '13-check backend flow + UX showcase',
+          onTap: onRunRegDiag,
+        ),
+        const SizedBox(height: 6),
+        _sectionRunButton(
+          context,
+          icon: Icons.people_alt_outlined,
+          label: 'Run Attendee / Admin Diagnostics',
+          sublabel: 'List · search · export · UC-01–UC-10',
+          onTap: onRunAdminDiag,
         ),
         const SizedBox(height: 8),
         // Run All Diagnostics — hero action
@@ -6664,6 +7904,62 @@ class _QuickActionsCard extends StatelessWidget {
     );
   }
 
+  Widget _adminPortalLinks(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    const adminBase = 'http://localhost:5173';
+    return Card(
+      elevation: 0,
+      color: cs.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'ADMIN PORTAL',
+              style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                    color: cs.primary,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0.8,
+                  ),
+            ),
+            const SizedBox(height: 8),
+            for (final (label, path) in [
+              ('Events', '/events'),
+              ('Attendees', '/attendees'),
+              ('Registrations', '/registrations'),
+            ])
+              Padding(
+                padding: const EdgeInsets.only(bottom: 4),
+                child: Row(
+                  children: [
+                    Icon(Icons.open_in_new, size: 12, color: cs.onSurfaceVariant),
+                    const SizedBox(width: 6),
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.labelMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                          ),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: SelectableText(
+                        '$adminBase$path',
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                              color: cs.onSurfaceVariant,
+                              fontFamily: 'monospace',
+                            ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _sectionLabel(BuildContext context, String text) {
     return Text(
       text.toUpperCase(),
@@ -6672,6 +7968,55 @@ class _QuickActionsCard extends StatelessWidget {
             fontWeight: FontWeight.w700,
             letterSpacing: 0.8,
           ),
+    );
+  }
+
+  Widget _sectionRunButton(
+    BuildContext context, {
+    required IconData icon,
+    required String label,
+    required String sublabel,
+    required VoidCallback onTap,
+  }) {
+    final colorScheme = Theme.of(context).colorScheme;
+    return Material(
+      color: colorScheme.surfaceContainerHighest,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(12),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+          child: Row(
+            children: [
+              Icon(icon, size: 20, color: colorScheme.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      label,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            fontWeight: FontWeight.w600,
+                            color: colorScheme.onSurface,
+                          ),
+                    ),
+                    Text(
+                      sublabel,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: colorScheme.onSurfaceVariant,
+                          ),
+                    ),
+                  ],
+                ),
+              ),
+              Icon(Icons.arrow_forward_ios,
+                  size: 14, color: colorScheme.onSurfaceVariant),
+            ],
+          ),
+        ),
+      ),
     );
   }
 
@@ -6768,6 +8113,190 @@ class _QuickActionsCard extends StatelessWidget {
           ),
         ),
       ),
+    );
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// QA Summary Card
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _QaSummaryCard extends StatelessWidget {
+  const _QaSummaryCard({
+    required this.categories,
+    required this.runState,
+  });
+
+  final List<DiagnosticCategory> categories;
+  final Map<DiagnosticId, DiagnosticRunState> runState;
+
+  @override
+  Widget build(BuildContext context) {
+    final allItems = categories.expand((c) => c.items).toList();
+    final statuses = allItems
+        .map((item) => (runState[item.id] ?? const DiagnosticRunState()).effectiveStatus(item))
+        .toList();
+
+    final passed = statuses.where((s) => s == DiagnosticStatus.ok).length;
+    final failed = statuses.where((s) => s == DiagnosticStatus.error).length;
+    final warning = statuses.where((s) => s == DiagnosticStatus.warning).length;
+    final notRun = statuses
+        .where((s) => s == DiagnosticStatus.notApplicable || s == DiagnosticStatus.info)
+        .length;
+    final total = allItems.length;
+
+    final lastRun = runState.values
+        .map((s) => s.lastRun)
+        .whereType<DateTime>()
+        .fold<DateTime?>(null, (best, t) => best == null || t.isAfter(best) ? t : best);
+
+    final session = AuthController.instance.session;
+    final userEmail = session?.email ?? '—';
+    final userType = session?.userType ?? '—';
+    final isAdmin = userType == 'admin';
+    final isAlumni = userType == 'alumni';
+
+    final cs = Theme.of(context).colorScheme;
+
+    return Card(
+      elevation: 0,
+      color: cs.surfaceContainerHighest,
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.analytics_outlined, size: 16, color: cs.primary),
+                const SizedBox(width: 6),
+                Text(
+                  'QA Summary',
+                  style: Theme.of(context).textTheme.labelLarge?.copyWith(
+                        fontWeight: FontWeight.w700,
+                        color: cs.primary,
+                      ),
+                ),
+                const Spacer(),
+                Text(
+                  'Last run: ${formatDiagnosticTimestamp(lastRun)}',
+                  style: Theme.of(context)
+                      .textTheme
+                      .labelSmall
+                      ?.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Status counts row
+            Row(
+              children: [
+                _QaBadge(label: '$passed', sublabel: 'PASS', color: Colors.green.shade700, bg: Colors.green.withValues(alpha: 0.10)),
+                const SizedBox(width: 6),
+                _QaBadge(label: '$failed', sublabel: 'FAIL', color: failed > 0 ? cs.error : cs.onSurfaceVariant, bg: failed > 0 ? cs.errorContainer : cs.surfaceContainerHighest),
+                const SizedBox(width: 6),
+                _QaBadge(label: '$warning', sublabel: 'WARN', color: Colors.orange.shade700, bg: Colors.orange.withValues(alpha: 0.10)),
+                const SizedBox(width: 6),
+                _QaBadge(label: '$notRun', sublabel: 'N/A', color: cs.onSurfaceVariant, bg: cs.surface),
+                const SizedBox(width: 6),
+                _QaBadge(label: '$total', sublabel: 'TOTAL', color: cs.onSurface, bg: cs.surface),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Environment row
+            Wrap(
+              spacing: 12,
+              runSpacing: 4,
+              children: [
+                _QaEnvChip(icon: Icons.link_outlined, label: backendBaseUrl),
+                _QaEnvChip(icon: Icons.person_outline, label: userEmail),
+                _QaEnvChip(
+                  icon: isAdmin
+                      ? Icons.admin_panel_settings_outlined
+                      : isAlumni
+                          ? Icons.school_outlined
+                          : Icons.person_outline,
+                  label: userType,
+                  highlight: isAdmin || isAlumni,
+                  highlightColor: isAdmin ? cs.tertiary : cs.primary,
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _QaBadge extends StatelessWidget {
+  const _QaBadge({
+    required this.label,
+    required this.sublabel,
+    required this.color,
+    required this.bg,
+  });
+
+  final String label;
+  final String sublabel;
+  final Color color;
+  final Color bg;
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+      decoration:
+          BoxDecoration(color: bg, borderRadius: BorderRadius.circular(8)),
+      child: Column(
+        children: [
+          Text(
+            label,
+            style: Theme.of(context).textTheme.titleSmall?.copyWith(
+                  color: color,
+                  fontWeight: FontWeight.w800,
+                ),
+          ),
+          Text(
+            sublabel,
+            style: Theme.of(context)
+                .textTheme
+                .labelSmall
+                ?.copyWith(color: color, fontSize: 9),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+class _QaEnvChip extends StatelessWidget {
+  const _QaEnvChip({
+    required this.icon,
+    required this.label,
+    this.highlight = false,
+    this.highlightColor,
+  });
+
+  final IconData icon;
+  final String label;
+  final bool highlight;
+  final Color? highlightColor;
+
+  @override
+  Widget build(BuildContext context) {
+    final cs = Theme.of(context).colorScheme;
+    final color = highlight ? (highlightColor ?? cs.primary) : cs.onSurfaceVariant;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 12, color: color),
+        const SizedBox(width: 4),
+        Text(
+          label,
+          style: Theme.of(context).textTheme.labelSmall?.copyWith(color: color),
+        ),
+      ],
     );
   }
 }

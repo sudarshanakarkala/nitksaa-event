@@ -4,11 +4,30 @@ Column mapping (DB → API alias where names differ):
   registrations.email  → email_snapshot  (alumni email at registration time)
   registrations.phone  → phone_snapshot
   registrations.notes  → attendee_note
+
+Admin note: admin attendee/registration endpoints ignore show_attendee_list.
+  show_attendee_list controls public visibility only; admins always have access.
 """
 from datetime import datetime
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Optional, Tuple
 
 import asyncpg
+
+# Columns for admin attendee list/export (status='registered' rows only).
+_ATTENDEE_COLS = """
+    registration_id, registration_number, fullname_snapshot,
+    email          AS email_snapshot,
+    phone          AS phone_snapshot,
+    batch_year_snapshot, branch_snapshot,
+    registered_at, status, confirmation_email_status
+"""
+
+# Columns for admin registrations audit view (all statuses).
+_REGISTRATION_AUDIT_COLS = """
+    registration_id, registration_number, fullname_snapshot,
+    email          AS email_snapshot,
+    status, registered_at, cancelled_at
+"""
 
 # SELECT clause shared by queries that need event fields for join_url resolution.
 _REG_WITH_EVENT = """
@@ -159,3 +178,113 @@ class RegistrationRepository:
             f"{_REG_WITH_EVENT} WHERE r.firebase_uid = $1 ORDER BY r.registered_at DESC",
             firebase_uid,
         )
+
+    # ── Admin: attendee queries (status = 'registered') ───────────────────────
+    # These methods intentionally ignore show_attendee_list — that flag controls
+    # public visibility only. Admins always have access to attendee data.
+
+    def _attendee_where(
+        self,
+        event_id: int,
+        search: Optional[str],
+        batch_year: Optional[int],
+    ) -> Tuple[str, list]:
+        parts = ["event_id = $1", "status = 'registered'"]
+        values: list = [event_id]
+        if search:
+            i = len(values) + 1
+            parts.append(f"fullname_snapshot ILIKE ${i}")
+            values.append(f"%{search}%")
+        if batch_year is not None:
+            i = len(values) + 1
+            parts.append(f"batch_year_snapshot = ${i}")
+            values.append(batch_year)
+        return " AND ".join(parts), values
+
+    async def list_attendees(
+        self,
+        event_id: int,
+        search: Optional[str],
+        batch_year: Optional[int],
+        page: int,
+        per_page: int,
+    ) -> List[asyncpg.Record]:
+        where, values = self._attendee_where(event_id, search, batch_year)
+        limit_idx = len(values) + 1
+        offset_idx = len(values) + 2
+        return await self.conn.fetch(
+            f"SELECT {_ATTENDEE_COLS} FROM registrations"
+            f" WHERE {where} ORDER BY registered_at ASC"
+            f" LIMIT ${limit_idx} OFFSET ${offset_idx}",
+            *values, per_page, (page - 1) * per_page,
+        )
+
+    async def count_attendees(
+        self,
+        event_id: int,
+        search: Optional[str],
+        batch_year: Optional[int],
+    ) -> int:
+        where, values = self._attendee_where(event_id, search, batch_year)
+        val = await self.conn.fetchval(
+            f"SELECT COUNT(*) FROM registrations WHERE {where}",
+            *values,
+        )
+        return int(val)
+
+    async def export_attendees(
+        self,
+        event_id: int,
+        search: Optional[str],
+        batch_year: Optional[int],
+    ) -> List[asyncpg.Record]:
+        where, values = self._attendee_where(event_id, search, batch_year)
+        return await self.conn.fetch(
+            f"SELECT {_ATTENDEE_COLS} FROM registrations"
+            f" WHERE {where} ORDER BY registered_at ASC",
+            *values,
+        )
+
+    # ── Admin: registration audit queries (all statuses) ──────────────────────
+
+    def _registration_where(
+        self,
+        event_id: int,
+        status_filter: Optional[str],
+    ) -> Tuple[str, list]:
+        parts = ["event_id = $1"]
+        values: list = [event_id]
+        if status_filter:
+            i = len(values) + 1
+            parts.append(f"status = ${i}")
+            values.append(status_filter)
+        return " AND ".join(parts), values
+
+    async def list_registrations(
+        self,
+        event_id: int,
+        status_filter: Optional[str],
+        page: int,
+        per_page: int,
+    ) -> List[asyncpg.Record]:
+        where, values = self._registration_where(event_id, status_filter)
+        limit_idx = len(values) + 1
+        offset_idx = len(values) + 2
+        return await self.conn.fetch(
+            f"SELECT {_REGISTRATION_AUDIT_COLS} FROM registrations"
+            f" WHERE {where} ORDER BY registered_at ASC"
+            f" LIMIT ${limit_idx} OFFSET ${offset_idx}",
+            *values, per_page, (page - 1) * per_page,
+        )
+
+    async def count_registrations(
+        self,
+        event_id: int,
+        status_filter: Optional[str],
+    ) -> int:
+        where, values = self._registration_where(event_id, status_filter)
+        val = await self.conn.fetchval(
+            f"SELECT COUNT(*) FROM registrations WHERE {where}",
+            *values,
+        )
+        return int(val)
