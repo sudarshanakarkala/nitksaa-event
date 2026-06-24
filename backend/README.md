@@ -157,20 +157,28 @@ when `alumni_db` is unreachable, so the backend runs without it for most develop
 createdb alumni_db
 
 # Apply the portal schema (obtain from nitksaa-portal-v2/migrations/)
-# or run a minimal seed for testing:
+# or run a minimal seed for testing (must match actual portal schema):
 psql -d alumni_db -c "
-  CREATE TABLE IF NOT EXISTS alumni_profiles (
-    ref_id      VARCHAR(128) PRIMARY KEY,
-    firebase_uid VARCHAR(128),
-    email       TEXT,
-    batch_year  INT,
-    is_verified BOOLEAN DEFAULT false
+  CREATE TABLE IF NOT EXISTS alumni (
+    alumni_id          TEXT PRIMARY KEY,
+    fullname           TEXT,
+    email              TEXT UNIQUE,
+    phone              TEXT,
+    graduationyear     INT,
+    branch             TEXT,
+    registrationstatus TEXT
   );
-  INSERT INTO alumni_profiles VALUES
-    ('TEST-001', 'dev-uid-admin', 'admin@test.com', 2010, true),
-    ('TEST-002', 'dev-uid-user',  'user@test.com',  2015, true);
+  INSERT INTO alumni VALUES
+    ('NITK2026IT001', 'Dev User', 'dev@example.com',
+     '+919999999999', 2026, 'Information Technology', 'Active');
 "
 ```
+
+> **Table name:** `alumni` (not `alumni_profiles`). Column names must match exactly:
+> `alumni_id`, `fullname`, `email`, `phone`, `graduationyear`, `branch`, `registrationstatus`.
+> `registrationstatus` must be `'Active'` or `'Self-Verified'` for the user to be eligible.
+> All other values (including `null`, `'Pending'`) result in `alumni_not_active`.
+> See `docs/architecture/alumni_db_integration_architecture_v1.md` for full schema reference.
 
 **Staging:** Point `ALUMNI_DB_URL` to the portal's staging database for realistic eligibility
 checks. Do not use the production alumni_db URL in local development.

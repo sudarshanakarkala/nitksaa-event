@@ -160,6 +160,27 @@ The following discrepancies were found and corrected during the Phase B document
 
 ---
 
+## Documentation Baseline
+
+### Authoritative Documents
+
+| Document | Purpose |
+|---|---|
+| `docs/api/backend_api_index_v3.md` | Single source of truth for all 36 backend API endpoints |
+| `docs/api/events_api_contract_v2.md` | Registration response shapes, join link rules, email rules, eligibility values |
+| `docs/architecture/alumni_db_integration_architecture_v1.md` | alumni_db ownership, schema, local setup, production checklist |
+
+### Deprecated Documents
+
+| Document | Reason |
+|---|---|
+| `docs/api/backend_api_index_v1.md` | Week 1/2 design spec — all entries were placeholders; superseded by v3 |
+| `docs/api/backend_api_index_v2.md` | Week 3 reference — "Week 4 Planned" section had wrong admin attendee paths; superseded by v3 |
+
+All future development should reference `backend_api_index_v3.md` as the primary API source of truth.
+
+---
+
 ## Recommended Week 5 Plan
 
 ### Priority 1 — Validation

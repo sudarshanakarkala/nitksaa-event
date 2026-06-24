@@ -2,12 +2,12 @@
 
 This document is retained for historical reference only.
 
-Use:
-- events_api_contract_v2.md
-- backend_api_index_v2.md
-- event_admin_api_usage_v2.md
+Use the following documents instead:
 
-for all new development.
+- docs/api/backend_api_index_v3.md
+- docs/api/events_api_contract_v2.md
+
+Do not use this document for new development, frontend integration, QA verification, or API implementation.
 
 # Backend API Index
 

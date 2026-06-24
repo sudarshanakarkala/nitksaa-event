@@ -568,9 +568,9 @@ Verify:
 * Batch Year
 * Department
 
-### Recommended Document
+### Documented
 
-Not yet created:
+Architecture documented in:
 
 ```text
 docs/architecture/alumni_db_integration_architecture_v1.md

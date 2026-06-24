@@ -1,5 +1,23 @@
 # Backend API Index v2
 
+## DEPRECATED
+
+This document has been superseded by:
+
+`docs/api/backend_api_index_v3.md`
+
+Do not use this document for:
+
+- frontend development
+- backend development
+- diagnostics implementation
+- QA verification
+- API integration
+
+Use `backend_api_index_v3.md` as the single source of truth.
+
+---
+
 **Version:** 2.0
 **Date:** 2026-06-19
 **Status:** SUPERSEDED by `backend_api_index_v3.md` (2026-06-24)
@@ -634,21 +652,22 @@ The 13 checks cover: alumni profile, test event setup (×2), eligibility, regist
 
 ---
 
-## Week 4 Planned Endpoints
+## Week 4 Planned Endpoints (Historical — Paths Were Wrong)
 
-Not yet implemented. These stubs exist in the codebase and return `501 Not Implemented`.
+> **These paths were never implemented.** The attendee endpoints were implemented at different
+> paths under `/api/v1/admin/...`. See `backend_api_index_v3.md` for the correct paths.
 
 ### GET /api/v1/events/{event_id}/attendees
 
-**Planned:** Admin attendee list — Week 4
+**WRONG PATH — historical only.**
+This path was planned in v2 but never implemented here.
+Actual implemented path: `GET /api/v1/admin/events/{event_id}/attendees`
 
 ### GET /api/v1/events/{event_id}/attendees/export
 
-**Planned:** Admin CSV attendee export — Week 4
-
-> The admin attendee management endpoints at `/api/v1/admin/events/{event_id}/...` (from
-> `admin_events.py`) follow the same pattern but are routed under a different prefix used by
-> the EventAdmin portal, not the NITKSAA React Admin Portal.
+**WRONG PATH — historical only.**
+This path was planned in v2 but never implemented here.
+Actual implemented path: `GET /api/v1/admin/events/{event_id}/attendees/export`
 
 ---
 
