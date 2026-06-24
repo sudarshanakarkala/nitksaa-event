@@ -624,6 +624,19 @@ The following are not implemented and have no functional endpoints:
 
 ---
 
+## Related Documentation
+
+**Authoritative API Reference:**
+
+- `docs/api/backend_api_index_v3.md` — single source of truth for all 36 endpoints, auth rules, and path corrections
+
+**Historical References (deprecated — do not use for new development):**
+
+- `backend_api_index_v1.md` — original Week 1/2 design spec, superseded
+- `backend_api_index_v2.md` — Week 3 reference, contains wrong admin attendee paths, superseded
+
+---
+
 ## Changelog
 
 | Version | Date | Changes |

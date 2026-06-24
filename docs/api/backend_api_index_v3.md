@@ -60,6 +60,10 @@
 > **Not implemented:** `DELETE /api/v1/events/{event_id}/register` — registration cancellation is
 > deferred. The Week 4 status report incorrectly listed this as implemented; it is not.
 
+> **This document is the authoritative API reference for Week 4 and later.**
+> All future development, frontend integration, diagnostics implementation, and QA verification
+> should reference this document as the primary source of truth.
+
 ---
 
 ## Health
@@ -781,6 +785,18 @@ Looks up an alumni record by `alumni_id` directly from `alumni_db`.
 | `GET /api/v1/admin/events/{id}/check-ins/verify` | Stub | QR check-in deferred |
 | `POST /api/v1/admin/events/{id}/check-ins` | Stub | QR check-in deferred |
 | `GET /api/v1/admin/events/{id}/check-ins` | Stub | QR check-in deferred |
+
+---
+
+## Documentation Version Matrix
+
+| Document | Status |
+|---|---|
+| `backend_api_index_v1.md` | Deprecated |
+| `backend_api_index_v2.md` | Deprecated |
+| `backend_api_index_v3.md` | Authoritative |
+| `events_api_contract_v2.md` | Authoritative |
+| `alumni_db_integration_architecture_v1.md` | Authoritative |
 
 ---
 

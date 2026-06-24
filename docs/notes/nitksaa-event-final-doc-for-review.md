@@ -19,6 +19,8 @@ https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/notes/june2026
 
 https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/notes/june2026/nitksaa-event_app_architecture_review_observations.md
 
+https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/architecture/alumni_db_integration_architecture_v1.md
+
 
 
 ### API Docs
