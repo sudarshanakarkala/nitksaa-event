@@ -184,10 +184,13 @@ class AuthController extends ChangeNotifier {
         'user-not-found' => 'No account was found for that email.',
         'wrong-password' => 'The password is incorrect.',
         'invalid-credential' => 'The email or password is incorrect.',
-        _ => error.message ?? 'Firebase authentication failed.',
+        'too-many-requests' => 'Too many attempts. Please wait a moment and try again.',
+        'network-request-failed' => 'A network error occurred. Check your connection and try again.',
+        'popup-blocked' => 'Sign-in popup was blocked. Please allow popups and try again.',
+        _ => 'Sign in failed. Please try again or use Google Sign-In.',
       };
     }
-    return error.toString();
+    return 'Sign in failed. Please try again.';
   }
 
   @override

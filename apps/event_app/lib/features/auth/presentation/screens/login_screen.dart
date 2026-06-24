@@ -62,16 +62,14 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() {
       loadingSetter(true);
       _errorMessage = null;
-      _statusMessage = 'Signing in with Firebase...';
+      _statusMessage = 'Signing in...';
     });
 
     try {
       await login();
       if (!mounted) return;
       setState(() {
-        _statusMessage = _authController.canAccessDeveloperDiagnostics
-            ? 'Backend session validated. Opening diagnostics...'
-            : 'Backend session validated. Opening home...';
+        _statusMessage = 'Signed in successfully.';
       });
       context.go(
         _authController.canAccessDeveloperDiagnostics
