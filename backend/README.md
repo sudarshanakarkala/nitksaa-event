@@ -27,9 +27,13 @@ APP_ENV=development
 APP_NAME=NITKSAA Event API
 APP_VERSION=0.1.0-alpha
 EVENTS_DB_URL=postgresql://postgres:postgres@localhost:5432/events_db
+ALUMNI_DB_URL=postgresql://postgres:postgres@localhost:5432/alumni_db
+EMAIL_MODE=log
 ```
 
 > `APP_ENV=development` is required for dev auth to work.
+
+See `.env.example` for the full list of variables including email SMTP settings.
 
 ---
 
@@ -48,12 +52,14 @@ pip install -r requirements.txt
 cp .env.example .env
 # Edit .env with your PostgreSQL credentials
 
-# 4. Create events_db database
+# 4. Create both databases
 createdb events_db
-# or: psql -c "CREATE DATABASE events_db;"
+createdb alumni_db
+# or: psql -c "CREATE DATABASE events_db;" && psql -c "CREATE DATABASE alumni_db;"
 
-# 5. Run migration
+# 5. Run migrations (run all in order)
 psql -d events_db -f migrations/events_db/001_create_events_alpha_schema.sql
+# ... through the latest migration file
 ```
 
 ---
@@ -132,6 +138,68 @@ curl http://localhost:8000/api/v1/health
 
 ---
 
+## alumni_db Local Setup
+
+The backend connects to two PostgreSQL databases:
+
+| Database | Purpose |
+|---|---|
+| `events_db` | Primary database — all events, registrations, sessions |
+| `alumni_db` | Read-only alumni eligibility lookups (from nitksaa-portal-v2) |
+
+`alumni_db` does not exist by default. Alumni eligibility calls gracefully skip the lookup
+when `alumni_db` is unreachable, so the backend runs without it for most development tasks.
+
+**To run eligibility checks locally:**
+
+```bash
+# Create an empty alumni_db
+createdb alumni_db
+
+# Apply the portal schema (obtain from nitksaa-portal-v2/migrations/)
+# or run a minimal seed for testing:
+psql -d alumni_db -c "
+  CREATE TABLE IF NOT EXISTS alumni_profiles (
+    ref_id      VARCHAR(128) PRIMARY KEY,
+    firebase_uid VARCHAR(128),
+    email       TEXT,
+    batch_year  INT,
+    is_verified BOOLEAN DEFAULT false
+  );
+  INSERT INTO alumni_profiles VALUES
+    ('TEST-001', 'dev-uid-admin', 'admin@test.com', 2010, true),
+    ('TEST-002', 'dev-uid-user',  'user@test.com',  2015, true);
+"
+```
+
+**Staging:** Point `ALUMNI_DB_URL` to the portal's staging database for realistic eligibility
+checks. Do not use the production alumni_db URL in local development.
+
+---
+
+## Email Setup
+
+Email sending is disabled by default (`EMAIL_MODE=log`). In log mode, emails are written to the
+Python logger and the registration flow completes normally.
+
+**To enable real email delivery:**
+
+```env
+EMAIL_MODE=send
+SMTP_USER=nitksaa.events@gmail.com
+SMTP_PASSWORD=your-gmail-app-password   # Gmail App Password, not the account password
+EMAIL_FROM=nitksaa.events@gmail.com
+EMAIL_REPLY_TO=events@nitksaa.org
+```
+
+Use a Gmail App Password (generated at myaccount.google.com → Security → App passwords), not
+the account password. Two-factor authentication must be enabled on the Gmail account.
+
+Test the configuration with `EMAIL_MODE=send` against a test event registration before using
+in production.
+
+---
+
 ## What Is Deferred
 
 - Production Firebase JWT verification
@@ -139,11 +207,10 @@ curl http://localhost:8000/api/v1/health
 - React Admin UI
 - Payments
 - Waitlist
-- Email notifications
 - Push notifications
 - QR code image generation
 - Offline sync
 - Analytics
 - Production QR token hashing (HMAC-SHA256)
-- Cross-database queries to alumni_db
+- Full cross-database alumni_db schema (portal team owns the schema)
 - Superadmin / portal staff roles

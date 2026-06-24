@@ -8,18 +8,18 @@ const PLANNED_APIS = [
 export default function RegistrationsPage() {
   return (
     <div>
-      <p className="page-eyebrow">Coming in Week 3</p>
+      <p className="page-eyebrow">Week 4</p>
       <h1 className="page-heading">Registrations</h1>
-      <p className="page-sub">Alumni can register for events. Confirmation email sent. Join link visible post-registration.</p>
+      <p className="page-sub">Registration backend is live. Admin UI for viewing and managing registrations per event is coming in Week 4.</p>
 
       <Card className="placeholder-page-card">
         <div className="notice notice--info placeholder-notice">
           <span>📋</span>
-          <span>Registration APIs will be implemented in Week 3. This page will display and manage attendee registrations per event.</span>
+          <span>Registration APIs are live (Week 3). This page will display and manage attendee registrations per event — coming in Week 4.</span>
         </div>
 
         <div className="planned-apis">
-          <h4>Planned APIs</h4>
+          <h4>Live APIs</h4>
           <div className="planned-apis-list">
             {PLANNED_APIS.map(api => (
               <div key={`${api.method}-${api.path}`} className="planned-api-row">

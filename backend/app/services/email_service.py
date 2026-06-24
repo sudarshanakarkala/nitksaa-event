@@ -6,6 +6,7 @@ EMAIL_MODE=send — sends via SMTP (smtplib); requires smtp_user, smtp_password 
 send_confirmation_email() never raises. Email failure returns a failed EmailResult
 and must never roll back the registration transaction.
 """
+import asyncio
 import logging
 import smtplib
 from dataclasses import dataclass
@@ -24,6 +25,27 @@ class EmailResult:
     status: str  # "sent" | "failed" | "skipped"
     sent_at: Optional[datetime]
     error: Optional[str]
+
+
+def _build_plain(
+    fullname: str,
+    event_title: str,
+    registration_number: str,
+    join_url: Optional[str],
+) -> str:
+    join_line = (
+        f"Virtual join link: {join_url}"
+        if join_url
+        else "This is an in-person event. Location details are on the event page."
+    )
+    return (
+        f"Registration Confirmed\n\n"
+        f"Hi {fullname},\n\n"
+        f"Your registration for {event_title} is confirmed.\n"
+        f"Registration number: {registration_number}\n\n"
+        f"{join_line}\n\n"
+        f"— NITKSAA Team"
+    )
 
 
 def _build_html(
@@ -45,6 +67,22 @@ def _build_html(
 {join_section}
 <p>— NITKSAA Team</p>
 </body></html>"""
+
+
+def _send_smtp_sync(
+    msg_string: str,
+    smtp_host: str,
+    smtp_port: int,
+    smtp_user: str,
+    smtp_password: str,
+    from_addr: str,
+    email_to: str,
+) -> None:
+    """Synchronous SMTP send. Called via asyncio.to_thread to avoid blocking the event loop."""
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
+        smtp.starttls()
+        smtp.login(smtp_user, smtp_password)
+        smtp.sendmail(from_addr, [email_to], msg_string)
 
 
 async def send_confirmation_email(
@@ -82,12 +120,19 @@ async def send_confirmation_email(
         msg["To"] = email_to
         if settings.email_reply_to:
             msg["Reply-To"] = settings.email_reply_to
+        msg.attach(MIMEText(_build_plain(fullname, event_title, registration_number, join_url), "plain"))
         msg.attach(MIMEText(_build_html(fullname, event_title, registration_number, join_url), "html"))
 
-        with smtplib.SMTP(settings.smtp_host, settings.smtp_port, timeout=10) as smtp:
-            smtp.starttls()
-            smtp.login(settings.smtp_user, settings.smtp_password)
-            smtp.sendmail(from_addr, [email_to], msg.as_string())
+        await asyncio.to_thread(
+            _send_smtp_sync,
+            msg.as_string(),
+            settings.smtp_host,
+            settings.smtp_port,
+            settings.smtp_user,
+            settings.smtp_password,
+            from_addr,
+            email_to,
+        )
 
         return EmailResult(status="sent", sent_at=datetime.now(timezone.utc), error=None)
 
