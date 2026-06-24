@@ -1,0 +1,251 @@
+/* ── Attendees & Registrations pages ─────────────────────────────────────── */
+
+/* Toolbar */
+.att-toolbar { display: flex; flex-direction: column; gap: 12px; margin-bottom: 24px; }
+
+.att-toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.att-event-select {
+  flex: 1;
+  min-width: 200px;
+  max-width: 360px;
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  cursor: pointer;
+}
+.att-event-select:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: transparent; }
+
+/* Search + filter row */
+.att-search-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+  flex: 1;
+  min-width: 180px;
+  max-width: 300px;
+}
+
+.att-search-icon {
+  position: absolute;
+  left: 10px;
+  color: var(--text-muted);
+  pointer-events: none;
+}
+
+.att-search-input {
+  width: 100%;
+  padding: 9px 32px 9px 32px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: var(--font-sans);
+}
+.att-search-input:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: transparent; }
+
+.att-search-clear {
+  position: absolute;
+  right: 8px;
+  background: none;
+  border: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  padding: 2px 4px;
+  line-height: 1;
+  font-size: 0.75rem;
+}
+.att-search-clear:hover { color: var(--text-primary); }
+
+.att-batch-select {
+  padding: 9px 12px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: 0.875rem;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  min-width: 130px;
+}
+.att-batch-select:focus { outline: 2px solid var(--gold); outline-offset: 1px; border-color: transparent; }
+
+/* Status filter pills (registrations page) */
+.att-filter-pills { display: flex; gap: 6px; flex-wrap: wrap; }
+
+.att-filter-pill {
+  padding: 6px 14px;
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  font-family: var(--font-sans);
+}
+.att-filter-pill:hover { border-color: var(--border-hover); color: var(--text-primary); }
+.att-filter-pill--active {
+  border-color: var(--gold);
+  background: rgba(var(--gold-ch), 0.12);
+  color: var(--gold);
+}
+
+/* Summary card */
+.att-summary-card { margin-bottom: 24px; }
+
+.att-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.att-summary-item { display: flex; flex-direction: column; gap: 4px; }
+
+.att-summary-label {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.att-summary-value {
+  font-size: 0.9375rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+.att-summary-value--muted { color: var(--text-muted); font-weight: 400; }
+
+.att-summary-count {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: var(--gold);
+}
+
+/* Table */
+.att-table-wrap {
+  overflow-x: auto;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border);
+}
+
+.att-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.875rem;
+}
+
+.att-table th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface);
+  white-space: nowrap;
+}
+
+.att-table td {
+  padding: 12px 14px;
+  border-bottom: 1px solid var(--border);
+  color: var(--text-primary);
+  vertical-align: top;
+}
+
+.att-table tr:last-child td { border-bottom: none; }
+
+.att-table tbody tr:hover { background: var(--surface); }
+
+/* Cell variants */
+.att-cell-name { font-weight: 500; }
+.att-cell-muted { color: var(--text-muted); font-size: 0.8125rem; }
+.att-cell-mono { font-family: var(--font-mono, monospace); font-size: 0.8125rem; }
+
+/* Email status indicator */
+.att-email-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 0.8rem;
+}
+.att-email-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.att-email-dot--sent    { background: #4ade80; }
+.att-email-dot--failed  { background: #f87171; }
+.att-email-dot--pending { background: #facc15; }
+.att-email-dot--skipped { background: var(--border); }
+
+/* Pagination */
+.att-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-top: 16px;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.att-pagination-info {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+}
+
+.att-pagination-btns { display: flex; gap: 8px; align-items: center; }
+
+/* Prompt to select an event */
+.att-select-prompt {
+  text-align: center;
+  padding: 48px 24px;
+  color: var(--text-muted);
+}
+.att-select-prompt-icon { font-size: 2.5rem; margin-bottom: 12px; }
+.att-select-prompt p { font-size: 0.9375rem; }
+
+/* Toast */
+.att-toast {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-radius: var(--radius-sm);
+  margin-bottom: 16px;
+  font-size: 0.875rem;
+}
+.att-toast-close {
+  background: none;
+  border: none;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0.7;
+  font-size: 0.875rem;
+  padding: 2px 4px;
+}
+.att-toast-close:hover { opacity: 1; }
+
+/* Count label */
+.att-count-label {
+  font-size: 0.8125rem;
+  color: var(--text-muted);
+  white-space: nowrap;
+  align-self: center;
+}
