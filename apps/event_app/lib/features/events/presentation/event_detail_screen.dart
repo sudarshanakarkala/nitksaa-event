@@ -96,9 +96,10 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _goRegister(PublicEventDetail event) {
-    final encodedTitle = Uri.encodeComponent(event.title);
-    context.push(
-      '${AppRoutes.events}/${event.eventId}/register?title=$encodedTitle',
+    ScaffoldMessenger.of(context).showSnackBar(
+      const SnackBar(
+        content: Text('Registration will be available in Week 3.'),
+      ),
     );
   }
 
@@ -213,19 +214,11 @@ class _RegistrationCta extends StatelessWidget {
       );
     }
 
-    if (!isAuthenticated) {
-      return AppPrimaryButton(
-        label: 'Sign in to Register',
-        icon: Icons.login_outlined,
-        onPressed: onLogin,
-      );
-    }
-
     return switch (event.registrationStatus) {
       'open' => AppPrimaryButton(
           label: 'Register',
           icon: Icons.how_to_reg_outlined,
-          onPressed: onRegister,
+          onPressed: isAuthenticated ? onRegister : onLogin,
         ),
       'full' => AppSecondaryButton(
           label: 'Event Full',
