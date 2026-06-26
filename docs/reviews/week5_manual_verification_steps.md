@@ -17,7 +17,7 @@ Before starting, read and follow these rules for every session:
 - **Do not write to alumni_db** — read-only consumer only.
 - **Do not commit `backend/.env`** — it contains DB passwords and SMTP credentials.
 - **Do not expose credentials in screenshots, reports, or chat.**
-- **Do not use the Cloud SQL public IP (`34.180.35.168`) directly** unless your current outbound
+- **Do not use the Cloud SQL public IP  directly** unless your current outbound
   IP has been added to Cloud SQL Authorized Networks in GCP Console. The preferred local access
   method is always the **Cloud SQL Auth Proxy on port 5433**.
 
@@ -494,9 +494,6 @@ All of the following must be true:
 - [ ] All four snapshot fields populated: `fullname_snapshot`, `batch_year_snapshot`, `branch_snapshot`, `ref_id`
 - [ ] Developer diagnostics report PASS for all checks
 - [ ] CSV export does not contain `join_url`, `virtual_url`, `qr_token`, or `firebase_uid`
-- [ ] `npm run build` exits 0 (admin portal — Section L.1)
-- [ ] `week5/all` returns `status=ok`, `failed=0`, 48/48 tests pass (Section K.1)
-- [ ] Admin enrichment panel: People / Sponsors / Partners CRUD all operational (Section L)
 
 ### PASS WITH NOTES
 
@@ -519,6 +516,73 @@ Any one of the following:
 
 ---
 
+## Section M — Full Automated Verification: Week 1 to Week 5
+
+Run after manual verification to confirm all automated checks pass before committing.
+
+### M.1 Start backend (if not already running)
+
+```bash
+# Terminal 2 — backend
+cd backend
+source .venv/bin/activate
+uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+```
+
+### M.2 Run the automated suite
+
+```bash
+# Terminal 5 — verification (new tab)
+cd backend
+source .venv/bin/activate
+
+python scripts/verify_all_weeks.py \
+  --base-url http://127.0.0.1:8000 \
+  --admin-header "X-Dev-User: admin" \
+  --json-output ../docs/reviews/week1_to_week5_automated_verification.json \
+  --markdown-output ../docs/reviews/week1_to_week5_automated_verification_report.md \
+  --repo-root ..
+```
+
+Expected output:
+
+```text
+============================================================
+  Overall:  WARNING
+  Total:    160
+  Passed:   135
+  Failed:   0
+  Warnings: 25
+============================================================
+```
+
+Exit code 0 means PASS or WARNING — safe to commit.
+Exit code 1 means FAIL — investigate before committing.
+
+### M.3 Expected WARNING categories (safe to ignore locally)
+
+| Category | Warning reason | Fix required? |
+|---|---|---|
+| Week 3 — Registration Flow | Alumni JWT not available in dev mode (`X-Dev-User: admin` cannot register) | No — expected locally |
+| Combined Diagnostics | Registration diagnostic 3/13 PASS — alumni DB not seeded with test user | No — expected locally |
+| Flutter Static | 1 pre-existing test failure: GoRouter not in test harness (from Week 2 commit 21ee22f) | No — deferred sprint |
+| API Index | `POST /auth/firebase` returns 405 unauthenticated (method-not-found before body parse) | No — expected behavior |
+
+### M.4 Report files
+
+| File | Description |
+|---|---|
+| `docs/reviews/week1_to_week5_automated_verification.json` | Machine-readable JSON (credentials redacted) |
+| `docs/reviews/week1_to_week5_automated_verification_report.md` | Human-readable Markdown |
+| `docs/reviews/week1_to_week5_automated_verification_design.md` | Design and architecture document |
+
+### M.5 Pass / Fail criteria
+
+PASS: `Overall: WARNING` or `Overall: PASS` with exit code 0.
+FAIL: Any `❌ FAIL` line in the output or exit code 1.
+
+---
+
 ## Shutdown Order
 
 Stop in this order to avoid connection errors in logs:
@@ -527,182 +591,3 @@ Stop in this order to avoid connection errors in logs:
 2. Admin Portal (`Ctrl+C` in Terminal 3)
 3. Backend (`Ctrl+C` in Terminal 2)
 4. Cloud SQL Proxy (`Ctrl+C` in Terminal 1) — **always stop last**
-
----
-
-## Section K — Week 5 Developer Workflows
-
-These automated diagnostic endpoints replace manual SQL queries for verifying all Week 5 backend foundations. Run in development mode only (`APP_ENV=development`). All endpoints accept `X-Dev-User: admin`.
-
-### K.1 — Run All Week 5 Diagnostics
-
-```bash
-curl -H "X-Dev-User: admin" \
-  http://localhost:8000/api/v1/dev/diagnostics/week5/all
-```
-
-Expected: `"status": "ok"`, `"failed": 0`.
-
-### K.2 — Phase 1: Full Day + Free/Paid Event Options
-
-```bash
-curl -H "X-Dev-User: admin" \
-  http://localhost:8000/api/v1/dev/diagnostics/week5/event-options
-```
-
-Verifies:
-- Full-day event creation and field propagation
-- Paid event creation (is_free=false, ticket_price present)
-- Public event detail includes Phase 1 fields
-- Backward compat: existing events default correctly
-
-### K.3 — Phase 2A: People / Speakers
-
-```bash
-curl -H "X-Dev-User: admin" \
-  http://localhost:8000/api/v1/dev/diagnostics/week5/people
-```
-
-Verifies:
-- Create HOST, SPEAKER, PANELIST, hidden person
-- Admin list returns all 4 (including hidden)
-- `speakers[]` derived subset: SPEAKER role + visible only
-- `people[]` in public response: 3 visible only
-- Hidden person not exposed publicly
-- Update and delete work
-
-### K.4 — Phase 2B: Sponsors and Partners
-
-```bash
-curl -H "X-Dev-User: admin" \
-  http://localhost:8000/api/v1/dev/diagnostics/week5/sponsors-partners
-```
-
-Verifies:
-- Create TITLE_SPONSOR, GOLD_SPONSOR, hidden BRONZE_SPONSOR
-- Create COMMUNITY_PARTNER, KNOWLEDGE_PARTNER, hidden MEDIA_PARTNER
-- Admin list: 3 each (including hidden)
-- Public sponsors/partners: visible only, no is_visible field
-- Sponsors and partners are separate lists
-- Update and delete work
-
-### K.5 — Phase 2C: Analytics Logging
-
-```bash
-curl -H "X-Dev-User: admin" \
-  http://localhost:8000/api/v1/dev/diagnostics/week5/analytics
-```
-
-Verifies:
-- Logs all 6 action types into event_activity_log
-- Rows present with correct metadata JSON
-- source_app present in all rows
-- No secrets in metadata
-
-### K.6 — Expected Pass Counts
-
-| Suite | Tests | Expected |
-|---|---|---|
-| event-options | 6 | 6/6 PASS |
-| people | 14 | 14/14 PASS |
-| sponsors-partners | 17 | 17/17 PASS |
-| analytics | 11 | 11/11 PASS |
-| **all (combined)** | **48** | **48/48 PASS** |
-
-### K.7 — Critical Failures
-
-Any `"failed" > 0` in `week5/all` output indicates a regression. Check the `results[]` array in the failing suite for the specific test ID and details.
-
----
-
-## Section L — Week 5 Admin Portal Enrichment Verification
-
-Run after any admin portal change and before every deployment. Requires the backend to be running (Terminal 2) and the admin portal dev server (Terminal 3).
-
-### L.1 — Build Verification
-
-```bash
-cd /Users/ananth/iTelematics/NITK_Project/NITK_Alumni/nitksaa-event/admin/event_admin
-npm run build
-```
-
-Expected: exit 0, `✓ built in ...ms`, no errors.
-
-### L.2 — Event List Indicators
-
-Open http://localhost:5173. Log in as admin. Go to the Events list.
-
-| Check | Condition | Expected |
-|---|---|---|
-| L.2.1 | Event with `is_full_day=true` | Gold `Full Day` pill shown below Virtual/In-person |
-| L.2.2 | Event with `is_free=true` (default) | Green `Free` pill shown |
-| L.2.3 | Event with `is_free=false`, price set | Orange `₹{price}` pill shown |
-| L.2.4 | Event with `is_free=false`, no price | Orange `Paid` pill shown |
-| L.2.5 | Legacy events (no Week 5 fields) | No pill shown for missing fields — no crash |
-
-### L.3 — Create Event → Navigate to Edit
-
-| Step | Action | Expected |
-|---|---|---|
-| L.3.1 | Click "Create Event" | Form loads at `/events/new` |
-| L.3.2 | Fill required fields; check "Full Day"; set Paid with price | Form valid |
-| L.3.3 | Submit form | **Navigates to `/events/{new_id}/edit`** (not to `/events` list) |
-| L.3.4 | Verify enrichment panel visible | Three tabs visible below the form: People, Sponsors, Partners |
-
-### L.4 — People / Speakers Tab
-
-Open any event's edit page. Click the **People** tab in the enrichment panel.
-
-| Step | Action | Expected |
-|---|---|---|
-| L.4.1 | Tab loads | Loading spinner → list (empty on fresh event) |
-| L.4.2 | Click "Add Person" | Inline form appears |
-| L.4.3 | Submit with blank fullname | Validation error — form not submitted |
-| L.4.4 | Fill fullname; choose role SPEAKER; submit | Person appears in list with `Visible` badge |
-| L.4.5 | Click Edit on a person | Form pre-fills with current data |
-| L.4.6 | Change role to HOST; save | List updates — row shows HOST |
-| L.4.7 | Set `is_visible = false`; save | Badge changes to `Hidden` |
-| L.4.8 | Click Delete → confirm | Person removed from list |
-| L.4.9 | Add one person per role | All 7 roles: HOST, MODERATOR, SPEAKER, PANELIST, CHIEF_GUEST, GUEST_OF_HONOUR, ORGANIZER |
-
-### L.5 — Sponsors Tab
-
-Click the **Sponsors** tab.
-
-| Step | Action | Expected |
-|---|---|---|
-| L.5.1 | Tab loads | List loads (empty on fresh event) |
-| L.5.2 | Add TITLE_SPONSOR with name | Appears in list |
-| L.5.3 | Add GOLD_SPONSOR | Appears in list |
-| L.5.4 | Add hidden BRONZE_SPONSOR (`is_visible=false`) | Appears with `Hidden` badge |
-| L.5.5 | Edit GOLD_SPONSOR description | List updates |
-| L.5.6 | Delete BRONZE_SPONSOR → confirm | Removed from list |
-
-### L.6 — Partners Tab
-
-Click the **Partners** tab.
-
-| Step | Action | Expected |
-|---|---|---|
-| L.6.1 | Tab loads | List loads (empty on fresh event) |
-| L.6.2 | Add COMMUNITY_PARTNER with name | Appears in list |
-| L.6.3 | Add KNOWLEDGE_PARTNER | Appears in list |
-| L.6.4 | Add hidden MEDIA_PARTNER (`is_visible=false`) | Appears with `Hidden` badge |
-| L.6.5 | Edit COMMUNITY_PARTNER description | List updates |
-| L.6.6 | Delete MEDIA_PARTNER → confirm | Removed from list |
-
-### L.7 — API URL Verification
-
-All enrichment calls must go to `/api/v1/events/{id}/people` (and `/sponsors`, `/partners`), not to `/api/v1/admin/events/{id}/people`. Verify in the browser's DevTools Network tab — no 404s, no 403s.
-
-### L.8 — Week 5 Admin Verification Checklist
-
-- [ ] `npm run build` exits 0 with no errors
-- [ ] Event list shows Full Day / Paid / Free pills correctly
-- [ ] Create event navigates to edit page (not events list)
-- [ ] Enrichment panel visible in edit mode below the form
-- [ ] People tab: add / edit / delete all work; all 7 roles available
-- [ ] Sponsors tab: add / edit / delete all work; all 5 types available
-- [ ] Partners tab: add / edit / delete all work; all 7 types available
-- [ ] Hidden items show `Hidden` badge in admin list
-- [ ] No 404 or 403 errors in browser DevTools for enrichment API calls

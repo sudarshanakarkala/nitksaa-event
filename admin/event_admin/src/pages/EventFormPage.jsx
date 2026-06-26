@@ -237,8 +237,9 @@ export default function EventFormPage() {
         navigate('/events');
       } else {
         const result = await createEvent(payload);
-        // Navigate to edit view so the enrichment panel (people/sponsors/partners) is immediately accessible.
-        navigate(`/events/${result.event_id}/edit`);
+        // API returns {"status":"ok","event":{"event_id":...}} — extract from nested key.
+        const newId = result?.event?.event_id;
+        navigate(`/events/${newId}/edit`);
       }
     } catch (err) {
       setApiError(err.message);
