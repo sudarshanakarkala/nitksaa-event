@@ -96,10 +96,9 @@ class _EventDetailScreenState extends State<EventDetailScreen> {
   }
 
   void _goRegister(PublicEventDetail event) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(
-        content: Text('Registration will be available in Week 3.'),
-      ),
+    context.push(
+      '${AppRoutes.registerForEvent(event.eventId)}'
+      '?title=${Uri.encodeComponent(event.title)}',
     );
   }
 

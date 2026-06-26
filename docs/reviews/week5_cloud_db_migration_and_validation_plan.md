@@ -417,7 +417,7 @@ curl -s https://<staging-host>/api/v1/health
 # Expected: {"status":"ok","version":"...","env":"staging","db":"ok"}
 
 # Public events list
-curl -s https://<staging-host>/api/v1/events
+curl -s https://<staging-host>/api/v1/events/public
 # Expected: 200 OK, JSON array (may be empty if no published events yet)
 ```
 
@@ -427,7 +427,7 @@ These steps require admin credentials. Run in this order:
 
 1. **Create a draft event** — POST `/api/v1/admin/events` with valid payload
 2. **Verify it appears** in admin events list — GET `/api/v1/admin/events`
-3. **Publish the event** — PATCH `/api/v1/admin/events/{id}/status` with `{"status":"published"}`
+3. **Publish the event** — POST `/api/v1/admin/events/{id}/publish`
 4. **Verify it appears** in the public list — GET `/api/v1/events`
 5. **Confirm audit log** recorded `published` entry:
    ```sql
@@ -534,7 +534,7 @@ sections:
 ### Backend API (staging only)
 
 - [ ] GET /api/v1/health → `{"status":"ok","db":"ok"}`
-- [ ] GET /api/v1/events → 200 OK
+- [ ] GET /api/v1/events/public → 200 OK (JSON array)
 - [ ] Create draft event in staging → success
 - [ ] Publish event in staging → success, audit log entry created
 - [ ] GET /api/v1/alumni/me → alumni profile returned
