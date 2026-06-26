@@ -162,6 +162,26 @@
   margin-left: 2px;
 }
 
+/* ── Input with prefix symbol (e.g. ₹) ───────────────────────────────── */
+.ef-input-prefix-wrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.ef-input-prefix {
+  position: absolute;
+  left: 0.65rem;
+  color: var(--text-muted);
+  font-size: 0.95rem;
+  pointer-events: none;
+  user-select: none;
+}
+
+.ef-input-prefix-wrap input {
+  flex: 1;
+}
+
 /* ── API error banner ─────────────────────────────────────────────────── */
 .ef-api-error {
   margin-bottom: 20px;

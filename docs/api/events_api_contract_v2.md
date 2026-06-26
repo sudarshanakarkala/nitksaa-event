@@ -609,6 +609,104 @@ class MyRegistrationsListResponse(BaseModel):
 
 ---
 
+## Week 5 — Additive Fields and Enrichment (2026-06-26)
+
+All Week 5 changes are **additive only** — no existing fields are removed or renamed.
+
+### Public Event List — `GET /api/v1/events/public`
+
+Three new fields are now included in each event item:
+
+| Field | Type | Default | Notes |
+|---|---|---|---|
+| `is_full_day` | `boolean` | `false` | True if the event runs all day (no specific time) |
+| `is_free` | `boolean` | `true` | False if ticket purchase is required |
+| `ticket_price` | `number or null` | `null` | Price in INR; present when `is_free=false` |
+
+**Backward compat:** All three have DB-level defaults. Existing events have `is_full_day=false`, `is_free=true`, `ticket_price=null`.
+
+### Public Event Detail — `GET /api/v1/events/public/{event_id}`
+
+Four new arrays are included in the `event` object:
+
+```json
+{
+  "event": {
+    "event_id": 26,
+    "title": "NITKSAA Annual Meetup",
+    "is_full_day": false,
+    "is_free": false,
+    "ticket_price": 500.00,
+    "people": [
+      {
+        "person_id": 1,
+        "role": "HOST",
+        "fullname": "Dr. Jane Doe",
+        "title": "Chief Host",
+        "organisation": "NITK",
+        "bio": "...",
+        "photo_url": null,
+        "linkedin_url": null,
+        "display_order": 0
+      }
+    ],
+    "speakers": [
+      {
+        "person_id": 2,
+        "role": "SPEAKER",
+        "fullname": "Prof. Example",
+        "title": "Dean, CS",
+        "organisation": "NITK",
+        "bio": "...",
+        "photo_url": null,
+        "linkedin_url": null,
+        "display_order": 0
+      }
+    ],
+    "sponsors": [
+      {
+        "sponsor_id": 1,
+        "sponsor_type": "TITLE_SPONSOR",
+        "name": "Acme Corp",
+        "logo_url": "https://example.com/logo.png",
+        "website_url": "https://acme.com",
+        "description": null,
+        "display_order": 0
+      }
+    ],
+    "partners": [
+      {
+        "partner_id": 1,
+        "partner_type": "COMMUNITY_PARTNER",
+        "name": "NITK Alumni Network",
+        "logo_url": null,
+        "website_url": null,
+        "description": null,
+        "display_order": 0
+      }
+    ],
+    "sessions": [],
+    "registered_count": 1,
+    "registration_status": "open"
+  }
+}
+```
+
+**Enrichment visibility rules:**
+
+- `people[]` — only `is_visible=true` people, ordered by `display_order ASC, person_id ASC`
+- `speakers[]` — derived subset of `people[]` where `role` ∈ `{SPEAKER, PANELIST, CHIEF_GUEST, GUEST_OF_HONOUR}`. HOST, MODERATOR, ORGANIZER are excluded.
+- `sponsors[]` — only `is_visible=true` sponsors, ordered by tier rank (TITLE→GOLD→SILVER→BRONZE→ASSOCIATE), then `display_order ASC`, then `sponsor_id ASC`
+- `partners[]` — only `is_visible=true` partners, ordered by `partner_type ASC` (alphabetical), then `display_order ASC`, then `partner_id ASC`
+- `is_visible` field is **never returned** in any public response
+- All arrays default to `[]` when no records exist
+
+**Flutter `fromJson` compatibility:** All four arrays use `?.` or `[]` defaults in `PublicEventDetail.fromJson`. No existing Flutter code is broken.
+
+For admin CRUD on these resources, see `docs/api/week5_event_enrichment_api_contract.md`.
+
+---
+
 ## Out of Scope (Not Yet Implemented)
 
 The following are not implemented and have no functional endpoints:
@@ -621,6 +719,7 @@ The following are not implemented and have no functional endpoints:
 | Waitlist | Not started |
 | Payment | Not started |
 | Registration cancellation | Not started (no `cancel` endpoint exists) |
+| Flutter enrichment display (people/sponsors/partners) | Deferred — backend + admin ready |
 
 ---
 
@@ -643,3 +742,4 @@ The following are not implemented and have no functional endpoints:
 |---|---|---|
 | v1.0 | Week 3 (before implementation) | Original design spec |
 | v2.0 | 2026-06-18 | Updated to match actual implementation: flat response shapes, actual eligibility_status values, removed confirm_profile from RegisterRequest, documented join link and email rules |
+| v2.1 | 2026-06-26 | Week 5 additive fields: `is_full_day`, `is_free`, `ticket_price` in event list and detail; `people[]`, `speakers[]`, `sponsors[]`, `partners[]` in public event detail; enrichment visibility and ordering rules documented |

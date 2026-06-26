@@ -19,6 +19,9 @@ class PublicEvent {
     this.capacity,
     this.showAttendeeList = false,
     this.publishedAt,
+    this.isFullDay = false,
+    this.isFree = true,
+    this.ticketPrice,
   });
 
   factory PublicEvent.fromJson(Map<String, dynamic> json) {
@@ -42,6 +45,9 @@ class PublicEvent {
       registeredCount: _optionalInt(json['registered_count']) ?? 0,
       registrationStatus: _requiredString(json, 'registration_status'),
       publishedAt: _optionalDateTime(json['published_at']),
+      isFullDay: _optionalBool(json['is_full_day']) ?? false,
+      isFree: _optionalBool(json['is_free']) ?? true,
+      ticketPrice: _optionalDouble(json['ticket_price']),
     );
   }
 
@@ -64,6 +70,11 @@ class PublicEvent {
   final int registeredCount;
   final String registrationStatus;
   final DateTime? publishedAt;
+  final bool isFullDay;
+  final bool isFree;
+  final double? ticketPrice;
+
+  String get priceLabel => isFree ? 'Free' : (ticketPrice != null ? '₹${ticketPrice!.toStringAsFixed(0)}' : 'Paid');
 
   String get eventTypeLabel => isVirtual ? 'Virtual' : 'In-person';
 
@@ -93,6 +104,13 @@ int _requiredInt(Map<String, dynamic> json, String key) {
 int? _optionalInt(dynamic value) => switch (value) {
       int number => number,
       num number => number.toInt(),
+      _ => null,
+    };
+
+double? _optionalDouble(dynamic value) => switch (value) {
+      double d => d,
+      num n => n.toDouble(),
+      String s => double.tryParse(s),
       _ => null,
     };
 

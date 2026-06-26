@@ -21,6 +21,9 @@ class PublicEventDetail {
     this.publishedAt,
     this.speakers = const [],
     this.sessions = const [],
+    this.isFullDay = false,
+    this.isFree = true,
+    this.ticketPrice,
   });
 
   factory PublicEventDetail.fromJson(Map<String, dynamic> json) {
@@ -46,6 +49,9 @@ class PublicEventDetail {
       publishedAt: _optionalDateTime(json['published_at']),
       speakers: _parseSpeakers(json['speakers']),
       sessions: _parseSessions(json['sessions']),
+      isFullDay: _optionalBool(json['is_full_day']) ?? false,
+      isFree: _optionalBool(json['is_free']) ?? true,
+      ticketPrice: _optionalDouble(json['ticket_price']),
     );
   }
 
@@ -70,6 +76,11 @@ class PublicEventDetail {
   final DateTime? publishedAt;
   final List<PublicEventSpeaker> speakers;
   final List<PublicEventSession> sessions;
+  final bool isFullDay;
+  final bool isFree;
+  final double? ticketPrice;
+
+  String get priceLabel => isFree ? 'Free' : (ticketPrice != null ? '₹${ticketPrice!.toStringAsFixed(0)}' : 'Paid');
 
   String get eventTypeLabel => isVirtual ? 'Virtual' : 'In-person';
 
@@ -166,6 +177,13 @@ bool _requiredBool(Map<String, dynamic> json, String key) {
 }
 
 bool? _optionalBool(dynamic value) => value is bool ? value : null;
+
+double? _optionalDouble(dynamic value) => switch (value) {
+      double d => d,
+      num n => n.toDouble(),
+      String s => double.tryParse(s),
+      _ => null,
+    };
 
 DateTime _requiredDateTime(Map<String, dynamic> json, String key) {
   final value = _optionalDateTime(json[key]);

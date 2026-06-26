@@ -343,9 +343,9 @@ class _EventInformationCard extends StatelessWidget {
         start.year == end.year &&
         start.month == end.month &&
         start.day == end.day;
-    final date = sameDay
+    final dateLabel = sameDay
         ? startDate
-        : '$startDate - ${localizations.formatMediumDate(end)}';
+        : '$startDate – ${localizations.formatMediumDate(end)}';
     final startTime = localizations.formatTimeOfDay(
       TimeOfDay.fromDateTime(start),
     );
@@ -362,20 +362,22 @@ class _EventInformationCard extends StatelessWidget {
           const SizedBox(height: 18),
           _DetailRow(
             icon: Icons.calendar_today_outlined,
-            label: 'Date',
-            value: date,
+            label: event.isFullDay ? (sameDay ? 'Date' : 'Dates') : 'Date',
+            value: dateLabel,
           ),
-          _DetailRow(
-            icon: Icons.schedule_outlined,
-            label: 'Start Time',
-            value: startTime,
-          ),
-          _DetailRow(icon: Icons.schedule, label: 'End Time', value: endTime),
-          _DetailRow(
-            icon: Icons.public_outlined,
-            label: 'Timezone',
-            value: event.timezone,
-          ),
+          if (!event.isFullDay) ...[
+            _DetailRow(
+              icon: Icons.schedule_outlined,
+              label: 'Start Time',
+              value: startTime,
+            ),
+            _DetailRow(icon: Icons.schedule, label: 'End Time', value: endTime),
+            _DetailRow(
+              icon: Icons.public_outlined,
+              label: 'Timezone',
+              value: event.timezone,
+            ),
+          ],
           _DetailRow(
             icon: event.isVirtual
                 ? Icons.videocam_outlined
@@ -384,6 +386,13 @@ class _EventInformationCard extends StatelessWidget {
             value: event.isVirtual
                 ? 'Online'
                 : event.locationText ?? 'Location to be announced',
+          ),
+          _DetailRow(
+            icon: event.isFree
+                ? Icons.confirmation_number_outlined
+                : Icons.sell_outlined,
+            label: 'Entry',
+            value: event.priceLabel,
           ),
           _DetailRow(
             icon: Icons.people_outline,

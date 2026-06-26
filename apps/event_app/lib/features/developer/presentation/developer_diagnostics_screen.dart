@@ -190,6 +190,20 @@ class _DeveloperDiagnosticsScreenState
           items[DiagnosticId.alumniLoginTrace]!,
         ],
       ),
+      DiagnosticCategory(
+        title: 'Week 5 — Event Enrichment',
+        description:
+            'Backend diagnostic suites for Week 5: event options, people/speakers, '
+            'sponsors (tier ordering), partners (alphabetical ordering), and analytics logging. '
+            '48 automated tests total. Run "Week 5 — All Suites" as the go/no-go check.',
+        items: [
+          items[DiagnosticId.week5All]!,
+          items[DiagnosticId.week5EventOptions]!,
+          items[DiagnosticId.week5People]!,
+          items[DiagnosticId.week5SponsorsPartners]!,
+          items[DiagnosticId.week5Analytics]!,
+        ],
+      ),
     ];
   }
 
@@ -481,6 +495,58 @@ class _DeveloperDiagnosticsScreenState
         initialStatus: DiagnosticStatus.notApplicable,
         apiDetails: diagnosticApiDetails[DiagnosticId.alumniLoginTrace]!,
       ),
+      DiagnosticId.week5EventOptions: DiagnosticItem(
+        id: DiagnosticId.week5EventOptions,
+        title: 'Event Options Diagnostic',
+        description:
+            'Runs 6 automated backend tests for is_full_day, is_free, and ticket_price. '
+            'Creates test events, verifies admin and public responses, checks backward compatibility.',
+        icon: Icons.event_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.week5EventOptions]!,
+      ),
+      DiagnosticId.week5People: DiagnosticItem(
+        id: DiagnosticId.week5People,
+        title: 'People / Speakers Diagnostic',
+        description:
+            'Runs 14 automated backend tests for event people CRUD. '
+            'Verifies all 7 roles, visibility gating, speakers[] derivation, HOST exclusion, update, and delete.',
+        icon: Icons.people_outline,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.week5People]!,
+      ),
+      DiagnosticId.week5SponsorsPartners: DiagnosticItem(
+        id: DiagnosticId.week5SponsorsPartners,
+        title: 'Sponsors & Partners Diagnostic',
+        description:
+            'Runs 17 automated backend tests. '
+            'Verifies sponsor tier ordering (TITLE → GOLD → SILVER → BRONZE → ASSOCIATE), '
+            'partner alphabetical ordering, visibility gating, CRUD, and separate list keys.',
+        icon: Icons.handshake_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.week5SponsorsPartners]!,
+      ),
+      DiagnosticId.week5Analytics: DiagnosticItem(
+        id: DiagnosticId.week5Analytics,
+        title: 'Analytics Logging Diagnostic',
+        description:
+            'Runs 11 automated backend tests for event_activity_log. '
+            'Verifies 6 action types, metadata JSONB, source_app, and no secret leakage.',
+        icon: Icons.analytics_outlined,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.week5Analytics]!,
+      ),
+      DiagnosticId.week5All: DiagnosticItem(
+        id: DiagnosticId.week5All,
+        title: 'Week 5 — All Suites',
+        description:
+            'Runs all 48 Week 5 backend diagnostic tests in one call: '
+            'event-options (6), people (14), sponsors-partners (17), analytics (11). '
+            'Use as go/no-go check before any Week 5 backend deployment.',
+        icon: Icons.check_circle_outline,
+        initialStatus: DiagnosticStatus.notApplicable,
+        apiDetails: diagnosticApiDetails[DiagnosticId.week5All]!,
+      ),
     };
   }
 
@@ -678,7 +744,308 @@ class DiagnosticDetailScreen extends StatelessWidget {
       DiagnosticId.alumniLookupId ||
       DiagnosticId.alumniLoginTrace =>
         _AlumniDiagnosticDetail(item: item),
+      DiagnosticId.week5EventOptions ||
+      DiagnosticId.week5People ||
+      DiagnosticId.week5SponsorsPartners ||
+      DiagnosticId.week5Analytics ||
+      DiagnosticId.week5All =>
+        _Week5DiagnosticDetail(item: item),
     };
+  }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Week 5 — Event Enrichment Diagnostic Detail
+// ─────────────────────────────────────────────────────────────────────────────
+
+class _Week5DiagnosticDetail extends StatefulWidget {
+  const _Week5DiagnosticDetail({required this.item});
+
+  final DiagnosticItem item;
+
+  @override
+  State<_Week5DiagnosticDetail> createState() => _Week5DiagnosticDetailState();
+}
+
+class _Week5DiagnosticDetailState extends State<_Week5DiagnosticDetail> {
+  bool _loading = false;
+  Map<String, dynamic>? _result;
+  String? _error;
+
+  String get _endpoint {
+    return switch (widget.item.id) {
+      DiagnosticId.week5EventOptions    => '/api/v1/dev/diagnostics/week5/event-options',
+      DiagnosticId.week5People          => '/api/v1/dev/diagnostics/week5/people',
+      DiagnosticId.week5SponsorsPartners => '/api/v1/dev/diagnostics/week5/sponsors-partners',
+      DiagnosticId.week5Analytics       => '/api/v1/dev/diagnostics/week5/analytics',
+      DiagnosticId.week5All             => '/api/v1/dev/diagnostics/week5/all',
+      _ => '/api/v1/dev/diagnostics/week5/all',
+    };
+  }
+
+  Future<void> _run() async {
+    setState(() {
+      _loading = true;
+      _error = null;
+      _result = null;
+    });
+    try {
+      final resp = await devDio
+          .get<Map<String, dynamic>>(
+            _endpoint,
+            options: Options(headers: {'X-Dev-User': 'admin'}),
+          )
+          .timeout(const Duration(seconds: 60));
+      if (!mounted) return;
+      setState(() => _result = resp.data);
+    } catch (e, st) {
+      AppLogger.error('Week 5 diagnostic failed', e, st);
+      if (!mounted) return;
+      setState(() => _error = errorMessage(e));
+    } finally {
+      if (mounted) setState(() => _loading = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final result = _result;
+    final overallStatus = result?['status'] as String?;
+    final totalPassed   = result?['passed']   as int?;
+    final totalFailed   = result?['failed']   as int?;
+    final totalTests    = result?['total']    as int?;
+    final warnings      = result?['warnings'] as int?;
+
+    DiagnosticRunState? runState;
+    if (result != null) {
+      runState = DiagnosticRunState(
+        status: overallStatus == 'ok'
+            ? DiagnosticStatus.ok
+            : overallStatus == 'warning'
+                ? DiagnosticStatus.warning
+                : DiagnosticStatus.error,
+        lastRun: DateTime.now(),
+      );
+    }
+
+    return DiagnosticDetailScaffold(
+      title: widget.item.title,
+      description: widget.item.description,
+      result: runState,
+      apiDetails: widget.item.apiDetails,
+      children: [
+        // Run button
+        ElevatedButton.icon(
+          onPressed: _loading ? null : _run,
+          icon: _loading
+              ? const SizedBox(
+                  width: 16,
+                  height: 16,
+                  child: CircularProgressIndicator(strokeWidth: 2),
+                )
+              : const Icon(Icons.play_arrow_outlined, size: 18),
+          label: Text(_loading ? 'Running…' : 'Run Diagnostic'),
+        ),
+        const SizedBox(height: 16),
+
+        // Error
+        if (_error != null)
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(12),
+              child: Text(_error!, style: const TextStyle(color: Colors.redAccent)),
+            ),
+          ),
+
+        // Summary card
+        if (result != null) ...[
+          Card(
+            child: Column(
+              children: [
+                _DiagRow(
+                  label: 'Status',
+                  value: overallStatus?.toUpperCase() ?? '—',
+                  status: overallStatus == 'ok'
+                      ? DiagnosticStatus.ok
+                      : overallStatus == 'warning'
+                          ? DiagnosticStatus.warning
+                          : DiagnosticStatus.error,
+                ),
+                _divider,
+                _DiagRow(label: 'Total tests', value: '$totalTests'),
+                _divider,
+                _DiagRow(
+                  label: 'Passed',
+                  value: '$totalPassed',
+                  status: (totalPassed ?? 0) > 0 ? DiagnosticStatus.ok : null,
+                ),
+                _divider,
+                _DiagRow(
+                  label: 'Failed',
+                  value: '$totalFailed',
+                  status: (totalFailed ?? 0) > 0 ? DiagnosticStatus.error : null,
+                ),
+                if ((warnings ?? 0) > 0) ...[
+                  _divider,
+                  _DiagRow(
+                    label: 'Warnings',
+                    value: '$warnings',
+                    status: DiagnosticStatus.warning,
+                  ),
+                ],
+                if (result['test_event_id'] != null) ...[
+                  _divider,
+                  _DiagRow(label: 'Test event ID', value: '${result['test_event_id']}'),
+                ],
+              ],
+            ),
+          ),
+          const SizedBox(height: 12),
+
+          // Per-suite breakdown for /all
+          if (result.containsKey('suites')) ...[
+            const Text(
+              'Suite Breakdown',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            for (final suite in (result['suites'] as List))
+              _Week5SuiteCard(suite: suite as Map<String, dynamic>),
+          ]
+          // Per-test results for individual suites
+          else if (result.containsKey('results')) ...[
+            const Text(
+              'Test Results',
+              style: TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            _Week5ResultsCard(results: (result['results'] as List).cast<Map<String, dynamic>>()),
+          ],
+        ],
+      ],
+    );
+  }
+}
+
+class _Week5SuiteCard extends StatelessWidget {
+  const _Week5SuiteCard({required this.suite});
+
+  final Map<String, dynamic> suite;
+
+  @override
+  Widget build(BuildContext context) {
+    final scope   = suite['scope']  as String? ?? '—';
+    final passed  = suite['passed'] as int?    ?? 0;
+    final total   = suite['total']  as int?    ?? 0;
+    final status  = suite['status'] as String? ?? 'failed';
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: ExpansionTile(
+        tilePadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+        leading: Icon(
+          status == 'ok' ? Icons.check_circle_outline : Icons.error_outline,
+          color: status == 'ok' ? Colors.green : Colors.redAccent,
+          size: 20,
+        ),
+        title: Text(
+          scope,
+          style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+        ),
+        subtitle: Text(
+          '$passed/$total passed',
+          style: const TextStyle(fontSize: 12),
+        ),
+        children: [
+          if (suite.containsKey('results'))
+            _Week5ResultsCard(
+              results: (suite['results'] as List).cast<Map<String, dynamic>>(),
+            ),
+        ],
+      ),
+    );
+  }
+}
+
+class _Week5ResultsCard extends StatelessWidget {
+  const _Week5ResultsCard({required this.results});
+
+  final List<Map<String, dynamic>> results;
+
+  @override
+  Widget build(BuildContext context) {
+    return Card(
+      child: Column(
+        children: [
+          for (int i = 0; i < results.length; i++) ...[
+            if (i > 0) _divider,
+            _Week5TestRow(result: results[i]),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _Week5TestRow extends StatelessWidget {
+  const _Week5TestRow({required this.result});
+
+  final Map<String, dynamic> result;
+
+  @override
+  Widget build(BuildContext context) {
+    final id      = result['id']      as String? ?? '—';
+    final name    = result['name']    as String? ?? '—';
+    final status  = result['status']  as String? ?? 'FAIL';
+    final details = result['details'] as String? ?? '';
+
+    final (icon, color) = switch (status) {
+      'PASS'    => (Icons.check_circle_outline, Colors.green),
+      'WARNING' => (Icons.warning_amber_outlined, Colors.orange),
+      _         => (Icons.cancel_outlined, Colors.redAccent),
+    };
+
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: color, size: 16),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  '[$id] $name',
+                  style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
+                ),
+                if (details.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(
+                      details,
+                      style: TextStyle(
+                        fontSize: 11,
+                        color: Theme.of(context).colorScheme.onSurfaceVariant,
+                      ),
+                    ),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            status,
+            style: TextStyle(
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              color: color,
+            ),
+          ),
+        ],
+      ),
+    );
   }
 }
 
@@ -6896,6 +7263,11 @@ enum DiagnosticId {
   alumniSearchPrefix,
   alumniLookupId,
   alumniLoginTrace,
+  week5EventOptions,
+  week5People,
+  week5SponsorsPartners,
+  week5Analytics,
+  week5All,
 }
 
 enum DiagnosticStatus { ok, info, warning, error, notApplicable }
@@ -7281,6 +7653,78 @@ const Map<DiagnosticId, BackendApiDetails> diagnosticApiDetails = {
     uiGuidance:
         'Key diagnostic: shows PASS/FAIL result with reason. '
         'fail_alumni_exists_but_event_user_not_mapped means the ON CONFLICT bug is the root cause.',
+  ),
+  DiagnosticId.week5EventOptions: BackendApiDetails(
+    featureName: 'Week 5 — Event Options',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/week5/event-options',
+    authRequirement: 'X-Dev-User: admin (dev only)',
+    purpose:
+        'Verify is_full_day, is_free, and ticket_price fields: create, read public, '
+        'and backward-compat checks for existing events. 6 automated tests.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"status":"ok","scope":"week5_event_options","total":6,"passed":6,"failed":0}',
+    uiGuidance: 'Run to verify Phase 1 event options are stored and returned correctly.',
+  ),
+  DiagnosticId.week5People: BackendApiDetails(
+    featureName: 'Week 5 — People / Speakers',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/week5/people',
+    authRequirement: 'X-Dev-User: admin (dev only)',
+    purpose:
+        'Full CRUD for event people: HOST, SPEAKER, PANELIST, CHIEF_GUEST, GUEST_OF_HONOUR roles. '
+        'Verifies is_visible gating, speakers[] derivation (4 roles), and HOST exclusion. 14 automated tests.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"status":"ok","scope":"week5_people","total":14,"passed":14,"failed":0}',
+    uiGuidance:
+        'Run to verify people CRUD, visibility gating, and speakers[] derivation rule.',
+  ),
+  DiagnosticId.week5SponsorsPartners: BackendApiDetails(
+    featureName: 'Week 5 — Sponsors & Partners',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/week5/sponsors-partners',
+    authRequirement: 'X-Dev-User: admin (dev only)',
+    purpose:
+        'Full CRUD for sponsors (5 types, tier ordering) and partners (7 types, alphabetical ordering). '
+        'Verifies is_visible gating, tier rank ordering for sponsors, and partner_type alpha ordering. 17 automated tests.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"status":"ok","scope":"week5_sponsors_partners","total":17,"passed":17,"failed":0}',
+    uiGuidance:
+        'Run to verify sponsor tier ordering (TITLE > GOLD > SILVER > BRONZE > ASSOCIATE) '
+        'and partner alphabetical ordering.',
+  ),
+  DiagnosticId.week5Analytics: BackendApiDetails(
+    featureName: 'Week 5 — Analytics Logging',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/week5/analytics',
+    authRequirement: 'X-Dev-User: admin (dev only)',
+    purpose:
+        'Verify event_activity_log writes for 6 action types, metadata JSONB storage, '
+        'source_app presence, and no secrets in metadata. 11 automated tests.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"status":"ok","scope":"week5_analytics","total":11,"passed":11,"failed":0}',
+    uiGuidance:
+        'Run to verify analytics fire-and-forget logging works end-to-end against the local DB.',
+  ),
+  DiagnosticId.week5All: BackendApiDetails(
+    featureName: 'Week 5 — All Suites',
+    method: 'GET',
+    path: '/api/v1/dev/diagnostics/week5/all',
+    authRequirement: 'X-Dev-User: admin (dev only)',
+    purpose:
+        'Runs all four Week 5 diagnostic suites in sequence: event-options, people, '
+        'sponsors-partners, analytics. Returns combined summary with per-suite breakdown. '
+        '48 automated tests total.',
+    implementationStatus: 'Implemented',
+    sampleResponse:
+        '{"status":"ok","total":48,"passed":48,"failed":0,"warnings":0,"suites":[...]}',
+    uiGuidance:
+        'Use as the single go/no-go check before any Week 5 deployment. '
+        'Expect: status=ok, passed=48, failed=0, warnings=0.',
   ),
 };
 

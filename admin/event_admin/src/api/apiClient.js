@@ -43,6 +43,7 @@ async function request(path, options = {}) {
 export const apiClient = {
   get:    (path, opts)       => request(path, { ...opts, method: 'GET' }),
   post:   (path, body, opts) => request(path, { ...opts, method: 'POST',  body: JSON.stringify(body) }),
+  put:    (path, body, opts) => request(path, { ...opts, method: 'PUT',   body: JSON.stringify(body) }),
   patch:  (path, body, opts) => request(path, { ...opts, method: 'PATCH', body: JSON.stringify(body) }),
   delete: (path, opts)       => request(path, { ...opts, method: 'DELETE' }),
 };
