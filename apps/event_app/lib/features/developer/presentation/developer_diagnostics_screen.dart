@@ -8034,7 +8034,9 @@ class DiagnosticCategorySection extends StatelessWidget {
         borderRadius: BorderRadius.circular(8),
       ),
       clipBehavior: Clip.antiAlias,
-      child: ExpansionTile(
+      child: Material(
+        color: Colors.transparent,
+        child: ExpansionTile(
         initiallyExpanded: category.initiallyExpanded,
         tilePadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         childrenPadding: const EdgeInsets.fromLTRB(8, 0, 8, 8),
@@ -8083,6 +8085,7 @@ class DiagnosticCategorySection extends StatelessWidget {
               onTap: () => onOpenDetail(item),
             ),
         ],
+      ),
       ),
     );
   }

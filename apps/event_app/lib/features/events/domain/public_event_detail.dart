@@ -97,6 +97,7 @@ class PublicEventSpeaker {
 
   factory PublicEventSpeaker.fromJson(Map<String, dynamic> json) {
     final name = _optionalString(json['name']) ??
+        _optionalString(json['fullname']) ??
         _optionalString(json['full_name']) ??
         _optionalString(json['speaker_name']);
     if (name == null) throw const FormatException('Speaker name is missing.');
