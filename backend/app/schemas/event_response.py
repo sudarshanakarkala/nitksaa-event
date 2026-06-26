@@ -1,3 +1,4 @@
+from decimal import Decimal
 from pydantic import BaseModel
 from typing import Optional, List, Any
 from datetime import datetime
@@ -25,6 +26,9 @@ class EventResponse(BaseModel):
     registration_closes_at: Optional[datetime] = None
     registered_count: int = 0
     registration_status: str
+    is_full_day: bool = False
+    is_free: bool = True
+    ticket_price: Optional[Decimal] = None
     created_by_firebase_uid: str
     created_by_name: Optional[str] = None
     created_at: datetime
@@ -55,6 +59,9 @@ class PublicEventResponse(BaseModel):
     show_attendee_list: bool = False
     registered_count: int = 0
     registration_status: str
+    is_full_day: bool = False
+    is_free: bool = True
+    ticket_price: Optional[Decimal] = None
     published_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}

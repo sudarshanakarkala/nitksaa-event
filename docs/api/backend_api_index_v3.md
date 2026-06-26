@@ -1,9 +1,9 @@
 # Backend API Index v3
 
-**Version:** 3.0
-**Date:** 2026-06-24
+**Version:** 3.1
+**Date:** 2026-06-26
 **Status:** AUTHORITATIVE — supersedes `backend_api_index_v2.md`
-**Source of truth:** `backend/app/api/` — actual router implementations verified 2026-06-24
+**Source of truth:** `backend/app/api/` — actual router implementations verified 2026-06-26
 
 > v2 is retained for historical reference. The "Week 4 Planned Endpoints" section in v2 listed
 > incorrect paths (`/api/v1/events/{id}/attendees` instead of `/api/v1/admin/events/{id}/attendees`).
@@ -52,6 +52,23 @@
 | `GET` | `/api/v1/dev/diagnostics/alumni/search-prefix` | X-Dev-User or JWT (dev only) | dev_diagnostics.py | 3 |
 | `GET` | `/api/v1/dev/diagnostics/alumni/login-trace` | X-Dev-User or JWT (dev only) | dev_diagnostics.py | 3 |
 | `GET` | `/api/v1/dev/diagnostics/alumni/{alumni_id}` | X-Dev-User or JWT (dev only) | dev_diagnostics.py | 3 |
+| `GET` | `/api/v1/events/{event_id}/people` | X-Dev-User: admin | people.py | **5** |
+| `POST` | `/api/v1/events/{event_id}/people` | X-Dev-User: admin | people.py | **5** |
+| `PUT` | `/api/v1/events/{event_id}/people/{person_id}` | X-Dev-User: admin | people.py | **5** |
+| `DELETE` | `/api/v1/events/{event_id}/people/{person_id}` | X-Dev-User: admin | people.py | **5** |
+| `GET` | `/api/v1/events/{event_id}/sponsors` | X-Dev-User: admin | sponsors_partners.py | **5** |
+| `POST` | `/api/v1/events/{event_id}/sponsors` | X-Dev-User: admin | sponsors_partners.py | **5** |
+| `PUT` | `/api/v1/events/{event_id}/sponsors/{sponsor_id}` | X-Dev-User: admin | sponsors_partners.py | **5** |
+| `DELETE` | `/api/v1/events/{event_id}/sponsors/{sponsor_id}` | X-Dev-User: admin | sponsors_partners.py | **5** |
+| `GET` | `/api/v1/events/{event_id}/partners` | X-Dev-User: admin | sponsors_partners.py | **5** |
+| `POST` | `/api/v1/events/{event_id}/partners` | X-Dev-User: admin | sponsors_partners.py | **5** |
+| `PUT` | `/api/v1/events/{event_id}/partners/{partner_id}` | X-Dev-User: admin | sponsors_partners.py | **5** |
+| `DELETE` | `/api/v1/events/{event_id}/partners/{partner_id}` | X-Dev-User: admin | sponsors_partners.py | **5** |
+| `GET` | `/api/v1/dev/diagnostics/week5/event-options` | X-Dev-User: admin (dev only) | week5_diagnostics.py | **5** |
+| `GET` | `/api/v1/dev/diagnostics/week5/people` | X-Dev-User: admin (dev only) | week5_diagnostics.py | **5** |
+| `GET` | `/api/v1/dev/diagnostics/week5/sponsors-partners` | X-Dev-User: admin (dev only) | week5_diagnostics.py | **5** |
+| `GET` | `/api/v1/dev/diagnostics/week5/analytics` | X-Dev-User: admin (dev only) | week5_diagnostics.py | **5** |
+| `GET` | `/api/v1/dev/diagnostics/week5/all` | X-Dev-User: admin (dev only) | week5_diagnostics.py | **5** |
 
 > **Auth note — Development mode:** Admin and dev endpoints accept `X-Dev-User: admin` header instead
 > of Bearer JWT. Production will use Firebase JWT via `Authorization: Bearer <token>`.
@@ -60,7 +77,7 @@
 > **Not implemented:** `DELETE /api/v1/events/{event_id}/register` — registration cancellation is
 > deferred. The Week 4 status report incorrectly listed this as implemented; it is not.
 
-> **This document is the authoritative API reference for Week 4 and later.**
+> **This document is the authoritative API reference for Week 5 and all prior weeks.**
 > All future development, frontend integration, diagnostics implementation, and QA verification
 > should reference this document as the primary source of truth.
 
@@ -777,6 +794,90 @@ Looks up an alumni record by `alumni_id` directly from `alumni_db`.
 
 ---
 
+## Week 5 — Event Enrichment Admin Endpoints
+
+> All endpoints in this section are in `people.py` or `sponsors_partners.py`.
+> Prefix: `/api/v1/events/{event_id}/` (not `/api/v1/admin/events/`).
+> Auth: `X-Dev-User: admin` in development; Bearer JWT with admin role in production.
+> Full request/response shapes: `docs/api/week5_event_enrichment_api_contract.md`.
+> Admin portal usage: `admin/event_admin/src/api/enrichmentApi.js`.
+
+### People
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/events/{event_id}/people` | Returns all people including hidden (`is_visible=false`) |
+| `POST` | `/api/v1/events/{event_id}/people` | Creates a person; returns 201 |
+| `PUT` | `/api/v1/events/{event_id}/people/{person_id}` | Updates any person fields; all body fields optional |
+| `DELETE` | `/api/v1/events/{event_id}/people/{person_id}` | Hard delete; returns 204 |
+
+**Valid `role` values:** `HOST`, `MODERATOR`, `SPEAKER`, `PANELIST`, `CHIEF_GUEST`, `GUEST_OF_HONOUR`, `ORGANIZER`
+
+**Public visibility:** `people[]` and `speakers[]` appear in `GET /api/v1/events/public/{id}`. Only `is_visible=true` people are returned. `speakers[]` is derived: visible people with `role` ∈ `{SPEAKER, PANELIST, CHIEF_GUEST, GUEST_OF_HONOUR}`.
+
+### Sponsors
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/events/{event_id}/sponsors` | Returns all sponsors including hidden |
+| `POST` | `/api/v1/events/{event_id}/sponsors` | Creates a sponsor; returns 201 |
+| `PUT` | `/api/v1/events/{event_id}/sponsors/{sponsor_id}` | Updates any sponsor fields |
+| `DELETE` | `/api/v1/events/{event_id}/sponsors/{sponsor_id}` | Hard delete; returns 204 |
+
+**Valid `sponsor_type` values:** `TITLE_SPONSOR`, `GOLD_SPONSOR`, `SILVER_SPONSOR`, `BRONZE_SPONSOR`, `ASSOCIATE_SPONSOR`
+
+**Public ordering:** Tier rank (TITLE=1 → ASSOCIATE=5), then `display_order ASC`, then `sponsor_id ASC`.
+
+### Partners
+
+| Method | Path | Notes |
+|---|---|---|
+| `GET` | `/api/v1/events/{event_id}/partners` | Returns all partners including hidden |
+| `POST` | `/api/v1/events/{event_id}/partners` | Creates a partner; returns 201 |
+| `PUT` | `/api/v1/events/{event_id}/partners/{partner_id}` | Updates any partner fields |
+| `DELETE` | `/api/v1/events/{event_id}/partners/{partner_id}` | Hard delete; returns 204 |
+
+**Valid `partner_type` values:** `COMMUNITY_PARTNER`, `KNOWLEDGE_PARTNER`, `MEDIA_PARTNER`, `VENUE_PARTNER`, `TECHNOLOGY_PARTNER`, `ECOSYSTEM_PARTNER`, `HIRING_PARTNER`
+
+**Public ordering:** `partner_type ASC` (alphabetical), then `display_order ASC`, then `partner_id ASC`.
+
+---
+
+## Week 5 — Diagnostic Endpoints
+
+> All in `week5_diagnostics.py`. Return `404` when `APP_ENV != development`.
+> Auth: `X-Dev-User: admin` required.
+> All 48 tests pass as of 2026-06-26.
+
+| Endpoint | Scope | Tests |
+|---|---|---|
+| `GET /api/v1/dev/diagnostics/week5/event-options` | Phase 1: full-day and paid event fields | 6 |
+| `GET /api/v1/dev/diagnostics/week5/people` | People CRUD, admin list, public visibility, speakers derivation | 14 |
+| `GET /api/v1/dev/diagnostics/week5/sponsors-partners` | Sponsors and partners CRUD, tier ordering, alphabetical ordering | 17 |
+| `GET /api/v1/dev/diagnostics/week5/analytics` | Analytics logging, 6 action types, metadata, no secrets | 11 |
+| `GET /api/v1/dev/diagnostics/week5/all` | Combined — all four suites in one call | 48 |
+
+**Response format (individual suite):**
+
+```json
+{
+  "status": "ok",
+  "scope": "week5_event_options",
+  "total": 6,
+  "passed": 6,
+  "failed": 0,
+  "warnings": 0,
+  "test_event_id": 176,
+  "results": [
+    { "id": "eo_01", "name": "Create full-day event", "status": "PASS", "details": "event_id=176 is_full_day=True" }
+  ]
+}
+```
+
+**`week5/all` response format:** Same outer shape but with a `suites` array instead of `results`, where each suite is the individual-suite response format.
+
+---
+
 ## Not Implemented / Deferred
 
 | Endpoint | Status | Notes |
@@ -790,13 +891,16 @@ Looks up an alumni record by `alumni_id` directly from `alumni_db`.
 
 ## Documentation Version Matrix
 
-| Document | Status |
-|---|---|
-| `backend_api_index_v1.md` | Deprecated |
-| `backend_api_index_v2.md` | Deprecated |
-| `backend_api_index_v3.md` | Authoritative |
-| `events_api_contract_v2.md` | Authoritative |
-| `alumni_db_integration_architecture_v1.md` | Authoritative |
+| Document | Status | Notes |
+|---|---|---|
+| `backend_api_index_v1.md` | Deprecated | Superseded by v2 |
+| `backend_api_index_v2.md` | Deprecated | Wrong admin attendee paths; superseded by v3 |
+| `backend_api_index_v3.md` | **Authoritative** | All endpoints Weeks 1–5 |
+| `events_api_contract_v2.md` | **Authoritative** | Registration, eligibility, join link, email, Week 5 enrichment fields |
+| `week5_event_enrichment_api_contract.md` | **Authoritative** | People/Sponsors/Partners/Analytics schemas and rules |
+| `week4_attendee_management_api_contract.md` | **Authoritative** | Attendee list, export, registrations audit |
+| `alumni_db_integration_architecture_v1.md` | **Authoritative** | Alumni DB proxy, read-only rules |
+| `backend_auth_api_v1.md` | **Authoritative** | Firebase auth flow |
 
 ---
 

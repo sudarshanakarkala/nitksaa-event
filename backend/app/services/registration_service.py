@@ -20,7 +20,7 @@ from app.schemas.registrations import (
     RegistrationEligibilityResponse,
     RegistrationResponse,
 )
-from app.services import alumni_service, audit_service, email_service
+from app.services import alumni_service, analytics_service, audit_service, email_service
 
 
 def _resolve_join_url(row: Dict[str, Any]) -> Optional[str]:
@@ -117,11 +117,25 @@ async def register_for_event(
                 raise HTTPException(status_code=409, detail="registration_closed")
 
             if await repo.get_active_for_user(event_id, firebase_uid):
+                await analytics_service.log_event_activity(
+                    action_type="REGISTRATION_FAILED",
+                    source_app="BACKEND",
+                    event_id=event_id,
+                    firebase_uid=firebase_uid,
+                    metadata={"reason": "already_registered"},
+                )
                 raise HTTPException(status_code=409, detail="already_registered")
 
             capacity = event_row["capacity"]
             if capacity is not None:
                 if await repo.count_active(event_id) >= capacity:
+                    await analytics_service.log_event_activity(
+                        action_type="REGISTRATION_FAILED",
+                        source_app="BACKEND",
+                        event_id=event_id,
+                        firebase_uid=firebase_uid,
+                        metadata={"reason": "event_full"},
+                    )
                     raise HTTPException(status_code=409, detail="event_full")
 
             registration_id = await repo.insert(
@@ -141,12 +155,29 @@ async def register_for_event(
 
         full_row = dict(await repo.get_by_id_with_event(registration_id))
 
+    await analytics_service.log_event_activity(
+        action_type="REGISTRATION_COMPLETED",
+        source_app="BACKEND",
+        event_id=event_id,
+        firebase_uid=firebase_uid,
+        metadata={"registration_number": reg_number},
+    )
+
     email_result = await email_service.send_confirmation_email(
         email_to=profile["email"],
         fullname=profile.get("fullname", ""),
         event_title=full_row.get("event_title", ""),
         registration_number=reg_number,
         join_url=_resolve_join_url(full_row),
+    )
+
+    email_action = "EMAIL_SENT" if email_result.status == "sent" else "EMAIL_FAILED"
+    await analytics_service.log_event_activity(
+        action_type=email_action,
+        source_app="EMAIL",
+        event_id=event_id,
+        firebase_uid=firebase_uid,
+        metadata={"registration_number": reg_number},
     )
 
     async with pool.acquire() as conn2:

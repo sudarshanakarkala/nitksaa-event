@@ -5,6 +5,8 @@ import asyncpg
 from fastapi import HTTPException
 
 from app.repositories.events_repository import EventsRepository
+from app.repositories.people_repository import PeopleRepository
+from app.repositories.sponsors_partners_repository import SponsorsRepository, PartnersRepository
 from app.schemas.event_create import EventCreate
 from app.schemas.event_status import EventStatusUpdate
 from app.schemas.event_update import EventUpdate
@@ -191,5 +193,17 @@ class EventsService:
         d = self._to_dict(record)
         _with_public_card_metadata(d)
         d["sessions"] = []
-        d["speakers"] = []
+
+        people_rows = await PeopleRepository(self.conn).list_public_by_event(event_id)
+        people = [dict(r) for r in people_rows]
+        d["people"] = people
+        _SPEAKER_ROLES = frozenset({"SPEAKER", "PANELIST", "CHIEF_GUEST", "GUEST_OF_HONOUR"})
+        d["speakers"] = [p for p in people if p["role"] in _SPEAKER_ROLES]
+
+        sponsor_rows = await SponsorsRepository(self.conn).list_public_by_event(event_id)
+        d["sponsors"] = [dict(r) for r in sponsor_rows]
+
+        partner_rows = await PartnersRepository(self.conn).list_public_by_event(event_id)
+        d["partners"] = [dict(r) for r in partner_rows]
+
         return d

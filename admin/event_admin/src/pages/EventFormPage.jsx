@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import { createEvent, getEvent, updateEvent } from '../api/eventsApi';
+import EventEnrichmentPanel from './EventEnrichmentPanel';
 import '../styles/event-form.css';
 
 // ── Timezone options and UTC offset lookup ────────────────────────────────
@@ -43,6 +44,9 @@ const EMPTY = {
   registration_closes_at: '',
   thumbnail_url:          '',
   banner_url:             '',
+  is_full_day:            false,
+  is_free:                true,
+  ticket_price:           '',
 };
 
 // Convert a UTC ISO datetime string to a datetime-local input value (YYYY-MM-DDTHH:mm)
@@ -72,17 +76,40 @@ function toDatetimeLocalInTZ(iso, tz) {
   return `${parts.year}-${parts.month}-${parts.day}T${hour}:${parts.minute}`;
 }
 
+// Convert a UTC ISO datetime string to a date-only value (YYYY-MM-DD) for full-day events.
+function toDateOnlyInTZ(iso, tz) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const parts = Object.fromEntries(
+    new Intl.DateTimeFormat('en-CA', {
+      timeZone: tz ?? 'UTC',
+      year: 'numeric', month: '2-digit', day: '2-digit',
+    })
+    .formatToParts(d)
+    .map(({ type, value }) => [type, value])
+  );
+  return `${parts.year}-${parts.month}-${parts.day}`;
+}
+
 // Validate form; returns object of {field: errorMessage}
 function validate(f) {
   const e = {};
   if (!f.title.trim())
     e.title = 'Title is required.';
-  if (!f.start_datetime)
-    e.start_datetime = 'Start date & time is required.';
-  if (!f.end_datetime)
-    e.end_datetime = 'End date & time is required.';
-  if (f.start_datetime && f.end_datetime && f.end_datetime <= f.start_datetime)
-    e.end_datetime = 'End must be after start.';
+
+  if (f.is_full_day) {
+    if (!f.start_datetime) e.start_datetime = 'Start date is required.';
+    if (!f.end_datetime)   e.end_datetime   = 'End date is required.';
+    if (f.start_datetime && f.end_datetime && f.end_datetime < f.start_datetime)
+      e.end_datetime = 'End date must be on or after start date.';
+  } else {
+    if (!f.start_datetime) e.start_datetime = 'Start date & time is required.';
+    if (!f.end_datetime)   e.end_datetime   = 'End date & time is required.';
+    if (f.start_datetime && f.end_datetime && f.end_datetime <= f.start_datetime)
+      e.end_datetime = 'End must be after start.';
+  }
+
   if (!f.timezone.trim())
     e.timezone = 'Timezone is required.';
   if (f.capacity !== '' && (isNaN(Number(f.capacity)) || Number(f.capacity) <= 0))
@@ -91,20 +118,33 @@ function validate(f) {
     e.location_text = 'Venue is required for physical events.';
   if (f.is_virtual && !f.virtual_url.trim())
     e.virtual_url = 'Join URL is required for virtual events.';
+  if (!f.is_free) {
+    if (f.ticket_price === '' || isNaN(Number(f.ticket_price)) || Number(f.ticket_price) < 0)
+      e.ticket_price = 'Enter a valid ticket price (0 or more).';
+  }
   return e;
 }
 
 // Build API payload from form state
 function buildPayload(f) {
   const offset = TZ_OFFSETS[f.timezone] ?? '+05:30';
-  const dt = v => v ? `${v}:00${offset}` : null;
+  const dt     = v => v ? `${v}:00${offset}` : null;
+
+  let start_datetime, end_datetime;
+  if (f.is_full_day) {
+    start_datetime = f.start_datetime ? `${f.start_datetime}T00:00:00${offset}` : null;
+    end_datetime   = f.end_datetime   ? `${f.end_datetime}T23:59:59${offset}`   : null;
+  } else {
+    start_datetime = dt(f.start_datetime);
+    end_datetime   = dt(f.end_datetime);
+  }
 
   return {
     title:                  f.title.trim(),
     tagline:                f.tagline.trim()                || null,
     description:            f.description.trim()            || null,
-    start_datetime:         dt(f.start_datetime),
-    end_datetime:           dt(f.end_datetime),
+    start_datetime,
+    end_datetime,
     timezone:               f.timezone,
     is_virtual:             f.is_virtual,
     location_text:          f.is_virtual ? null : (f.location_text.trim() || null),
@@ -114,6 +154,9 @@ function buildPayload(f) {
     registration_closes_at: dt(f.registration_closes_at),
     thumbnail_url:          f.thumbnail_url.trim()          || null,
     banner_url:             f.banner_url.trim()             || null,
+    is_full_day:            Boolean(f.is_full_day),
+    is_free:                Boolean(f.is_free),
+    ticket_price:           f.is_free ? null : (f.ticket_price !== '' ? parseFloat(f.ticket_price) : null),
   };
 }
 
@@ -136,22 +179,32 @@ export default function EventFormPage() {
     setLoadingEvent(true);
     getEvent(eventId)
       .then(data => {
-        const ev = data.event;
+        const ev  = data.event;
+        const tz  = ev.timezone ?? 'Asia/Kolkata';
+        const fd  = Boolean(ev.is_full_day);
         setForm({
           title:                  ev.title                  ?? '',
           tagline:                ev.tagline                ?? '',
           description:            ev.description            ?? '',
-          start_datetime:         toDatetimeLocalInTZ(ev.start_datetime,         ev.timezone),
-          end_datetime:           toDatetimeLocalInTZ(ev.end_datetime,           ev.timezone),
-          timezone:               ev.timezone               ?? 'Asia/Kolkata',
+          start_datetime:         fd
+                                    ? toDateOnlyInTZ(ev.start_datetime, tz)
+                                    : toDatetimeLocalInTZ(ev.start_datetime, tz),
+          end_datetime:           fd
+                                    ? toDateOnlyInTZ(ev.end_datetime, tz)
+                                    : toDatetimeLocalInTZ(ev.end_datetime, tz),
+          timezone:               tz,
           is_virtual:             ev.is_virtual             ?? false,
           location_text:          ev.location_text          ?? '',
           virtual_url:            ev.virtual_url            ?? '',
           capacity:               ev.capacity != null ? String(ev.capacity) : '',
-          registration_opens_at:  toDatetimeLocalInTZ(ev.registration_opens_at,  ev.timezone),
-          registration_closes_at: toDatetimeLocalInTZ(ev.registration_closes_at, ev.timezone),
+          show_attendee_list:     ev.show_attendee_list     ?? false,
+          registration_opens_at:  toDatetimeLocalInTZ(ev.registration_opens_at,  tz),
+          registration_closes_at: toDatetimeLocalInTZ(ev.registration_closes_at, tz),
           thumbnail_url:          ev.thumbnail_url          ?? '',
           banner_url:             ev.banner_url             ?? '',
+          is_full_day:            fd,
+          is_free:                ev.is_free                ?? true,
+          ticket_price:           ev.ticket_price != null ? String(ev.ticket_price) : '',
         });
       })
       .catch(err => setLoadError(err.message))
@@ -179,10 +232,12 @@ export default function EventFormPage() {
       const payload = buildPayload(form);
       if (isEdit) {
         await updateEvent(eventId, payload);
+        navigate('/events');
       } else {
-        await createEvent(payload);
+        const result = await createEvent(payload);
+        // Navigate to edit view so the enrichment panel (people/sponsors/partners) is immediately accessible.
+        navigate(`/events/${result.event_id}/edit`);
       }
-      navigate('/events');
     } catch (err) {
       setApiError(err.message);
       setSaving(false);
@@ -193,7 +248,7 @@ export default function EventFormPage() {
   if (loadingEvent) {
     return (
       <div className="ef-page fade-up">
-        <p className="page-eyebrow">Week 2</p>
+        <p className="page-eyebrow">Week 5</p>
         <h1 className="page-heading">Edit Event</h1>
         <p style={{ color: 'var(--text-muted)', marginTop: 8 }}>Loading event…</p>
       </div>
@@ -203,7 +258,7 @@ export default function EventFormPage() {
   if (loadError) {
     return (
       <div className="ef-page fade-up">
-        <p className="page-eyebrow">Week 2</p>
+        <p className="page-eyebrow">Week 5</p>
         <h1 className="page-heading">Edit Event</h1>
         <p className="error-msg" style={{ marginTop: 12 }}>{loadError}</p>
         <button
@@ -224,7 +279,7 @@ export default function EventFormPage() {
         ← Back to Events
       </button>
 
-      <p className="page-eyebrow">Week 2</p>
+      <p className="page-eyebrow">Week 5</p>
       <h1 className="page-heading">{isEdit ? 'Edit Event' : 'Create Event'}</h1>
       <p className="page-sub">
         {isEdit
@@ -331,15 +386,36 @@ export default function EventFormPage() {
             </div>
           )}
 
-          {/* Start + End datetimes */}
+          {/* Full Day toggle */}
+          <label className="ef-toggle-option" htmlFor="ef-full-day">
+            <input
+              id="ef-full-day"
+              type="checkbox"
+              checked={form.is_full_day}
+              onChange={e => {
+                set('is_full_day', e.target.checked);
+                set('start_datetime', '');
+                set('end_datetime', '');
+              }}
+            />
+            <span>
+              <strong>Full Day Event</strong>
+              <small>
+                All-day or multi-day event — time fields are hidden. End date = start date for a single-day event.
+              </small>
+            </span>
+          </label>
+
+          {/* Start + End — date-only for full-day, datetime-local otherwise */}
           <div className="ef-field-row">
             <div className="ef-field">
               <label htmlFor="ef-start">
-                Start Date &amp; Time <span className="ef-req">*</span>
+                {form.is_full_day ? 'Start Date' : 'Start Date & Time'}{' '}
+                <span className="ef-req">*</span>
               </label>
               <input
                 id="ef-start"
-                type="datetime-local"
+                type={form.is_full_day ? 'date' : 'datetime-local'}
                 value={form.start_datetime}
                 onChange={e => set('start_datetime', e.target.value)}
               />
@@ -349,36 +425,42 @@ export default function EventFormPage() {
             </div>
             <div className="ef-field">
               <label htmlFor="ef-end">
-                End Date &amp; Time <span className="ef-req">*</span>
+                {form.is_full_day ? 'End Date' : 'End Date & Time'}{' '}
+                <span className="ef-req">*</span>
               </label>
               <input
                 id="ef-end"
-                type="datetime-local"
+                type={form.is_full_day ? 'date' : 'datetime-local'}
                 value={form.end_datetime}
                 onChange={e => set('end_datetime', e.target.value)}
               />
               {errors.end_datetime && (
                 <span className="ef-field-error">{errors.end_datetime}</span>
               )}
+              {form.is_full_day && (
+                <span className="ef-hint">Same as start date for a single-day event.</span>
+              )}
             </div>
           </div>
 
-          {/* Timezone */}
-          <div className="ef-field">
-            <label htmlFor="ef-timezone">
-              Timezone <span className="ef-req">*</span>
-            </label>
-            <select
-              id="ef-timezone"
-              value={form.timezone}
-              onChange={e => set('timezone', e.target.value)}
-            >
-              {TIMEZONES.map(tz => (
-                <option key={tz.value} value={tz.value}>{tz.label}</option>
-              ))}
-            </select>
-            {errors.timezone && <span className="ef-field-error">{errors.timezone}</span>}
-          </div>
+          {/* Timezone — hidden for full-day events (no time component) */}
+          {!form.is_full_day && (
+            <div className="ef-field">
+              <label htmlFor="ef-timezone">
+                Timezone <span className="ef-req">*</span>
+              </label>
+              <select
+                id="ef-timezone"
+                value={form.timezone}
+                onChange={e => set('timezone', e.target.value)}
+              >
+                {TIMEZONES.map(tz => (
+                  <option key={tz.value} value={tz.value}>{tz.label}</option>
+                ))}
+              </select>
+              {errors.timezone && <span className="ef-field-error">{errors.timezone}</span>}
+            </div>
+          )}
 
           {/* Description */}
           <div className="ef-field">
@@ -436,9 +518,73 @@ export default function EventFormPage() {
               />
             </div>
           </div>
+
+          <label className="ef-toggle-option" htmlFor="ef-show-attendee-list">
+            <input
+              id="ef-show-attendee-list"
+              type="checkbox"
+              checked={form.show_attendee_list}
+              onChange={e => set('show_attendee_list', e.target.checked)}
+            />
+            <span>
+              <strong>Show attendee list publicly</strong>
+              <small>
+                Keep this off unless the event should expose attendee visibility in a future attendee feature.
+              </small>
+            </span>
+          </label>
         </div>
 
-        {/* ── Section 3: Media ─────────────────────────────────────────── */}
+        {/* ── Section 3: Pricing ───────────────────────────────────────── */}
+        <div className="card ef-section">
+          <h3 className="ef-section-title">Pricing</h3>
+
+          <label className="ef-toggle-option" htmlFor="ef-is-free">
+            <input
+              id="ef-is-free"
+              type="checkbox"
+              checked={form.is_free}
+              onChange={e => {
+                set('is_free', e.target.checked);
+                if (e.target.checked) set('ticket_price', '');
+              }}
+            />
+            <span>
+              <strong>Free event</strong>
+              <small>No ticket price required. Uncheck to specify a ticket price.</small>
+            </span>
+          </label>
+
+          {!form.is_free && (
+            <div className="ef-field-row" style={{ marginTop: '14px' }}>
+              <div className="ef-field">
+                <label htmlFor="ef-ticket-price">
+                  Ticket Price (INR) <span className="ef-req">*</span>
+                </label>
+                <div className="ef-input-prefix-wrap">
+                  <span className="ef-input-prefix">₹</span>
+                  <input
+                    id="ef-ticket-price"
+                    type="number"
+                    min="0"
+                    step="1"
+                    placeholder="0"
+                    value={form.ticket_price}
+                    onChange={e => set('ticket_price', e.target.value)}
+                    style={{ paddingLeft: '2rem' }}
+                  />
+                </div>
+                {errors.ticket_price
+                  ? <span className="ef-field-error">{errors.ticket_price}</span>
+                  : <span className="ef-hint">Display-only. Payment processing is not enabled.</span>
+                }
+              </div>
+              <div className="ef-field" />
+            </div>
+          )}
+        </div>
+
+        {/* ── Section 4: Media ─────────────────────────────────────────── */}
         <div className="card ef-section">
           <h3 className="ef-section-title">Media</h3>
 
@@ -482,6 +628,10 @@ export default function EventFormPage() {
         </div>
 
       </form>
+
+      {/* ── Event Enrichment (edit mode only) ────────────────────────── */}
+      {isEdit && <EventEnrichmentPanel eventId={eventId} />}
+
     </div>
   );
 }

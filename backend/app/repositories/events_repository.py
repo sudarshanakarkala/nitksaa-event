@@ -19,6 +19,7 @@ _PUBLIC_COLUMNS = """
     e.thumbnail_url, e.banner_url, e.capacity,
     e.show_attendee_list,
     e.registration_opens_at, e.registration_closes_at,
+    e.is_full_day, e.is_free, e.ticket_price,
     e.published_at,
     (SELECT COUNT(*) FROM registrations r
      WHERE r.event_id = e.event_id AND r.status = 'registered') AS registered_count
@@ -53,6 +54,7 @@ class EventsRepository:
                 thumbnail_url, banner_url,
                 capacity, show_attendee_list,
                 registration_opens_at, registration_closes_at,
+                is_full_day, is_free, ticket_price,
                 created_by_firebase_uid, status
             ) VALUES (
                 $1, $2, $3, $4,
@@ -62,7 +64,8 @@ class EventsRepository:
                 $12, $13,
                 $14, $15,
                 $16, $17,
-                $18, 'draft'
+                $18, $19, $20,
+                $21, 'draft'
             ) RETURNING event_id
             """,
             slug,
@@ -82,6 +85,9 @@ class EventsRepository:
             data.show_attendee_list,
             data.registration_opens_at,
             data.registration_closes_at,
+            data.is_full_day,
+            data.is_free,
+            data.ticket_price,
             firebase_uid,
         )
         return await self.get_event(event_id)

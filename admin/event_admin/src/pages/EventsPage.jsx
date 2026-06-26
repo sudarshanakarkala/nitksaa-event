@@ -264,7 +264,23 @@ export default function EventsPage() {
                     <td>
                       <StatusBadge status={event.status} />
                     </td>
-                    <td>{event.is_virtual ? 'Virtual' : 'In-person'}</td>
+                    <td>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                        <span>{event.is_virtual ? 'Virtual' : 'In-person'}</span>
+                        <div style={{ display: 'flex', gap: 4, flexWrap: 'wrap' }}>
+                          {event.is_full_day && (
+                            <span className="events-pill events-pill--info">Full Day</span>
+                          )}
+                          {event.is_free === false ? (
+                            <span className="events-pill events-pill--paid">
+                              {event.ticket_price != null ? `₹${event.ticket_price}` : 'Paid'}
+                            </span>
+                          ) : (
+                            <span className="events-pill events-pill--free">Free</span>
+                          )}
+                        </div>
+                      </div>
+                    </td>
                     <td className="capacity-cell">
                       {event.capacity == null
                         ? 'Unlimited'
