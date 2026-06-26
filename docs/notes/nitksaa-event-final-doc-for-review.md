@@ -49,6 +49,15 @@ https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/releases/week4
 https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/releases/week4_closure_report_2026-06-24.md
 
 
+### Week 5 — Backend & Admin portal Status 
+
+https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/releases/week5_status_report_2026-06-26.md
+
+https://github.com/sudarshanakarkala/nitksaa-event/blob/main/docs/notes/june2026/nitksaa_event_week5_document_review_status_report.md
+
+---
+
+
 
 # NITKSAA Event Platform — Local Development Startup Guide
 
@@ -63,7 +72,7 @@ Open **4 separate terminal windows/tabs** and execute the following commands.
 This creates a secure tunnel to the Cloud SQL `alumni_db` instance.
 
 ```bash
-cd /Users/ananth/iTelematics/NITK_Project/NITK_Alumni/nitksaa-portal-v2/webapp/backend
+cd nitksaa-portal-v2/webapp/backend
 
 ./cloud-sql-proxy project-d22bed42-f302-4e23-8dc:asia-south1:nitksaa-alumni-db --port 5433
 ```
@@ -85,7 +94,7 @@ Leave this terminal running.
 Navigate to the backend:
 
 ```bash
-cd /Users/ananth/iTelematics/NITK_Project/NITK_Alumni/nitksaa-event/backend
+cd /nitksaa-event/backend
 ```
 
 Activate the virtual environment:
@@ -136,7 +145,7 @@ Expected:
 Navigate to the Flutter application:
 
 ```bash
-cd /Users/ananth/iTelematics/NITK_Project/NITK_Alumni/nitksaa-event/apps/event_app
+cd /nitksaa-event/apps/event_app
 ```
 
 Run Flutter:
@@ -164,7 +173,7 @@ flutter run -d chrome \
 Navigate to the admin portal:
 
 ```bash
-cd /Users/ananth/iTelematics/NITK_Project/NITK_Alumni/nitksaa-event/admin/event_admin
+cd /nitksaa-event/admin/event_admin
 ```
 
 Start the Vite development server:
