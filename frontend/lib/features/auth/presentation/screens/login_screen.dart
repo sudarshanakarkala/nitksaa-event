@@ -67,7 +67,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     setState(() {
       loadingSetter(true);
       _errorMessage = null;
-      _statusMessage = 'Signing in with Firebase...';
+      _statusMessage = 'Signing in...';
     });
     try {
       await login();

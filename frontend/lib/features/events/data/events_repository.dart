@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/event.dart';
+import '../domain/my_event_registration.dart';
 
 class EventsRepository {
   EventsRepository({Dio? dio}) : _dio = dio ?? _createDio();
@@ -81,6 +82,40 @@ class EventsRepository {
       }
       rethrow;
     }
+  }
+
+  Future<List<MyEventRegistration>> getMyRegistrations(String accessToken) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/my/registrations',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    final rawRegistrations =
+        response.data?['registrations'] as List<dynamic>? ?? [];
+    final registrations = rawRegistrations
+        .map((json) => MyEventRegistration.fromJson(json as Map<String, dynamic>))
+        .toList();
+
+    final hydrated = <MyEventRegistration>[];
+    for (final registration in registrations) {
+      try {
+        final event = await getPublicEvent(registration.eventId);
+        hydrated.add(registration.copyWith(publicEvent: event));
+      } on DioException {
+        hydrated.add(registration);
+      }
+    }
+    return hydrated;
+  }
+
+  Future<MyEventRegistration> cancelMyRegistration(
+    int eventId,
+    String accessToken,
+  ) async {
+    final response = await _dio.delete<Map<String, dynamic>>(
+      '/api/v1/events/$eventId/my-registration',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return MyEventRegistration.fromJson(response.data ?? <String, dynamic>{});
   }
 
   Future<Map<String, dynamic>> registerForEvent(int eventId, String accessToken, String attendeeNote) async {

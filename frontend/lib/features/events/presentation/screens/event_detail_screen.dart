@@ -1550,7 +1550,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   elevation: 0,
                 ),
                 onPressed: () {
-                  context.go(AppRoutes.home);
+                  context.go(AppRoutes.myEvents);
                 },
                 child: const Text(
                   'Go to My Events',

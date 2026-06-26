@@ -1638,11 +1638,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           ),
         ),
         onTap: () {
-          if (!active) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('$label coming soon.')));
+          if (active) return;
+          if (label == 'My Events') {
+            context.go(AppRoutes.myEvents);
+            return;
           }
+          ScaffoldMessenger.of(
+            context,
+          ).showSnackBar(SnackBar(content: Text('$label coming soon.')));
         },
       ),
     );
