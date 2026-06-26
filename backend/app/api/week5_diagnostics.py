@@ -1,6 +1,7 @@
 """Week 5 development-only diagnostics.
 
-Covers: event-options, people, sponsors-partners, analytics.
+Covers: event-options, people, sponsors-partners, analytics, and the
+combined all-weeks summary endpoint.
 All endpoints return 404 when APP_ENV != development.
 """
 from __future__ import annotations
@@ -11,7 +12,8 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import asyncpg
-from fastapi import APIRouter, Depends, Header, HTTPException
+import httpx
+from fastapi import APIRouter, Depends, Header, HTTPException, Request
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
@@ -803,4 +805,88 @@ async def diag_all(user: Dict[str, Any] = Depends(_get_admin)) -> Dict[str, Any]
         "failed": failed,
         "warnings": warnings,
         "suites": suites,
+    }
+
+
+# ── /dev/diagnostics/all-weeks ─────────────────────────────────────────────────
+# Combined Week 1–5 summary.  Calls Week 5 helpers directly and makes an HTTP
+# sub-request for the events diagnostic (which uses Depends() internally).
+# Registrations diagnostic is omitted — it requires an alumni JWT unavailable
+# in dev mode.  Attendees diagnostic is omitted — it requires a known event_id.
+
+@router.get("/all-weeks", tags=["diagnostics"])
+async def diag_all_weeks(
+    request: Request,
+    user: Dict[str, Any] = Depends(_get_admin),
+) -> Dict[str, Any]:
+    actor = {"firebase_uid": user["firebase_uid"]}
+    started = datetime.utcnow()
+    suites: List[Dict[str, Any]] = []
+    omitted: List[str] = []
+
+    # ── Week 5 suites (plain async helpers — callable directly) ────────────────
+    for fn in [_run_event_options, _run_people, _run_sponsors_partners, _run_analytics]:
+        try:
+            suites.append(await fn(actor))
+        except Exception as exc:
+            suites.append({
+                "status": "failed",
+                "scope": fn.__name__.replace("_run_", "week5_"),
+                "error": str(exc),
+                "total": 0, "passed": 0, "failed": 1, "warnings": 0, "results": [],
+            })
+
+    # ── Events diagnostic (HTTP sub-request — handler uses Depends()) ──────────
+    base = str(request.base_url).rstrip("/")
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            resp = await client.get(
+                f"{base}/api/v1/dev/diagnostics/events",
+                headers={"X-Dev-User": "admin"},
+            )
+        if resp.status_code == 200:
+            suites.append(resp.json())
+        else:
+            suites.append({
+                "status": "failed",
+                "scope": "events_diagnostic",
+                "error": f"HTTP {resp.status_code}",
+                "total": 0, "passed": 0, "failed": 1, "warnings": 0, "results": [],
+            })
+    except Exception as exc:
+        suites.append({
+            "status": "failed",
+            "scope": "events_diagnostic",
+            "error": str(exc),
+            "total": 0, "passed": 0, "failed": 1, "warnings": 0, "results": [],
+        })
+
+    # ── Omitted suites ─────────────────────────────────────────────────────────
+    omitted = [
+        "registrations_diagnostic — requires alumni JWT (Cloud SQL); run manually",
+        "attendees_diagnostic — requires a known published event_id; run manually",
+    ]
+
+    total = sum(s.get("total", 0) for s in suites)
+    passed = sum(s.get("passed", 0) for s in suites)
+    failed = sum(s.get("failed", 0) for s in suites)
+    warnings = sum(s.get("warnings", 0) for s in suites)
+    overall = "failed" if failed > 0 else ("warning" if warnings > 0 else "ok")
+
+    return {
+        "status": overall,
+        "scope": "all_weeks",
+        "started_at": started.isoformat() + "Z",
+        "completed_at": datetime.utcnow().isoformat() + "Z",
+        "total": total,
+        "passed": passed,
+        "failed": failed,
+        "warnings": warnings,
+        "suites": suites,
+        "omitted": omitted,
+        "note": (
+            "Covers Week 5 (event-options, people, sponsors-partners, analytics) "
+            "and Week 2–4 events diagnostic. Registration and attendees diagnostics "
+            "require alumni JWT / event_id — run via verify_all_weeks.py instead."
+        ),
     }

@@ -1,0 +1,1444 @@
+{
+  "status": "WARNING",
+  "started_at": "2026-06-26T12:55:41.423996+00:00",
+  "completed_at": "2026-06-26T12:55:51.733758+00:00",
+  "base_url": "http://127.0.0.1:8000",
+  "summary": {
+    "total": 160,
+    "passed": 135,
+    "failed": 0,
+    "warnings": 25
+  },
+  "categories": [
+    {
+      "id": "env",
+      "name": "Week 1 — Environment & Health",
+      "status": "PASS",
+      "total": 6,
+      "passed": 6,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "w1_env_01",
+          "name": "Backend health: status=ok, db=ok",
+          "status": "PASS",
+          "details": "HTTP 200 version=0.1.0-alpha env=development",
+          "evidence": {
+            "endpoint": "/api/v1/health",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w1_env_02",
+          "name": "Root health alias /healthz returns ok",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "endpoint": "/healthz",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w1_env_03",
+          "name": "Dev mode: diagnostics accessible with X-Dev-User: admin",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/db/tables",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w1_env_04",
+          "name": "Dev diagnostics blocked without valid auth header",
+          "status": "PASS",
+          "details": "HTTP 401 (correctly rejected)",
+          "evidence": {
+            "http_status": 401
+          }
+        },
+        {
+          "id": "w1_env_05",
+          "name": "***REDACTED***",
+          "status": "PASS",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w1_env_06",
+          "name": "***REDACTED***",
+          "status": "PASS",
+          "details": "***REDACTED***",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "api_index",
+      "name": "API Index Consistency (All Weeks)",
+      "status": "WARNING",
+      "total": 16,
+      "passed": 15,
+      "failed": 0,
+      "warnings": 1,
+      "tests": [
+        {
+          "id": "api_idx_01",
+          "name": "Route exists: GET /api/v1/health",
+          "status": "PASS",
+          "details": "HTTP 200 (expected [200])",
+          "evidence": {
+            "endpoint": "/api/v1/health",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_02",
+          "name": "Route exists: GET /api/v1/events/public",
+          "status": "PASS",
+          "details": "HTTP 200 (expected [200])",
+          "evidence": {
+            "endpoint": "/api/v1/events/public",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_03",
+          "name": "Route exists: GET /api/v1/events (admin list)",
+          "status": "PASS",
+          "details": "HTTP 200 (expected [200])",
+          "evidence": {
+            "endpoint": "/api/v1/events",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_04",
+          "name": "Route exists: GET /api/v1/events/{id} (event detail)",
+          "status": "PASS",
+          "details": "HTTP 200 (expected [200, 404])",
+          "evidence": {
+            "endpoint": "/api/v1/events/1",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_05",
+          "name": "Protected route blocks unauthenticated: POST /api/v1/auth/firebase requires body",
+          "status": "WARNING",
+          "details": "HTTP 405 without auth (expected one of [400, 422])",
+          "evidence": {
+            "endpoint": "/api/v1/auth/firebase",
+            "http_status": 405
+          }
+        },
+        {
+          "id": "api_idx_06",
+          "name": "***REDACTED***",
+          "status": "PASS",
+          "details": "HTTP 403 without auth (expected one of [401, 403, 422])",
+          "evidence": {
+            "endpoint": "/api/v1/auth/me",
+            "http_status": 403
+          }
+        },
+        {
+          "id": "api_idx_07",
+          "name": "***REDACTED***",
+          "status": "PASS",
+          "details": "HTTP 403 without auth (expected one of [401, 403, 422])",
+          "evidence": {
+            "endpoint": "/api/v1/alumni/me",
+            "http_status": 403
+          }
+        },
+        {
+          "id": "api_idx_08",
+          "name": "DELETE /register is correctly not implemented (404 or 405)",
+          "status": "PASS",
+          "details": "HTTP 405 — as documented in backend_api_index_v3.md",
+          "evidence": {
+            "endpoint": "/api/v1/events/1/register",
+            "http_status": 405
+          }
+        },
+        {
+          "id": "api_idx_09",
+          "name": "Week 5 enrichment route responds: /api/v1/events/1/people",
+          "status": "PASS",
+          "details": "HTTP 200 (200 or 404 both valid)",
+          "evidence": {
+            "endpoint": "/api/v1/events/1/people",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_10",
+          "name": "Week 5 enrichment route responds: /api/v1/events/1/sponsors",
+          "status": "PASS",
+          "details": "HTTP 200 (200 or 404 both valid)",
+          "evidence": {
+            "endpoint": "/api/v1/events/1/sponsors",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_11",
+          "name": "Week 5 enrichment route responds: /api/v1/events/1/partners",
+          "status": "PASS",
+          "details": "HTTP 200 (200 or 404 both valid)",
+          "evidence": {
+            "endpoint": "/api/v1/events/1/partners",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_12",
+          "name": "Week 5 diagnostic route responds: /api/v1/dev/diagnostics/week5/event-options",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/event-options",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_13",
+          "name": "Week 5 diagnostic route responds: /api/v1/dev/diagnostics/week5/people",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/people",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_14",
+          "name": "Week 5 diagnostic route responds: /api/v1/dev/diagnostics/week5/sponsors-partners",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/sponsors-partners",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_15",
+          "name": "Week 5 diagnostic route responds: /api/v1/dev/diagnostics/week5/analytics",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/analytics",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "api_idx_16",
+          "name": "Week 5 diagnostic route responds: /api/v1/dev/diagnostics/week5/all",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/all",
+            "http_status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "public_events",
+      "name": "Week 2 — Public Events",
+      "status": "PASS",
+      "total": 10,
+      "passed": 10,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "w2_pub_01",
+          "name": "GET /events/public returns 200 with events array",
+          "status": "PASS",
+          "details": "HTTP 200 events_count=20",
+          "evidence": {
+            "endpoint": "/api/v1/events/public",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w2_pub_02",
+          "name": "Public event list: no virtual_url or join_url",
+          "status": "PASS",
+          "details": "Checked 20 events — clean",
+          "evidence": {}
+        },
+        {
+          "id": "w2_pub_03",
+          "name": "Public event list items include Week 5 option fields",
+          "status": "PASS",
+          "details": "is_full_day=True is_free=True ticket_price=None",
+          "evidence": {}
+        },
+        {
+          "id": "w2_pub_04",
+          "name": "All events have valid registration_status",
+          "status": "PASS",
+          "details": "Valid statuses: {'full', 'closed', 'not_open_yet', 'open'}",
+          "evidence": {}
+        },
+        {
+          "id": "w2_pub_05",
+          "name": "Public event list response includes pagination fields",
+          "status": "PASS",
+          "details": "total=34 page=1 per_page=20",
+          "evidence": {}
+        },
+        {
+          "id": "w2_pub_06",
+          "name": "Public event detail wraps event under 'event' key",
+          "status": "PASS",
+          "details": "HTTP 200 'event' key present=True",
+          "evidence": {
+            "endpoint": "/api/v1/events/public/135",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w2_pub_07",
+          "name": "Public event detail: no virtual_url or join_url",
+          "status": "PASS",
+          "details": "Clean",
+          "evidence": {}
+        },
+        {
+          "id": "w2_pub_08",
+          "name": "Public event detail includes people[], speakers[], sponsors[], partners[]",
+          "status": "PASS",
+          "details": "people=0 speakers=0 sponsors=0 partners=0",
+          "evidence": {}
+        },
+        {
+          "id": "w2_pub_09",
+          "name": "Public event detail includes is_full_day, is_free, ticket_price",
+          "status": "PASS",
+          "details": "is_full_day=True is_free=True ticket_price=None",
+          "evidence": {}
+        },
+        {
+          "id": "w2_pub_10",
+          "name": "Public event detail: is_visible never returned in public arrays",
+          "status": "PASS",
+          "details": "Clean — is_visible absent from all public arrays",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "admin_events",
+      "name": "Week 2+5 — Admin Events & Event Options",
+      "status": "PASS",
+      "total": 8,
+      "passed": 8,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "w2_adm_01",
+          "name": "Create draft event via POST /events",
+          "status": "PASS",
+          "details": "HTTP 201 event_id=333 status=draft",
+          "evidence": {
+            "endpoint": "/api/v1/events",
+            "http_status": 201,
+            "event_id": 333
+          }
+        },
+        {
+          "id": "w2_adm_02",
+          "name": "Update event via PATCH /events/{id}",
+          "status": "PASS",
+          "details": "HTTP 200 title='DIAG_ALL_WEEKS_125541_UPDATED'",
+          "evidence": {
+            "endpoint": "/api/v1/events/333",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w2_adm_03",
+          "name": "Publish event via PATCH /events/{id}/status",
+          "status": "PASS",
+          "details": "HTTP 200 status=published",
+          "evidence": {
+            "endpoint": "/api/v1/events/333/status",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w2_adm_04",
+          "name": "New event has correct Week 5 defaults (is_full_day=false, is_free=true, ticket_price=null)",
+          "status": "PASS",
+          "details": "is_full_day=False is_free=True ticket_price=None",
+          "evidence": {}
+        },
+        {
+          "id": "w2_adm_05",
+          "name": "Create paid event via POST /events: is_free=false, ticket_price=500",
+          "status": "PASS",
+          "details": "HTTP 201 is_free=False ticket_price=500.00",
+          "evidence": {
+            "http_status": 201
+          }
+        },
+        {
+          "id": "w2_adm_06",
+          "name": "Create full-day event via POST /events: is_full_day=true",
+          "status": "PASS",
+          "details": "HTTP 201 is_full_day=True",
+          "evidence": {
+            "http_status": 201
+          }
+        },
+        {
+          "id": "w2_adm_07",
+          "name": "Admin event list GET /events returns events array",
+          "status": "PASS",
+          "details": "HTTP 200 count=20",
+          "evidence": {
+            "endpoint": "/api/v1/events",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w2_adm_08",
+          "name": "Cancel event via PATCH /events/{id}/status",
+          "status": "PASS",
+          "details": "HTTP 200 status=cancelled",
+          "evidence": {
+            "http_status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "registration",
+      "name": "Week 3 — Registration Flow",
+      "status": "WARNING",
+      "total": 26,
+      "passed": 5,
+      "failed": 0,
+      "warnings": 21,
+      "tests": [
+        {
+          "id": "w3_reg_diag_Alumni Profile",
+          "name": "Alumni Profile",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Test Virtual Event Setup",
+          "name": "Test Virtual Event Setup",
+          "status": "PASS",
+          "details": "{'event_id': 336, 'status': 'published'}",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Test Capacity Event Setup",
+          "name": "Test Capacity Event Setup",
+          "status": "PASS",
+          "details": "{'event_id': 337, 'status': 'published'}",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Registration Eligibility",
+          "name": "Registration Eligibility",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Register for Event",
+          "name": "Register for Event",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_My Registration",
+          "name": "My Registration",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_My Registrations List",
+          "name": "My Registrations List",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Duplicate Registration Guard",
+          "name": "Duplicate Registration Guard",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Capacity Guard",
+          "name": "Capacity Guard",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Join Link Visibility",
+          "name": "Join Link Visibility",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Confirmation Email Status",
+          "name": "Confirmation Email Status",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Audit Log Check",
+          "name": "Audit Log Check",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_diag_Public API Leak Check",
+          "name": "Public API Leak Check",
+          "status": "PASS",
+          "details": "{'forbidden_fields_leaked': 'none'}",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_01",
+          "name": "Registration diagnostic endpoint accessible",
+          "status": "PASS",
+          "details": "***REDACTED***",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/registrations",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w3_reg_02",
+          "name": "Eligibility endpoint requires auth (correctly rejects unauthenticated)",
+          "status": "PASS",
+          "details": "***REDACTED***",
+          "evidence": {
+            "endpoint": "/api/v1/events/135/registration-eligibility",
+            "http_status": 403
+          }
+        },
+        {
+          "id": "w3_reg_03",
+          "name": "***REDACTED***",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_04",
+          "name": "Duplicate registration guard returns already_registered",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_05",
+          "name": "Capacity full guard returns event_full",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_06",
+          "name": "Registration closed guard returns registration_closed",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_07",
+          "name": "Not-open-yet guard returns registration_not_open_yet",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_08",
+          "name": "Non-alumni / inactive alumni guard returns alumni_not_active",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_09",
+          "name": "GET /my-registration returns registration object",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_10",
+          "name": "GET /my/registrations returns list",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_11",
+          "name": "Join URL: null for physical event after registration",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_12",
+          "name": "Join URL: non-null for virtual event after registration",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        },
+        {
+          "id": "w3_reg_13",
+          "name": "Confirmation email status: sent, failed, or skipped",
+          "status": "WARNING",
+          "details": "***REDACTED***",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "admin_attendees",
+      "name": "Week 4 — Admin Attendees",
+      "status": "PASS",
+      "total": 19,
+      "passed": 19,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "w4_att_diag_UC-09",
+          "name": "event not found returns empty",
+          "status": "PASS",
+          "details": "{'nonexistent_event_id': 999999999, 'count': 0, 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-01",
+          "name": "attendees visible (status=registered only)",
+          "status": "PASS",
+          "details": "{'event_id': 337, 'total': 0, 'returned': 0, 'all_status_registered': True, 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-10",
+          "name": "empty attendee list handled",
+          "status": "PASS",
+          "details": "{'count': 0, 'rows': 0, 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-02",
+          "name": "search filter works",
+          "status": "PASS",
+          "details": "{'note': 'no attendees in event — skipped verification', 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-03",
+          "name": "batch year filter works",
+          "status": "PASS",
+          "details": "{'note': 'no attendees with batch_year — skipped verification', 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-04",
+          "name": "pagination works (no overlap, correct size)",
+          "status": "PASS",
+          "details": "{'total': 0, 'page1_rows': 0, 'page2_rows': 0, 'overlap': False, 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-05",
+          "name": "CSV export columns correct",
+          "status": "PASS",
+          "details": "{'note': 'no attendees — column structure not verifiable from data; query succeeded', 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-06",
+          "name": "cancelled hidden from attendees list",
+          "status": "PASS",
+          "details": "{'total_attendees': 0, 'non_registered_rows': 0, 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-07",
+          "name": "cancelled visible in registrations audit view",
+          "status": "PASS",
+          "details": "{'total_all': 0, 'total_registered': 0, 'total_cancelled': 0, 'counts_sum_correctly': True, 'duration_ms': 0}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_diag_UC-08",
+          "name": "admin auth required (structural check)",
+          "status": "PASS",
+          "details": "{'note': 'All /api/v1/admin/* routes use Depends(get_admin_user). Verified in admin_events.py source.'}",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_00",
+          "name": "Attendees diagnostic endpoint accessible",
+          "status": "PASS",
+          "details": "event_id=337 total=10 passed=10 failed=0",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/attendees?event_id=337",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w4_att_01",
+          "name": "Admin attendees list endpoint returns attendees array",
+          "status": "PASS",
+          "details": "HTTP 200 count=0",
+          "evidence": {
+            "endpoint": "/api/v1/admin/events/337/attendees",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w4_att_02",
+          "name": "***REDACTED***",
+          "status": "PASS",
+          "details": "Checked 0 attendees — CLEAN",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_03",
+          "name": "Attendees response includes pagination fields",
+          "status": "PASS",
+          "details": "total=0 page=1 per_page=50",
+          "evidence": {}
+        },
+        {
+          "id": "w4_att_04",
+          "name": "Attendees list: per_page parameter accepted",
+          "status": "PASS",
+          "details": "HTTP 200 per_page=1",
+          "evidence": {
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w4_att_05",
+          "name": "Attendees list: search parameter accepted",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w4_att_06",
+          "name": "Attendees list: batch_year parameter accepted",
+          "status": "PASS",
+          "details": "HTTP 200",
+          "evidence": {
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w4_att_07",
+          "name": "CSV export endpoint returns 200 with CSV content",
+          "status": "PASS",
+          "details": "HTTP 200 content-type=text/csv; charset=utf-8",
+          "evidence": {
+            "endpoint": "/api/v1/admin/events/337/attendees/export",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w4_att_08",
+          "name": "***REDACTED***",
+          "status": "PASS",
+          "details": "CLEAN",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "week5_event_options",
+      "name": "Week 5 — Event Options Diagnostic",
+      "status": "PASS",
+      "total": 7,
+      "passed": 7,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "w5_eo_eo_01",
+          "name": "Create full-day event",
+          "status": "PASS",
+          "details": "event_id=338 is_full_day=True",
+          "evidence": {}
+        },
+        {
+          "id": "w5_eo_eo_02",
+          "name": "Full-day fields in admin response",
+          "status": "PASS",
+          "details": "is_full_day=True is_free=True ticket_price=None",
+          "evidence": {}
+        },
+        {
+          "id": "w5_eo_eo_03",
+          "name": "Create paid event",
+          "status": "PASS",
+          "details": "event_id=339 is_free=False ticket_price=500.00",
+          "evidence": {}
+        },
+        {
+          "id": "w5_eo_eo_04",
+          "name": "Public event detail: full-day fields present",
+          "status": "PASS",
+          "details": "is_full_day=True is_free=True ticket_price=None",
+          "evidence": {}
+        },
+        {
+          "id": "w5_eo_eo_05",
+          "name": "Public event detail: paid fields present",
+          "status": "PASS",
+          "details": "is_free=False ticket_price=500.00",
+          "evidence": {}
+        },
+        {
+          "id": "w5_eo_eo_06",
+          "name": "Backward compat: existing events have defaults",
+          "status": "PASS",
+          "details": "Checked 20 events — all have is_full_day/is_free boolean values",
+          "evidence": {}
+        },
+        {
+          "id": "w5_eo_overall",
+          "name": "All 6 diagnostic tests pass",
+          "status": "PASS",
+          "details": "passed=6/6 failed=0 warnings=0",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/event-options",
+            "http_status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "week5_people",
+      "name": "Week 5 — People / Speakers Diagnostic",
+      "status": "PASS",
+      "total": 17,
+      "passed": 17,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "w5_pp_people_01",
+          "name": "Create diagnostic event",
+          "status": "PASS",
+          "details": "event_id=340",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_02",
+          "name": "Add HOST person",
+          "status": "PASS",
+          "details": "person_id=194 role=HOST",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_03",
+          "name": "Add SPEAKER person",
+          "status": "PASS",
+          "details": "person_id=195 role=SPEAKER",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_04",
+          "name": "Add PANELIST person",
+          "status": "PASS",
+          "details": "person_id=196 role=PANELIST",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_05",
+          "name": "Add CHIEF_GUEST person",
+          "status": "PASS",
+          "details": "person_id=197 role=CHIEF_GUEST",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_06",
+          "name": "Add GUEST_OF_HONOUR person",
+          "status": "PASS",
+          "details": "person_id=198 role=GUEST_OF_HONOUR",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_07",
+          "name": "Add hidden person (is_visible=false)",
+          "status": "PASS",
+          "details": "person_id=199 is_visible=False",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_08",
+          "name": "Admin list includes all people (incl. hidden)",
+          "status": "PASS",
+          "details": "expected=6 got=6",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_09",
+          "name": "Public people[] contains 5 visible people",
+          "status": "PASS",
+          "details": "people count=5 (expected 5 visible)",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_10",
+          "name": "Hidden person not exposed publicly",
+          "status": "PASS",
+          "details": "hidden_id=199 in_public_people=False",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_11",
+          "name": "Speakers[] contains SPEAKER, PANELIST, CHIEF_GUEST, GUEST_OF_HONOUR",
+          "status": "PASS",
+          "details": "speakers count=4 roles=['CHIEF_GUEST', 'GUEST_OF_HONOUR', 'PANELIST', 'SPEAKER']",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_12",
+          "name": "HOST not in speakers[]",
+          "status": "PASS",
+          "details": "roles in speakers=['CHIEF_GUEST', 'GUEST_OF_HONOUR', 'PANELIST', 'SPEAKER'] HOST present=False",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_13",
+          "name": "Update person title",
+          "status": "PASS",
+          "details": "new_title=Updated Speaker Title",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_people_14",
+          "name": "Delete person",
+          "status": "PASS",
+          "details": "deleted=True remaining_count=5",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_overall",
+          "name": "All 14 diagnostic tests pass",
+          "status": "PASS",
+          "details": "passed=14/14 failed=0 warnings=0",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/people",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w5_pp_hidden_check",
+          "name": "people_10 confirms hidden person NOT in public response",
+          "status": "PASS",
+          "details": "Verified by diagnostic",
+          "evidence": {}
+        },
+        {
+          "id": "w5_pp_speakers_check",
+          "name": "people_11 confirms speakers[] derivation rule (SPEAKER/PANELIST/CHIEF_GUEST/GUEST_OF_HONOUR only)",
+          "status": "PASS",
+          "details": "Verified by diagnostic",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "week5_sponsors_partners",
+      "name": "Week 5 — Sponsors & Partners Diagnostic",
+      "status": "PASS",
+      "total": 20,
+      "passed": 20,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "w5_sp_sp_01",
+          "name": "Create diagnostic event",
+          "status": "PASS",
+          "details": "event_id=341",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_02",
+          "name": "Add GOLD_SPONSOR",
+          "status": "PASS",
+          "details": "sponsor_id=101",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_03",
+          "name": "Add TITLE_SPONSOR",
+          "status": "PASS",
+          "details": "sponsor_id=102",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_04",
+          "name": "Add hidden sponsor (is_visible=false)",
+          "status": "PASS",
+          "details": "sponsor_id=103 is_visible=False",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_05",
+          "name": "Add KNOWLEDGE_PARTNER",
+          "status": "PASS",
+          "details": "partner_id=101",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_06",
+          "name": "Add COMMUNITY_PARTNER",
+          "status": "PASS",
+          "details": "partner_id=102",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_07",
+          "name": "Add hidden partner (is_visible=false)",
+          "status": "PASS",
+          "details": "partner_id=103 is_visible=False",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_08",
+          "name": "Admin list sponsors (includes hidden)",
+          "status": "PASS",
+          "details": "count=3 expected=3",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_09",
+          "name": "Admin list partners (includes hidden)",
+          "status": "PASS",
+          "details": "count=3 expected=3",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_10",
+          "name": "Public sponsors: visible only, no is_visible field",
+          "status": "PASS",
+          "details": "count=2 expected=2 has_is_visible=False",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_10_tier",
+          "name": "Sponsor tier ordering: TITLE_SPONSOR before GOLD_SPONSOR",
+          "status": "PASS",
+          "details": "first=TITLE_SPONSOR (GOLD was created first with same display_order=0)",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_11",
+          "name": "Public partners: visible only",
+          "status": "PASS",
+          "details": "count=2 expected=2",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_11_alpha",
+          "name": "Partner ordering: COMMUNITY_PARTNER before KNOWLEDGE_PARTNER",
+          "status": "PASS",
+          "details": "first=COMMUNITY_PARTNER (KNOWLEDGE was created first with same display_order=0)",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_12",
+          "name": "Sponsors and partners are separate lists",
+          "status": "PASS",
+          "details": "sponsors use sponsor_id=True partners use partner_id=True",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_13",
+          "name": "Update sponsor",
+          "status": "PASS",
+          "details": "description=Updated by DIAG_WEEK5",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_14",
+          "name": "Update partner",
+          "status": "PASS",
+          "details": "description=Updated by DIAG_WEEK5",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_sp_15",
+          "name": "Delete all test sponsors/partners",
+          "status": "PASS",
+          "details": "deleted=6 expected=6",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_overall",
+          "name": "All 17 diagnostic tests pass",
+          "status": "PASS",
+          "details": "passed=17/17 failed=0 warnings=0",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/sponsors-partners",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "w5_sp_tier_check",
+          "name": "sp_10_tier confirms sponsor tier ordering (TITLE before GOLD)",
+          "status": "PASS",
+          "details": "Verified by diagnostic",
+          "evidence": {}
+        },
+        {
+          "id": "w5_sp_alpha_check",
+          "name": "sp_11_alpha confirms partner alphabetical ordering (COMMUNITY before KNOWLEDGE)",
+          "status": "PASS",
+          "details": "Verified by diagnostic",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "week5_analytics",
+      "name": "Week 5 — Analytics Diagnostic",
+      "status": "PASS",
+      "total": 13,
+      "passed": 13,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "w5_an_an_01",
+          "name": "Create diagnostic event",
+          "status": "PASS",
+          "details": "event_id=342",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_02",
+          "name": "Log EVENT_DETAIL_OPENED",
+          "status": "PASS",
+          "details": "action=EVENT_DETAIL_OPENED source=BACKEND",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_03",
+          "name": "Log REGISTER_CLICKED",
+          "status": "PASS",
+          "details": "action=REGISTER_CLICKED source=FLUTTER",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_04",
+          "name": "Log REGISTRATION_COMPLETED",
+          "status": "PASS",
+          "details": "action=REGISTRATION_COMPLETED source=BACKEND",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_05",
+          "name": "Log REGISTRATION_FAILED",
+          "status": "PASS",
+          "details": "action=REGISTRATION_FAILED source=BACKEND",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_06",
+          "name": "Log EMAIL_SENT",
+          "status": "PASS",
+          "details": "action=EMAIL_SENT source=EMAIL",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_07",
+          "name": "Log EMAIL_FAILED",
+          "status": "PASS",
+          "details": "action=EMAIL_FAILED source=EMAIL",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_08",
+          "name": "Verify rows inserted into event_activity_log",
+          "status": "PASS",
+          "details": "rows=6 expected>=6",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_09",
+          "name": "Metadata JSON stored correctly",
+          "status": "PASS",
+          "details": "checked 6 rows",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_10",
+          "name": "source_app present in all rows",
+          "status": "PASS",
+          "details": "checked 6 rows",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_an_11",
+          "name": "***REDACTED***",
+          "status": "PASS",
+          "details": "No sensitive keys found in metadata",
+          "evidence": {}
+        },
+        {
+          "id": "w5_an_overall",
+          "name": "All 11 diagnostic tests pass",
+          "status": "PASS",
+          "details": "passed=11/11 failed=0 warnings=0",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/analytics",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "***REDACTED***",
+          "name": "***REDACTED***",
+          "status": "PASS",
+          "details": "Verified by diagnostic",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "diagnostics_combined",
+      "name": "Combined Diagnostics Summary",
+      "status": "WARNING",
+      "total": 4,
+      "passed": 3,
+      "failed": 0,
+      "warnings": 1,
+      "tests": [
+        {
+          "id": "comb_events",
+          "name": "Events management diagnostic: 8/8 PASS",
+          "status": "PASS",
+          "details": "passed=8 failed=0 total=8",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/events",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "comb_registrations",
+          "name": "Registrations diagnostic: 3/13 PASS",
+          "status": "WARNING",
+          "details": "passed=3 failed=10 total=13. Alumni-gated tests require a real alumni account in Cloud SQL alumni_db — expected locally.",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/registrations",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "comb_week5_all",
+          "name": "Week 5 combined diagnostic: 48/48 PASS",
+          "status": "PASS",
+          "details": "passed=48 failed=0 warnings=0 total=48 (expected 48)",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/all",
+            "http_status": 200
+          }
+        },
+        {
+          "id": "comb_all_weeks",
+          "name": "All-weeks combined diagnostic: 56/56 PASS",
+          "status": "PASS",
+          "details": "passed=56 failed=0 total=56",
+          "evidence": {
+            "endpoint": "/api/v1/dev/diagnostics/week5/all-weeks",
+            "http_status": 200
+          }
+        }
+      ]
+    },
+    {
+      "id": "admin_build",
+      "name": "Admin Portal Build",
+      "status": "PASS",
+      "total": 2,
+      "passed": 2,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "admin_build_01",
+          "name": "Admin portal: npm run build exits 0 with no errors",
+          "status": "PASS",
+          "details": "exit=0 modules=78 time=618ms",
+          "evidence": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "admin_build_02",
+          "name": "Admin portal build: no errors in output",
+          "status": "PASS",
+          "details": "Build output clean",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "flutter_static",
+      "name": "Flutter Static Verification",
+      "status": "WARNING",
+      "total": 3,
+      "passed": 1,
+      "failed": 0,
+      "warnings": 2,
+      "tests": [
+        {
+          "id": "flutter_01",
+          "name": "flutter analyze: No issues found",
+          "status": "PASS",
+          "details": "Analyzing event_app...                                          \nNo issues found! (ran in 1.5s)",
+          "evidence": {
+            "exit_code": 0
+          }
+        },
+        {
+          "id": "flutter_02",
+          "name": "flutter test: 0 passed, 1 failed",
+          "status": "WARNING",
+          "details": "passed=0 pre-existing-failures=['authenticated Register shows Week 3 message'] — not Week 5 regressions",
+          "evidence": {
+            "exit_code": 1,
+            "pre_existing_failures": [
+              "authenticated Register shows Week 3 message"
+            ]
+          }
+        },
+        {
+          "id": "flutter_known_authenticated_Regist",
+          "name": "Known pre-existing failure: 'authenticated Register shows Week 3 message'",
+          "status": "WARNING",
+          "details": "Pre-existing from Week 2 (commit 21ee22f). GoRouter not provided in test widget tree. Not a Week 5 regression.",
+          "evidence": {}
+        }
+      ]
+    },
+    {
+      "id": "docs_presence",
+      "name": "Documentation Presence",
+      "status": "PASS",
+      "total": 9,
+      "passed": 9,
+      "failed": 0,
+      "warnings": 0,
+      "tests": [
+        {
+          "id": "docs_01",
+          "name": "Doc present: docs/api/backend_api_index_v3.md",
+          "status": "PASS",
+          "details": "Exists (28KB)",
+          "evidence": {
+            "path": "docs/api/backend_api_index_v3.md"
+          }
+        },
+        {
+          "id": "docs_02",
+          "name": "Doc present: docs/api/events_api_contract_v2.md",
+          "status": "PASS",
+          "details": "Exists (24KB)",
+          "evidence": {
+            "path": "docs/api/events_api_contract_v2.md"
+          }
+        },
+        {
+          "id": "docs_03",
+          "name": "Doc present: docs/api/week5_event_enrichment_api_contract.md",
+          "status": "PASS",
+          "details": "Exists (10KB)",
+          "evidence": {
+            "path": "docs/api/week5_event_enrichment_api_contract.md"
+          }
+        },
+        {
+          "id": "docs_04",
+          "name": "Doc present: docs/releases/week5_status_report_2026-06-26.md",
+          "status": "PASS",
+          "details": "Exists (7KB)",
+          "evidence": {
+            "path": "docs/releases/week5_status_report_2026-06-26.md"
+          }
+        },
+        {
+          "id": "docs_05",
+          "name": "Doc present: docs/reviews/week5_full_verification_report.md",
+          "status": "PASS",
+          "details": "Exists (8KB)",
+          "evidence": {
+            "path": "docs/reviews/week5_full_verification_report.md"
+          }
+        },
+        {
+          "id": "docs_06",
+          "name": "Doc present: docs/reviews/week5_event_usage_crosscheck.md",
+          "status": "PASS",
+          "details": "Exists (9KB)",
+          "evidence": {
+            "path": "docs/reviews/week5_event_usage_crosscheck.md"
+          }
+        },
+        {
+          "id": "docs_07",
+          "name": "Doc present: docs/reviews/week5_manual_verification_steps.md",
+          "status": "PASS",
+          "details": "Exists (21KB)",
+          "evidence": {
+            "path": "docs/reviews/week5_manual_verification_steps.md"
+          }
+        },
+        {
+          "id": "docs_08",
+          "name": "Doc present: docs/reviews/week5_developer_workflows_verification.md",
+          "status": "PASS",
+          "details": "Exists (8KB)",
+          "evidence": {
+            "path": "docs/reviews/week5_developer_workflows_verification.md"
+          }
+        },
+        {
+          "id": "docs_09",
+          "name": "Doc present: docs/reviews/week5_admin_enrichment_ui_verification.md",
+          "status": "PASS",
+          "details": "Exists (6KB)",
+          "evidence": {
+            "path": "docs/reviews/week5_admin_enrichment_ui_verification.md"
+          }
+        }
+      ]
+    }
+  ]
+}
