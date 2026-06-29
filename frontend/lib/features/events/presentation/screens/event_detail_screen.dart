@@ -864,8 +864,37 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       );
     }
 
+    final registrationStatus =
+        state.myRegistration?['status']?.toString().toLowerCase();
+    final hasActiveRegistration = registrationStatus == 'registered';
+    final hasCancelledRegistration = registrationStatus == 'cancelled';
+
     Widget ctaWidget;
-    if (state.myRegistration != null) {
+    if (hasCancelledRegistration) {
+      ctaWidget = Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFE9E9),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: const Color(0xFF8A1B1B).withOpacity(0.2)),
+        ),
+        child: const Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(Icons.cancel, color: Color(0xFF8A1B1B), size: 20),
+            SizedBox(width: 8),
+            Text(
+              'Registration cancelled',
+              style: TextStyle(
+                color: Color(0xFF8A1B1B),
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+          ],
+        ),
+      );
+    } else if (hasActiveRegistration) {
       final regNo = state.myRegistration!['registration_number'] ?? '';
       ctaWidget = Column(
         mainAxisSize: MainAxisSize.min,
