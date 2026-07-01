@@ -904,6 +904,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         state.myRegistration?['status']?.toString().toLowerCase();
     final hasActiveRegistration = registrationStatus == 'registered';
     final hasCancelledRegistration = registrationStatus == 'cancelled';
+    final isPastEvent = event.endDatetime != null
+        ? event.endDatetime!.isBefore(DateTime.now())
+        : event.startDatetime.isBefore(DateTime.now());
 
     Widget ctaWidget;
     if (hasCancelledRegistration) {
@@ -1049,6 +1052,21 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           child: Text(
             state.eligibilityMessage ?? 'Ineligible to register.',
             style: const TextStyle(color: Color(0xFF8A1B1B), fontWeight: FontWeight.bold),
+          ),
+        ),
+      );
+    } else if (isPastEvent) {
+      ctaWidget = Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: const Color(0xFFFFE9E9),
+          borderRadius: BorderRadius.circular(8),
+        ),
+        child: const Center(
+          child: Text(
+            'Registration is unavailable for past events.',
+            style: TextStyle(color: Color(0xFF8A1B1B), fontWeight: FontWeight.bold),
           ),
         ),
       );
