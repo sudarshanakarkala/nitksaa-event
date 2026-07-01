@@ -782,6 +782,13 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             inactiveColor,
           ),
           _buildCupertinoNavItem(
+            CupertinoIcons.person_circle,
+            'Manage',
+            false,
+            accentGold,
+            inactiveColor,
+          ),
+          _buildCupertinoNavItem(
             CupertinoIcons.ellipsis,
             'More',
             false,
@@ -803,6 +810,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     return Expanded(
       child: GestureDetector(
         onTap: () {
+          if (label == 'Manage') {
+            context.go(AppRoutes.manageEvents);
+            return;
+          }
           if (!active) {
             ScaffoldMessenger.of(
               context,
@@ -1238,6 +1249,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   false,
                   isDark,
                 ),
+                _buildSidebarItem(
+                  Icons.admin_panel_settings_outlined,
+                  'Manage Events',
+                  false,
+                  isDark,
+                ),
                 _buildSidebarItem(Icons.more_horiz, 'More', false, isDark),
                 const Spacer(),
                 if (auth.isAuthenticated) ...[
@@ -1569,6 +1586,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         );
                       },
                     ),
+                    ListTile(
+                      leading: const Icon(Icons.admin_panel_settings_outlined),
+                      title: const Text('Manage Events'),
+                      onTap: () {
+                        Navigator.pop(context);
+                        context.go(AppRoutes.manageEvents);
+                      },
+                    ),
                   ],
                 ),
               )
@@ -1641,6 +1666,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           if (active) return;
           if (label == 'My Events') {
             context.go(AppRoutes.myEvents);
+            return;
+          }
+          if (label == 'Manage Events') {
+            context.go(AppRoutes.manageEvents);
             return;
           }
           ScaffoldMessenger.of(

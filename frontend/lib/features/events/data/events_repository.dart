@@ -53,6 +53,39 @@ class EventsRepository {
     return response.data ?? <String, dynamic>{};
   }
 
+  Future<AppEvent> createAdminEvent(
+    Map<String, dynamic> data,
+    String accessToken,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/events',
+      data: data,
+      options: Options(headers: {
+        'Authorization': 'Bearer $accessToken',
+        'X-Dev-User': 'admin',
+      }),
+    );
+    final eventJson = response.data?['event'] as Map<String, dynamic>;
+    return AppEvent.fromJson(eventJson);
+  }
+
+  Future<AppEvent> updateAdminEvent(
+    int eventId,
+    Map<String, dynamic> data,
+    String accessToken,
+  ) async {
+    final response = await _dio.patch<Map<String, dynamic>>(
+      '/api/v1/events/$eventId',
+      data: data,
+      options: Options(headers: {
+        'Authorization': 'Bearer $accessToken',
+        'X-Dev-User': 'admin',
+      }),
+    );
+    final eventJson = response.data?['event'] as Map<String, dynamic>;
+    return AppEvent.fromJson(eventJson);
+  }
+
   Future<AppEvent> getPublicEvent(int eventId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/events/public/$eventId',

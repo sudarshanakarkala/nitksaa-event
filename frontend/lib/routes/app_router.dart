@@ -6,6 +6,7 @@ import '../features/developer/presentation/developer_diagnostics_screen.dart';
 import '../features/foundation/presentation/foundation_ready_screen.dart';
 import '../features/events/presentation/screens/event_list_screen.dart';
 import '../features/events/presentation/screens/event_detail_screen.dart';
+import '../features/events/presentation/screens/manage_events_screen.dart';
 import '../features/events/presentation/screens/my_events_screen.dart';
 import '../features/auth/services/auth_controller.dart';
 import 'app_routes.dart';
@@ -37,6 +38,10 @@ abstract class AppRouter {
       GoRoute(
         path: AppRoutes.myEvents,
         builder: (context, state) => const MyEventsScreen(),
+      ),
+      GoRoute(
+        path: AppRoutes.manageEvents,
+        builder: (context, state) => const ManageEventsScreen(),
       ),
       GoRoute(
         path: AppRoutes.eventDetail,
