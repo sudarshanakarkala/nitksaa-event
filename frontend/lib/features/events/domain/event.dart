@@ -20,6 +20,8 @@ class AppEvent {
     this.publishedAt,
     required this.registrationStatus,
     required this.registeredCount,
+    this.sessions = const [],
+    this.speakers = const [],
   });
 
   final int eventId;
@@ -42,6 +44,8 @@ class AppEvent {
   final DateTime? publishedAt;
   final String registrationStatus;
   final int registeredCount;
+  final List<EventSession> sessions;
+  final List<EventPerson> speakers;
 
   factory AppEvent.fromJson(Map<String, dynamic> json) {
     return AppEvent(
@@ -73,6 +77,106 @@ class AppEvent {
           : null,
       registrationStatus: json['registration_status'] as String? ?? 'not_applicable',
       registeredCount: json['registered_count'] as int? ?? 0,
+      sessions: (json['sessions'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(EventSession.fromJson)
+          .toList(),
+      speakers: (json['speakers'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(EventPerson.fromJson)
+          .toList(),
+    );
+  }
+}
+
+class EventSession {
+  const EventSession({
+    required this.sessionId,
+    required this.title,
+    this.description,
+    this.speakerName,
+    this.locationText,
+    this.track,
+    required this.startDatetime,
+    this.endDatetime,
+  });
+
+  final int sessionId;
+  final String title;
+  final String? description;
+  final String? speakerName;
+  final String? locationText;
+  final String? track;
+  final DateTime startDatetime;
+  final DateTime? endDatetime;
+
+  factory EventSession.fromJson(Map<String, dynamic> json) {
+    final start = json['start_datetime'] ?? json['starts_at'];
+    final end = json['end_datetime'] ?? json['ends_at'];
+    return EventSession(
+      sessionId: json['session_id'] as int,
+      title: json['title'] as String,
+      description: json['description'] as String?,
+      speakerName: json['speaker_name'] as String?,
+      locationText: (json['location_text'] ?? json['location']) as String?,
+      track: (json['track'] ?? json['track_name']) as String?,
+      startDatetime: DateTime.parse(start as String).toLocal(),
+      endDatetime: end != null ? DateTime.parse(end as String).toLocal() : null,
+    );
+  }
+}
+
+class EventPerson {
+  const EventPerson({
+    required this.personId,
+    required this.role,
+    required this.fullname,
+    this.title,
+    this.organisation,
+    this.bio,
+    this.photoUrl,
+    this.linkedinUrl,
+  });
+
+  final int personId;
+  final String role;
+  final String fullname;
+  final String? title;
+  final String? organisation;
+  final String? bio;
+  final String? photoUrl;
+  final String? linkedinUrl;
+
+  String get initials {
+    final parts = fullname.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
+    if (parts.isEmpty) return '?';
+    if (parts.length == 1) return parts.first.substring(0, 1).toUpperCase();
+    return '${parts.first.substring(0, 1)}${parts.last.substring(0, 1)}'.toUpperCase();
+  }
+
+  String get subtitle {
+    final details = [
+      if (title != null && title!.trim().isNotEmpty) title!.trim(),
+      if (organisation != null && organisation!.trim().isNotEmpty) organisation!.trim(),
+    ];
+    if (details.isNotEmpty) return details.join(', ');
+    return role
+        .toLowerCase()
+        .split('_')
+        .map((word) => word.isEmpty ? word : '${word[0].toUpperCase()}${word.substring(1)}')
+        .join(' ');
+  }
+
+  factory EventPerson.fromJson(Map<String, dynamic> json) {
+    return EventPerson(
+      personId: json['person_id'] as int,
+      role: json['role'] as String,
+      fullname: json['fullname'] as String,
+      title: json['title'] as String?,
+      organisation: json['organisation'] as String?,
+      bio: json['bio'] as String?,
+      photoUrl: json['photo_url'] as String?,
+      linkedinUrl: json['linkedin_url'] as String?,
     );
   }
 }

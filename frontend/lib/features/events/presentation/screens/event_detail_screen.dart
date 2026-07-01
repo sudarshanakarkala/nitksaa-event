@@ -105,8 +105,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     }
   }
 
-  // Static mockup data
-  static const List<Map<String, String>> mockSpeakers = [
+  static const List<Map<String, String>> unusedMockSpeakers = [
     {
       'name': 'Prof. Ashwin Rao',
       'role': 'NITK Surathkal — Chair, CSE Dept.',
@@ -124,7 +123,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     }
   ];
 
-  static const List<Map<String, String>> mockAgenda = [
+  static const List<Map<String, String>> unusedMockAgenda = [
     {'time': '09:00 AM', 'text': 'Keynote Address — Prof. Ashwin Rao'},
     {'time': '10:30 AM', 'text': 'Panel: Future of Deep Tech'},
     {'time': '01:00 PM', 'text': 'Alumni Networking Lunch'},
@@ -289,19 +288,22 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     const SizedBox(height: 8),
                     _buildCupertinoSectionHeader('Agenda', textSecondary),
                     const SizedBox(height: 8),
-                    ...mockAgenda.map((item) {
+                    if (event.sessions.isEmpty)
+                      Text('Agenda will be updated soon.', style: TextStyle(color: textSecondary, fontSize: 13))
+                    else
+                      ...event.sessions.map((item) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 8.0),
                         child: Row(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
                             Text(
-                              item['time']!,
+                              _formatSessionTime(item),
                               style: TextStyle(color: accentGold, fontSize: 13, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
-                              child: Text(item['text']!, style: TextStyle(color: textPrimary, fontSize: 13)),
+                              child: Text(_formatSessionTitle(item), style: TextStyle(color: textPrimary, fontSize: 13)),
                             ),
                           ],
                         ),
@@ -312,26 +314,27 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     const SizedBox(height: 8),
                     _buildCupertinoSectionHeader('Speakers', textSecondary),
                     const SizedBox(height: 8),
-                    ...mockSpeakers.map((sp) {
+                    if (event.speakers.isEmpty)
+                      Text('Speaker details will be updated soon.', style: TextStyle(color: textSecondary, fontSize: 13))
+                    else
+                      ...event.speakers.map((sp) {
                       return Padding(
                         padding: const EdgeInsets.only(bottom: 10.0),
                         child: Row(
                           children: [
-                            CircleAvatar(
+                            _buildSpeakerAvatar(
+                              sp,
                               radius: 16,
-                              backgroundColor: accentGold.withOpacity(0.2),
-                              child: Text(
-                                sp['initials']!,
-                                style: TextStyle(color: accentGold, fontSize: 12, fontWeight: FontWeight.bold),
-                              ),
+                              accentColor: accentGold,
+                              initialsStyle: TextStyle(color: accentGold, fontSize: 12, fontWeight: FontWeight.bold),
                             ),
                             const SizedBox(width: 12),
                             Expanded(
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Text(sp['name']!, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textPrimary)),
-                                  Text(sp['role']!, style: TextStyle(fontSize: 11, color: textSecondary)),
+                                  Text(sp.fullname, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textPrimary)),
+                                  Text(sp.subtitle, style: TextStyle(fontSize: 11, color: textSecondary)),
                                 ],
                               ),
                             ),
@@ -483,11 +486,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const SizedBox(height: 24),
                         const Divider(),
                         const SizedBox(height: 16),
-                        _buildAgendaSection(),
+                        _buildAgendaSection(event),
                         const SizedBox(height: 24),
                         const Divider(),
                         const SizedBox(height: 16),
-                        _buildSpeakersSection(),
+                        _buildSpeakersSection(event),
                       ],
                     ),
                   ),
@@ -588,11 +591,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
-              _buildAgendaSection(),
+              _buildAgendaSection(event),
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
-              _buildSpeakersSection(),
+              _buildSpeakersSection(event),
             ],
           ),
         ),
@@ -734,7 +737,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
-  Widget _buildAgendaSection() {
+  Widget _buildAgendaSection(AppEvent event) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -743,19 +746,22 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
         ),
         const SizedBox(height: 12),
-        ...mockAgenda.map((item) {
+        if (event.sessions.isEmpty)
+          const Text('Agenda will be updated soon.', style: TextStyle(fontSize: 14, color: Colors.grey))
+        else
+          ...event.sessions.map((item) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 12.0),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text(
-                  item['time']!,
+                  _formatSessionTime(item),
                   style: const TextStyle(color: Color(0xFFC9952A), fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
-                  child: Text(item['text']!, style: const TextStyle(fontSize: 14)),
+                  child: Text(_formatSessionTitle(item), style: const TextStyle(fontSize: 14)),
                 ),
               ],
             ),
@@ -765,7 +771,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
-  Widget _buildSpeakersSection() {
+  Widget _buildSpeakersSection(AppEvent event) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -774,27 +780,28 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
         ),
         const SizedBox(height: 12),
-        ...mockSpeakers.map((sp) {
+        if (event.speakers.isEmpty)
+          const Text('Speaker details will be updated soon.', style: TextStyle(fontSize: 14, color: Colors.grey))
+        else
+          ...event.speakers.map((sp) {
           return Padding(
             padding: const EdgeInsets.only(bottom: 16.0),
             child: Row(
               children: [
-                CircleAvatar(
+                _buildSpeakerAvatar(
+                  sp,
                   radius: 20,
-                  backgroundColor: const Color(0xFFC9952A).withOpacity(0.15),
-                  child: Text(
-                    sp['initials']!,
-                    style: const TextStyle(color: Color(0xFFC9952A), fontWeight: FontWeight.bold),
-                  ),
+                  accentColor: const Color(0xFFC9952A),
+                  initialsStyle: const TextStyle(color: Color(0xFFC9952A), fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      Text(sp['name']!, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
+                      Text(sp.fullname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       const SizedBox(height: 2),
-                      Text(sp['role']!, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(sp.subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
                     ],
                   ),
                 ),
@@ -803,6 +810,35 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           );
         }),
       ],
+    );
+  }
+
+  Widget _buildSpeakerAvatar(
+    EventPerson speaker, {
+    required double radius,
+    required Color accentColor,
+    required TextStyle initialsStyle,
+  }) {
+    final photoUrl = speaker.photoUrl?.trim();
+    final fallback = CircleAvatar(
+      radius: radius,
+      backgroundColor: accentColor.withOpacity(0.15),
+      child: Text(speaker.initials, style: initialsStyle),
+    );
+
+    if (photoUrl == null || photoUrl.isEmpty) {
+      return fallback;
+    }
+
+    return ClipOval(
+      child: Image.network(
+        photoUrl,
+        width: radius * 2,
+        height: radius * 2,
+        fit: BoxFit.cover,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+        errorBuilder: (_, __, ___) => fallback,
+      ),
     );
   }
 
@@ -1410,6 +1446,19 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
   String _formatDateTime(DateTime dt) {
     return '${_formatDate(dt)} at ${_formatTime(dt, null)}';
+  }
+
+  String _formatSessionTime(EventSession session) {
+    return _formatTime(session.startDatetime, session.endDatetime);
+  }
+
+  String _formatSessionTitle(EventSession session) {
+    final parts = [
+      session.title,
+      if (session.speakerName != null && session.speakerName!.trim().isNotEmpty)
+        session.speakerName!.trim(),
+    ];
+    return parts.join(' - ');
   }
 
   String _formatRemainingTime(DateTime target) {
