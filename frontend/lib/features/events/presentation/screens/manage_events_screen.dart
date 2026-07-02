@@ -433,6 +433,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   bool _isFree = true;
   late final TextEditingController _ticketPrice;
   
+  // Speakers & Sessions
+  late List<Map<String, String>> _speakers;
+  late List<Map<String, String>> _sessions;
+  
   var _isSaving = false;
 
   @override
@@ -471,6 +475,28 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _capacity = TextEditingController(text: event?.capacity?.toString() ?? '');
     _isFree = true;
     _ticketPrice = TextEditingController(text: '');
+    
+    // Initialize speakers (convert EventPerson to Map)
+    _speakers = event?.speakers.map((sp) => {
+      'fullname': sp.fullname,
+      'title': sp.title ?? '',
+      'organisation': sp.organisation ?? '',
+    }).toList() ?? [];
+    
+    // Initialize sessions (convert EventSession to Map)
+    _sessions = event?.sessions.map((sess) {
+      final speakerNames = _speakers.map((s) => s['fullname']!).toList();
+      final matchingSpeaker = speakerNames.firstWhere(
+        (name) => name.toLowerCase() == (sess.speakerName?.toLowerCase() ?? ''),
+        orElse: () => '',
+      );
+      return {
+        'title': sess.title,
+        'speaker': matchingSpeaker,
+        'start_time': _formatDateTimeOnly(sess.startDatetime),
+        'end_time': sess.endDatetime != null ? _formatDateTimeOnly(sess.endDatetime!) : '',
+      };
+    }).toList() ?? [];
     
     // Add listeners for syncing dates and times
     _startDate.addListener(_syncDates);
@@ -669,6 +695,18 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       keyboardType: TextInputType.number,
                       required: true,
                     ),
+                  
+                  const SizedBox(height: 28),
+                  // ── Speakers Section ──
+                  _buildSectionHeader('Speakers'),
+                  const SizedBox(height: 16),
+                  _buildSpeakersSection(),
+                  
+                  const SizedBox(height: 28),
+                  // ── Sessions Section ──
+                  _buildSectionHeader('Sessions'),
+                  const SizedBox(height: 16),
+                  _buildSessionsSection(),
                   
                   const SizedBox(height: 32),
                   // ── Actions ──
@@ -887,6 +925,401 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
+  Widget _buildSpeakersSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // List of speakers
+        if (_speakers.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No speakers added yet',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+          )
+        else
+          ...List.generate(_speakers.length, (index) {
+            final speaker = _speakers[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            speaker['fullname'] ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            '${speaker['title'] ?? ''}, ${speaker['organisation'] ?? ''}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 18),
+                          onPressed: () => _showSpeakerDialog(index),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                          onPressed: () {
+                            setState(() => _speakers.removeAt(index));
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        const SizedBox(height: 12),
+        FilledButton.tonalIcon(
+          onPressed: () => _showSpeakerDialog(null),
+          icon: const Icon(Icons.add),
+          label: const Text('Add Speaker'),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildSessionsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // List of sessions
+        if (_sessions.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No sessions added yet',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+          )
+        else
+          ...List.generate(_sessions.length, (index) {
+            final session = _sessions[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            session['title'] ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            'Speaker: ${session['speaker'] ?? 'Not assigned'}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            '${session['start_time'] ?? ''} - ${session['end_time'] ?? ''}',
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                        ],
+                      ),
+                    ),
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 18),
+                          onPressed: () => _showSessionDialog(index),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                          onPressed: () {
+                            setState(() => _sessions.removeAt(index));
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        const SizedBox(height: 12),
+        FilledButton.tonalIcon(
+          onPressed: _speakers.isEmpty 
+            ? null 
+            : () => _showSessionDialog(null),
+          icon: const Icon(Icons.add),
+          label: const Text('Add Session'),
+        ),
+        if (_speakers.isEmpty)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: Text(
+              'Add speakers before creating sessions',
+              style: TextStyle(fontSize: 12, color: Colors.orange.shade600),
+            ),
+          ),
+      ],
+    );
+  }
+
+  void _showSpeakerDialog(int? editIndex) {
+    final fullnameCtrl = TextEditingController(
+      text: editIndex != null ? _speakers[editIndex]['fullname'] ?? '' : '',
+    );
+    final titleCtrl = TextEditingController(
+      text: editIndex != null ? _speakers[editIndex]['title'] ?? '' : '',
+    );
+    final organisationCtrl = TextEditingController(
+      text: editIndex != null ? _speakers[editIndex]['organisation'] ?? '' : '',
+    );
+
+    showDialog(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(editIndex == null ? 'Add Speaker' : 'Edit Speaker'),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            TextField(
+              controller: fullnameCtrl,
+              decoration: InputDecoration(
+                labelText: 'Full Name *',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: titleCtrl,
+              decoration: InputDecoration(
+                labelText: 'Title *',
+                hintText: 'e.g., Chief Technology Officer',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: organisationCtrl,
+              decoration: InputDecoration(
+                labelText: 'Organization *',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () {
+              if (fullnameCtrl.text.trim().isEmpty ||
+                  titleCtrl.text.trim().isEmpty ||
+                  organisationCtrl.text.trim().isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text('All fields are required')),
+                );
+                return;
+              }
+
+              setState(() {
+                final speaker = {
+                  'fullname': fullnameCtrl.text.trim(),
+                  'title': titleCtrl.text.trim(),
+                  'organisation': organisationCtrl.text.trim(),
+                };
+                if (editIndex == null) {
+                  _speakers.add(speaker);
+                } else {
+                  _speakers[editIndex] = speaker;
+                }
+              });
+              Navigator.pop(context);
+            },
+            child: const Text('Save'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showSessionDialog(int? editIndex) {
+    final titleCtrl = TextEditingController(
+      text: editIndex != null ? _sessions[editIndex]['title'] ?? '' : '',
+    );
+    final startTimeCtrl = TextEditingController(
+      text: editIndex != null ? _sessions[editIndex]['start_time'] ?? '' : '',
+    );
+    final endTimeCtrl = TextEditingController(
+      text: editIndex != null ? _sessions[editIndex]['end_time'] ?? '' : '',
+    );
+    var selectedSpeaker = editIndex != null ? _sessions[editIndex]['speaker'] ?? '' : '';
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) => AlertDialog(
+          title: Text(editIndex == null ? 'Add Session' : 'Edit Session'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                TextField(
+                  controller: titleCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Session Title *',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                ),
+                const SizedBox(height: 12),
+                DropdownButtonFormField<String>(
+                  value: selectedSpeaker.isEmpty ? null : selectedSpeaker,
+                  decoration: InputDecoration(
+                    labelText: 'Speaker *',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  items: _speakers
+                      .map((s) => DropdownMenuItem(
+                        value: s['fullname'],
+                        child: Text(s['fullname'] ?? ''),
+                      ))
+                      .toList(),
+                  onChanged: (value) {
+                    setDialogState(() => selectedSpeaker = value ?? '');
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: startTimeCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'Start Time *',
+                    hintText: 'YYYY-MM-DD HH:mm',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  onTap: () async {
+                    final dateTime = await _showDateTimePickerDialog(startTimeCtrl.text);
+                    if (dateTime != null) {
+                      startTimeCtrl.text = dateTime;
+                    }
+                  },
+                ),
+                const SizedBox(height: 12),
+                TextField(
+                  controller: endTimeCtrl,
+                  decoration: InputDecoration(
+                    labelText: 'End Time *',
+                    hintText: 'YYYY-MM-DD HH:mm',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  onTap: () async {
+                    final dateTime = await _showDateTimePickerDialog(endTimeCtrl.text);
+                    if (dateTime != null) {
+                      endTimeCtrl.text = dateTime;
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              onPressed: () {
+                if (titleCtrl.text.trim().isEmpty ||
+                    selectedSpeaker.isEmpty ||
+                    startTimeCtrl.text.trim().isEmpty ||
+                    endTimeCtrl.text.trim().isEmpty) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text('All fields are required')),
+                  );
+                  return;
+                }
+
+                setState(() {
+                  final session = {
+                    'title': titleCtrl.text.trim(),
+                    'speaker': selectedSpeaker,
+                    'start_time': startTimeCtrl.text.trim(),
+                    'end_time': endTimeCtrl.text.trim(),
+                  };
+                  if (editIndex == null) {
+                    _sessions.add(session);
+                  } else {
+                    _sessions[editIndex] = session;
+                  }
+                });
+                Navigator.pop(context);
+              },
+              child: const Text('Save'),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<String?> _showDateTimePickerDialog(String currentValue) async {
+    DateTime? dateTime;
+    try {
+      dateTime = DateTime.parse(currentValue);
+    } catch (e) {
+      dateTime = DateTime.now();
+    }
+
+    final date = await showDatePicker(
+      context: context,
+      initialDate: dateTime,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2040),
+    );
+
+    if (date == null) return null;
+
+    if (!mounted) return null;
+
+    final time = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay.fromDateTime(dateTime),
+    );
+
+    if (time == null) return null;
+
+    final combined = DateTime(date.year, date.month, date.day, time.hour, time.minute);
+    return _formatDateTimeOnly(combined);
+  }
+
   Widget _buildToggleField(String label, bool value, Function(bool) onChanged) {
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1005,6 +1438,20 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           'registration_opens_at': '${_registrationOpensAt.text.trim()}:00$offset',
         if (_registrationClosesAt.text.trim().isNotEmpty)
           'registration_closes_at': '${_registrationClosesAt.text.trim()}:00$offset',
+        // Add speakers data
+        'speakers': _speakers.map((speaker) => {
+          'fullname': speaker['fullname'],
+          'title': speaker['title'],
+          'organisation': speaker['organisation'],
+          'role': 'speaker',
+        }).toList(),
+        // Add sessions data
+        'sessions': _sessions.map((session) => {
+          'title': session['title'],
+          'speaker_name': session['speaker'],
+          'start_datetime': '${session['start_time']}:00$offset',
+          'end_datetime': '${session['end_time']}:00$offset',
+        }).toList(),
       };
 
       final repo = ref.read(eventsRepositoryProvider);
