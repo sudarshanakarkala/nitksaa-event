@@ -18,6 +18,7 @@ class EventsState {
     this.dateRangeEnd,
     this.filterModes = const {'physical': true, 'virtual': true},
     this.filterRegistrationStatus = const {'open': true, 'closed': true},
+    this.timeline,
   });
 
   final List<AppEvent> events;
@@ -32,6 +33,7 @@ class EventsState {
   final DateTime? dateRangeEnd;
   final Map<String, bool> filterModes; // {'physical': bool, 'virtual': bool}
   final Map<String, bool> filterRegistrationStatus; // {'open': bool, 'closed': bool}
+  final String? timeline; // 'this_week', 'next_week', 'this_month', 'next_month', 'next_3_months', or null
 
   EventsState copyWith({
     List<AppEvent>? events,
@@ -46,6 +48,7 @@ class EventsState {
     dynamic dateRangeEnd = _kUnsetValue,
     Map<String, bool>? filterModes,
     Map<String, bool>? filterRegistrationStatus,
+    dynamic timeline = _kUnsetValue,
   }) {
     return EventsState(
       events: events ?? this.events,
@@ -60,6 +63,7 @@ class EventsState {
       dateRangeEnd: identical(dateRangeEnd, _kUnsetValue) ? this.dateRangeEnd : dateRangeEnd as DateTime?,
       filterModes: filterModes ?? this.filterModes,
       filterRegistrationStatus: filterRegistrationStatus ?? this.filterRegistrationStatus,
+      timeline: identical(timeline, _kUnsetValue) ? this.timeline : timeline as String?,
     );
   }
 }
@@ -138,6 +142,10 @@ class EventsNotifier extends StateNotifier<EventsState> {
     state = state.copyWith(filterRegistrationStatus: updated);
   }
 
+  void setTimeline(String? value) {
+    state = state.copyWith(timeline: value);
+  }
+
   void clearFilters() {
     state = state.copyWith(
       dateRangeStart: null,
@@ -145,6 +153,7 @@ class EventsNotifier extends StateNotifier<EventsState> {
       filterModes: const {'physical': true, 'virtual': true},
       filterRegistrationStatus: const {'open': true, 'closed': true},
       searchQuery: '',
+      timeline: null,
     );
   }
 }
@@ -169,6 +178,60 @@ final filteredEventsProvider = Provider<List<AppEvent>>((ref) {
       final locationMatch = event.locationText?.toLowerCase().contains(query) ?? false;
       return titleMatch || descMatch || taglineMatch || locationMatch;
     }).toList();
+  }
+
+  // Apply timeline filter (overrides date range if set)
+  if (state.timeline != null) {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    
+    final int weekday = today.weekday; // 1=Monday ... 7=Sunday
+    int daysUntilStart;
+    int daysUntilEnd;
+    
+    switch (state.timeline) {
+      case 'this_week':
+        // From today to end of week (Sunday = day 7)
+        daysUntilEnd = DateTime.daysPerWeek - weekday;
+        filtered = filtered.where((event) {
+          return !event.startDatetime.isBefore(today) &&
+                 !event.startDatetime.isAfter(today.add(Duration(days: daysUntilEnd)));
+        }).toList();
+        break;
+      case 'next_week':
+        // Next Monday
+        daysUntilStart = (DateTime.daysPerWeek - weekday + 1) % DateTime.daysPerWeek;
+        if (daysUntilStart == 0) daysUntilStart = DateTime.daysPerWeek;
+        final nextMonday = today.add(Duration(days: daysUntilStart));
+        final nextSunday = nextMonday.add(const Duration(days: 6));
+        filtered = filtered.where((event) {
+          return !event.startDatetime.isBefore(nextMonday) &&
+                 !event.startDatetime.isAfter(nextSunday);
+        }).toList();
+        break;
+      case 'this_month':
+        filtered = filtered.where((event) {
+          return event.startDatetime.year == today.year &&
+                 event.startDatetime.month == today.month &&
+                 !event.startDatetime.isBefore(today);
+        }).toList();
+        break;
+      case 'next_month':
+        final nextMonthStart = DateTime(today.year, today.month + 1, 1);
+        final nextMonthEnd = DateTime(today.year, today.month + 2, 0, 23, 59, 59);
+        filtered = filtered.where((event) {
+          return !event.startDatetime.isBefore(nextMonthStart) &&
+                 !event.startDatetime.isAfter(nextMonthEnd);
+        }).toList();
+        break;
+      case 'next_3_months':
+        final threeMonthEnd = DateTime(today.year, today.month + 3, 0, 23, 59, 59);
+        filtered = filtered.where((event) {
+          return !event.startDatetime.isBefore(today) &&
+                 !event.startDatetime.isAfter(threeMonthEnd);
+        }).toList();
+        break;
+    }
   }
 
   // Apply date range filter

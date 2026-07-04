@@ -97,7 +97,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       state.dateRangeEnd != null ||
       !((state.filterModes?['physical'] ?? true) && (state.filterModes?['virtual'] ?? true)) ||
       !((state.filterRegistrationStatus?['open'] ?? true) && (state.filterRegistrationStatus?['closed'] ?? true)) ||
-      state.searchQuery.isNotEmpty;
+      state.searchQuery.isNotEmpty ||
+      state.timeline != null;
     final isInDrawer = kIsWeb || MediaQuery.of(context).size.width > 900;
 
     return SingleChildScrollView(
@@ -207,6 +208,15 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ),
             ],
           ),
+          const SizedBox(height: 20),
+
+          // Timeline Section (single-select dropdown)
+          const Text(
+            'Timeline',
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          _buildTimelineDropdown(rf, state, isInDrawer),
           const SizedBox(height: 20),
 
           // Event Mode Section (checkbox style)
@@ -910,7 +920,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       state.dateRangeEnd != null ||
       !((state.filterModes['physical'] ?? true) && (state.filterModes['virtual'] ?? true)) ||
       !((state.filterRegistrationStatus['open'] ?? true) && (state.filterRegistrationStatus['closed'] ?? true)) ||
-      state.searchQuery.isNotEmpty;
+      state.searchQuery.isNotEmpty ||
+      state.timeline != null;
 
     return CupertinoActionSheetAction(
       onPressed: () {},
@@ -961,6 +972,17 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         },
                       ),
                     ),
+
+                  // Timeline Section
+                  const Padding(
+                    padding: EdgeInsets.only(top: 12.0, bottom: 8.0),
+                    child: Text(
+                      'Timeline',
+                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ),
+                  _buildCupertinoTimelineDropdown(state, accentGold, isDark),
+                  const SizedBox(height: 12),
 
                   // Date Range Section
                   const Padding(
@@ -1955,6 +1977,105 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             style: TextStyle(color: Colors.grey),
           ),
         ],
+      ),
+    );
+  }
+
+  // ==========================================
+  // TIMELINE DROPDOWN HELPERS
+  // ==========================================
+  static const Map<String, String> _timelineOptions = {
+    'this_week': 'This week',
+    'next_week': 'Next week',
+    'this_month': 'This month',
+    'next_month': 'Next month',
+    'next_3_months': 'Next 3 months',
+  };
+
+  Widget _buildTimelineDropdown(WidgetRef rf, EventsState state, bool isInDrawer) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(
+          color: Theme.of(context).colorScheme.outlineVariant,
+        ),
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: state.timeline,
+          isExpanded: true,
+          hint: const Text('Select timeline'),
+          items: [
+            DropdownMenuItem<String?>(
+              value: null,
+              child: Text(
+                'None',
+                style: TextStyle(
+                  color: Theme.of(context).colorScheme.onSurfaceVariant,
+                ),
+              ),
+            ),
+            ..._timelineOptions.entries.map((entry) {
+              return DropdownMenuItem<String?>(
+                value: entry.key,
+                child: Text(entry.value),
+              );
+            }),
+          ],
+          onChanged: (value) {
+            rf.read(eventsProvider.notifier).setTimeline(value);
+          },
+        ),
+      ),
+    );
+  }
+
+  Widget _buildCupertinoTimelineDropdown(
+    EventsState state,
+    Color accentGold,
+    bool isDark,
+  ) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.symmetric(horizontal: 12),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD0D0D0)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String?>(
+          value: state.timeline,
+          isExpanded: true,
+          dropdownColor: isDark ? const Color(0xFF1C1C1E) : null,
+          hint: Text(
+            'Select timeline',
+            style: TextStyle(
+              color: isDark ? const Color(0xFFEBEBF5) : const Color(0xFF3C3C43),
+            ),
+          ),
+          items: [
+            DropdownMenuItem<String?>(
+              value: null,
+              child: Text(
+                'None',
+                style: TextStyle(
+                  color: isDark ? const Color(0xFFEBEBF5) : const Color(0xFF3C3C43),
+                ),
+              ),
+            ),
+            ..._timelineOptions.entries.map((entry) {
+              return DropdownMenuItem<String?>(
+                value: entry.key,
+                child: Text(entry.value),
+              );
+            }),
+          ],
+          onChanged: (value) {
+            ref.read(eventsProvider.notifier).setTimeline(value);
+          },
+        ),
       ),
     );
   }
