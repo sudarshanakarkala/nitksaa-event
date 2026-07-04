@@ -105,37 +105,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     }
   }
 
-  static const List<Map<String, String>> unusedMockSpeakers = [
-    {
-      'name': 'Prof. Ashwin Rao',
-      'role': 'NITK Surathkal — Chair, CSE Dept.',
-      'initials': 'AR'
-    },
-    {
-      'name': 'Priya Krishnamurthy',
-      'role': 'CTO, Infosys Alumni Cell',
-      'initials': 'PK'
-    },
-    {
-      'name': 'Dr. K. Umamaheshwar Rao',
-      'role': 'Director, NITK Surathkal',
-      'initials': 'UR'
-    }
-  ];
-
-  static const List<Map<String, String>> unusedMockAgenda = [
-    {'time': '09:00 AM', 'text': 'Keynote Address — Prof. Ashwin Rao'},
-    {'time': '10:30 AM', 'text': 'Panel: Future of Deep Tech'},
-    {'time': '01:00 PM', 'text': 'Alumni Networking Lunch'},
-    {'time': '03:00 PM', 'text': 'Giving Back to the Alma Mater'},
-  ];
-
-  static const List<Map<String, String>> mockSponsors = [
-    {'name': 'Infosys', 'color': '007CC2'},
-    {'name': 'NITK Foundation', 'color': '0D1B3E'},
-    {'name': 'Tata Elxsi', 'color': '003087'},
-  ];
-
   // ==========================================
   // CUPERTINO LAYOUT (iOS)
   // ==========================================
@@ -249,31 +218,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     const SizedBox(height: 8),
                     _buildCupertinoSectionHeader('Sponsors', textSecondary),
                     const SizedBox(height: 8),
-                    Wrap(
-                      spacing: 8,
-                      runSpacing: 8,
-                      children: mockSponsors.map((sp) {
-                        return Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                          decoration: BoxDecoration(
-                            color: cardBg,
-                            borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: textSecondary.withOpacity(0.1)),
-                          ),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              CircleAvatar(
-                                radius: 8,
-                                backgroundColor: Color(int.parse('0xFF${sp['color']!}')),
-                              ),
-                              const SizedBox(width: 6),
-                              Text(sp['name']!, style: TextStyle(fontSize: 12, color: textPrimary)),
-                            ],
-                          ),
-                        );
-                      }).toList(),
-                    ),
+                    _buildCupertinoSponsorChips(event, cardBg, textPrimary, textSecondary),
                     const SizedBox(height: 16),
                     _buildCupertinoDivider(isDark),
                     const SizedBox(height: 8),
@@ -482,7 +427,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const SizedBox(height: 24),
                         const Divider(),
                         const SizedBox(height: 16),
-                        _buildSponsorsSection(isDark),
+                        _buildSponsorsSection(event, isDark),
                         const SizedBox(height: 24),
                         const Divider(),
                         const SizedBox(height: 16),
@@ -587,7 +532,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
-              _buildSponsorsSection(isDark),
+              _buildSponsorsSection(event, isDark),
               const SizedBox(height: 16),
               const Divider(),
               const SizedBox(height: 16),
@@ -700,7 +645,109 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
-  Widget _buildSponsorsSection(bool isDark) {
+  Widget _buildCupertinoSponsorChips(AppEvent event, Color cardBg, Color textPrimary, Color textSecondary) {
+    if (event.sponsors.isEmpty && event.partners.isEmpty) {
+      return Text('Sponsor details will be updated soon.',
+          style: TextStyle(color: textSecondary, fontSize: 13));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (event.sponsors.isNotEmpty) ...[
+          Text('SPONSORS',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: textSecondary, letterSpacing: 0.5)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: event.sponsors.map((sp) {
+              return _buildCupertinoSponsorChip(sp.name, sp.sponsorTypeLabel, sp.logoUrl, sp.websiteUrl,
+                  cardBg, textPrimary, textSecondary);
+            }).toList(),
+          ),
+          const SizedBox(height: 12),
+        ],
+        if (event.partners.isNotEmpty) ...[
+          Text('PARTNERS',
+              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: textSecondary, letterSpacing: 0.5)),
+          const SizedBox(height: 6),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: event.partners.map((pt) {
+              return _buildCupertinoSponsorChip(pt.name, pt.partnerTypeLabel, pt.logoUrl, pt.websiteUrl,
+                  cardBg, textPrimary, textSecondary);
+            }).toList(),
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildCupertinoSponsorChip(String name, String typeLabel, String? logoUrl, String? websiteUrl,
+      Color cardBg, Color textPrimary, Color textSecondary) {
+    final chipContent = Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: cardBg,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: textSecondary.withOpacity(0.1)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          if (logoUrl != null && logoUrl.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(4),
+              child: Image.network(
+                logoUrl,
+                width: 20,
+                height: 20,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) => Icon(Icons.business, size: 16, color: const Color(0xFFC9952A)),
+              ),
+            )
+          else
+            Icon(Icons.business, size: 16, color: const Color(0xFFC9952A)),
+          const SizedBox(width: 6),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(name, style: TextStyle(fontSize: 12, color: textPrimary, fontWeight: FontWeight.w500)),
+              Text(typeLabel, style: TextStyle(fontSize: 9, color: textSecondary)),
+            ],
+          ),
+        ],
+      ),
+    );
+
+    if (websiteUrl != null && websiteUrl.isNotEmpty) {
+      return GestureDetector(
+        onTap: () => _launchUrl(websiteUrl),
+        child: chipContent,
+      );
+    }
+    return chipContent;
+  }
+
+  Widget _buildSponsorsSection(AppEvent event, bool isDark) {
+    if (event.sponsors.isEmpty && event.partners.isEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const Text(
+            'Sponsors',
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+          ),
+          const SizedBox(height: 12),
+          const Text('Sponsor details will be updated soon.',
+              style: TextStyle(fontSize: 14, color: Colors.grey)),
+        ],
+      );
+    }
+
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -709,32 +756,138 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
         ),
         const SizedBox(height: 12),
-        Wrap(
-          spacing: 12,
-          runSpacing: 8,
-          children: mockSponsors.map((sp) {
-            return Container(
-              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
-              decoration: BoxDecoration(
-                color: isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  CircleAvatar(
-                    radius: 8,
-                    backgroundColor: Color(int.parse('0xFF${sp['color']!}')),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(sp['name']!, style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w500)),
-                ],
-              ),
-            );
-          }).toList(),
-        ),
+        if (event.sponsors.isNotEmpty) ...[
+          Text('SPONSORS',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          _buildSponsorGrid(event.sponsors, isDark, isSponsor: true),
+          const SizedBox(height: 16),
+        ],
+        if (event.partners.isNotEmpty) ...[
+          Text('PARTNERS',
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
+                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                  letterSpacing: 0.5)),
+          const SizedBox(height: 8),
+          _buildSponsorGrid(event.partners, isDark, isSponsor: false),
+        ],
       ],
     );
+  }
+
+  Widget _buildSponsorGrid(List<dynamic> items, bool isDark, {required bool isSponsor}) {
+    if (items.isEmpty) return const SizedBox.shrink();
+
+    final screenWidth = MediaQuery.of(context).size.width;
+    final crossAxisCount = screenWidth > 900 ? 3 : (screenWidth > 600 ? 2 : 1);
+
+    return GridView.builder(
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
+        crossAxisCount: crossAxisCount,
+        crossAxisSpacing: 12,
+        mainAxisSpacing: 12,
+        childAspectRatio: 3.2,
+      ),
+      itemCount: items.length,
+      itemBuilder: (context, index) {
+        final item = items[index];
+        if (isSponsor) {
+          return _buildSponsorGridCard(
+            name: (item as EventSponsor).name,
+            typeLabel: item.sponsorTypeLabel,
+            logoUrl: item.logoUrl,
+            websiteUrl: item.websiteUrl,
+            isDark: isDark,
+          );
+        } else {
+          return _buildSponsorGridCard(
+            name: (item as EventPartner).name,
+            typeLabel: item.partnerTypeLabel,
+            logoUrl: item.logoUrl,
+            websiteUrl: item.websiteUrl,
+            isDark: isDark,
+          );
+        }
+      },
+    );
+  }
+
+  Widget _buildSponsorGridCard({
+    required String name,
+    required String typeLabel,
+    String? logoUrl,
+    String? websiteUrl,
+    required bool isDark,
+  }) {
+    final bg = isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA);
+    final card = Container(
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          if (logoUrl != null && logoUrl.isNotEmpty)
+            ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: Image.network(
+                logoUrl,
+                width: 36,
+                height: 36,
+                fit: BoxFit.contain,
+                errorBuilder: (_, __, ___) =>
+                    Icon(Icons.business, size: 22, color: const Color(0xFFC9952A)),
+              ),
+            )
+          else
+            Icon(Icons.business, size: 22, color: const Color(0xFFC9952A)),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                Text(
+                  name,
+                  style: TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: (websiteUrl != null && websiteUrl.isNotEmpty)
+                        ? const Color(0xFFC9952A)
+                        : null,
+                    decoration: (websiteUrl != null && websiteUrl.isNotEmpty)
+                        ? TextDecoration.underline
+                        : null,
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+                const SizedBox(height: 1),
+                Text(
+                  typeLabel,
+                  style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+
+    if (websiteUrl != null && websiteUrl.isNotEmpty) {
+      return GestureDetector(
+        onTap: () => _launchUrl(websiteUrl),
+        child: card,
+      );
+    }
+    return card;
   }
 
   Widget _buildAgendaSection(AppEvent event) {

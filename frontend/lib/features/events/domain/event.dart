@@ -1,3 +1,117 @@
+class EventSponsor {
+  const EventSponsor({
+    required this.sponsorId,
+    required this.eventId,
+    required this.sponsorType,
+    required this.name,
+    this.logoUrl,
+    this.websiteUrl,
+    this.description,
+    required this.displayOrder,
+  });
+
+  final int sponsorId;
+  final int eventId;
+  final String sponsorType;
+  final String name;
+  final String? logoUrl;
+  final String? websiteUrl;
+  final String? description;
+  final int displayOrder;
+
+  String get sponsorTypeLabel {
+    switch (sponsorType) {
+      case 'TITLE_SPONSOR':
+        return 'Title Sponsor';
+      case 'GOLD_SPONSOR':
+        return 'Gold Sponsor';
+      case 'SILVER_SPONSOR':
+        return 'Silver Sponsor';
+      case 'BRONZE_SPONSOR':
+        return 'Bronze Sponsor';
+      case 'ASSOCIATE_SPONSOR':
+        return 'Associate Sponsor';
+      default:
+        return sponsorType
+            .split('_')
+            .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+            .join(' ');
+    }
+  }
+
+  factory EventSponsor.fromJson(Map<String, dynamic> json) {
+    return EventSponsor(
+      sponsorId: json['sponsor_id'] as int,
+      eventId: json['event_id'] as int,
+      sponsorType: json['sponsor_type'] as String,
+      name: json['name'] as String,
+      logoUrl: json['logo_url'] as String?,
+      websiteUrl: json['website_url'] as String?,
+      description: json['description'] as String?,
+      displayOrder: json['display_order'] as int? ?? 0,
+    );
+  }
+}
+
+class EventPartner {
+  const EventPartner({
+    required this.partnerId,
+    required this.eventId,
+    required this.partnerType,
+    required this.name,
+    this.logoUrl,
+    this.websiteUrl,
+    this.description,
+    required this.displayOrder,
+  });
+
+  final int partnerId;
+  final int eventId;
+  final String partnerType;
+  final String name;
+  final String? logoUrl;
+  final String? websiteUrl;
+  final String? description;
+  final int displayOrder;
+
+  String get partnerTypeLabel {
+    switch (partnerType) {
+      case 'COMMUNITY_PARTNER':
+        return 'Community Partner';
+      case 'KNOWLEDGE_PARTNER':
+        return 'Knowledge Partner';
+      case 'MEDIA_PARTNER':
+        return 'Media Partner';
+      case 'VENUE_PARTNER':
+        return 'Venue Partner';
+      case 'TECHNOLOGY_PARTNER':
+        return 'Technology Partner';
+      case 'ECOSYSTEM_PARTNER':
+        return 'Ecosystem Partner';
+      case 'HIRING_PARTNER':
+        return 'Hiring Partner';
+      default:
+        return partnerType
+            .split('_')
+            .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+            .join(' ');
+    }
+  }
+
+  factory EventPartner.fromJson(Map<String, dynamic> json) {
+    return EventPartner(
+      partnerId: json['partner_id'] as int,
+      eventId: json['event_id'] as int,
+      partnerType: json['partner_type'] as String,
+      name: json['name'] as String,
+      logoUrl: json['logo_url'] as String?,
+      websiteUrl: json['website_url'] as String?,
+      description: json['description'] as String?,
+      displayOrder: json['display_order'] as int? ?? 0,
+    );
+  }
+}
+
 class AppEvent {
   const AppEvent({
     required this.eventId,
@@ -22,6 +136,8 @@ class AppEvent {
     required this.registeredCount,
     this.sessions = const [],
     this.speakers = const [],
+    this.sponsors = const [],
+    this.partners = const [],
   });
 
   final int eventId;
@@ -46,6 +162,8 @@ class AppEvent {
   final int registeredCount;
   final List<EventSession> sessions;
   final List<EventPerson> speakers;
+  final List<EventSponsor> sponsors;
+  final List<EventPartner> partners;
 
   factory AppEvent.fromJson(Map<String, dynamic> json) {
     return AppEvent(
@@ -84,6 +202,14 @@ class AppEvent {
       speakers: (json['speakers'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(EventPerson.fromJson)
+          .toList(),
+      sponsors: (json['sponsors'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(EventSponsor.fromJson)
+          .toList(),
+      partners: (json['partners'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(EventPartner.fromJson)
           .toList(),
     );
   }
