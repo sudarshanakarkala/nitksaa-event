@@ -437,7 +437,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   late List<Map<String, String>> _speakers;
   late List<Map<String, String>> _sessions;
   
+  // Sponsors
+  late List<Map<String, String>> _sponsors;
+  
   var _isSaving = false;
+  var _currentStep = 0;
 
   @override
   void initState() {
@@ -483,6 +487,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       'organisation': sp.organisation ?? '',
     }).toList() ?? [];
     
+    // Initialize sponsors (convert EventSponsor to Map)
+    _sponsors = event?.sponsors.map((sp) => {
+      'name': sp.name,
+      'sponsor_type': sp.sponsorType,
+      'logo_url': sp.logoUrl ?? '',
+      'website_url': sp.websiteUrl ?? '',
+    }).toList() ?? [];
+    
     // Initialize sessions (convert EventSession to Map)
     _sessions = event?.sessions.map((sess) {
       final speakerNames = _speakers.map((s) => s['fullname']!).toList();
@@ -501,6 +513,20 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     // Add listeners for syncing dates and times
     _startDate.addListener(_syncDates);
     _startTime.addListener(_syncTimes);
+    
+    // Add listeners to step 1 required fields to trigger rebuild for Next button state
+    _title.addListener(_onFieldChanged);
+    _description.addListener(_onFieldChanged);
+    _startDate.addListener(_onFieldChanged);
+    _endDate.addListener(_onFieldChanged);
+    _timezone.addListener(_onFieldChanged);
+    _location.addListener(_onFieldChanged);
+    _virtualUrl.addListener(_onFieldChanged);
+  }
+
+  void _onFieldChanged() {
+    // Trigger rebuild so _isStep1Complete is re-evaluated
+    setState(() {});
   }
 
   void _syncDates() {
@@ -540,6 +566,18 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     super.dispose();
   }
 
+  bool get _isStep1Complete {
+    final titleFilled = _title.text.trim().isNotEmpty;
+    final descFilled = _description.text.trim().isNotEmpty;
+    final startDateFilled = _startDate.text.trim().isNotEmpty;
+    final endDateFilled = _endDate.text.trim().isNotEmpty;
+    final timezoneFilled = _timezone.text.trim().isNotEmpty;
+    final locationFilled = _isVirtual
+        ? _virtualUrl.text.trim().isNotEmpty
+        : _location.text.trim().isNotEmpty;
+    return titleFilled && descFilled && startDateFilled && endDateFilled && timezoneFilled && locationFilled;
+  }
+
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.event != null;
@@ -560,176 +598,271 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           ),
           body: Form(
             key: _formKey,
-            child: SingleChildScrollView(
-              padding: const EdgeInsets.all(24),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  // ── Event Details Section ──
-                  _buildSectionHeader('Event Details'),
-                  const SizedBox(height: 16),
-                  _buildTextField(_title, 'Event Title', hint: 'e.g., NITK Alumni Meetup', required: true),
-                  const SizedBox(height: 12),
-                  _buildTextField(_tagline, 'Tagline', hint: 'Brief one-line summary', maxLines: 1),
-                  const SizedBox(height: 12),
-                  _buildTextField(_description, 'Description', hint: 'Detailed event description', maxLines: 4, required: true),
-                  
-                  const SizedBox(height: 28),
-                  // ── Date & Time Section ──
-                  _buildSectionHeader('Date & Time'),
-                  const SizedBox(height: 16),
-                  
-                  // Timezone selector
-                  _buildTimezoneDropdown(),
-                  const SizedBox(height: 12),
-                  
-                  // Full day toggle
-                  _buildToggleField('Full Day Event', _isFullDay, (val) {
-                    setState(() => _isFullDay = val);
-                  }),
-                  const SizedBox(height: 12),
-                  
-                  // Date/time fields
-                  if (_isFullDay)
-                    Column(
-                      children: [
-                        _buildDateField(_startDate, 'Event Date', required: true),
-                        const SizedBox(height: 12),
-                      ],
-                    )
-                  else
-                    Column(
-                      children: [
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildDateField(_startDate, 'Start Date', required: true),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildTimeField(_startTime, 'Start Time', required: true),
-                            ),
-                          ],
-                        ),
-                        const SizedBox(height: 12),
-                        Row(
-                          children: [
-                            Expanded(
-                              child: _buildDateField(_endDate, 'End Date', required: true),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: _buildTimeField(_endTime, 'End Time', required: true),
-                            ),
-                          ],
-                        ),
-                      ],
-                    ),
-                  
-                  const SizedBox(height: 28),
-                  // ── Location Section ──
-                  _buildSectionHeader('Location'),
-                  const SizedBox(height: 16),
-                  
-                  _buildToggleField('Virtual Event', _isVirtual, (val) {
-                    setState(() => _isVirtual = val);
-                  }),
-                  const SizedBox(height: 12),
-                  
-                  if (_isVirtual)
-                    _buildTextField(_virtualUrl, 'Meeting URL', hint: 'e.g., https://zoom.us/j/...', required: true)
-                  else
-                    _buildTextField(_location, 'Location', hint: 'e.g., NITK Surathkal Campus', required: true),
-                  
-                  const SizedBox(height: 28),
-                  // ── Registration Section ──
-                  _buildSectionHeader('Registration'),
-                  const SizedBox(height: 16),
-                  
-                  Row(
+            child: Column(
+              children: [
+                // Step indicator
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+                  child: Row(
                     children: [
-                      Expanded(
-                        child: _buildDateTimeField(
-                          _registrationOpensAt, 
-                          'Registration Opens', 
-                          hint: 'YYYY-MM-DD HH:mm',
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: _buildDateTimeField(
-                          _registrationClosesAt, 
-                          'Registration Closes', 
-                          hint: 'YYYY-MM-DD HH:mm',
-                        ),
+                      _buildStepIndicator(0, 'General', 'Event details, date, location'),
+                      Expanded(child: Divider(color: _currentStep > 0 ? const Color(0xFFC9952A) : Colors.grey.shade300, thickness: 2)),
+                      _buildStepIndicator(1, 'People & Agenda', 'Sponsors, speakers and sessions'),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 8),
+                // Step content
+                Expanded(
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(24),
+                    child: _currentStep == 0 ? _buildStep1() : _buildStep2(),
+                  ),
+                ),
+                // Bottom actions
+                Container(
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: theme.scaffoldBackgroundColor,
+                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                  ),
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      if (_currentStep > 0)
+                        TextButton.icon(
+                          onPressed: () => setState(() => _currentStep--),
+                          icon: const Icon(Icons.arrow_back),
+                          label: const Text('Back'),
+                        )
+                      else
+                        const SizedBox.shrink(),
+                      Row(
+                        children: [
+                          TextButton(
+                            onPressed: _isSaving ? null : () => Navigator.pop(context, false),
+                            child: const Text('Cancel'),
+                          ),
+                          const SizedBox(width: 12),
+                          if (_currentStep == 0)
+                            FilledButton.icon(
+                              onPressed: _isStep1Complete ? () => setState(() => _currentStep = 1) : null,
+                              icon: const Icon(Icons.arrow_forward),
+                              label: const Text('Next'),
+                            )
+                          else
+                            FilledButton(
+                              onPressed: _isSaving ? null : _save,
+                              child: Text(_isSaving ? 'Saving...' : 'Save Event'),
+                            ),
+                        ],
                       ),
                     ],
                   ),
-                  const SizedBox(height: 12),
-                  _buildTextField(_capacity, 'Capacity', hint: 'Leave empty for unlimited', keyboardType: TextInputType.number),
-                  
-                  const SizedBox(height: 28),
-                  // ── Images Section ──
-                  _buildSectionHeader('Images'),
-                  const SizedBox(height: 16),
-                  
-                  _buildTextField(_thumbnailUrl, 'Thumbnail URL', hint: 'Square image URL for event cards'),
-                  const SizedBox(height: 12),
-                  _buildTextField(_bannerUrl, 'Banner URL', hint: 'Wide image URL for event header'),
-                  
-                  const SizedBox(height: 28),
-                  // ── Pricing Section ──
-                  _buildSectionHeader('Pricing'),
-                  const SizedBox(height: 16),
-                  
-                  _buildToggleField('Free Event', _isFree, (val) {
-                    setState(() => _isFree = val);
-                  }),
-                  const SizedBox(height: 12),
-                  
-                  if (!_isFree)
-                    _buildTextField(
-                      _ticketPrice, 
-                      'Ticket Price', 
-                      hint: 'e.g., 499.99',
-                      keyboardType: TextInputType.number,
-                      required: true,
-                    ),
-                  
-                  const SizedBox(height: 28),
-                  // ── Speakers Section ──
-                  _buildSectionHeader('Speakers'),
-                  const SizedBox(height: 16),
-                  _buildSpeakersSection(),
-                  
-                  const SizedBox(height: 28),
-                  // ── Sessions Section ──
-                  _buildSectionHeader('Sessions'),
-                  const SizedBox(height: 16),
-                  _buildSessionsSection(),
-                  
-                  const SizedBox(height: 32),
-                  // ── Actions ──
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      TextButton(
-                        onPressed: _isSaving ? null : () => Navigator.pop(context, false),
-                        child: const Text('Cancel'),
-                      ),
-                      const SizedBox(width: 12),
-                      FilledButton(
-                        onPressed: _isSaving ? null : _save,
-                        child: Text(_isSaving ? 'Saving...' : 'Save Event'),
-                      ),
-                    ],
-                  ),
-                ],
-              ),
+                ),
+              ],
             ),
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildStepIndicator(int step, String title, String subtitle) {
+    final isActive = _currentStep == step;
+    final isCompleted = _currentStep > step;
+    final color = isCompleted || isActive ? const Color(0xFFC9952A) : Colors.grey;
+    return GestureDetector(
+      onTap: step == 0 || (step == 1 && _isStep1Complete) ? () => setState(() => _currentStep = step) : null,
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              shape: BoxShape.circle,
+              color: isCompleted ? const Color(0xFFC9952A) : (isActive ? const Color(0xFFC9952A).withOpacity(0.15) : Colors.transparent),
+              border: Border.all(color: color, width: 2),
+            ),
+            child: Center(
+              child: isCompleted
+                  ? const Icon(Icons.check, size: 18, color: Colors.white)
+                  : Text('${step + 1}', style: TextStyle(fontWeight: FontWeight.bold, color: isActive ? const Color(0xFFC9952A) : Colors.grey, fontSize: 14)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isActive || isCompleted ? const Color(0xFFC9952A) : Colors.grey)),
+              Text(subtitle, style: TextStyle(fontSize: 10, color: Colors.grey)),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildStep1() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Event Details Section ──
+        _buildSectionHeader('Event Details'),
+        const SizedBox(height: 16),
+        _buildTextField(_title, 'Event Title', hint: 'e.g., NITK Alumni Meetup', required: true),
+        const SizedBox(height: 12),
+        _buildTextField(_tagline, 'Tagline', hint: 'Brief one-line summary', maxLines: 1),
+        const SizedBox(height: 12),
+        _buildTextField(_description, 'Description', hint: 'Detailed event description', maxLines: 4, required: true),
+        
+        const SizedBox(height: 28),
+        // ── Date & Time Section ──
+        _buildSectionHeader('Date & Time'),
+        const SizedBox(height: 16),
+        
+        // Timezone selector
+        _buildTimezoneDropdown(),
+        const SizedBox(height: 12),
+        
+        // Full day toggle
+        _buildToggleField('Full Day Event', _isFullDay, (val) {
+          setState(() => _isFullDay = val);
+        }),
+        const SizedBox(height: 12),
+        
+        // Date/time fields
+        if (_isFullDay)
+          Column(
+            children: [
+              _buildDateField(_startDate, 'Event Date', required: true),
+              const SizedBox(height: 12),
+            ],
+          )
+        else
+          Column(
+            children: [
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateField(_startDate, 'Start Date', required: true),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTimeField(_startTime, 'Start Time', required: true),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: _buildDateField(_endDate, 'End Date', required: true),
+                  ),
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: _buildTimeField(_endTime, 'End Time', required: true),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        
+        const SizedBox(height: 28),
+        // ── Location Section ──
+        _buildSectionHeader('Location'),
+        const SizedBox(height: 16),
+        
+        _buildToggleField('Virtual Event', _isVirtual, (val) {
+          setState(() => _isVirtual = val);
+        }),
+        const SizedBox(height: 12),
+        
+        if (_isVirtual)
+          _buildTextField(_virtualUrl, 'Meeting URL', hint: 'e.g., https://zoom.us/j/...', required: true)
+        else
+          _buildTextField(_location, 'Location', hint: 'e.g., NITK Surathkal Campus', required: true),
+        
+        const SizedBox(height: 28),
+        // ── Registration Section ──
+        _buildSectionHeader('Registration'),
+        const SizedBox(height: 16),
+        
+        Row(
+          children: [
+            Expanded(
+              child: _buildDateTimeField(
+                _registrationOpensAt, 
+                'Registration Opens', 
+                hint: 'YYYY-MM-DD HH:mm',
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildDateTimeField(
+                _registrationClosesAt, 
+                'Registration Closes', 
+                hint: 'YYYY-MM-DD HH:mm',
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(_capacity, 'Capacity', hint: 'Leave empty for unlimited', keyboardType: TextInputType.number),
+        
+        const SizedBox(height: 28),
+        // ── Images Section ──
+        _buildSectionHeader('Images'),
+        const SizedBox(height: 16),
+        
+        _buildTextField(_thumbnailUrl, 'Thumbnail URL', hint: 'Square image URL for event cards'),
+        const SizedBox(height: 12),
+        _buildTextField(_bannerUrl, 'Banner URL', hint: 'Wide image URL for event header'),
+        
+        const SizedBox(height: 28),
+        // ── Pricing Section ──
+        _buildSectionHeader('Pricing'),
+        const SizedBox(height: 16),
+        
+        _buildToggleField('Free Event', _isFree, (val) {
+          setState(() => _isFree = val);
+        }),
+        const SizedBox(height: 12),
+        
+        if (!_isFree)
+          _buildTextField(
+            _ticketPrice, 
+            'Ticket Price', 
+            hint: 'e.g., 499.99',
+            keyboardType: TextInputType.number,
+            required: true,
+          ),
+      ],
+    );
+  }
+
+  Widget _buildStep2() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Sponsors Section ──
+        _buildSectionHeader('Sponsors'),
+        const SizedBox(height: 16),
+        _buildSponsorsSection(),
+        
+        const SizedBox(height: 28),
+        // ── Speakers Section ──
+        _buildSectionHeader('Speakers'),
+        const SizedBox(height: 16),
+        _buildSpeakersSection(),
+        
+        const SizedBox(height: 28),
+        // ── Sessions Section ──
+        _buildSectionHeader('Sessions'),
+        const SizedBox(height: 16),
+        _buildSessionsSection(),
+      ],
     );
   }
 
@@ -752,10 +885,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     int maxLines = 1,
     TextInputType? keyboardType,
   }) {
+    final displayLabel = required ? '$label *' : label;
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: displayLabel,
         hintText: hint,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -770,10 +904,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   }
 
   Widget _buildDateField(TextEditingController controller, String label, {bool required = false}) {
+    final displayLabel = required ? '$label *' : label;
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: displayLabel,
         hintText: 'YYYY-MM-DD',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -800,10 +935,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   }
 
   Widget _buildTimeField(TextEditingController controller, String label, {bool required = false}) {
+    final displayLabel = required ? '$label *' : label;
     return TextFormField(
       controller: controller,
       decoration: InputDecoration(
-        labelText: label,
+        labelText: displayLabel,
         hintText: 'HH:mm',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -865,7 +1001,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return TextFormField(
       controller: _timezone,
       decoration: InputDecoration(
-        labelText: 'Timezone',
+        labelText: 'Timezone *',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
         suffixIcon: GestureDetector(
@@ -1084,6 +1220,239 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
+  Widget _buildSponsorsSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        if (_sponsors.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No sponsors added yet',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+          )
+        else
+          ...List.generate(_sponsors.length, (index) {
+            final sponsor = _sponsors[index];
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                decoration: BoxDecoration(
+                  border: Border.all(color: Colors.grey.shade300),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                padding: const EdgeInsets.all(12),
+                child: Row(
+                  children: [
+                    // Up/Down buttons
+                    Column(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.arrow_upward, size: 16),
+                          onPressed: index > 0 ? () {
+                            setState(() {
+                              final temp = _sponsors[index];
+                              _sponsors[index] = _sponsors[index - 1];
+                              _sponsors[index - 1] = temp;
+                            });
+                          } : null,
+                          constraints: const BoxConstraints(minWidth: 24, minHeight: 16),
+                          padding: EdgeInsets.zero,
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.arrow_downward, size: 16),
+                          onPressed: index < _sponsors.length - 1 ? () {
+                            setState(() {
+                              final temp = _sponsors[index];
+                              _sponsors[index] = _sponsors[index + 1];
+                              _sponsors[index + 1] = temp;
+                            });
+                          } : null,
+                          constraints: const BoxConstraints(minWidth: 24, minHeight: 16),
+                          padding: EdgeInsets.zero,
+                        ),
+                      ],
+                    ),
+                    const SizedBox(width: 8),
+                    // Sponsor info
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            sponsor['name'] ?? '',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
+                          ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _sponsorTypeLabel(sponsor['sponsor_type'] ?? ''),
+                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                          ),
+                          if ((sponsor['logo_url'] ?? '').isNotEmpty)
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                'Logo: ${sponsor['logo_url']}',
+                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                              ),
+                            ),
+                        ],
+                      ),
+                    ),
+                    // Edit/Delete buttons
+                    Row(
+                      children: [
+                        IconButton(
+                          icon: const Icon(Icons.edit, size: 18),
+                          onPressed: () => _showSponsorDialog(index),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                          onPressed: () {
+                            setState(() => _sponsors.removeAt(index));
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+            );
+          }),
+        const SizedBox(height: 12),
+        FilledButton.tonalIcon(
+          onPressed: () => _showSponsorDialog(null),
+          icon: const Icon(Icons.add),
+          label: const Text('Add Sponsor'),
+        ),
+      ],
+    );
+  }
+
+  String _sponsorTypeLabel(String type) {
+    switch (type) {
+      case 'TITLE_SPONSOR': return 'Title Sponsor';
+      case 'GOLD_SPONSOR': return 'Gold Sponsor';
+      case 'SILVER_SPONSOR': return 'Silver Sponsor';
+      case 'BRONZE_SPONSOR': return 'Bronze Sponsor';
+      case 'ASSOCIATE_SPONSOR': return 'Associate Sponsor';
+      default: return type.split('_').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}').join(' ');
+    }
+  }
+
+  void _showSponsorDialog(int? editIndex) {
+    final nameCtrl = TextEditingController(
+      text: editIndex != null ? _sponsors[editIndex]['name'] ?? '' : '',
+    );
+    final logoUrlCtrl = TextEditingController(
+      text: editIndex != null ? _sponsors[editIndex]['logo_url'] ?? '' : '',
+    );
+    final websiteUrlCtrl = TextEditingController(
+      text: editIndex != null ? _sponsors[editIndex]['website_url'] ?? '' : '',
+    );
+    var selectedType = editIndex != null ? _sponsors[editIndex]['sponsor_type'] ?? 'TITLE_SPONSOR' : 'TITLE_SPONSOR';
+
+    final sponsorTypes = [
+      'TITLE_SPONSOR',
+      'GOLD_SPONSOR',
+      'SILVER_SPONSOR',
+      'BRONZE_SPONSOR',
+      'ASSOCIATE_SPONSOR',
+    ];
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final canSave = nameCtrl.text.trim().isNotEmpty;
+          return AlertDialog(
+            title: Text(editIndex == null ? 'Add Sponsor' : 'Edit Sponsor'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Sponsor Name *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedType,
+                    decoration: InputDecoration(
+                      labelText: 'Sponsor Type *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    items: sponsorTypes.map((type) => DropdownMenuItem(
+                      value: type,
+                      child: Text(_sponsorTypeLabel(type)),
+                    )).toList(),
+                    onChanged: (value) {
+                      setDialogState(() => selectedType = value ?? 'TITLE_SPONSOR');
+                    },
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: logoUrlCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Logo URL',
+                      hintText: 'https://example.com/logo.png',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: websiteUrlCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Website URL',
+                      hintText: 'https://example.com',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: canSave ? () {
+                  setState(() {
+                    final sponsor = {
+                      'name': nameCtrl.text.trim(),
+                      'sponsor_type': selectedType,
+                      'logo_url': logoUrlCtrl.text.trim(),
+                      'website_url': websiteUrlCtrl.text.trim(),
+                    };
+                    if (editIndex == null) {
+                      _sponsors.add(sponsor);
+                    } else {
+                      _sponsors[editIndex] = sponsor;
+                    }
+                  });
+                  Navigator.pop(context);
+                } : null,
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+
   void _showSpeakerDialog(int? editIndex) {
     final fullnameCtrl = TextEditingController(
       text: editIndex != null ? _speakers[editIndex]['fullname'] ?? '' : '',
@@ -1094,76 +1463,91 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final organisationCtrl = TextEditingController(
       text: editIndex != null ? _speakers[editIndex]['organisation'] ?? '' : '',
     );
+    final photoUrlCtrl = TextEditingController(
+      text: editIndex != null ? _speakers[editIndex]['photo_url'] ?? '' : '',
+    );
 
     showDialog(
       context: context,
-      builder: (context) => AlertDialog(
-        title: Text(editIndex == null ? 'Add Speaker' : 'Edit Speaker'),
-        content: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            TextField(
-              controller: fullnameCtrl,
-              decoration: InputDecoration(
-                labelText: 'Full Name *',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final canSave = fullnameCtrl.text.trim().isNotEmpty && 
+              organisationCtrl.text.trim().isNotEmpty;
+          return AlertDialog(
+            title: Text(editIndex == null ? 'Add Speaker' : 'Edit Speaker'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: fullnameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Full Name *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Title',
+                      hintText: 'e.g., Chief Technology Officer',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: organisationCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Organization *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: photoUrlCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Profile Picture URL',
+                      hintText: 'https://example.com/photo.jpg',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                ],
               ),
             ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: titleCtrl,
-              decoration: InputDecoration(
-                labelText: 'Title *',
-                hintText: 'e.g., Chief Technology Officer',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
               ),
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: organisationCtrl,
-              decoration: InputDecoration(
-                labelText: 'Organization *',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              FilledButton(
+                onPressed: canSave ? () {
+                  setState(() {
+                    final speaker = {
+                      'fullname': fullnameCtrl.text.trim(),
+                      'title': titleCtrl.text.trim(),
+                      'organisation': organisationCtrl.text.trim(),
+                      'photo_url': photoUrlCtrl.text.trim(),
+                    };
+                    if (editIndex == null) {
+                      _speakers.add(speaker);
+                    } else {
+                      _speakers[editIndex] = speaker;
+                    }
+                  });
+                  Navigator.pop(context);
+                } : null,
+                child: const Text('Save'),
               ),
-            ),
-          ],
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('Cancel'),
-          ),
-          FilledButton(
-            onPressed: () {
-              if (fullnameCtrl.text.trim().isEmpty ||
-                  titleCtrl.text.trim().isEmpty ||
-                  organisationCtrl.text.trim().isEmpty) {
-                ScaffoldMessenger.of(context).showSnackBar(
-                  const SnackBar(content: Text('All fields are required')),
-                );
-                return;
-              }
-
-              setState(() {
-                final speaker = {
-                  'fullname': fullnameCtrl.text.trim(),
-                  'title': titleCtrl.text.trim(),
-                  'organisation': organisationCtrl.text.trim(),
-                };
-                if (editIndex == null) {
-                  _speakers.add(speaker);
-                } else {
-                  _speakers[editIndex] = speaker;
-                }
-              });
-              Navigator.pop(context);
-            },
-            child: const Text('Save'),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
   }
@@ -1173,121 +1557,194 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       text: editIndex != null ? _sessions[editIndex]['title'] ?? '' : '',
     );
     final startTimeCtrl = TextEditingController(
-      text: editIndex != null ? _sessions[editIndex]['start_time'] ?? '' : '',
+      text: editIndex != null ? _sessions[editIndex]['start_time'] ?? '' : _getDefaultStartTime(),
     );
     final endTimeCtrl = TextEditingController(
-      text: editIndex != null ? _sessions[editIndex]['end_time'] ?? '' : '',
+      text: editIndex != null ? _sessions[editIndex]['end_time'] ?? '' : _getDefaultEndTime(startTimeCtrl.text),
     );
     var selectedSpeaker = editIndex != null ? _sessions[editIndex]['speaker'] ?? '' : '';
 
     showDialog(
       context: context,
       builder: (context) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          title: Text(editIndex == null ? 'Add Session' : 'Edit Session'),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                TextField(
-                  controller: titleCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Session Title *',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        builder: (context, setDialogState) {
+          final canSave = titleCtrl.text.trim().isNotEmpty && 
+              selectedSpeaker.isNotEmpty && 
+              startTimeCtrl.text.trim().isNotEmpty && 
+              endTimeCtrl.text.trim().isNotEmpty;
+          
+          return AlertDialog(
+            title: Text(editIndex == null ? 'Add Session' : 'Edit Session'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: titleCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Session Title *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
                   ),
-                ),
-                const SizedBox(height: 12),
-                DropdownButtonFormField<String>(
-                  value: selectedSpeaker.isEmpty ? null : selectedSpeaker,
-                  decoration: InputDecoration(
-                    labelText: 'Speaker *',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedSpeaker.isEmpty ? null : selectedSpeaker,
+                    decoration: InputDecoration(
+                      labelText: 'Speaker *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    items: _speakers
+                        .map((s) => DropdownMenuItem(
+                          value: s['fullname'],
+                          child: Text(s['fullname'] ?? ''),
+                        ))
+                        .toList(),
+                    onChanged: (value) {
+                      setDialogState(() => selectedSpeaker = value ?? '');
+                    },
                   ),
-                  items: _speakers
-                      .map((s) => DropdownMenuItem(
-                        value: s['fullname'],
-                        child: Text(s['fullname'] ?? ''),
-                      ))
-                      .toList(),
-                  onChanged: (value) {
-                    setDialogState(() => selectedSpeaker = value ?? '');
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: startTimeCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'Start Time *',
-                    hintText: 'YYYY-MM-DD HH:mm',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: startTimeCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Start Time *',
+                      hintText: 'YYYY-MM-DD HH:mm',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    onTap: () async {
+                      final dateTime = await _showDateTimePickerDialog(startTimeCtrl.text);
+                      if (dateTime != null) {
+                        startTimeCtrl.text = dateTime;
+                        // Auto-calculate end time (+60 min)
+                        final newEndTime = _getDefaultEndTime(dateTime);
+                        endTimeCtrl.text = newEndTime;
+                        setDialogState(() {});
+                      }
+                    },
+                    onChanged: (_) => setDialogState(() {}),
                   ),
-                  onTap: () async {
-                    final dateTime = await _showDateTimePickerDialog(startTimeCtrl.text);
-                    if (dateTime != null) {
-                      startTimeCtrl.text = dateTime;
-                    }
-                  },
-                ),
-                const SizedBox(height: 12),
-                TextField(
-                  controller: endTimeCtrl,
-                  decoration: InputDecoration(
-                    labelText: 'End Time *',
-                    hintText: 'YYYY-MM-DD HH:mm',
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: endTimeCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'End Time *',
+                      hintText: 'YYYY-MM-DD HH:mm',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    onTap: () async {
+                      final dateTime = await _showDateTimePickerDialog(endTimeCtrl.text);
+                      if (dateTime != null) {
+                        endTimeCtrl.text = dateTime;
+                        setDialogState(() {});
+                      }
+                    },
+                    onChanged: (_) => setDialogState(() {}),
                   ),
-                  onTap: () async {
-                    final dateTime = await _showDateTimePickerDialog(endTimeCtrl.text);
-                    if (dateTime != null) {
-                      endTimeCtrl.text = dateTime;
-                    }
-                  },
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(context),
-              child: const Text('Cancel'),
-            ),
-            FilledButton(
-              onPressed: () {
-                if (titleCtrl.text.trim().isEmpty ||
-                    selectedSpeaker.isEmpty ||
-                    startTimeCtrl.text.trim().isEmpty ||
-                    endTimeCtrl.text.trim().isEmpty) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('All fields are required')),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: canSave ? () {
+                  // Validate for time clashes
+                  final clashError = _validateSessionClash(
+                    editIndex,
+                    startTimeCtrl.text.trim(),
+                    endTimeCtrl.text.trim(),
                   );
-                  return;
-                }
-
-                setState(() {
-                  final session = {
-                    'title': titleCtrl.text.trim(),
-                    'speaker': selectedSpeaker,
-                    'start_time': startTimeCtrl.text.trim(),
-                    'end_time': endTimeCtrl.text.trim(),
-                  };
-                  if (editIndex == null) {
-                    _sessions.add(session);
-                  } else {
-                    _sessions[editIndex] = session;
+                  if (clashError != null) {
+                    ScaffoldMessenger.of(context).showSnackBar(
+                      SnackBar(content: Text(clashError)),
+                    );
+                    return;
                   }
-                });
-                Navigator.pop(context);
-              },
-              child: const Text('Save'),
-            ),
-          ],
-        ),
+
+                  setState(() {
+                    final session = {
+                      'title': titleCtrl.text.trim(),
+                      'speaker': selectedSpeaker,
+                      'start_time': startTimeCtrl.text.trim(),
+                      'end_time': endTimeCtrl.text.trim(),
+                    };
+                    if (editIndex == null) {
+                      _sessions.add(session);
+                    } else {
+                      _sessions[editIndex] = session;
+                    }
+                  });
+                  Navigator.pop(context);
+                } : null,
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
       ),
     );
+  }
+
+  String _getDefaultStartTime() {
+    // If there are existing sessions, use the end time of the last one
+    if (_sessions.isNotEmpty) {
+      final lastSession = _sessions.last;
+      final lastEndTime = lastSession['end_time'] ?? '';
+      if (lastEndTime.isNotEmpty) {
+        try {
+          final parsed = DateTime.parse(lastEndTime);
+          return _formatDateTimeOnly(parsed);
+        } catch (e) {
+          // Fall through to default
+        }
+      }
+    }
+    // Default to current time
+    return _formatDateTimeOnly(DateTime.now());
+  }
+
+  String _getDefaultEndTime(String startTime) {
+    if (startTime.isEmpty) return _formatDateTimeOnly(DateTime.now().add(const Duration(hours: 1)));
+    try {
+      final parsed = DateTime.parse(startTime);
+      return _formatDateTimeOnly(parsed.add(const Duration(minutes: 60)));
+    } catch (e) {
+      return _formatDateTimeOnly(DateTime.now().add(const Duration(hours: 1)));
+    }
+  }
+
+  String? _validateSessionClash(int? editIndex, String startTime, String endTime) {
+    try {
+      final start = DateTime.parse(startTime);
+      final end = DateTime.parse(endTime);
+      
+      if (!end.isAfter(start)) {
+        return 'End time must be after start time';
+      }
+
+      // Check for clashes with other sessions
+      for (int i = 0; i < _sessions.length; i++) {
+        if (i == editIndex) continue; // Skip the session being edited
+        
+        final otherStart = DateTime.parse(_sessions[i]['start_time'] ?? '');
+        final otherEnd = DateTime.parse(_sessions[i]['end_time'] ?? '');
+        
+        // Check if times overlap: (start < otherEnd) && (end > otherStart)
+        if (start.isBefore(otherEnd) && end.isAfter(otherStart)) {
+          return 'Session timing clashes with "${_sessions[i]['title']}"';
+        }
+      }
+      return null;
+    } catch (e) {
+      return null; // Let other validation handle parsing errors
+    }
   }
 
   Future<String?> _showDateTimePickerDialog(String currentValue) async {
@@ -1438,6 +1895,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           'registration_opens_at': '${_registrationOpensAt.text.trim()}:00$offset',
         if (_registrationClosesAt.text.trim().isNotEmpty)
           'registration_closes_at': '${_registrationClosesAt.text.trim()}:00$offset',
+        // Add sponsors data
+        'sponsors': _sponsors.asMap().entries.map((entry) => {
+          'name': entry.value['name'],
+          'sponsor_type': entry.value['sponsor_type'],
+          'logo_url': entry.value['logo_url']?.isEmpty == true ? null : entry.value['logo_url'],
+          'website_url': entry.value['website_url']?.isEmpty == true ? null : entry.value['website_url'],
+          'display_order': entry.key,
+        }).toList(),
         // Add speakers data
         'speakers': _speakers.map((speaker) => {
           'fullname': speaker['fullname'],
