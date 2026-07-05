@@ -8,6 +8,7 @@ import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
+import '../../../../shared/widgets/app_sidebar.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
   const ManageEventsScreen({super.key});
@@ -186,7 +187,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       body: SafeArea(
         child: Row(
           children: [
-            if (isWebScreen) _Sidebar(isDark: isDark, auth: auth),
+            if (isWebScreen) const AppSidebar(),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(

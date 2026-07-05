@@ -7,6 +7,7 @@ import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
 import '../providers/my_events_provider.dart';
+import '../../../../shared/widgets/app_sidebar.dart';
 
 class MyEventsScreen extends ConsumerStatefulWidget {
   const MyEventsScreen({super.key});
@@ -71,7 +72,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       body: SafeArea(
         child: Row(
           children: [
-            if (isWebScreen) _Sidebar(isDark: isDark, auth: auth),
+            if (isWebScreen) const AppSidebar(),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -228,137 +229,6 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
   }
 }
 
-class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.isDark, required this.auth});
-
-  final bool isDark;
-  final AuthController auth;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: 240,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0E1726) : const Color(0xFFF8F9FD),
-        border: Border(
-          right: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const Row(
-            children: [
-              Icon(Icons.calendar_today_outlined, color: Color(0xFFC9952A)),
-              SizedBox(width: 8),
-              Text(
-                'NITKSAA',
-                style: TextStyle(
-                  fontFamily: 'Fraunces',
-                  fontSize: 20,
-                  fontWeight: FontWeight.bold,
-                  color: Color(0xFFC9952A),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          _SidebarItem(
-            icon: Icons.calendar_month,
-            label: 'Events',
-            active: false,
-            onTap: () => context.go(AppRoutes.home),
-          ),
-          _SidebarItem(
-            icon: Icons.bookmark,
-            label: 'My Events',
-            active: true,
-            onTap: () {},
-          ),
-          const _SidebarItem(
-            icon: Icons.verified_user_outlined,
-            label: 'Volunteer',
-            active: false,
-          ),
-          const _SidebarItem(icon: Icons.more_horiz, label: 'More', active: false),
-          const Spacer(),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: const Color(0xFFC9952A),
-                child: Text(
-                  (auth.session?.fullname ?? 'U').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  auth.session?.fullname ?? 'Alumni User',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarItem extends StatelessWidget {
-  const _SidebarItem({
-    required this.icon,
-    required this.label,
-    required this.active,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final activeBg = isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA);
-    final activeText = isDark ? Colors.white : const Color(0xFF0D1B3E);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      decoration: BoxDecoration(
-        color: active ? activeBg : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListTile(
-        visualDensity: VisualDensity.compact,
-        leading: Icon(
-          icon,
-          size: 20,
-          color: active ? activeText : const Color(0xFF5A6A8A),
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: active ? activeText : const Color(0xFF5A6A8A),
-            fontSize: 13,
-            fontWeight: active ? FontWeight.bold : FontWeight.w500,
-          ),
-        ),
-        onTap: onTap,
-      ),
-    );
-  }
-}
 
 class _RegistrationCard extends StatelessWidget {
   const _RegistrationCard({

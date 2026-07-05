@@ -8,6 +8,7 @@ import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
 import '../../domain/event.dart';
+import '../../../../shared/widgets/app_sidebar.dart';
 
 class EventListScreen extends ConsumerStatefulWidget {
   const EventListScreen({super.key});
@@ -1221,133 +1222,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     // Web styling rules
     final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
 
-    final sidebar = isWebScreen
-        ? Container(
-            width: 240,
-            decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF0E1726) : const Color(0xFFF8F9FD),
-              border: Border(
-                right: BorderSide(
-                  color: colorScheme.outlineVariant.withOpacity(0.5),
-                ),
-              ),
-            ),
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  children: [
-                    const Icon(
-                      Icons.calendar_today_outlined,
-                      color: Color(0xFFC9952A),
-                      size: 24,
-                    ),
-                    const SizedBox(width: 8),
-                    Text(
-                      'NITKSAA',
-                      style: TextStyle(
-                        fontFamily: 'Fraunces',
-                        fontSize: 20,
-                        fontWeight: FontWeight.bold,
-                        color: isDark
-                            ? const Color(0xFFC9952A)
-                            : colorScheme.primary,
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 32),
-                _buildSidebarItem(Icons.calendar_month, 'Events', true, isDark),
-                _buildSidebarItem(
-                  Icons.bookmark_border,
-                  'My Events',
-                  false,
-                  isDark,
-                ),
-                _buildSidebarItem(
-                  Icons.verified_user_outlined,
-                  'Volunteer',
-                  false,
-                  isDark,
-                ),
-                _buildSidebarItem(
-                  Icons.admin_panel_settings_outlined,
-                  'Manage Events',
-                  false,
-                  isDark,
-                ),
-                _buildSidebarItem(Icons.more_horiz, 'More', false, isDark),
-                const Spacer(),
-                if (auth.isAuthenticated) ...[
-                  Row(
-                    children: [
-                      CircleAvatar(
-                        backgroundColor: const Color(0xFFC9952A),
-                        radius: 18,
-                        child: Text(
-                          (auth.session?.fullname ?? 'U')
-                              .substring(0, 1)
-                              .toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontWeight: FontWeight.bold,
-                            fontSize: 13,
-                          ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              auth.session?.fullname ?? 'Alumni User',
-                              style: const TextStyle(
-                                fontWeight: FontWeight.bold,
-                                fontSize: 13,
-                              ),
-                              maxLines: 1,
-                              overflow: TextOverflow.ellipsis,
-                            ),
-                            Text(
-                              auth.session?.userType ?? 'Member',
-                              style: TextStyle(
-                                fontSize: 11,
-                                color: theme.colorScheme.onSurfaceVariant,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 16),
-                ],
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton.icon(
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: isDark
-                          ? const Color(0xFFC9952A)
-                          : const Color(0xFF0D1B3E),
-                      foregroundColor: isDark ? Colors.black : Colors.white,
-                      padding: const EdgeInsets.symmetric(vertical: 12),
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                    icon: Icon(
-                      auth.isAuthenticated ? Icons.logout : Icons.login,
-                    ),
-                    label: Text(auth.isAuthenticated ? 'Log Out' : 'Log In'),
-                    onPressed: _handleAuthAction,
-                  ),
-                ),
-              ],
-            ),
-          )
-        : null;
+    final sidebar = isWebScreen ? const AppSidebar() : null;
 
     final bodyContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1655,52 +1530,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  Widget _buildSidebarItem(
-    IconData icon,
-    String label,
-    bool active,
-    bool isDark,
-  ) {
-    final activeBg = isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA);
-    final activeText = isDark ? Colors.white : const Color(0xFF0D1B3E);
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6.0),
-      decoration: BoxDecoration(
-        color: active ? activeBg : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListTile(
-        visualDensity: VisualDensity.compact,
-        leading: Icon(
-          icon,
-          color: active ? activeText : const Color(0xFF5A6A8A),
-          size: 20,
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: active ? activeText : const Color(0xFF5A6A8A),
-            fontSize: 13,
-            fontWeight: active ? FontWeight.bold : FontWeight.w500,
-          ),
-        ),
-        onTap: () {
-          if (active) return;
-          if (label == 'My Events') {
-            context.go(AppRoutes.myEvents);
-            return;
-          }
-          if (label == 'Manage Events') {
-            context.go(AppRoutes.manageEvents);
-            return;
-          }
-          ScaffoldMessenger.of(
-            context,
-          ).showSnackBar(SnackBar(content: Text('$label coming soon.')));
-        },
-      ),
-    );
-  }
 
   Widget _buildMaterialEventCard(AppEvent event, bool isDark, ThemeData theme) {
     final isPhysical = !event.isVirtual;
