@@ -1909,7 +1909,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           'fullname': speaker['fullname'],
           'title': speaker['title'],
           'organisation': speaker['organisation'],
-          'role': 'speaker',
+          'role': 'SPEAKER',
         }).toList(),
         // Add sessions data
         'sessions': _sessions.map((session) => {

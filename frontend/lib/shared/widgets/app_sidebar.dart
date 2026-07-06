@@ -282,7 +282,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                 _isCollapsed ? 8 : 12,
                 8,
                 _isCollapsed ? 8 : 12,
-                16,
+                8,
               ),
               child: _isCollapsed
                   ? Tooltip(
@@ -342,6 +342,144 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                           ),
                         ),
                       ],
+                    ),
+            ),
+            // Logout button
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                _isCollapsed ? 8 : 12,
+                0,
+                _isCollapsed ? 8 : 12,
+                16,
+              ),
+              child: _isCollapsed
+                  ? Tooltip(
+                      message: 'Logout',
+                      child: IconButton(
+                        icon: const Icon(Icons.logout, size: 20),
+                        color: inactiveText,
+                        onPressed: () async {
+                          final confirm = await showDialog<bool>(
+                            context: context,
+                            builder: (context) => AlertDialog(
+                              title: const Text('Logout'),
+                              content: const Text('Are you sure you want to logout?'),
+                              actions: [
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, false),
+                                  child: const Text('Cancel'),
+                                ),
+                                TextButton(
+                                  onPressed: () => Navigator.pop(context, true),
+                                  child: const Text('Logout'),
+                                ),
+                              ],
+                            ),
+                          );
+                          if (confirm == true && mounted) {
+                            await ref.read(authControllerProvider.notifier).signOut();
+                            if (mounted) {
+                              context.go(AppRoutes.login);
+                            }
+                          }
+                        },
+                      ),
+                    )
+                  : ListTile(
+                      visualDensity: VisualDensity.compact,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: _isCollapsed ? 8 : 12,
+                        vertical: 4,
+                      ),
+                      leading: const Icon(
+                        Icons.logout,
+                        size: 20,
+                        color: Colors.red,
+                      ),
+                      title: Text(
+                        'Logout',
+                        style: TextStyle(
+                          color: Colors.red,
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      onTap: () async {
+                        final confirm = await showDialog<bool>(
+                          context: context,
+                          builder: (context) => AlertDialog(
+                            title: const Text('Logout'),
+                            content: const Text('Are you sure you want to logout?'),
+                            actions: [
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, false),
+                                child: const Text('Cancel'),
+                              ),
+                              TextButton(
+                                onPressed: () => Navigator.pop(context, true),
+                                child: const Text('Logout'),
+                              ),
+                            ],
+                          ),
+                        );
+                        if (confirm == true && mounted) {
+                          await ref.read(authControllerProvider.notifier).signOut();
+                          if (mounted) {
+                            context.go(AppRoutes.login);
+                          }
+                        }
+                      },
+                    ),
+            ),
+          ] else ...[
+            // Login button for unauthenticated users
+            const Divider(
+              height: 1,
+              thickness: 1,
+              indent: 16,
+              endIndent: 16,
+            ),
+            const SizedBox(height: 8),
+            Padding(
+              padding: EdgeInsets.fromLTRB(
+                _isCollapsed ? 8 : 12,
+                8,
+                _isCollapsed ? 8 : 12,
+                16,
+              ),
+              child: _isCollapsed
+                  ? Tooltip(
+                      message: 'Login',
+                      child: IconButton(
+                        icon: const Icon(Icons.login, size: 20),
+                        color: const Color(0xFFC9952A),
+                        onPressed: () {
+                          context.go(AppRoutes.login);
+                        },
+                      ),
+                    )
+                  : ListTile(
+                      visualDensity: VisualDensity.compact,
+                      contentPadding: EdgeInsets.symmetric(
+                        horizontal: _isCollapsed ? 8 : 12,
+                        vertical: 4,
+                      ),
+                      leading: const Icon(
+                        Icons.login,
+                        size: 20,
+                        color: Color(0xFFC9952A),
+                      ),
+                      title: Text(
+                        'Login',
+                        style: TextStyle(
+                          color: const Color(0xFFC9952A),
+                          fontSize: 13,
+                          fontWeight: FontWeight.w500,
+                        ),
+                      ),
+                      onTap: () {
+                        context.go(AppRoutes.login);
+                      },
                     ),
             ),
           ],
