@@ -242,6 +242,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       const SizedBox(height: 20),
       logo,
       const SizedBox(height: 20),
+      googleButton,
+      const SizedBox(height: 16),
+      divider,
+      const SizedBox(height: 16),
       emailField,
       const SizedBox(height: 16),
       passwordField,
@@ -251,10 +255,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: 16),
       ],
       loginButton,
-      const SizedBox(height: 16),
-      divider,
-      const SizedBox(height: 16),
-      googleButton,
       const SizedBox(height: 40),
       Center(
         child: Text(
