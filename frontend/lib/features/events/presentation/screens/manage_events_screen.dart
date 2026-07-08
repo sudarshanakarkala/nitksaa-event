@@ -22,6 +22,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
   var _isLoading = false;
   String? _errorMessage;
   late TabController _tabController;
+  final TextEditingController _searchController = TextEditingController();
 
   bool get _isAdmin {
     final userType = ref.read(authControllerProvider).session?.userType;
@@ -32,26 +33,42 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _searchController.addListener(() {
+      setState(() {}); // Trigger rebuild when search text changes
+    });
     Future.microtask(_fetchEvents);
   }
 
   @override
   void dispose() {
+    _searchController.dispose();
     _tabController.dispose();
     super.dispose();
   }
 
-  bool _isUpcoming(AppEvent event) {
-    return event.startDatetime.isAfter(DateTime.now());
+  List<AppEvent> get _filteredEvents {
+    final query = _searchController.text.toLowerCase();
+    if (query.isEmpty) return _events;
+    return _events.where((e) {
+      final title = e.title.toLowerCase();
+      final description = e.description?.toLowerCase() ?? '';
+      final tagline = e.tagline?.toLowerCase() ?? '';
+      final location = e.locationText?.toLowerCase() ?? '';
+      return title.contains(query) || description.contains(query) || tagline.contains(query) || location.contains(query);
+    }).toList();
   }
 
-  List<AppEvent> get _publishedEvents => _events
+  List<AppEvent> get _publishedEvents => _filteredEvents
       .where((e) => e.status.toLowerCase() == 'published' && _isUpcoming(e))
       .toList();
   
-  List<AppEvent> get _draftEvents => _events
+  List<AppEvent> get _draftEvents => _filteredEvents
       .where((e) => e.status.toLowerCase() == 'draft' && _isUpcoming(e))
       .toList();
+
+  bool _isUpcoming(AppEvent event) {
+    return event.startDatetime.isAfter(DateTime.now());
+  }
 
   Future<void> _fetchEvents() async {
     setState(() {
@@ -226,6 +243,23 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                       ],
                     ),
                     const SizedBox(height: 16),
+                    // Search box
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search events...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     // Tab Bar
                     TabBar(
                       controller: _tabController,
@@ -311,25 +345,31 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     }
 
     if (events.isEmpty) {
+      // Check if this is a search result or actual empty state
+      final isSearchEmpty = _searchController.text.isNotEmpty;
       return Center(
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Icon(
-              isPublished ? Icons.check_circle_outline : Icons.drafts_outlined,
+              isSearchEmpty ? Icons.search_off : (isPublished ? Icons.check_circle_outline : Icons.drafts_outlined),
               size: 48,
               color: Colors.grey,
             ),
             const SizedBox(height: 16),
             Text(
-              isPublished ? 'No published events' : 'No draft events',
+              isSearchEmpty 
+                  ? 'No events match your search' 
+                  : (isPublished ? 'No published events' : 'No draft events'),
               style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
             ),
             const SizedBox(height: 8),
             Text(
-              isPublished
-                  ? 'Publish draft events to see them here.'
-                  : 'Create new events or move from published to draft.',
+              isSearchEmpty
+                  ? 'Try a different search term'
+                  : (isPublished
+                      ? 'Publish draft events to see them here.'
+                      : 'Create new events or move from published to draft.'),
               style: const TextStyle(color: Colors.grey),
             ),
           ],

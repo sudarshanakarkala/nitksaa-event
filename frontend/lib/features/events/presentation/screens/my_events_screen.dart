@@ -1,3 +1,4 @@
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -17,10 +18,21 @@ class MyEventsScreen extends ConsumerStatefulWidget {
 }
 
 class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
+  final TextEditingController _searchController = TextEditingController();
+
   @override
   void initState() {
     super.initState();
+    _searchController.addListener(() {
+      setState(() {}); // Trigger rebuild when search text changes
+    });
     Future.microtask(() => ref.read(myEventsProvider.notifier).fetchMyEvents());
+  }
+
+  @override
+  void dispose() {
+    _searchController.dispose();
+    super.dispose();
   }
 
   @override
@@ -30,6 +42,17 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
+
+    // Get search query and filter registrations
+    final searchQuery = _searchController.text.toLowerCase();
+    final filteredRegistrations = searchQuery.isEmpty
+        ? state.registrations
+        : state.registrations.where((r) {
+            final title = (r.event?.title ?? r.publicEvent?.title ?? '').toLowerCase();
+            final tagline = (r.publicEvent?.tagline ?? '').toLowerCase();
+            final location = (r.event?.locationText ?? r.publicEvent?.locationText ?? '').toLowerCase();
+            return title.contains(searchQuery) || tagline.contains(searchQuery) || location.contains(searchQuery);
+          }).toList();
 
     if (!auth.isAuthenticated) {
       return Scaffold(
@@ -109,7 +132,24 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                       '${state.registrations.where((r) => r.isActive).length} active registrations',
                       style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                     ),
-                    const SizedBox(height: 24),
+                    const SizedBox(height: 16),
+                    // Search box
+                    TextField(
+                      controller: _searchController,
+                      decoration: InputDecoration(
+                        hintText: 'Search my events...',
+                        prefixIcon: const Icon(Icons.search, size: 20),
+                        isDense: true,
+                        contentPadding: const EdgeInsets.symmetric(
+                          horizontal: 12,
+                          vertical: 10,
+                        ),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(8),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 16),
                     Expanded(
                       child: state.isLoading
                           ? const Center(child: CircularProgressIndicator())
@@ -120,8 +160,10 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                                       .read(myEventsProvider.notifier)
                                       .fetchMyEvents(),
                                 )
-                              : state.registrations.isEmpty
-                                  ? const _EmptyState()
+                              : filteredRegistrations.isEmpty
+                                  ? searchQuery.isNotEmpty
+                                      ? const _SearchEmptyState()
+                                      : const _EmptyState()
                                   : RefreshIndicator(
                                       onRefresh: () => ref
                                           .read(myEventsProvider.notifier)
@@ -138,10 +180,10 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                                               mainAxisSpacing: 20,
                                               mainAxisExtent: 260,
                                             ),
-                                            itemCount: state.registrations.length,
+                                            itemCount: filteredRegistrations.length,
                                             itemBuilder: (context, index) {
                                               final registration =
-                                                  state.registrations[index];
+                                                  filteredRegistrations[index];
                                               return _RegistrationCard(
                                                 registration: registration,
                                                 isDark: isDark,
@@ -463,6 +505,32 @@ class _ErrorState extends StatelessWidget {
           Text(message, textAlign: TextAlign.center),
           const SizedBox(height: 16),
           OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
+        ],
+      ),
+    );
+  }
+}
+
+class _SearchEmptyState extends StatelessWidget {
+  const _SearchEmptyState();
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          const Icon(Icons.search_off, size: 64, color: Colors.grey),
+          const SizedBox(height: 16),
+          const Text(
+            'No events match your search',
+            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 8),
+          const Text(
+            'Try a different search term',
+            style: TextStyle(color: Colors.grey),
+          ),
         ],
       ),
     );
