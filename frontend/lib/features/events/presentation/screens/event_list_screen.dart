@@ -304,7 +304,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         color: Theme.of(context).colorScheme.outlineVariant,
                       ),
                     ),
-                    child: const Text('Cancel'),
+                    child: const Text('Unregister'),
                   ),
                 ),
                 const SizedBox(width: 12),

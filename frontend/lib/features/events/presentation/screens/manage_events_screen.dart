@@ -1,9 +1,13 @@
+
+import 'dart:async';
+import 'dart:convert';
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:http/http.dart' as http;
 import 'package:timezone/timezone.dart' as tz;
-
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
@@ -486,6 +490,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   
   var _isSaving = false;
   var _currentStep = 0;
+  
+  // Location search state
+  final _locationSearchController = TextEditingController();
+  var _locationSuggestions = <Map<String, String>>[];
+  var _isSearchingLocation = false;
+  var _locationSelected = false;
 
   @override
   void initState() {
@@ -509,6 +519,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _isVirtual = event?.isVirtual ?? false;
     _location = TextEditingController(text: event?.locationText ?? '');
     _locationMapsUrl = TextEditingController(text: event?.locationMapsUrl ?? '');
+    _locationSearchController.text = event?.locationText ?? '';
+    _locationSelected = event?.locationText != null && event!.locationText!.isNotEmpty;
     _virtualUrl = TextEditingController(text: '');
     
     _registrationOpensAt = TextEditingController(text: event?.registrationOpensAt != null 
@@ -602,6 +614,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _timezone.dispose();
     _location.dispose();
     _locationMapsUrl.dispose();
+    _locationSearchController.dispose();
     _virtualUrl.dispose();
     _registrationOpensAt.dispose();
     _registrationClosesAt.dispose();
@@ -828,50 +841,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         if (_isVirtual)
           _buildTextField(_virtualUrl, 'Meeting URL', hint: 'e.g., https://zoom.us/j/...', required: true)
         else
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              _buildTextField(_location, 'Location', hint: 'e.g., NITK Surathkal Campus', required: true),
-              const SizedBox(height: 12),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Expanded(
-                    child: _buildTextField(
-                      _locationMapsUrl,
-                      'Google Maps URL',
-                      hint: 'https://maps.google.com/?q=...',
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Padding(
-                    padding: const EdgeInsets.only(top: 8),
-                    child: Tooltip(
-                      message: 'Open Google Maps',
-                      child: IconButton.filledTonal(
-                        onPressed: () async {
-                          final uri = Uri.tryParse(_locationMapsUrl.text.trim());
-                          if (uri != null && await canLaunchUrl(uri)) {
-                            await launchUrl(uri, mode: LaunchMode.externalApplication);
-                          } else {
-                            // Default: open Google Maps search for the location name
-                            final query = _location.text.trim();
-                            if (query.isNotEmpty) {
-                              final mapsUri = Uri.parse(
-                                'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}',
-                              );
-                              await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
-                            }
-                          }
-                        },
-                        icon: const Icon(Icons.map_outlined),
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
+          _buildLocationPicker(),
         
         const SizedBox(height: 28),
         // ── Registration Section ──
@@ -1864,6 +1834,256 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
 
     final combined = DateTime(date.year, date.month, date.day, time.hour, time.minute);
     return _formatDateTimeOnly(combined);
+  }
+
+  Widget _buildLocationPicker() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Location search field
+        TextFormField(
+          controller: _locationSearchController,
+          decoration: InputDecoration(
+            labelText: 'Search Location *',
+            hintText: 'Type a place name or address...',
+            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            prefixIcon: const Icon(Icons.search),
+            suffixIcon: _locationSelected
+                ? IconButton(
+                    icon: const Icon(Icons.clear, color: Colors.green),
+                    tooltip: 'Clear selection',
+                    onPressed: () {
+                      setState(() {
+                        _locationSearchController.clear();
+                        _location.text = '';
+                        _locationMapsUrl.text = '';
+                        _locationSuggestions = [];
+                        _locationSelected = false;
+                      });
+                    },
+                  )
+                : null,
+          ),
+          onChanged: (value) {
+            setState(() {
+              _locationSelected = false;
+              _location.text = '';
+              _locationMapsUrl.text = '';
+            });
+            _debouncedLocationSearch(value);
+          },
+          validator: (value) {
+            if (!_locationSelected && (value == null || value.trim().isEmpty)) {
+              return 'Location is required';
+            }
+            return null;
+          },
+        ),
+        const SizedBox(height: 8),
+        // Suggestions list
+        if (_isSearchingLocation)
+          const Padding(
+            padding: EdgeInsets.symmetric(vertical: 8),
+            child: Center(child: SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))),
+          )
+        else if (_locationSuggestions.isNotEmpty && !_locationSelected)
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            constraints: const BoxConstraints(maxHeight: 200),
+            child: ListView.separated(
+              shrinkWrap: true,
+              itemCount: _locationSuggestions.length,
+              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade200),
+              itemBuilder: (context, index) {
+                final suggestion = _locationSuggestions[index];
+                return ListTile(
+                  dense: true,
+                  leading: const Icon(Icons.place, size: 18, color: Color(0xFFC9952A)),
+                  title: Text(
+                    suggestion['name'] ?? '',
+                    style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  subtitle: Text(
+                    suggestion['address'] ?? '',
+                    style: const TextStyle(fontSize: 11),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                  onTap: () => _selectLocation(suggestion),
+                );
+              },
+            ),
+          )
+        else if (!_locationSelected && _locationSearchController.text.trim().length >= 3 && !_isSearchingLocation && _locationSuggestions.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Row(
+              children: [
+                const Icon(Icons.info_outline, size: 14, color: Colors.grey),
+                const SizedBox(width: 6),
+                Expanded(
+                  child: Text(
+                    'No suggestions found. You can type the location name manually and press "Use as location" below.',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // Selected location display
+        if (_locationSelected)
+          Container(
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: const Color(0xFFC9952A).withValues(alpha: 0.08),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: const Color(0xFFC9952A).withValues(alpha: 0.3)),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.check_circle, color: Color(0xFFC9952A), size: 20),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        _location.text,
+                        style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13),
+                      ),
+                      if (_locationMapsUrl.text.isNotEmpty)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 2),
+                          child: GestureDetector(
+                            onTap: () async {
+                              final uri = Uri.tryParse(_locationMapsUrl.text);
+                              if (uri != null && await canLaunchUrl(uri)) {
+                                await launchUrl(uri, mode: LaunchMode.externalApplication);
+                              }
+                            },
+                            child: Text(
+                              'Open in Google Maps',
+                              style: TextStyle(
+                                fontSize: 11,
+                                color: Theme.of(context).colorScheme.primary,
+                                decoration: TextDecoration.underline,
+                              ),
+                            ),
+                          ),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        // Manual use button when no suggestions but text is entered
+        if (!_locationSelected && _locationSearchController.text.trim().length >= 3 && _locationSuggestions.isEmpty && !_isSearchingLocation)
+          Padding(
+            padding: const EdgeInsets.only(top: 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    final text = _locationSearchController.text.trim();
+                    _location.text = text;
+                    _locationMapsUrl.text = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(text)}';
+                    _locationSuggestions = [];
+                    _locationSelected = true;
+                  });
+                },
+                icon: const Icon(Icons.check, size: 16),
+                label: const Text('Use as location', style: TextStyle(fontSize: 12)),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  Timer? _debounceTimer;
+  void _debouncedLocationSearch(String query) {
+    _debounceTimer?.cancel();
+    if (query.trim().length < 3) {
+      setState(() {
+        _locationSuggestions = [];
+        _isSearchingLocation = false;
+      });
+      return;
+    }
+    _debounceTimer = Timer(const Duration(milliseconds: 500), () => _searchPlaces(query.trim()));
+  }
+
+  Future<void> _searchPlaces(String query) async {
+    setState(() => _isSearchingLocation = true);
+    try {
+      // Use OpenStreetMap Nominatim API (free, no API key required)
+      final url = Uri.parse(
+        'https://nominatim.openstreetmap.org/search'
+        '?q=${Uri.encodeComponent(query)}'
+        '&format=json'
+        '&addressdetails=1'
+        '&limit=5'
+        '&countrycodes=in',
+      );
+      final response = await http.get(
+        url,
+        headers: {'User-Agent': 'NITKSAAEventApp/1.0'},
+      );
+      if (response.statusCode == 200) {
+        final data = jsonDecode(response.body) as List<dynamic>;
+        setState(() {
+          _locationSuggestions = data.map((r) {
+            final rMap = r as Map<String, dynamic>;
+            final lat = rMap['lat'] as String?;
+            final lng = rMap['lon'] as String?;
+            final displayName = rMap['display_name'] as String? ?? '';
+            final addressParts = displayName.split(',');
+            // Extract a short name (first part) and full address
+            final name = addressParts.isNotEmpty ? addressParts[0].trim() : displayName;
+            final address = addressParts.length > 1
+                ? addressParts.sublist(1).join(',').trim()
+                : displayName;
+            final mapsUrl = (lat != null && lng != null)
+                ? 'https://www.google.com/maps/search/?api=1&query=$lat,$lng'
+                : '';
+            return {
+              'name': name,
+              'address': address,
+              'maps_url': mapsUrl,
+            };
+          }).toList();
+          _isSearchingLocation = false;
+        });
+      } else {
+        setState(() {
+          _locationSuggestions = [];
+          _isSearchingLocation = false;
+        });
+      }
+    } catch (e) {
+      setState(() {
+        _locationSuggestions = [];
+        _isSearchingLocation = false;
+      });
+    }
+  }
+
+  void _selectLocation(Map<String, String> suggestion) {
+    setState(() {
+      _location.text = suggestion['name'] ?? suggestion['address'] ?? '';
+      _locationMapsUrl.text = suggestion['maps_url'] ?? '';
+      _locationSearchController.text = suggestion['name'] ?? suggestion['address'] ?? '';
+      _locationSuggestions = [];
+      _locationSelected = true;
+    });
   }
 
   Widget _buildToggleField(String label, bool value, Function(bool) onChanged) {

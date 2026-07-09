@@ -248,7 +248,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
           ),
           FilledButton.tonal(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('Cancel Registration'),
+            child: const Text('Unregister'),
           ),
         ],
       ),
@@ -393,7 +393,7 @@ class _RegistrationCard extends StatelessWidget {
                               child: CircularProgressIndicator(strokeWidth: 2),
                             )
                           : const Icon(Icons.cancel_outlined, size: 18),
-                      label: const Text('Cancel'),
+                      label: const Text('Unregister'),
                     ),
                   ),
                 ],
