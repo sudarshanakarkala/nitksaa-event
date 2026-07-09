@@ -1881,6 +1881,32 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           },
         ),
         const SizedBox(height: 8),
+        // Manual use button - always at the top when text is entered and no location selected
+        if (!_locationSelected && _locationSearchController.text.trim().length >= 3 && !_isSearchingLocation)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: SizedBox(
+              width: double.infinity,
+              child: OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    final text = _locationSearchController.text.trim();
+                    _location.text = text;
+                    _locationMapsUrl.text = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(text)}';
+                    _locationSuggestions = [];
+                    _locationSelected = true;
+                  });
+                },
+                icon: const Icon(Icons.edit_outlined, size: 16),
+                label: Text(
+                  _locationSuggestions.isNotEmpty
+                      ? 'Use typed text as location'
+                      : 'Use as location',
+                  style: const TextStyle(fontSize: 12),
+                ),
+              ),
+            ),
+          ),
         // Suggestions list
         if (_isSearchingLocation)
           const Padding(
@@ -1918,22 +1944,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                   onTap: () => _selectLocation(suggestion),
                 );
               },
-            ),
-          )
-        else if (!_locationSelected && _locationSearchController.text.trim().length >= 3 && !_isSearchingLocation && _locationSuggestions.isEmpty)
-          Padding(
-            padding: const EdgeInsets.symmetric(vertical: 4),
-            child: Row(
-              children: [
-                const Icon(Icons.info_outline, size: 14, color: Colors.grey),
-                const SizedBox(width: 6),
-                Expanded(
-                  child: Text(
-                    'No suggestions found. You can type the location name manually and press "Use as location" below.',
-                    style: TextStyle(fontSize: 11, color: Colors.grey.shade600),
-                  ),
-                ),
-              ],
             ),
           ),
         // Selected location display
@@ -1981,27 +1991,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                   ),
                 ),
               ],
-            ),
-          ),
-        // Manual use button when no suggestions but text is entered
-        if (!_locationSelected && _locationSearchController.text.trim().length >= 3 && _locationSuggestions.isEmpty && !_isSearchingLocation)
-          Padding(
-            padding: const EdgeInsets.only(top: 8),
-            child: SizedBox(
-              width: double.infinity,
-              child: OutlinedButton.icon(
-                onPressed: () {
-                  setState(() {
-                    final text = _locationSearchController.text.trim();
-                    _location.text = text;
-                    _locationMapsUrl.text = 'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(text)}';
-                    _locationSuggestions = [];
-                    _locationSelected = true;
-                  });
-                },
-                icon: const Icon(Icons.check, size: 16),
-                label: const Text('Use as location', style: TextStyle(fontSize: 12)),
-              ),
             ),
           ),
       ],
