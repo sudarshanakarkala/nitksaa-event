@@ -4,6 +4,8 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:timezone/timezone.dart' as tz;
 
+import 'package:url_launcher/url_launcher.dart';
+
 import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
@@ -459,6 +461,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   // Location/Virtual
   bool _isVirtual = false;
   late final TextEditingController _location;
+  late final TextEditingController _locationMapsUrl;
   late final TextEditingController _virtualUrl;
   
   // Registration
@@ -505,6 +508,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     
     _isVirtual = event?.isVirtual ?? false;
     _location = TextEditingController(text: event?.locationText ?? '');
+    _locationMapsUrl = TextEditingController(text: event?.locationMapsUrl ?? '');
     _virtualUrl = TextEditingController(text: '');
     
     _registrationOpensAt = TextEditingController(text: event?.registrationOpensAt != null 
@@ -597,6 +601,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _endTime.dispose();
     _timezone.dispose();
     _location.dispose();
+    _locationMapsUrl.dispose();
     _virtualUrl.dispose();
     _registrationOpensAt.dispose();
     _registrationClosesAt.dispose();
@@ -823,7 +828,50 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         if (_isVirtual)
           _buildTextField(_virtualUrl, 'Meeting URL', hint: 'e.g., https://zoom.us/j/...', required: true)
         else
-          _buildTextField(_location, 'Location', hint: 'e.g., NITK Surathkal Campus', required: true),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              _buildTextField(_location, 'Location', hint: 'e.g., NITK Surathkal Campus', required: true),
+              const SizedBox(height: 12),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: _buildTextField(
+                      _locationMapsUrl,
+                      'Google Maps URL',
+                      hint: 'https://maps.google.com/?q=...',
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 8),
+                    child: Tooltip(
+                      message: 'Open Google Maps',
+                      child: IconButton.filledTonal(
+                        onPressed: () async {
+                          final uri = Uri.tryParse(_locationMapsUrl.text.trim());
+                          if (uri != null && await canLaunchUrl(uri)) {
+                            await launchUrl(uri, mode: LaunchMode.externalApplication);
+                          } else {
+                            // Default: open Google Maps search for the location name
+                            final query = _location.text.trim();
+                            if (query.isNotEmpty) {
+                              final mapsUri = Uri.parse(
+                                'https://www.google.com/maps/search/?api=1&query=${Uri.encodeComponent(query)}',
+                              );
+                              await launchUrl(mapsUri, mode: LaunchMode.externalApplication);
+                            }
+                          }
+                        },
+                        icon: const Icon(Icons.map_outlined),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ],
+          ),
         
         const SizedBox(height: 28),
         // ── Registration Section ──
@@ -1892,6 +1940,73 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       return;
     }
 
+    // Validate registration opens/closes
+    if (_registrationOpensAt.text.trim().isNotEmpty && _registrationClosesAt.text.trim().isNotEmpty) {
+      try {
+        final regOpen = DateTime.parse(_registrationOpensAt.text.trim());
+        final regClose = DateTime.parse(_registrationClosesAt.text.trim());
+        if (regClose.isBefore(regOpen)) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Registration closes must be on or after registration opens')),
+            );
+          }
+          return;
+        }
+      } catch (e) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Invalid registration date format')),
+          );
+        }
+        return;
+      }
+    }
+
+    // Validate all sessions fall within event timeframe
+    if (_sessions.isNotEmpty) {
+      for (final session in _sessions) {
+        final sessionStartStr = session['start_time'] ?? '';
+        final sessionEndStr = session['end_time'] ?? '';
+        if (sessionStartStr.isEmpty || sessionEndStr.isEmpty) continue;
+
+        try {
+          final sessionStart = DateTime.parse(sessionStartStr);
+          final sessionEnd = DateTime.parse(sessionEndStr);
+
+          if (!sessionEnd.isAfter(sessionStart)) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(content: Text('Session "${session['title']}" end time must be after start time')),
+              );
+            }
+            return;
+          }
+
+          if (sessionStart.isBefore(startDateTime) || sessionEnd.isAfter(endDateTime)) {
+            if (mounted) {
+              ScaffoldMessenger.of(context).showSnackBar(
+                SnackBar(
+                  content: Text(
+                    'Session "${session['title']}" must be within event timeframe '
+                    '(${_formatDateTimeOnly(startDateTime)} - ${_formatDateTimeOnly(endDateTime)})',
+                  ),
+                ),
+              );
+            }
+            return;
+          }
+        } catch (e) {
+          if (mounted) {
+            ScaffoldMessenger.of(context).showSnackBar(
+              const SnackBar(content: Text('Invalid session date/time format')),
+            );
+          }
+          return;
+        }
+      }
+    }
+
     if (_isVirtual && _virtualUrl.text.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -1925,6 +2040,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         'timezone': _timezone.text,
         'is_virtual': _isVirtual,
         'location_text': _isVirtual ? null : _location.text.trim().isEmpty ? null : _location.text.trim(),
+        'location_maps_url': _isVirtual ? null : _locationMapsUrl.text.trim().isEmpty ? null : _locationMapsUrl.text.trim(),
         'virtual_url': _isVirtual ? _virtualUrl.text.trim() : null,
         'is_full_day': _isFullDay,
         'capacity': _capacity.text.trim().isEmpty ? null : int.tryParse(_capacity.text.trim()),
