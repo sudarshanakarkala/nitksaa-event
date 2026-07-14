@@ -213,6 +213,7 @@ class EventsRepository {
     int perPage = 50,
     String? search,
     int? batchYear,
+    String? branch,
   }) async {
     final queryParams = <String, dynamic>{
       'page': page,
@@ -223,6 +224,9 @@ class EventsRepository {
     }
     if (batchYear != null) {
       queryParams['batch_year'] = batchYear;
+    }
+    if (branch != null && branch.isNotEmpty) {
+      queryParams['branch'] = branch;
     }
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/admin/events/$eventId/attendees',

@@ -19,6 +19,8 @@ class EventRegistrationsScreen extends ConsumerStatefulWidget {
       _EventRegistrationsScreenState();
 }
 
+enum SortColumn { registrationNumber, fullName, batchYear, branch, registeredAt }
+
 class _EventRegistrationsScreenState
     extends ConsumerState<EventRegistrationsScreen> {
   var _attendees = <Map<String, dynamic>>[];
@@ -30,6 +32,18 @@ class _EventRegistrationsScreenState
   var _hasMore = false;
   AppEvent? _event;
   final _searchController = TextEditingController();
+
+  // Sort state
+  SortColumn _sortColumn = SortColumn.registeredAt;
+  var _sortAscending = false;
+
+  // Filter state
+  int? _filterBatchYear;
+  String? _filterBranch;
+
+  // Available filter values (extracted from loaded data)
+  final Set<int> _availableBatchYears = {};
+  final Set<String> _availableBranches = {};
 
   @override
   void initState() {
@@ -108,6 +122,8 @@ class _EventRegistrationsScreenState
         perPage: _perPage,
         search:
             _searchController.text.isNotEmpty ? _searchController.text : null,
+        batchYear: _filterBatchYear,
+        branch: _filterBranch,
       );
       final rows = (response['attendees'] as List<dynamic>?)
               ?.cast<Map<String, dynamic>>() ??
@@ -123,6 +139,13 @@ class _EventRegistrationsScreenState
           _total = total;
           _hasMore = _attendees.length < total;
           _isLoading = false;
+          // Collect available filter values
+          for (final row in rows) {
+            final by = row['batch_year_snapshot'] as int?;
+            if (by != null) _availableBatchYears.add(by);
+            final br = row['branch_snapshot'] as String?;
+            if (br != null && br.isNotEmpty) _availableBranches.add(br);
+          }
         });
       }
     } catch (error) {
@@ -138,6 +161,75 @@ class _EventRegistrationsScreenState
   void _loadMore() {
     if (!_hasMore || _isLoading) return;
     setState(() => _page++);
+    _fetchAttendees();
+  }
+
+  // Getters for sorted attendees (client-side sorting)
+  int _sortValue(Map<String, dynamic> a, Map<String, dynamic> b) {
+    switch (_sortColumn) {
+      case SortColumn.registrationNumber:
+        final av = a['registration_number'] as String? ?? '';
+        final bv = b['registration_number'] as String? ?? '';
+        return av.compareTo(bv);
+      case SortColumn.fullName:
+        final av = a['fullname_snapshot'] as String? ?? '';
+        final bv = b['fullname_snapshot'] as String? ?? '';
+        return av.compareTo(bv);
+      case SortColumn.batchYear:
+        final av = a['batch_year_snapshot'] as int? ?? 0;
+        final bv = b['batch_year_snapshot'] as int? ?? 0;
+        return av.compareTo(bv);
+      case SortColumn.branch:
+        final av = a['branch_snapshot'] as String? ?? '';
+        final bv = b['branch_snapshot'] as String? ?? '';
+        return av.compareTo(bv);
+      case SortColumn.registeredAt:
+        final av = a['registered_at'] as String? ?? '';
+        final bv = b['registered_at'] as String? ?? '';
+        return av.compareTo(bv);
+    }
+  }
+
+  List<Map<String, dynamic>> get _sortedAttendees {
+    final sorted = List<Map<String, dynamic>>.from(_attendees);
+    sorted.sort((a, b) {
+      final result = _sortValue(a, b);
+      return _sortAscending ? result : -result;
+    });
+    return sorted;
+  }
+
+  void _toggleSort(SortColumn column) {
+    setState(() {
+      if (_sortColumn == column) {
+        _sortAscending = !_sortAscending;
+      } else {
+        _sortColumn = column;
+        _sortAscending = true;
+      }
+    });
+  }
+
+  IconData _sortIcon(SortColumn column) {
+    if (_sortColumn != column) return Icons.swap_vert;
+    return _sortAscending ? Icons.arrow_upward : Icons.arrow_downward;
+  }
+
+  void _applyBatchYearFilter(int? year) {
+    setState(() {
+      _filterBatchYear = year;
+      _page = 1;
+      _attendees = [];
+    });
+    _fetchAttendees();
+  }
+
+  void _applyBranchFilter(String? branch) {
+    setState(() {
+      _filterBranch = branch;
+      _page = 1;
+      _attendees = [];
+    });
     _fetchAttendees();
   }
 
@@ -282,6 +374,25 @@ class _EventRegistrationsScreenState
                         Wrap(
                           spacing: 8,
                           children: [
+                            if (_filterBatchYear != null || _filterBranch != null)
+                              Chip(
+                                label: Text(
+                                  '${_filterBatchYear != null ? 'Year:$_filterBatchYear' : ''}${_filterBatchYear != null && _filterBranch != null ? ' ' : ''}${_filterBranch != null ? 'Branch:$_filterBranch' : ''}',
+                                  style: const TextStyle(fontSize: 11),
+                                ),
+                                deleteIcon: const Icon(Icons.close, size: 14),
+                                onDeleted: () {
+                                  setState(() {
+                                    _filterBatchYear = null;
+                                    _filterBranch = null;
+                                    _page = 1;
+                                    _attendees = [];
+                                  });
+                                  _fetchAttendees();
+                                },
+                                visualDensity: VisualDensity.compact,
+                                materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              ),
                             IconButton.filledTonal(
                               tooltip: 'Refresh',
                               onPressed: _isLoading ? null : _loadData,
@@ -361,6 +472,104 @@ class _EventRegistrationsScreenState
     return months[month - 1];
   }
 
+  Widget _buildSortableHeader(String label, SortColumn column,
+      {Widget? trailing}) {
+    final isActive = _sortColumn == column;
+    return GestureDetector(
+      onTap: () => _toggleSort(column),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(
+              fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
+              fontSize: 13,
+              color: isActive ? const Color(0xFFC9952A) : null,
+            ),
+          ),
+          const SizedBox(width: 4),
+          Icon(
+            _sortIcon(column),
+            size: 14,
+            color: isActive ? const Color(0xFFC9952A) : Colors.grey,
+          ),
+          if (trailing != null) ...[const SizedBox(width: 2), trailing],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBatchYearFilterDropdown() {
+    final sortedYears = _availableBatchYears.toList()..sort((a, b) => b.compareTo(a));
+    return PopupMenuButton<int?>(
+      padding: EdgeInsets.zero,
+      onSelected: (value) {
+        _applyBatchYearFilter(value);
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: null,
+          child: Text('All Years', style: TextStyle(fontSize: 13)),
+        ),
+        ...sortedYears.map((year) => PopupMenuItem(
+              value: year,
+              child: Text(
+                year.toString(),
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _filterBatchYear == year
+                      ? const Color(0xFFC9952A)
+                      : null,
+                ),
+              ),
+            )),
+      ],
+      child: Icon(
+        Icons.filter_list,
+        size: 16,
+        color: _filterBatchYear != null
+            ? const Color(0xFFC9952A)
+            : Colors.grey,
+      ),
+    );
+  }
+
+  Widget _buildBranchFilterDropdown() {
+    final sortedBranches = _availableBranches.toList()..sort();
+    return PopupMenuButton<String?>(
+      padding: EdgeInsets.zero,
+      onSelected: (value) {
+        _applyBranchFilter(value);
+      },
+      itemBuilder: (context) => [
+        const PopupMenuItem(
+          value: null,
+          child: Text('All Branches', style: TextStyle(fontSize: 13)),
+        ),
+        ...sortedBranches.map((branch) => PopupMenuItem(
+              value: branch,
+              child: Text(
+                branch,
+                style: TextStyle(
+                  fontSize: 13,
+                  color: _filterBranch == branch
+                      ? const Color(0xFFC9952A)
+                      : null,
+                ),
+              ),
+            )),
+      ],
+      child: Icon(
+        Icons.filter_list,
+        size: 16,
+        color: _filterBranch != null
+            ? const Color(0xFFC9952A)
+            : Colors.grey,
+      ),
+    );
+  }
+
   Widget _buildContent(ThemeData theme, bool isDark) {
     if (_isLoading && _attendees.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -417,6 +626,7 @@ class _EventRegistrationsScreenState
     }
 
     final isWide = MediaQuery.of(context).size.width > 700 || kIsWeb;
+    final displayedAttendees = _sortedAttendees;
 
     if (!isWide) {
       return RefreshIndicator(
@@ -438,15 +648,15 @@ class _EventRegistrationsScreenState
             return false;
           },
           child: ListView.builder(
-            itemCount: _attendees.length + (_hasMore ? 1 : 0),
+            itemCount: displayedAttendees.length + (_hasMore ? 1 : 0),
             itemBuilder: (context, index) {
-              if (index == _attendees.length) {
+              if (index == displayedAttendees.length) {
                 return const Padding(
                   padding: EdgeInsets.all(16),
                   child: Center(child: CircularProgressIndicator()),
                 );
               }
-              final attendee = _attendees[index];
+              final attendee = displayedAttendees[index];
               return _AttendeeCard(
                 attendee: attendee,
                 theme: theme,
@@ -458,7 +668,7 @@ class _EventRegistrationsScreenState
       );
     }
 
-    // Web/wide: table view matching mockup "13 · Attendee List (Data Table)"
+    // Web/wide: table view with sortable headers and filter icons
     return RefreshIndicator(
       onRefresh: () async {
         setState(() {
@@ -478,7 +688,12 @@ class _EventRegistrationsScreenState
           return false;
         },
         child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
           child: Container(
+            constraints: BoxConstraints(
+              minWidth:
+                  MediaQuery.of(context).size.width - (kIsWeb ? 340 : 80),
+            ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),
               border: Border.all(
@@ -494,54 +709,29 @@ class _EventRegistrationsScreenState
                       : const Color(0xFFF8F9FD),
                 ),
                 columnSpacing: 24,
-                columns: const [
+                columns: [
                   DataColumn(
-                    label: Text(
-                      'Registration #',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
+                    label: _buildSortableHeader(
+                        'Registration #', SortColumn.registrationNumber),
                   ),
                   DataColumn(
-                    label: Text(
-                      'Full Name',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
+                    label: _buildSortableHeader(
+                        'Full Name', SortColumn.fullName),
                   ),
                   DataColumn(
-                    label: Text(
-                      'Batch Year',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
+                    label: _buildSortableHeader('Batch Year', SortColumn.batchYear,
+                        trailing: _buildBatchYearFilterDropdown()),
                   ),
                   DataColumn(
-                    label: Text(
-                      'Branch',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
+                    label: _buildSortableHeader('Branch', SortColumn.branch,
+                        trailing: _buildBranchFilterDropdown()),
                   ),
                   DataColumn(
-                    label: Text(
-                      'Registered At',
-                      style: TextStyle(
-                        fontWeight: FontWeight.w600,
-                        fontSize: 13,
-                      ),
-                    ),
+                    label: _buildSortableHeader(
+                        'Registered At', SortColumn.registeredAt),
                   ),
                 ],
-                rows: _attendees.map((attendee) {
+                rows: displayedAttendees.map((attendee) {
                   final regNumber =
                       attendee['registration_number'] as String? ?? '-';
                   final fullname =
