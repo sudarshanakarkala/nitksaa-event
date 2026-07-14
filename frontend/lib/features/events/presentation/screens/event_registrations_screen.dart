@@ -1,3 +1,5 @@
+import 'dart:convert' show utf8;
+
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -8,6 +10,9 @@ import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 import '../../../../shared/widgets/app_sidebar.dart';
+
+// ignore: avoid_web_libraries_in_flutter
+import 'dart:html' as html;
 
 class EventRegistrationsScreen extends ConsumerStatefulWidget {
   const EventRegistrationsScreen({super.key, required this.eventId});
@@ -258,6 +263,40 @@ class _EventRegistrationsScreenState
     }
   }
 
+  String _generateCsv() {
+    final buffer = StringBuffer();
+    // Header row
+    buffer.writeln('Registration Number,Full Name,Batch Year,Branch,Registered At');
+    // Data rows
+    for (final attendee in _sortedAttendees) {
+      final regNumber = (attendee['registration_number'] as String? ?? '-').replaceAll(',', '');
+      final fullname = (attendee['fullname_snapshot'] as String? ?? 'Unknown').replaceAll(',', '');
+      final batchYear = (attendee['batch_year_snapshot'] as int?)?.toString() ?? '-';
+      final branch = (attendee['branch_snapshot'] as String? ?? '-').replaceAll(',', '');
+      final registeredAt = _parseRegisteredAt(attendee['registered_at'] as String?).replaceAll(',', '');
+      buffer.writeln('$regNumber,$fullname,$batchYear,$branch,$registeredAt');
+    }
+    return buffer.toString();
+  }
+
+  void _exportToCsv() {
+    if (_sortedAttendees.isEmpty) return;
+    final csv = _generateCsv();
+    final filename = 'event_${widget.eventId}_registrations.csv';
+    
+    if (kIsWeb) {
+      // For web, use dart:html to download
+      // Convert to UTF-8 bytes for proper encoding
+      final bytes = utf8.encode(csv);
+      final blob = html.Blob([bytes], 'text/csv');
+      final url = html.Url.createObjectUrlFromBlob(blob);
+      final anchor = html.AnchorElement(href: url)
+        ..setAttribute('download', filename)
+        ..click();
+      html.Url.revokeObjectUrl(url);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
@@ -393,6 +432,11 @@ class _EventRegistrationsScreenState
                                 visualDensity: VisualDensity.compact,
                                 materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
                               ),
+                            IconButton.filledTonal(
+                              tooltip: 'Export to CSV',
+                              onPressed: _sortedAttendees.isEmpty ? null : _exportToCsv,
+                              icon: const Icon(Icons.download),
+                            ),
                             IconButton.filledTonal(
                               tooltip: 'Refresh',
                               onPressed: _isLoading ? null : _loadData,
