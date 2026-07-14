@@ -2424,34 +2424,59 @@ class _ManageEventCard extends StatelessWidget {
               label: event.locationText ?? (event.isVirtual ? 'Virtual event' : 'Location pending'),
             ),
             const SizedBox(height: 16),
-            Row(
-              children: [
-                if (!isPublished && onPublish != null)
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onPublish,
-                      icon: const Icon(Icons.publish_outlined),
-                      label: const Text('Publish'),
-                    ),
-                  )
-                else
+            // Action buttons
+            if (isPublished) ...[
+              // Published event: View, View Registrations, Edit
+              Row(
+                children: [
                   Expanded(
                     child: OutlinedButton.icon(
                       onPressed: onView,
-                      icon: const Icon(Icons.visibility_outlined),
-                      label: const Text('View'),
+                      icon: const Icon(Icons.visibility_outlined, size: 16),
+                      label: const Text('View', style: TextStyle(fontSize: 12)),
                     ),
                   ),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: FilledButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined),
-                    label: const Text('Edit'),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: () => context.push('/admin/events/${event.eventId}/registrations'),
+                      icon: const Icon(Icons.people_outline, size: 16),
+                      label: const Text('Registrations', style: TextStyle(fontSize: 12)),
+                    ),
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined, size: 16),
+                      label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                ],
+              ),
+            ] else ...[
+              // Draft event: Publish, Edit
+              Row(
+                children: [
+                  if (onPublish != null)
+                    Expanded(
+                      child: OutlinedButton.icon(
+                        onPressed: onPublish,
+                        icon: const Icon(Icons.publish_outlined),
+                        label: const Text('Publish'),
+                      ),
+                    ),
+                  if (onPublish != null) const SizedBox(width: 10),
+                  Expanded(
+                    child: FilledButton.icon(
+                      onPressed: onEdit,
+                      icon: const Icon(Icons.edit_outlined),
+                      label: const Text('Edit'),
+                    ),
+                  ),
+                ],
+              ),
+            ],
           ],
         ),
       ),

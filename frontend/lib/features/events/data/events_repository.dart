@@ -205,6 +205,35 @@ class EventsRepository {
     );
     return response.data ?? <String, dynamic>{};
   }
+
+  Future<Map<String, dynamic>> getEventAttendees({
+    required int eventId,
+    required String accessToken,
+    int page = 1,
+    int perPage = 50,
+    String? search,
+    int? batchYear,
+  }) async {
+    final queryParams = <String, dynamic>{
+      'page': page,
+      'per_page': perPage,
+    };
+    if (search != null && search.isNotEmpty) {
+      queryParams['search'] = search;
+    }
+    if (batchYear != null) {
+      queryParams['batch_year'] = batchYear;
+    }
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/admin/events/$eventId/attendees',
+      queryParameters: queryParams,
+      options: Options(headers: {
+        'Authorization': 'Bearer $accessToken',
+        'X-Dev-User': 'admin',
+      }),
+    );
+    return response.data ?? <String, dynamic>{};
+  }
 }
 
 final eventsRepositoryProvider = Provider<EventsRepository>((ref) {

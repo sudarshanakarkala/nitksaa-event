@@ -5,6 +5,7 @@ abstract class AppRoutes {
   static const String home = '/home';
   static const String myEvents = '/my-events';
   static const String manageEvents = '/manage-events';
+  static const String eventRegistrations = '/admin/events/:id/registrations';
   static const String developer = '/developer';
   static const String eventDetail = '/events/:id';
 }
