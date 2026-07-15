@@ -80,6 +80,13 @@ class EventsService:
     ) -> Dict[str, Any]:
         slug = await self.slug_svc.generate_slug(data.title)
         record = await self.repo.create_event(data, slug, user["firebase_uid"])
+        event_id = record["event_id"]
+        
+        # Save nested data
+        await self._save_sessions(event_id, data.sessions or [])
+        await self._save_speakers(event_id, data.speakers or [])
+        await self._save_sponsors(event_id, data.sponsors or [])
+        
         d = self._to_dict(record)
         await self._audit(user["firebase_uid"], "event_created", d["event_id"])
         return _enrich(d)
@@ -95,7 +102,23 @@ class EventsService:
         search: Optional[str] = None,
     ) -> Tuple[List[Dict[str, Any]], int]:
         rows, total = await self.repo.list_events(page, per_page, status, is_virtual, search)
-        return [_enrich(self._to_dict(r)) for r in rows], total
+        result = []
+        for r in rows:
+            d = _enrich(self._to_dict(r))
+            event_id = d["event_id"]
+            
+            # Fetch nested data
+            session_rows = await self.repo.list_public_sessions(event_id)
+            d["sessions"] = [dict(r) for r in session_rows]
+            
+            people_rows = await PeopleRepository(self.conn).list_by_event(event_id)
+            d["speakers"] = [dict(r) for r in people_rows]
+            
+            sponsor_rows = await SponsorsRepository(self.conn).list_by_event(event_id)
+            d["sponsors"] = [dict(r) for r in sponsor_rows]
+            
+            result.append(d)
+        return result, total
 
     # ── Admin: Get ───────────────────────────────────────────────────────────
 
@@ -103,7 +126,19 @@ class EventsService:
         record = await self.repo.get_event(event_id)
         if not record:
             raise HTTPException(status_code=404, detail="event_not_found")
-        return _enrich(self._to_dict(record))
+        d = _enrich(self._to_dict(record))
+        
+        # Fetch nested data
+        session_rows = await self.repo.list_public_sessions(event_id)
+        d["sessions"] = [dict(r) for r in session_rows]
+        
+        people_rows = await PeopleRepository(self.conn).list_by_event(event_id)
+        d["speakers"] = [dict(r) for r in people_rows]
+        
+        sponsor_rows = await SponsorsRepository(self.conn).list_by_event(event_id)
+        d["sponsors"] = [dict(r) for r in sponsor_rows]
+        
+        return d
 
     # ── Admin: Update ────────────────────────────────────────────────────────
 
@@ -117,6 +152,24 @@ class EventsService:
         fields = data.model_dump(exclude_unset=True)
         if not fields:
             return _enrich(self._to_dict(existing))
+
+        # Handle nested data updates
+        if data.sessions is not None:
+            await self.conn.execute("DELETE FROM sessions WHERE event_id = $1", event_id)
+            await self._save_sessions(event_id, data.sessions)
+        
+        if data.speakers is not None:
+            await self.conn.execute("DELETE FROM event_people WHERE event_id = $1", event_id)
+            await self._save_speakers(event_id, data.speakers)
+        
+        if data.sponsors is not None:
+            await self.conn.execute("DELETE FROM event_sponsors WHERE event_id = $1", event_id)
+            await self._save_sponsors(event_id, data.sponsors)
+
+        # Remove nested fields from update to avoid SQL errors
+        fields.pop('sessions', None)
+        fields.pop('speakers', None)
+        fields.pop('sponsors', None)
 
         record = await self.repo.update_event(event_id, fields)
         await self._audit(user["firebase_uid"], "event_updated", event_id)
@@ -172,6 +225,62 @@ class EventsService:
                 detail=f"missing_fields_for_publish: {', '.join(missing)}",
             )
 
+    async def _save_sessions(self, event_id: int, sessions: List[Any]) -> None:
+        """Save sessions for an event."""
+        for idx, session in enumerate(sessions):
+            await self.conn.execute(
+                """
+                INSERT INTO sessions (
+                    event_id, title, speaker_name,
+                    start_datetime, end_datetime, sort_order
+                ) VALUES ($1, $2, $3, $4, $5, $6)
+                """,
+                event_id,
+                session.title,
+                session.speaker_name,
+                session.start_datetime,
+                session.end_datetime,
+                idx,
+            )
+
+    async def _save_speakers(self, event_id: int, speakers: List[Any]) -> None:
+        """Save speakers/people for an event."""
+        for idx, speaker in enumerate(speakers):
+            await self.conn.execute(
+                """
+                INSERT INTO event_people (
+                    event_id, role, fullname, title, organisation,
+                    display_order, is_visible
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                """,
+                event_id,
+                speaker.role,
+                speaker.fullname,
+                speaker.title,
+                speaker.organisation,
+                idx,
+                True,
+            )
+
+    async def _save_sponsors(self, event_id: int, sponsors: List[Any]) -> None:
+        """Save sponsors for an event."""
+        for idx, sponsor in enumerate(sponsors):
+            await self.conn.execute(
+                """
+                INSERT INTO event_sponsors (
+                    event_id, sponsor_type, name, logo_url,
+                    website_url, display_order, is_visible
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7)
+                """,
+                event_id,
+                sponsor.sponsor_type,
+                sponsor.name,
+                sponsor.logo_url,
+                sponsor.website_url,
+                idx,
+                True,
+            )
+
     # ── Public: List ─────────────────────────────────────────────────────────
 
     async def list_public_events(
@@ -192,7 +301,8 @@ class EventsService:
             raise HTTPException(status_code=404, detail="event_not_found")
         d = self._to_dict(record)
         _with_public_card_metadata(d)
-        d["sessions"] = []
+        session_rows = await self.repo.list_public_sessions(event_id)
+        d["sessions"] = [dict(r) for r in session_rows]
 
         people_rows = await PeopleRepository(self.conn).list_public_by_event(event_id)
         people = [dict(r) for r in people_rows]

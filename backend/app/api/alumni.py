@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/v1/alumni", tags=["alumni"])
 async def get_my_alumni_profile(
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> AlumniProfileResponse:
-    if user.get("user_type") != "alumni" or not user.get("ref_id"):
+    if user.get("user_type") not in ["alumni", "admin"] or not user.get("ref_id"):
         raise HTTPException(status_code=403, detail="alumni_only")
 
     profile = await alumni_service.get_alumni_profile_by_ref_id(user["ref_id"])

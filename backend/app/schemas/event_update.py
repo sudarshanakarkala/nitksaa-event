@@ -1,7 +1,9 @@
 from decimal import Decimal
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+
+from app.schemas.event_create import SessionCreate, SpeakerCreate, SponsorCreate
 
 
 class EventUpdate(BaseModel):
@@ -24,6 +26,9 @@ class EventUpdate(BaseModel):
     is_full_day: Optional[bool] = None
     is_free: Optional[bool] = None
     ticket_price: Optional[Decimal] = Field(default=None, ge=0)
+    sessions: Optional[List[SessionCreate]] = None
+    speakers: Optional[List[SpeakerCreate]] = None
+    sponsors: Optional[List[SponsorCreate]] = None
 
     @model_validator(mode="after")
     def validate_datetimes(self) -> "EventUpdate":

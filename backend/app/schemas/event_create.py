@@ -1,7 +1,29 @@
 from decimal import Decimal
 from pydantic import BaseModel, Field, model_validator
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
+
+
+class SessionCreate(BaseModel):
+    title: str = Field(..., min_length=1, max_length=255)
+    speaker_name: Optional[str] = None
+    start_datetime: datetime
+    end_datetime: datetime
+
+
+class SpeakerCreate(BaseModel):
+    fullname: str = Field(..., min_length=1, max_length=255)
+    title: Optional[str] = None
+    organisation: Optional[str] = None
+    role: str = "SPEAKER"
+
+
+class SponsorCreate(BaseModel):
+    name: str = Field(..., min_length=1, max_length=255)
+    sponsor_type: str
+    logo_url: Optional[str] = None
+    website_url: Optional[str] = None
+    display_order: int = 0
 
 
 class EventCreate(BaseModel):
@@ -24,6 +46,9 @@ class EventCreate(BaseModel):
     is_full_day: bool = False
     is_free: bool = True
     ticket_price: Optional[Decimal] = Field(default=None, ge=0)
+    sessions: Optional[List[SessionCreate]] = []
+    speakers: Optional[List[SpeakerCreate]] = []
+    sponsors: Optional[List[SponsorCreate]] = []
 
     @model_validator(mode="after")
     def validate_event(self) -> "EventCreate":

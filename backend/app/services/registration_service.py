@@ -75,7 +75,7 @@ async def register_for_event(
     firebase_uid = user["firebase_uid"]
     ref_id = user.get("ref_id")
 
-    if user.get("user_type") != "alumni" or not ref_id:
+    if user.get("user_type") not in ["alumni", "admin"] or not ref_id:
         raise HTTPException(status_code=403, detail="alumni_only")
 
     profile = await alumni_service.get_alumni_profile_by_ref_id(ref_id)
@@ -214,6 +214,60 @@ async def get_my_event_registration(
     return _format_registration(dict(row))
 
 
+async def cancel_my_event_registration(
+    event_id: int, user: Dict[str, Any]
+) -> RegistrationResponse:
+    firebase_uid = user["firebase_uid"]
+    pool = await get_pool()
+
+    async with pool.acquire() as conn:
+        repo = RegistrationRepository(conn)
+        async with conn.transaction():
+            event_row = await conn.fetchrow(
+                """
+                SELECT event_id, status, registration_opens_at, registration_closes_at
+                FROM events
+                WHERE event_id = $1
+                FOR UPDATE
+                """,
+                event_id,
+            )
+            if not event_row:
+                raise HTTPException(status_code=404, detail="event_not_found")
+            if event_row["status"] != "published":
+                raise HTTPException(status_code=409, detail="event_not_open")
+
+            now = datetime.now(timezone.utc)
+            opens_at = event_row["registration_opens_at"]
+            closes_at = event_row["registration_closes_at"]
+            if opens_at and now < opens_at:
+                raise HTTPException(status_code=409, detail="registration_not_open_yet")
+            if closes_at and now > closes_at:
+                raise HTTPException(status_code=409, detail="registration_closed")
+
+            registration_id = await repo.cancel_active_for_user(event_id, firebase_uid)
+            if not registration_id:
+                raise HTTPException(status_code=404, detail="active_registration_not_found")
+
+        row = await repo.get_by_id_with_event(registration_id)
+
+    await analytics_service.log_event_activity(
+        action_type="REGISTRATION_FAILED",
+        source_app="BACKEND",
+        event_id=event_id,
+        firebase_uid=firebase_uid,
+        metadata={"reason": "cancelled_by_user"},
+    )
+    await audit_service.emit(
+        actor_uid=firebase_uid,
+        event_type="registration_cancelled",
+        entity_type="registration",
+        entity_id=registration_id,
+        context={"event_id": event_id},
+    )
+    return _format_registration(dict(row))
+
+
 async def list_my_registrations(user: Dict[str, Any]) -> MyRegistrationsListResponse:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -236,8 +290,8 @@ async def get_registration_eligibility(
             message=msg,
         )
 
-    if user.get("user_type") != "alumni" or not ref_id:
-        return _ineligible("Only alumni can register for events.")
+    if user.get("user_type") not in ["alumni", "admin"] or not ref_id:
+        return _ineligible(user.get("user_type") + "Only alumni can register for events.")
 
     profile = await alumni_service.get_alumni_profile_by_ref_id(ref_id)
     if not profile or not alumni_service.is_alumni_active(profile.get("registrationstatus")):

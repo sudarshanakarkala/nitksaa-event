@@ -198,3 +198,16 @@ class EventsRepository:
             """,
             event_id,
         )
+
+    async def list_public_sessions(self, event_id: int) -> List[asyncpg.Record]:
+        return list(await self.conn.fetch(
+            """
+            SELECT
+                session_id, event_id, title, description, speaker_name,
+                location_text, track, start_datetime, end_datetime, sort_order
+            FROM sessions
+            WHERE event_id = $1
+            ORDER BY sort_order ASC, start_datetime ASC
+            """,
+            event_id,
+        ))

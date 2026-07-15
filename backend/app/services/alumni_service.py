@@ -4,7 +4,7 @@ from typing import Optional, Dict, Any
 from app.database import get_alumni_pool
 
 # Statuses that permit event registration.
-ACTIVE_ALUMNI_STATUSES: frozenset = frozenset(["Active", "Self-Verified"])
+ACTIVE_ALUMNI_STATUSES: frozenset = frozenset(["ACTIVE", "Self-Verified"])
 
 
 def is_alumni_active(registrationstatus: Optional[str]) -> bool:
@@ -21,7 +21,7 @@ async def find_alumni_by_email(email: str) -> Optional[Dict[str, Any]]:
     async with pool.acquire() as conn:
         row = await conn.fetchrow(
             """
-            SELECT alumni_id, fullname, graduationyear
+            SELECT alumni_id, fullname, graduationyear, user_type
             FROM alumni
             WHERE lower(email) = lower($1)
             LIMIT 1

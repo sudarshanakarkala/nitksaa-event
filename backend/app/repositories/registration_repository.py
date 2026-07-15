@@ -172,6 +172,25 @@ class RegistrationRepository:
             firebase_uid,
         )
 
+    async def cancel_active_for_user(
+        self, event_id: int, firebase_uid: str
+    ) -> Optional[int]:
+        """Cancel the active registration for a user/event and return its id."""
+        return await self.conn.fetchval(
+            """
+            UPDATE registrations
+            SET status = 'cancelled',
+                cancelled_at = NOW(),
+                updated_at = NOW()
+            WHERE event_id = $1
+              AND firebase_uid = $2
+              AND status = 'registered'
+            RETURNING registration_id
+            """,
+            event_id,
+            firebase_uid,
+        )
+
     async def list_for_user(self, firebase_uid: str) -> List[asyncpg.Record]:
         """Fetch all registration rows for a user across all events."""
         return await self.conn.fetch(

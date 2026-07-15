@@ -39,6 +39,17 @@ async def get_my_event_registration(
     return await registration_service.get_my_event_registration(event_id, user)
 
 
+@router.delete(
+    "/api/v1/events/{event_id}/my-registration",
+    response_model=RegistrationResponse,
+)
+async def cancel_my_event_registration(
+    event_id: int,
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> RegistrationResponse:
+    return await registration_service.cancel_my_event_registration(event_id, user)
+
+
 @router.get(
     "/api/v1/my/registrations",
     response_model=MyRegistrationsListResponse,

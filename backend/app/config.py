@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     db_host: str = Field("127.0.0.1", alias="DB_HOST")
     db_port: int = Field(5432, alias="DB_PORT")
     db_user: str = Field("postgres", alias="DB_USER")
-    db_password: str = Field("postgres", alias="DB_PASSWORD")
+    db_password: str = Field("db123", alias="DB_PASSWORD")
     db_sslmode: str = Field("prefer", alias="DB_SSLMODE")
     events_db_name: str = Field("events_db", alias="EVENTS_DB_NAME")
     events_db_url: Optional[str] = Field(None, alias="EVENTS_DB_URL")
