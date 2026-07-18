@@ -51,6 +51,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   Widget build(BuildContext context) {
     final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     final state = ref.watch(eventDetailProvider(widget.eventId));
+    final auth = ref.watch(authControllerProvider);
+    final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
 
     if (state.isLoading && state.event == null) {
       return Scaffold(
@@ -99,16 +101,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     }
 
     if (isIOS) {
-      return _buildCupertinoLayout(event, state);
+      return _buildCupertinoLayout(event, state, isAdmin: isAdmin);
     } else {
-      return _buildMaterialLayout(event, state);
+      return _buildMaterialLayout(event, state, isAdmin: isAdmin);
     }
   }
 
   // ==========================================
   // CUPERTINO LAYOUT (iOS)
   // ==========================================
-  Widget _buildCupertinoLayout(AppEvent event, EventDetailState state) {
+  Widget _buildCupertinoLayout(AppEvent event, EventDetailState state, {required bool isAdmin}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final bg = isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
     final cardBg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
@@ -184,37 +186,39 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     ),
                     const SizedBox(height: 16),
                     _buildCupertinoDivider(isDark),
-                    const SizedBox(height: 8),
-                    _buildCupertinoSectionHeader('Capacity Status', textSecondary),
-                    const SizedBox(height: 8),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text('Registered', style: TextStyle(color: textSecondary, fontSize: 13)),
-                        Text(
-                          event.capacity != null
-                              ? '${event.registeredCount} / ${event.capacity}'
-                              : '${event.registeredCount} Registered',
-                          style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary, fontSize: 13),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 6),
-                    ClipRRect(
-                      borderRadius: BorderRadius.circular(4),
-                      child: SizedBox(
-                        height: 6,
-                        child: LinearProgressIndicator(
-                          value: event.capacity != null && event.capacity! > 0
-                              ? event.registeredCount / event.capacity!
-                              : 0,
-                          backgroundColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
-                          valueColor: AlwaysStoppedAnimation<Color>(accentGold),
+                    if (isAdmin) ...[
+                      const SizedBox(height: 8),
+                      _buildCupertinoSectionHeader('Capacity Status', textSecondary),
+                      const SizedBox(height: 8),
+                      Row(
+                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        children: [
+                          Text('Registered', style: TextStyle(color: textSecondary, fontSize: 13)),
+                          Text(
+                            event.capacity != null
+                                ? '${event.registeredCount} / ${event.capacity}'
+                                : '${event.registeredCount} Registered',
+                            style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary, fontSize: 13),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 6),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: SizedBox(
+                          height: 6,
+                          child: LinearProgressIndicator(
+                            value: event.capacity != null && event.capacity! > 0
+                                ? event.registeredCount / event.capacity!
+                                : 0,
+                            backgroundColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+                            valueColor: AlwaysStoppedAnimation<Color>(accentGold),
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildCupertinoDivider(isDark),
+                      const SizedBox(height: 16),
+                      _buildCupertinoDivider(isDark),
+                    ],
                     const SizedBox(height: 8),
                     _buildCupertinoSectionHeader('Sponsors', textSecondary),
                     const SizedBox(height: 8),
@@ -354,7 +358,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   // ==========================================
   // MATERIAL LAYOUT (WEB / ANDROID)
   // ==========================================
-  Widget _buildMaterialLayout(AppEvent event, EventDetailState state) {
+  Widget _buildMaterialLayout(AppEvent event, EventDetailState state, {required bool isAdmin}) {
     final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -459,7 +463,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                               style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
                             ),
                             const SizedBox(height: 12),
-                            _buildCapacityBar(event, isDark),
+                            if (isAdmin) _buildCapacityBar(event, isDark),
                             const SizedBox(height: 16),
                             _buildRegistrationCTA(state, isIOS: false),
                           ],
@@ -521,9 +525,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               ),
               const SizedBox(height: 16),
               const Divider(),
-              const SizedBox(height: 8),
-              _buildCapacityBar(event, isDark),
-              const SizedBox(height: 16),
+              if (isAdmin) ...[
+                const SizedBox(height: 8),
+                _buildCapacityBar(event, isDark),
+                const SizedBox(height: 16),
+              ],
               _buildRegistrationCTA(state, isIOS: false),
               const SizedBox(height: 16),
               const Divider(),
@@ -1969,4 +1975,3 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 }
-

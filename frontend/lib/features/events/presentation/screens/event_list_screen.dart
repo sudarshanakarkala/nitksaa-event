@@ -506,6 +506,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                       ),
                       itemCount: filteredEvents.length,
                       itemBuilder: (context, index) {
+                        final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
                         return _buildCupertinoEventCard(
                           filteredEvents[index],
                           cardBg,
@@ -513,6 +514,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           textSecondary,
                           accentGold,
                           isDark,
+                          isAdmin: isAdmin,
                         );
                       },
                     ),
@@ -531,6 +533,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     Color textSecondary,
     Color accentGold,
     bool isDark,
+    {required bool isAdmin}
   ) {
     final regStatusColor = event.registrationStatus == 'open'
         ? (isDark ? const Color(0xFF30D158) : const Color(0xFF34C759))
@@ -651,41 +654,43 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
             textSecondary,
           ),
-          const SizedBox(height: 12),
-          // Capacity bar
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              Text(
-                'Capacity',
-                style: TextStyle(fontSize: 11, color: textSecondary),
-              ),
-              Text(
-                capacityText,
-                style: TextStyle(
-                  fontSize: 11,
-                  fontWeight: FontWeight.w600,
-                  color: textPrimary,
+          if (isAdmin) ...[
+            const SizedBox(height: 12),
+            // Capacity bar
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(
+                  'Capacity',
+                  style: TextStyle(fontSize: 11, color: textSecondary),
                 ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 4),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(2.5),
-            child: SizedBox(
-              height: 5,
-              child: LinearProgressIndicator(
-                value: progress,
-                backgroundColor: isDark
-                    ? const Color(0xFF2C2C2E)
-                    : const Color(0xFFE5E5EA),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  progress > 0.8 ? Colors.orange : Colors.green,
+                Text(
+                  capacityText,
+                  style: TextStyle(
+                    fontSize: 11,
+                    fontWeight: FontWeight.w600,
+                    color: textPrimary,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 4),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(2.5),
+              child: SizedBox(
+                height: 5,
+                child: LinearProgressIndicator(
+                  value: progress,
+                  backgroundColor: isDark
+                      ? const Color(0xFF2C2C2E)
+                      : const Color(0xFFE5E5EA),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    progress > 0.8 ? Colors.orange : Colors.green,
+                  ),
                 ),
               ),
             ),
-          ),
+          ],
           const SizedBox(height: 14),
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -1405,6 +1410,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         filteredEvents[index],
                         isDark,
                         theme,
+                        isAdmin: auth.session?.userType.toLowerCase() == 'admin',
                       );
                     },
                   ),
@@ -1531,7 +1537,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
 
-  Widget _buildMaterialEventCard(AppEvent event, bool isDark, ThemeData theme) {
+  Widget _buildMaterialEventCard(AppEvent event, bool isDark, ThemeData theme, {required bool isAdmin}) {
     final isPhysical = !event.isVirtual;
     final tagBg = isPhysical
         ? (isDark ? const Color(0xFF1E2E50) : const Color(0xFFDDE8FF))
@@ -1660,37 +1666,39 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ],
               ),
             ),
-            const SizedBox(height: 8),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                const Text(
-                  'Capacity',
-                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
-                ),
-                Text(
-                  capacityText,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.bold,
+            if (isAdmin) ...[
+              const SizedBox(height: 8),
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Capacity',
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                  ),
+                  Text(
+                    capacityText,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 4),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 6,
+                  backgroundColor: isDark
+                      ? const Color(0xFF1C2A40)
+                      : const Color(0xFFEEF3FA),
+                  valueColor: AlwaysStoppedAnimation<Color>(
+                    progress > 0.85 ? Colors.orange : Colors.green,
                   ),
                 ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: LinearProgressIndicator(
-                value: progress,
-                minHeight: 6,
-                backgroundColor: isDark
-                    ? const Color(0xFF1C2A40)
-                    : const Color(0xFFEEF3FA),
-                valueColor: AlwaysStoppedAnimation<Color>(
-                  progress > 0.85 ? Colors.orange : Colors.green,
-                ),
               ),
-            ),
+            ],
             const SizedBox(height: 12),
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
