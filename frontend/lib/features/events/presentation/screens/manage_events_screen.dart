@@ -14,6 +14,7 @@ import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
+import '../../presentation/providers/events_provider.dart';
 import '../../../../shared/widgets/app_sidebar.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
@@ -138,6 +139,11 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       
       // Refresh events to show updated status
       await _fetchEvents();
+      
+      // Also refresh the public events list so EventListScreen shows updated data
+      if (mounted) {
+        ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true);
+      }
       
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
@@ -335,6 +341,10 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     );
     if (saved == true) {
       await _fetchEvents();
+      // Also refresh the public events list so EventListScreen shows updated data
+      if (mounted) {
+        ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true);
+      }
     }
   }
 
