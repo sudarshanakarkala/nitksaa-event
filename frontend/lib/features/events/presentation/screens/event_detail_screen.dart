@@ -21,10 +21,14 @@ class EventDetailScreen extends ConsumerStatefulWidget {
 
 class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   final TextEditingController _notesController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
 
   @override
   void dispose() {
     _notesController.dispose();
+    _emailController.dispose();
+    _phoneController.dispose();
     super.dispose();
   }
 
@@ -1271,8 +1275,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   }
 
   void _showRegistrationForm(AppEvent event, EventDetailState state, {required bool isIOS}) {
-    _notesController.clear();
     final auth = ref.read(authControllerProvider);
+    _notesController.clear();
+    _emailController.text = state.alumniProfile?['email'] ?? auth.session?.email ?? '';
+    _phoneController.text = state.alumniProfile?['phone'] ?? '';
 
     if (isIOS) {
       showCupertinoModalPopup(
@@ -1341,8 +1347,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         children: [
                           _buildEventHeader(event, isDark),
                           _buildReadOnlyField('Badge name', state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? '', isDark),
-                          _buildReadOnlyField('Email', state.alumniProfile?['email'] ?? auth.session?.email ?? '', isDark),
-                          _buildReadOnlyField('Phone', state.alumniProfile?['phone'] ?? '', isDark),
+                          _buildEditableField('Email', _emailController, 'your@email.com', isDark),
+                          _buildEditableField('Phone', _phoneController, 'Phone number', isDark),
                           _buildEditableField('Notes (optional)', _notesController, 'Dietary preferences, accessibility needs…', isDark),
                           const SizedBox(height: 20),
                           SizedBox(
@@ -1401,8 +1407,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     const SizedBox(height: 16),
                     _buildEventHeader(event, isDark),
                     _buildReadOnlyField('Badge name', state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? '', isDark),
-                    _buildReadOnlyField('Email', state.alumniProfile?['email'] ?? auth.session?.email ?? '', isDark),
-                    _buildReadOnlyField('Phone', state.alumniProfile?['phone'] ?? '', isDark),
+                    _buildEditableField('Email', _emailController, 'your@email.com', isDark),
+                    _buildEditableField('Phone', _phoneController, 'Phone number', isDark),
                     _buildEditableField('Notes (optional)', _notesController, 'Dietary preferences, accessibility needs…', isDark),
                     const SizedBox(height: 20),
                     SizedBox(
