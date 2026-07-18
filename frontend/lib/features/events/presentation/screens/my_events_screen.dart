@@ -237,9 +237,9 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Cancel registration?'),
+        title: const Text('Unregister?'),
         content: Text(
-          'This will cancel your registration for ${registration.event?.title ?? 'this event'}.',
+          'This will unregister you from ${registration.event?.title ?? 'this event'}.',
         ),
         actions: [
           TextButton(
@@ -263,8 +263,8 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       SnackBar(
         content: Text(
           error == null
-              ? 'Registration cancelled.'
-              : 'Could not cancel registration.',
+              ? 'Unregistered'
+              : 'Could not unregister.',
         ),
       ),
     );
@@ -327,7 +327,7 @@ class _RegistrationCard extends StatelessWidget {
                   ),
                 ),
                 _Tag(
-                  label: registration.isActive ? 'Registered' : 'Cancelled',
+                  label: registration.isActive ? 'Registered' : 'Unregistered',
                   bg: registration.isActive
                       ? const Color(0xFFDDEEFF)
                       : const Color(0xFFFFE9E9),

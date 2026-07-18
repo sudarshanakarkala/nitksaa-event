@@ -1077,7 +1077,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             Icon(Icons.cancel, color: Color(0xFF8A1B1B), size: 20),
             SizedBox(width: 8),
             Text(
-              'Registration cancelled',
+              'Unregistered from this event',
               style: TextStyle(
                 color: Color(0xFF8A1B1B),
                 fontWeight: FontWeight.bold,
