@@ -430,6 +430,31 @@ List<String> _getAvailableTimezones() {
   return tz.timeZoneDatabase.locations.keys.toList()..sort();
 }
 
+// Common timezones for the simple dropdown
+List<String> _getCommonTimezones() {
+  return [
+    'Asia/Kolkata',
+    'UTC',
+    'Asia/Dubai',
+    'Europe/London',
+    'America/New_York',
+    'America/Los_Angeles',
+    'Asia/Singapore',
+    'Australia/Sydney',
+    'Asia/Tokyo',
+    'Europe/Paris',
+    'Europe/Berlin',
+    'Asia/Shanghai',
+    'Asia/Hong_Kong',
+    'Asia/Bangkok',
+    'Asia/Jakarta',
+    'Europe/Moscow',
+    'America/Chicago',
+    'America/Denver',
+    'Pacific/Auckland',
+  ];
+}
+
 // Fallback timezone offsets for common zones
 const Map<String, String> TZ_OFFSETS = {
   'Asia/Kolkata': '+05:30',
@@ -1067,66 +1092,28 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   }
 
   Widget _buildTimezoneDropdown() {
-    return TextFormField(
-      controller: _timezone,
+    final zones = _getCommonTimezones();
+    final currentValue = _timezone.text.isEmpty ? zones.first : _timezone.text;
+    
+    return DropdownButtonFormField<String>(
+      value: zones.contains(currentValue) ? currentValue : zones.first,
+      isDense: true,
+      menuMaxHeight: 300,
       decoration: InputDecoration(
         labelText: 'Timezone *',
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        suffixIcon: GestureDetector(
-          onTap: _showTimezoneSelector,
-          child: const Icon(Icons.arrow_drop_down),
-        ),
+        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       ),
-    );
-  }
-
-  Future<void> _showTimezoneSelector() async {
-    final zones = _getAvailableTimezones();
-    String searchText = '';
-
-    showDialog(
-      context: context,
-      builder: (context) => StatefulBuilder(
-        builder: (context, setState) => AlertDialog(
-          title: const Text('Select Timezone'),
-          content: SizedBox(
-            width: double.maxFinite,
-            height: 400,
-            child: Column(
-              children: [
-                TextField(
-                  decoration: InputDecoration(
-                    hintText: 'Search timezone...',
-                    prefixIcon: const Icon(Icons.search),
-                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                  ),
-                  onChanged: (value) {
-                    setState(() => searchText = value);
-                  },
-                ),
-                const SizedBox(height: 12),
-                Expanded(
-                  child: ListView(
-                    children: zones
-                        .where((z) => z.toLowerCase().contains(searchText.toLowerCase()))
-                        .map((zone) => ListTile(
-                          title: Text(zone),
-                          selected: zone == _timezone.text,
-                          onTap: () {
-                            _timezone.text = zone;
-                            Navigator.pop(context);
-                          },
-                        ))
-                        .toList(),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
+      items: zones.map((zone) => DropdownMenuItem(
+        value: zone,
+        child: Text(zone, style: const TextStyle(fontSize: 13)),
+      )).toList(),
+      onChanged: (value) {
+        if (value != null) {
+          _timezone.text = value;
+        }
+      },
+      dropdownColor: Theme.of(context).cardColor,
     );
   }
 
