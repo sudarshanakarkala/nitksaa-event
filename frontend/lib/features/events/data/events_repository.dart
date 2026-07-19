@@ -124,6 +124,19 @@ class EventsRepository {
     return AppEvent.fromJson(eventJson);
   }
 
+  Future<void> deleteAdminEvent(
+    int eventId,
+    String accessToken,
+  ) async {
+    await _dio.delete(
+      '/api/v1/events/$eventId',
+      options: Options(headers: {
+        'Authorization': 'Bearer $accessToken',
+        'X-Dev-User': 'admin',
+      }),
+    );
+  }
+
   Future<AppEvent> getPublicEvent(int eventId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/events/public/$eventId',

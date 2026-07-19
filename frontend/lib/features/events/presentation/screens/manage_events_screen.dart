@@ -167,6 +167,130 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     }
   }
 
+  Future<void> _unpublishEvent(AppEvent event) async {
+    try {
+      final auth = ref.read(authControllerProvider);
+      final repo = ref.read(eventsRepositoryProvider);
+      
+      if (!mounted) return;
+      
+      // Show loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Unpublishing event...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+      
+      // Call API to update event status to draft
+      await repo.updateEventStatus(
+        event.eventId,
+        'draft',
+        auth.session!.accessToken,
+      );
+      
+      // Refresh events to show updated status
+      await _fetchEvents();
+      
+      // Also refresh the public events list so EventListScreen shows updated data
+      if (mounted) {
+        ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${event.title} unpublished successfully'),
+            backgroundColor: Colors.orange,
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error unpublishing event: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
+  Future<void> _deleteEvent(AppEvent event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Delete Event'),
+        content: Text('Are you sure you want to delete "${event.title}"? This action cannot be undone.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Delete'),
+          ),
+        ],
+      ),
+    );
+    
+    if (confirmed != true) return;
+    
+    try {
+      final auth = ref.read(authControllerProvider);
+      final repo = ref.read(eventsRepositoryProvider);
+      
+      if (!mounted) return;
+      
+      // Show loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Deleting event...'),
+          duration: Duration(seconds: 1),
+        ),
+      );
+      
+      // Call API to delete event
+      await repo.deleteAdminEvent(
+        event.eventId,
+        auth.session!.accessToken,
+      );
+      
+      // Refresh events to show updated status
+      await _fetchEvents();
+      
+      // Also refresh the public events list so EventListScreen shows updated data
+      if (mounted) {
+        ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true);
+      }
+      
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('${event.title} deleted successfully'),
+            backgroundColor: Colors.green,
+          ),
+        );
+      }
+    } catch (error) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).clearSnackBars();
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Error deleting event: $error'),
+            backgroundColor: Colors.red,
+          ),
+        );
+      }
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
@@ -416,6 +540,8 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                 onView: () => context.push('/events/${event.eventId}'),
                 onEdit: () => _showEventForm(event: event),
                 onPublish: isPublished ? null : () => _publishEvent(event),
+                onUnpublish: isPublished ? () => _unpublishEvent(event) : null,
+                onDelete: () => _deleteEvent(event),
               );
             },
           );
@@ -2352,6 +2478,8 @@ class _ManageEventCard extends StatelessWidget {
     required this.onView,
     required this.onEdit,
     this.onPublish,
+    this.onUnpublish,
+    this.onDelete,
   });
 
   final AppEvent event;
@@ -2361,6 +2489,8 @@ class _ManageEventCard extends StatelessWidget {
   final VoidCallback onView;
   final VoidCallback onEdit;
   final VoidCallback? onPublish;
+  final VoidCallback? onUnpublish;
+  final VoidCallback? onDelete;
 
   @override
   Widget build(BuildContext context) {
@@ -2423,7 +2553,7 @@ class _ManageEventCard extends StatelessWidget {
             const SizedBox(height: 16),
             // Action buttons
             if (isPublished) ...[
-              // Published event: View, View Registrations, Edit
+              // Published event: View, Registrations, Unpublish, Delete, Edit
               Row(
                 children: [
                   Expanded(
@@ -2443,6 +2573,26 @@ class _ManageEventCard extends StatelessWidget {
                   ),
                   const SizedBox(width: 6),
                   Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onUnpublish,
+                      icon: const Icon(Icons.unpublished_outlined, size: 16),
+                      label: const Text('Unpublish', style: TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                      label: const Text('Delete', style: TextStyle(fontSize: 12, color: Colors.red)),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 6),
+              Row(
+                children: [
+                  Expanded(
                     child: FilledButton.icon(
                       onPressed: onEdit,
                       icon: const Icon(Icons.edit_outlined, size: 16),
@@ -2452,7 +2602,7 @@ class _ManageEventCard extends StatelessWidget {
                 ],
               ),
             ] else ...[
-              // Draft event: Publish, Edit
+              // Draft event: Publish, Delete, Edit
               Row(
                 children: [
                   if (onPublish != null)
@@ -2464,6 +2614,14 @@ class _ManageEventCard extends StatelessWidget {
                       ),
                     ),
                   if (onPublish != null) const SizedBox(width: 10),
+                  Expanded(
+                    child: OutlinedButton.icon(
+                      onPressed: onDelete,
+                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
+                      label: const Text('Delete', style: TextStyle(fontSize: 12, color: Colors.red)),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
                   Expanded(
                     child: FilledButton.icon(
                       onPressed: onEdit,
