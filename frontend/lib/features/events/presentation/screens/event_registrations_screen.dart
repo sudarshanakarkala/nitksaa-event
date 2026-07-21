@@ -302,7 +302,7 @@ class _EventRegistrationsScreenState
     final auth = ref.watch(authControllerProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
+    final isWebScreen = MediaQuery.of(context).size.width >= 900;
     final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
 
     if (!auth.isAuthenticated || !isAdmin) {
@@ -669,7 +669,7 @@ class _EventRegistrationsScreenState
       );
     }
 
-    final isWide = MediaQuery.of(context).size.width > 700 || kIsWeb;
+    final isWide = MediaQuery.of(context).size.width >= 700;
     final displayedAttendees = _sortedAttendees;
 
     if (!isWide) {
@@ -736,7 +736,7 @@ class _EventRegistrationsScreenState
           child: Container(
             constraints: BoxConstraints(
               minWidth:
-                  MediaQuery.of(context).size.width - (kIsWeb ? 340 : 80),
+                  MediaQuery.of(context).size.width - (MediaQuery.of(context).size.width >= 900 ? 340 : 80),
             ),
             decoration: BoxDecoration(
               borderRadius: BorderRadius.circular(12),

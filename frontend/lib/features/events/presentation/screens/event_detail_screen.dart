@@ -363,7 +363,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   // MATERIAL LAYOUT (WEB / ANDROID)
   // ==========================================
   Widget _buildMaterialLayout(AppEvent event, EventDetailState state, {required bool isAdmin}) {
-    final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
+    final isWebScreen = MediaQuery.of(context).size.width >= 900;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     final appBar = AppBar(

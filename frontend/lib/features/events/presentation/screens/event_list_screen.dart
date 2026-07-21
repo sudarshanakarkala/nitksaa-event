@@ -60,7 +60,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
   void _showFilterBottomSheet() {
-    final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
+    final isWebScreen = MediaQuery.of(context).size.width >= 900;
     if (isWebScreen) {
       // Open the scaffold end drawer for a standards-compliant side filter panel
       _scaffoldKey.currentState?.openEndDrawer();
@@ -100,7 +100,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       !((state.filterRegistrationStatus?['open'] ?? true) && (state.filterRegistrationStatus?['closed'] ?? true)) ||
       state.searchQuery.isNotEmpty ||
       state.timeline != null;
-    final isInDrawer = kIsWeb || MediaQuery.of(context).size.width > 900;
+    final isInDrawer = MediaQuery.of(context).size.width >= 900;
 
     return SingleChildScrollView(
       child: Column(
@@ -1224,8 +1224,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     final ThemeData theme = Theme.of(context);
     final ColorScheme colorScheme = theme.colorScheme;
 
-    // Web styling rules
-    final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
+    // Web / Desktop styling rules
+    final isWebScreen = MediaQuery.of(context).size.width >= 900;
 
     final sidebar = isWebScreen ? const AppSidebar() : null;
 
@@ -1297,13 +1297,22 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   ],
                 )
               else if (!isWebScreen)
-                IconButton(
-                  icon: Icon(
-                    auth.isAuthenticated
-                        ? Icons.logout_outlined
-                        : Icons.login_outlined,
-                  ),
-                  onPressed: _handleAuthAction,
+                Row(
+                  children: [
+                    IconButton(
+                      icon: const Icon(Icons.tune),
+                      tooltip: 'Filters',
+                      onPressed: _showFilterBottomSheet,
+                    ),
+                    IconButton(
+                      icon: Icon(
+                        auth.isAuthenticated
+                            ? Icons.logout_outlined
+                            : Icons.login_outlined,
+                      ),
+                      onPressed: _handleAuthAction,
+                    ),
+                  ],
                 ),
             ],
           ),

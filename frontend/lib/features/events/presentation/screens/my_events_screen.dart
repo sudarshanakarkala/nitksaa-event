@@ -41,7 +41,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     final state = ref.watch(myEventsProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
+    final isWebScreen = MediaQuery.of(context).size.width >= 900;
 
     // Get search query and filter registrations
     final searchQuery = _searchController.text.toLowerCase();
@@ -178,7 +178,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                                               crossAxisCount: columns,
                                               crossAxisSpacing: 20,
                                               mainAxisSpacing: 20,
-                                              mainAxisExtent: 260,
+                                              mainAxisExtent: 280,
                                             ),
                                             itemCount: filteredRegistrations.length,
                                             itemBuilder: (context, index) {

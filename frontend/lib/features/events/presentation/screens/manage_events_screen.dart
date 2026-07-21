@@ -296,7 +296,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     final auth = ref.watch(authControllerProvider);
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
-    final isWebScreen = kIsWeb || MediaQuery.of(context).size.width > 900;
+    final isWebScreen = MediaQuery.of(context).size.width >= 900;
     final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
 
     if (!auth.isAuthenticated || !isAdmin) {
@@ -350,8 +350,10 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    Wrap(
+                      alignment: WrapAlignment.spaceBetween,
+                      crossAxisAlignment: WrapCrossAlignment.center,
+                      runSpacing: 12,
                       children: [
                         const Text(
                           'Manage Events',
@@ -363,6 +365,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                         ),
                         Wrap(
                           spacing: 8,
+                          runSpacing: 8,
                           children: [
                             IconButton.filledTonal(
                               tooltip: 'Refresh',
@@ -527,7 +530,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
               crossAxisCount: columns,
               crossAxisSpacing: 20,
               mainAxisSpacing: 20,
-              mainAxisExtent: 300,
+              mainAxisExtent: columns == 1 ? 360 : 330,
             ),
             itemCount: events.length,
             itemBuilder: (context, index) {
@@ -892,6 +895,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final isActive = _currentStep == step;
     final isCompleted = _currentStep > step;
     final color = isCompleted || isActive ? const Color(0xFFC9952A) : Colors.grey;
+    final isNarrow = MediaQuery.of(context).size.width < 600;
     return GestureDetector(
       onTap: step == 0 || (step == 1 && _isStep1Complete) ? () => setState(() => _currentStep = step) : null,
       child: Row(
@@ -916,7 +920,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isActive || isCompleted ? const Color(0xFFC9952A) : Colors.grey)),
-              Text(subtitle, style: TextStyle(fontSize: 10, color: Colors.grey)),
+              if (!isNarrow) Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.grey)),
             ],
           ),
         ],
@@ -2552,86 +2556,59 @@ class _ManageEventCard extends StatelessWidget {
             ),
             const SizedBox(height: 16),
             // Action buttons
-            if (isPublished) ...[
-              // Published event: View, Registrations, Unpublish, Delete, Edit
-              Row(
-                children: [
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: onView,
-                      icon: const Icon(Icons.visibility_outlined, size: 16),
-                      label: const Text('View', style: TextStyle(fontSize: 12)),
-                    ),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                if (isPublished) ...[
+                  OutlinedButton.icon(
+                    onPressed: onView,
+                    icon: const Icon(Icons.visibility_outlined, size: 16),
+                    label: const Text('View', style: TextStyle(fontSize: 12)),
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: OutlinedButton.icon(
-                      onPressed: () => context.push('/admin/events/${event.eventId}/registrations'),
-                      icon: const Icon(Icons.people_outline, size: 16),
-                      label: const Text('Registrations', style: TextStyle(fontSize: 12)),
-                    ),
+                  OutlinedButton.icon(
+                    onPressed: () => context.push('/admin/events/${event.eventId}/registrations'),
+                    icon: const Icon(Icons.people_outline, size: 16),
+                    label: const Text('Registrations', style: TextStyle(fontSize: 12)),
                   ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: OutlinedButton.icon(
+                  FilledButton.icon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                  ),
+                  if (onUnpublish != null)
+                    OutlinedButton.icon(
                       onPressed: onUnpublish,
                       icon: const Icon(Icons.unpublished_outlined, size: 16),
                       label: const Text('Unpublish', style: TextStyle(fontSize: 12)),
                     ),
-                  ),
-                  const SizedBox(width: 6),
-                  Expanded(
-                    child: OutlinedButton.icon(
+                  if (onDelete != null)
+                    OutlinedButton.icon(
                       onPressed: onDelete,
                       icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
                       label: const Text('Delete', style: TextStyle(fontSize: 12, color: Colors.red)),
                     ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 6),
-              Row(
-                children: [
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined, size: 16),
-                      label: const Text('Edit', style: TextStyle(fontSize: 12)),
-                    ),
-                  ),
-                ],
-              ),
-            ] else ...[
-              // Draft event: Publish, Delete, Edit
-              Row(
-                children: [
+                ] else ...[
                   if (onPublish != null)
-                    Expanded(
-                      child: OutlinedButton.icon(
-                        onPressed: onPublish,
-                        icon: const Icon(Icons.publish_outlined),
-                        label: const Text('Publish'),
-                      ),
+                    FilledButton.icon(
+                      onPressed: onPublish,
+                      icon: const Icon(Icons.publish_outlined, size: 16),
+                      label: const Text('Publish', style: TextStyle(fontSize: 12)),
                     ),
-                  if (onPublish != null) const SizedBox(width: 10),
-                  Expanded(
-                    child: OutlinedButton.icon(
+                  FilledButton.tonalIcon(
+                    onPressed: onEdit,
+                    icon: const Icon(Icons.edit_outlined, size: 16),
+                    label: const Text('Edit', style: TextStyle(fontSize: 12)),
+                  ),
+                  if (onDelete != null)
+                    OutlinedButton.icon(
                       onPressed: onDelete,
                       icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
                       label: const Text('Delete', style: TextStyle(fontSize: 12, color: Colors.red)),
                     ),
-                  ),
-                  const SizedBox(width: 10),
-                  Expanded(
-                    child: FilledButton.icon(
-                      onPressed: onEdit,
-                      icon: const Icon(Icons.edit_outlined),
-                      label: const Text('Edit'),
-                    ),
-                  ),
                 ],
-              ),
-            ],
+              ],
+            ),
           ],
         ),
       ),
