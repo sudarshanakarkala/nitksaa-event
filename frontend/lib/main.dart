@@ -52,9 +52,11 @@ class App extends ConsumerWidget {
         return Stack(
           children: [
             if (child != null) child,
-            // Global theme toggle button in the top-right corner so all screens inherit it
+            // Global theme toggle button - positioned just above bottom nav on mobile
             Positioned(
-              bottom: MediaQuery.of(context).padding.bottom + 16,
+              bottom: MediaQuery.of(context).size.width >= 900
+                  ? MediaQuery.of(context).padding.bottom + 16
+                  : MediaQuery.of(context).padding.bottom + 80,
               right: 16,
               child: SafeArea(
                 child: Consumer(

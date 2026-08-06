@@ -16,6 +16,7 @@ import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 import '../../presentation/providers/events_provider.dart';
 import '../../../../shared/widgets/app_sidebar.dart';
+import '../../../../shared/widgets/app_bottom_nav.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
   const ManageEventsScreen({super.key});
@@ -434,29 +435,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
           ],
         ),
       ),
-      bottomNavigationBar: isWebScreen
-          ? null
-          : NavigationBar(
-              selectedIndex: 2,
-              onDestinationSelected: (index) {
-                if (index == 0) context.go(AppRoutes.home);
-                if (index == 1) context.go(AppRoutes.myEvents);
-              },
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.calendar_month),
-                  label: 'Events',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.bookmark),
-                  label: 'My Events',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.admin_panel_settings),
-                  label: 'Manage',
-                ),
-              ],
-            ),
+      bottomNavigationBar: const AppBottomNav(currentIndex: 2),
     );
   }
 

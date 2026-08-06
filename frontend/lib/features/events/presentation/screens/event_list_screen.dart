@@ -9,6 +9,7 @@ import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
 import '../../domain/event.dart';
 import '../../../../shared/widgets/app_sidebar.dart';
+import '../../../../shared/widgets/app_bottom_nav.dart';
 
 class EventListScreen extends ConsumerStatefulWidget {
   const EventListScreen({super.key});
@@ -1511,6 +1512,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               )
             : null,
         body: SafeArea(
+          bottom: false,
           child: Row(
             children: [
               if (sidebar != null) sidebar,
@@ -1518,29 +1520,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ],
           ),
         ),
-        bottomNavigationBar: (!isWebScreen && !auth.isAuthenticated)
-            ? Container(
-                padding: const EdgeInsets.symmetric(
-                  horizontal: 16,
-                  vertical: 12,
-                ),
-                color: isDark ? const Color(0xFF14171C) : Colors.white,
-                child: ElevatedButton(
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFFC9952A),
-                    foregroundColor: Colors.white,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: _handleAuthAction,
-                  child: const Text(
-                    'Log In to Access Premium Features',
-                    style: TextStyle(fontWeight: FontWeight.bold),
-                  ),
-                ),
-              )
-            : null,
+        bottomNavigationBar: const AppBottomNav(currentIndex: 0),
       ),
     );
   }
