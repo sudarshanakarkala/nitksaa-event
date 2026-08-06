@@ -828,8 +828,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                     color: theme.scaffoldBackgroundColor,
                     border: Border(top: BorderSide(color: Colors.grey.shade200)),
                   ),
-                  child: Row(
-                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  child: Wrap(
+                    spacing: 8,
+                    runSpacing: 8,
+                    alignment: WrapAlignment.spaceBetween,
                     children: [
                       if (_currentStep > 0)
                         TextButton.icon(
@@ -840,12 +842,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       else
                         const SizedBox.shrink(),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           TextButton(
                             onPressed: _isSaving ? null : () => Navigator.pop(context, false),
                             child: const Text('Cancel'),
                           ),
-                          const SizedBox(width: 12),
                           if (_currentStep == 0)
                             FilledButton.icon(
                               onPressed: _isStep1Complete ? () => setState(() => _currentStep = 1) : null,
