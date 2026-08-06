@@ -69,7 +69,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       showModalBottomSheet(
         context: context,
         isScrollControlled: true,
-        builder: (context) => _buildFilterPanel(),
+        builder: (context) => ProviderScope(
+          child: Consumer(
+            builder: (context, ref, _) => _buildFilterPanel(ref),
+          ),
+        ),
       );
     }
   }
@@ -293,36 +297,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           ),
           const SizedBox(height: 24),
 
-          // Action Buttons
-          if (MediaQuery.of(context).size.width <= 900)
-            Row(
-              children: [
-                Expanded(
-                  child: TextButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: TextButton.styleFrom(
-                      side: BorderSide(
-                        color: Theme.of(context).colorScheme.outlineVariant,
-                      ),
-                    ),
-                    child: const Text('Unregister'),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: ElevatedButton(
-                    onPressed: () => Navigator.pop(context),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: const Color(0xFFC9952A),
-                    ),
-                    child: const Text(
-                      'Apply',
-                      style: TextStyle(color: Colors.white),
-                    ),
-                  ),
-                ),
-              ],
-            ),
           // Drawer-only clear button removed — top 'Clear All' handles clearing.
         ],
       ),
