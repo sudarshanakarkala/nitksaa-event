@@ -6,12 +6,13 @@ before the capacity check and INSERT, preventing double-registration under concu
 Email failure policy: email is sent after the transaction commits. A failed send
 updates confirmation_email_status to 'failed' but never rolls back the registration.
 """
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
 from fastapi import HTTPException
 
 from app.database import get_pool
+from app.repositories.payment_repository import PaymentRepository
 from app.repositories.registration_repository import RegistrationRepository
 from app.schemas.registrations import (
     EventSummary,
@@ -63,6 +64,7 @@ def _format_registration(row: Dict[str, Any]) -> RegistrationResponse:
         cancelled_at=row.get("cancelled_at"),
         confirmation_email_status=row.get("confirmation_email_status"),
         confirmation_email_sent_at=row.get("confirmation_email_sent_at"),
+        hold_expires_at=row.get("hold_expires_at"),
         join_url=join_url,
         event=event,
         updated_at=row.get("updated_at"),
@@ -87,6 +89,17 @@ async def register_for_event(
     pool = await get_pool()
     registration_id: int
     reg_number: str
+    is_paid_event: bool
+    # Deadlock avoidance: analytics_service.log_event_activity() acquires a
+    # SEPARATE pooled connection and its INSERT takes an FK-check lock on the
+    # events row this transaction already holds FOR UPDATE. Awaiting that call
+    # while still inside this transaction self-deadlocks (Postgres never sees
+    # a lock-wait cycle to detect, because this connection is blocked on the
+    # Python await, not on a DB lock — so it hangs forever, not just until
+    # Postgres's deadlock_timeout). Failure reasons are captured here and the
+    # transaction is allowed to close normally (releasing the FOR UPDATE lock)
+    # before analytics/audit calls run on a different connection.
+    failure_reason: Optional[str] = None
 
     async with pool.acquire() as conn:
         repo = RegistrationRepository(conn)
@@ -94,7 +107,7 @@ async def register_for_event(
         async with conn.transaction():
             event_row = await conn.fetchrow(
                 """
-                SELECT event_id, status, capacity, is_virtual,
+                SELECT event_id, status, capacity, is_virtual, is_free,
                        registration_opens_at, registration_closes_at
                 FROM events
                 WHERE event_id = $1
@@ -116,44 +129,80 @@ async def register_for_event(
             if closes_at and now > closes_at:
                 raise HTTPException(status_code=409, detail="registration_closed")
 
-            if await repo.get_active_for_user(event_id, firebase_uid):
-                await analytics_service.log_event_activity(
-                    action_type="REGISTRATION_FAILED",
-                    source_app="BACKEND",
+            is_paid_event = not event_row["is_free"]
+            payment_config = None
+            if is_paid_event:
+                payment_config = await PaymentRepository(conn).get_published_config_for_event(event_id)
+                if not payment_config:
+                    raise HTTPException(status_code=409, detail="payment_not_configured")
+                await repo.expire_stale_holds(event_id)
+
+            existing = (
+                await repo.get_active_or_held_for_user(event_id, firebase_uid)
+                if is_paid_event
+                else await repo.get_active_for_user(event_id, firebase_uid)
+            )
+            if existing:
+                failure_reason = "already_registered"
+            else:
+                capacity = event_row["capacity"]
+                if capacity is not None:
+                    active_count = (
+                        await repo.count_active_or_held(event_id)
+                        if is_paid_event
+                        else await repo.count_active(event_id)
+                    )
+                    if active_count >= capacity:
+                        failure_reason = "event_full"
+
+            if failure_reason is None:
+                registration_id = await repo.insert(
                     event_id=event_id,
                     firebase_uid=firebase_uid,
-                    metadata={"reason": "already_registered"},
+                    ref_id=ref_id,
+                    email=profile["email"],
+                    phone=profile.get("phone"),
+                    fullname_snapshot=profile.get("fullname"),
+                    batch_year_snapshot=profile.get("graduationyear"),
+                    branch_snapshot=profile.get("branch"),
+                    notes=body.attendee_note,
+                    status="seat_held" if is_paid_event else "registered",
+                    hold_expires_at=(
+                        now + timedelta(minutes=payment_config["seat_hold_minutes"])
+                        if is_paid_event
+                        else None
+                    ),
                 )
-                raise HTTPException(status_code=409, detail="already_registered")
+                reg_number = f"NITKSAA-{datetime.now(timezone.utc).year}-{registration_id:06d}"
+                await repo.set_registration_number(registration_id, reg_number)
+        # Transaction committed (or was a no-op read) — FOR UPDATE lock on the
+        # events row is released here, so it's now safe to open a second
+        # pooled connection for analytics/audit without deadlocking.
 
-            capacity = event_row["capacity"]
-            if capacity is not None:
-                if await repo.count_active(event_id) >= capacity:
-                    await analytics_service.log_event_activity(
-                        action_type="REGISTRATION_FAILED",
-                        source_app="BACKEND",
-                        event_id=event_id,
-                        firebase_uid=firebase_uid,
-                        metadata={"reason": "event_full"},
-                    )
-                    raise HTTPException(status_code=409, detail="event_full")
-
-            registration_id = await repo.insert(
+        if failure_reason is not None:
+            await analytics_service.log_event_activity(
+                action_type="REGISTRATION_FAILED",
+                source_app="BACKEND",
                 event_id=event_id,
                 firebase_uid=firebase_uid,
-                ref_id=ref_id,
-                email=profile["email"],
-                phone=profile.get("phone"),
-                fullname_snapshot=profile.get("fullname"),
-                batch_year_snapshot=profile.get("graduationyear"),
-                branch_snapshot=profile.get("branch"),
-                notes=body.attendee_note,
+                metadata={"reason": failure_reason},
             )
-            reg_number = f"NITKSAA-{datetime.now(timezone.utc).year}-{registration_id:06d}"
-            await repo.set_registration_number(registration_id, reg_number)
-        # Transaction committed
+            raise HTTPException(status_code=409, detail=failure_reason)
 
         full_row = dict(await repo.get_by_id_with_event(registration_id))
+
+    if is_paid_event:
+        # Payment must clear before this registration is confirmed — no
+        # confirmation email yet; that happens once payment_service captures
+        # a payment and sets status='registered'.
+        await audit_service.emit(
+            actor_uid=firebase_uid,
+            event_type="registration_seat_held",
+            entity_type="registration",
+            entity_id=registration_id,
+            context={"event_id": event_id, "registration_number": reg_number},
+        )
+        return _format_registration(full_row)
 
     await analytics_service.log_event_activity(
         action_type="REGISTRATION_COMPLETED",
@@ -304,7 +353,8 @@ async def get_registration_eligibility(
         repo = RegistrationRepository(conn)
         event_row = await conn.fetchrow(
             """
-            SELECT status, capacity, registration_opens_at, registration_closes_at
+            SELECT status, capacity, is_free, ticket_price,
+                   registration_opens_at, registration_closes_at
             FROM events WHERE event_id = $1
             """,
             event_id,
@@ -317,12 +367,16 @@ async def get_registration_eligibility(
         now = datetime.now(timezone.utc)
         opens_at = event_row["registration_opens_at"]
         closes_at = event_row["registration_closes_at"]
+        payment_required = not event_row["is_free"]
+        ticket_price = event_row["ticket_price"]
         if opens_at and now < opens_at:
             return RegistrationEligibilityResponse(
                 event_id=event_id,
                 firebase_uid=firebase_uid,
                 eligibility_status="not_open_yet",
                 message="Registration has not opened yet.",
+                payment_required=payment_required,
+                ticket_price=ticket_price,
             )
         if closes_at and now > closes_at:
             return RegistrationEligibilityResponse(
@@ -330,18 +384,31 @@ async def get_registration_eligibility(
                 firebase_uid=firebase_uid,
                 eligibility_status="closed",
                 message="Registration is closed.",
+                payment_required=payment_required,
+                ticket_price=ticket_price,
             )
 
-        if await repo.get_active_for_user(event_id, firebase_uid):
+        if payment_required:
+            await repo.expire_stale_holds(event_id)
+            existing = await repo.get_active_or_held_for_user(event_id, firebase_uid)
+        else:
+            existing = await repo.get_active_for_user(event_id, firebase_uid)
+        if existing:
             return RegistrationEligibilityResponse(
                 event_id=event_id,
                 firebase_uid=firebase_uid,
                 eligibility_status="already_registered",
                 message="You are already registered for this event.",
+                payment_required=payment_required,
+                ticket_price=ticket_price,
             )
 
         capacity = event_row["capacity"]
-        active_count = await repo.count_active(event_id)
+        active_count = (
+            await repo.count_active_or_held(event_id)
+            if payment_required
+            else await repo.count_active(event_id)
+        )
 
         if capacity is not None and active_count >= capacity:
             return RegistrationEligibilityResponse(
@@ -351,6 +418,8 @@ async def get_registration_eligibility(
                 message="Event is at full capacity.",
                 registered_count=active_count,
                 capacity=capacity,
+                payment_required=payment_required,
+                ticket_price=ticket_price,
             )
 
         return RegistrationEligibilityResponse(
@@ -360,4 +429,6 @@ async def get_registration_eligibility(
             message="You are eligible to register.",
             registered_count=active_count,
             capacity=capacity,
+            payment_required=payment_required,
+            ticket_price=ticket_price,
         )

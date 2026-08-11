@@ -8,12 +8,13 @@ from uuid import UUID
 
 import time
 import asyncpg
-from fastapi import APIRouter, Depends, Header, HTTPException, Query
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
 from app.database import get_alumni_pool, get_pool
 from app.middleware.auth import decode_access_token
+from app.schemas.payments import PaymentConfigImportRequest, ResolvePendingAttemptRequest
 from app.services.alumni_service import ACTIVE_ALUMNI_STATUSES
 
 router = APIRouter(prefix="/api/v1/dev/diagnostics", tags=["dev-diagnostics"])
@@ -1640,4 +1641,798 @@ async def lookup_alumni_by_id(
         "alumni_id": alumni_id,
         "record": _alumni_record_to_dict(row),
         "checked_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+# ── Payments Diagnostics (Phase 0) ────────────────────────────────────────────
+#
+# Dev-only. Gated by both _require_development() (via _get_dev_user) and
+# settings.payment_diagnostics_enabled, per the Phase 0 requirement that
+# diagnostics must be independently disable-able without redeploying with a
+# different APP_ENV.
+
+
+def _require_payment_diagnostics_enabled() -> None:
+    if not get_settings().payment_diagnostics_enabled:
+        raise HTTPException(status_code=404, detail="not_found")
+
+
+@router.post("/payments/configuration/import")
+async def import_payment_configuration(
+    body: PaymentConfigImportRequest,
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """Upsert a published payment_configurations row for an event and flip
+    events.is_free=false / ticket_price=base_amount to match. Dev-only."""
+    _require_payment_diagnostics_enabled()
+    from app.repositories.payment_repository import PaymentRepository
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        event_exists = await conn.fetchval(
+            "SELECT EXISTS(SELECT 1 FROM events WHERE event_id = $1)", body.event_id
+        )
+        if not event_exists:
+            raise HTTPException(status_code=404, detail="event_not_found")
+        async with conn.transaction():
+            await conn.execute(
+                "UPDATE events SET is_free = false, ticket_price = $2 WHERE event_id = $1",
+                body.event_id,
+                body.base_amount,
+            )
+            config = await PaymentRepository(conn).create_new_config_version(
+                configuration_key=body.configuration_key,
+                event_id=body.event_id,
+                base_amount=body.base_amount,
+                gst_enabled=body.gst_enabled,
+                gst_rate=body.gst_rate,
+                gst_mode=body.gst_mode,
+                convenience_fee_enabled=body.convenience_fee_enabled,
+                convenience_fee_type=body.convenience_fee_type,
+                convenience_fee_value=body.convenience_fee_value,
+                seat_hold_minutes=body.seat_hold_minutes,
+                payment_session_expiry_minutes=body.payment_session_expiry_minutes,
+                created_by=user["firebase_uid"],
+            )
+    return {
+        "status": "ok",
+        "configuration_id": config["id"],
+        "configuration_key": config["configuration_key"],
+        "configuration_version": config["version"],
+        "event_id": config["event_id"],
+        "imported_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.get("/payments/orders/{order_id}/technical-timeline")
+async def get_payment_technical_timeline(
+    order_id: str,
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """Full unfiltered audit feed for one order — the developer/technical
+    timeline. Also stands in for the admin timeline in Phase 0: no distinct
+    admin role model exists yet for payments, so both use this same
+    dev-diagnostics-gated view rather than a separate, unbuilt admin auth
+    path pretending to exist."""
+    _require_payment_diagnostics_enabled()
+    from app.services import payment_service
+
+    timeline = await payment_service.get_developer_timeline(order_id)
+    return {
+        "status": "ok",
+        "order_id": timeline.order_id,
+        "entries": [e.model_dump(mode="json") for e in timeline.entries],
+        "requested_by": user["firebase_uid"],
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.get("/payments/exceptions")
+async def list_payment_exceptions(
+    status_filter: Optional[str] = Query(default=None, alias="status", pattern="^(open|resolved)$"),
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """Read-only view of payment_exceptions (PAYMENT_CAPTURED_AFTER_SEAT_EXPIRY,
+    VERIFICATION_UNRESOLVED, ...). No resolve action here yet — an admin
+    finance portal is explicitly out of scope for Phase 0; this is the
+    read-only visibility half of 'admin-visible exception'."""
+    _require_payment_diagnostics_enabled()
+    from app.repositories.payment_repository import PaymentRepository
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        rows = await PaymentRepository(conn).list_exceptions(status_filter)
+    return {
+        "status": "ok",
+        "count": len(rows),
+        "exceptions": [_record_to_dict(r) for r in rows],
+        "requested_by": user["firebase_uid"],
+        "checked_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.post("/payments/attempts/{attempt_id}/resolve")
+async def resolve_pending_payment_attempt(
+    attempt_id: str,
+    body: ResolvePendingAttemptRequest,
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """Resolve a live 'pending'/'requires_verification' attempt to SUCCESS or
+    FAILURE over HTTP, for diagnostics/demo purposes only. There is no real
+    gateway in Phase 0 to asynchronously deliver this webhook, and a client
+    can never construct a validly-signed delivery itself (the signing secret
+    never leaves the backend) — this route builds and processes the exact
+    same signed webhook delivery the gateway would have sent, reusing the
+    existing sandbox module, so 'pending -> success/failure' is demonstrable
+    end-to-end without exposing payment_sandbox_signing_secret to any client.
+    Dev-only; independently gated by payment_diagnostics_enabled."""
+    _require_payment_diagnostics_enabled()
+    from app.gateways import deterministic_sandbox as sandbox
+    from app.repositories.payment_repository import PaymentRepository
+    from app.services import payment_service
+
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        pay_repo = PaymentRepository(conn)
+        attempt = await pay_repo.get_attempt_by_public_id(attempt_id)
+        if not attempt:
+            raise HTTPException(status_code=404, detail="payment_attempt_not_found")
+        if attempt["status"] not in ("pending", "requires_verification"):
+            raise HTTPException(status_code=409, detail="attempt_not_resolvable")
+        order = await pay_repo.get_order_by_id(attempt["order_id"])
+
+    settings = get_settings()
+    raw_body, signature = sandbox.build_signed_delivery(
+        gateway_order_ref=attempt["gateway_order_ref"],
+        scenario=body.outcome,
+        amount=attempt["amount"],
+        currency=attempt["currency"],
+        secret=settings.payment_sandbox_signing_secret,
+    )
+    ack = await payment_service.process_webhook(sandbox.GATEWAY_NAME, raw_body, signature)
+    order_after = await payment_service.get_order(
+        order["public_order_number"], {"firebase_uid": order["payer_firebase_uid"]}
+    )
+
+    return {
+        "status": "ok",
+        "processing_status": ack.processing_status,
+        "attempt_id": attempt_id,
+        "outcome": body.outcome,
+        "order_id": order_after.order_id,
+        "order_status": order_after.status,
+        "registration_status": order_after.registration_status,
+        "resolved_by": user["firebase_uid"],
+        "resolved_at": datetime.utcnow().isoformat() + "Z",
+    }
+
+
+@router.get("/payments")
+async def run_payment_diagnostics(
+    user: Dict[str, Any] = Depends(_get_dev_user),
+) -> Dict[str, Any]:
+    """End-to-end sandbox payment scenarios: success, failure+retry, duplicate
+    webhook idempotency. Creates and cancels its own throwaway paid event.
+    Development mode only."""
+    _require_payment_diagnostics_enabled()
+    from app.schemas.event_create import EventCreate
+    from app.schemas.event_status import EventStatusUpdate
+    from app.schemas.registrations import RegisterRequest
+    from app.schemas.payments import CreatePaymentAttemptRequest, CreatePaymentOrderRequest
+    from app.services import registration_service, payment_service
+    from app.services.events_service import EventsService
+    from app.repositories.payment_repository import PaymentRepository
+
+    pool = await get_pool()
+    results: List[Dict[str, Any]] = []
+    run_ts = datetime.utcnow()
+    ts_key = run_ts.strftime("%Y%m%d%H%M%S")
+    actor: Dict[str, Any] = {"firebase_uid": user["firebase_uid"]}
+    start_dt = run_ts + timedelta(days=30)
+    end_dt = start_dt + timedelta(hours=2)
+
+    is_alumni = user.get("user_type") == "alumni" and bool(user.get("ref_id"))
+    test_event_id: Optional[int] = None
+
+    async with pool.acquire() as conn:
+        svc = EventsService(conn)
+        t0 = time.monotonic()
+        try:
+            created = await svc.create_event(
+                EventCreate(
+                    title=f"DIAG_PAYMENT_{ts_key}",
+                    description="Dev diagnostic paid event. Safe to ignore.",
+                    start_datetime=start_dt,
+                    end_datetime=end_dt,
+                    timezone="Asia/Kolkata",
+                    is_virtual=True,
+                    virtual_url="https://meet.example.com/dev-payment-diagnostic",
+                    capacity=20,
+                ),
+                actor,
+            )
+            test_event_id = created["event_id"]
+            await svc.update_status(test_event_id, EventStatusUpdate(status="published"), actor)
+            await conn.execute(
+                "UPDATE events SET is_free = false, ticket_price = 100.00 WHERE event_id = $1",
+                test_event_id,
+            )
+            config = await PaymentRepository(conn).create_new_config_version(
+                configuration_key=f"diag-{ts_key}",
+                event_id=test_event_id,
+                base_amount=Decimal("100.00"),
+                gst_enabled=True,
+                gst_rate=Decimal("18.00"),
+                gst_mode="exclusive",
+                convenience_fee_enabled=False,
+                convenience_fee_type="fixed",
+                convenience_fee_value=Decimal("0.00"),
+                seat_hold_minutes=15,
+                payment_session_expiry_minutes=15,
+                created_by=user["firebase_uid"],
+            )
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Paid Event + Config Setup", "/api/v1/dev/diagnostics/payments/configuration/import",
+                "POST", True, {"event_id": test_event_id, "base_amount": "100.00", "gst_rate": "18.00"},
+                {"event_id": test_event_id, "configuration_id": config["id"]}, True, ms,
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Paid Event + Config Setup", "/api/v1/dev/diagnostics/payments/configuration/import",
+                "POST", True, {}, {}, False, ms, str(exc),
+            ))
+
+    if test_event_id is None or not is_alumni:
+        results.append(_diag_entry(
+            "Payment Flow", "n/a", "n/a", True, {}, {}, False, 0,
+            "skipped: setup failed or user is not alumni",
+        ))
+        return {
+            "status": "ok", "category": "Payments", "total": len(results),
+            "passed": sum(1 for r in results if r["status"] == "PASS"),
+            "failed": sum(1 for r in results if r["status"] == "FAIL"),
+            "results": results, "run_by": user["firebase_uid"], "run_at": run_ts.isoformat() + "Z",
+        }
+
+    # ── Pricing ────────────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    try:
+        pricing = await payment_service.get_pricing(test_event_id)
+        ms = int((time.monotonic() - t0) * 1000)
+        passed = str(pricing.final_amount) == "118.00" and str(pricing.tax_amount) == "18.00"
+        results.append(_diag_entry(
+            "Pricing (GST exclusive 18%)", f"/api/v1/events/{test_event_id}/payment-pricing", "GET", True,
+            {"event_id": test_event_id},
+            {"base_amount": str(pricing.base_amount), "tax_amount": str(pricing.tax_amount), "final_amount": str(pricing.final_amount)},
+            passed, ms, None if passed else "Expected base=100.00 tax=18.00 final=118.00",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Pricing", "n/a", "GET", True, {}, {}, False, ms, str(exc)))
+
+    # ── Seat-held registration ───────────────────────────────────────────────
+    t0 = time.monotonic()
+    registration_id: Optional[int] = None
+    try:
+        reg = await registration_service.register_for_event(
+            test_event_id, user, RegisterRequest(attendee_note="Payment diagnostic — safe to ignore")
+        )
+        registration_id = reg.registration_id
+        ms = int((time.monotonic() - t0) * 1000)
+        passed = reg.status == "seat_held"
+        results.append(_diag_entry(
+            "Seat Held on Register", f"/api/v1/events/{test_event_id}/register", "POST", True,
+            {"event_id": test_event_id}, {"status": reg.status}, passed, ms,
+            None if passed else f"Expected status=seat_held, got {reg.status}",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Seat Held on Register", "n/a", "POST", True, {}, {}, False, ms, str(exc)))
+
+    # ── Order creation + idempotency ─────────────────────────────────────────
+    t0 = time.monotonic()
+    order_id: Optional[str] = None
+    if registration_id is not None:
+        try:
+            key = f"diag-order-{ts_key}"
+            order1 = await payment_service.create_order(registration_id, user, CreatePaymentOrderRequest(idempotency_key=key).idempotency_key)
+            order2 = await payment_service.create_order(registration_id, user, key)
+            order_id = order1.order_id
+            ms = int((time.monotonic() - t0) * 1000)
+            passed = order1.order_id == order2.order_id and str(order1.final_amount) == "118.00"
+            results.append(_diag_entry(
+                "Order Creation + Idempotency", f"/api/v1/registrations/{registration_id}/payment-order", "POST", True,
+                {"idempotency_key": key}, {"order_id": order1.order_id, "final_amount": str(order1.final_amount), "second_call_same_order": order1.order_id == order2.order_id},
+                passed, ms, None if passed else "Idempotent replay returned a different order or wrong amount",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry("Order Creation + Idempotency", "n/a", "POST", True, {}, {}, False, ms, str(exc)))
+
+    # ── Failed payment + retry ────────────────────────────────────────────────
+    t0 = time.monotonic()
+    if order_id is not None:
+        try:
+            bg = BackgroundTasks()
+            failed_attempt = await payment_service.create_attempt(
+                order_id, user, CreatePaymentAttemptRequest(scenario="FAILURE"), bg
+            )
+            order_after_fail = await payment_service.get_order(order_id, user)
+            ms = int((time.monotonic() - t0) * 1000)
+            passed = failed_attempt.status == "failed" and order_after_fail.registration_status == "payment_failed"
+            results.append(_diag_entry(
+                "Failed Payment", f"/api/v1/payment-orders/{order_id}/attempts", "POST", True,
+                {"scenario": "FAILURE"},
+                {"attempt_status": failed_attempt.status, "registration_status": order_after_fail.registration_status},
+                passed, ms, None if passed else "Expected attempt=failed, registration=payment_failed",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry("Failed Payment", "n/a", "POST", True, {}, {}, False, ms, str(exc)))
+
+    # ── Retry succeeds ────────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    if order_id is not None:
+        try:
+            bg = BackgroundTasks()
+            success_attempt = await payment_service.create_attempt(
+                order_id, user, CreatePaymentAttemptRequest(scenario="SUCCESS"), bg
+            )
+            order_after_success = await payment_service.get_order(order_id, user)
+            reg_after_success = await registration_service.get_my_event_registration(test_event_id, user)
+            ms = int((time.monotonic() - t0) * 1000)
+            passed = (
+                success_attempt.status == "captured"
+                and order_after_success.status == "paid"
+                and reg_after_success.status == "registered"
+                and success_attempt.attempt_number == 2
+            )
+            results.append(_diag_entry(
+                "Retry Succeeds (2nd attempt)", f"/api/v1/payment-orders/{order_id}/attempts", "POST", True,
+                {"scenario": "SUCCESS"},
+                {
+                    "attempt_number": success_attempt.attempt_number,
+                    "attempt_status": success_attempt.status,
+                    "order_status": order_after_success.status,
+                    "registration_status": reg_after_success.status,
+                },
+                passed, ms, None if passed else "Expected 2nd attempt captured, order paid, registration registered",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry("Retry Succeeds", "n/a", "POST", True, {}, {}, False, ms, str(exc)))
+
+    # ── Duplicate webhook is a no-op ─────────────────────────────────────────
+    t0 = time.monotonic()
+    if order_id is not None:
+        async with pool.acquire() as conn:
+            try:
+                from app.gateways import deterministic_sandbox as sandbox
+                from app.config import get_settings as _get_settings
+
+                attempts = await PaymentRepository(conn).list_attempts_for_order(
+                    (await PaymentRepository(conn).get_order_by_public_id(order_id))["id"]
+                )
+                captured = next(a for a in attempts if a["status"] == "captured")
+                settings = _get_settings()
+                raw_body, signature = sandbox.build_signed_delivery(
+                    gateway_order_ref=captured["gateway_order_ref"],
+                    scenario="SUCCESS",
+                    amount=captured["amount"],
+                    currency=captured["currency"],
+                    secret=settings.payment_sandbox_signing_secret,
+                )
+                # Replay the exact same signed payload the SUCCESS attempt already delivered.
+                order_row = await PaymentRepository(conn).get_order_by_public_id(order_id)
+                ack = await payment_service.process_webhook(sandbox.GATEWAY_NAME, raw_body, signature)
+                order_after_replay = await payment_service.get_order(order_id, user)
+                ms = int((time.monotonic() - t0) * 1000)
+                passed = (
+                    ack.processing_status == "duplicate"
+                    and str(order_after_replay.amount_paid) == str(order_row["final_amount"])
+                )
+                results.append(_diag_entry(
+                    "Duplicate Webhook Idempotency", "/api/v1/payment-gateways/deterministic_sandbox/webhook", "POST", False,
+                    {"replayed_scenario": "SUCCESS"},
+                    {"processing_status": ack.processing_status, "amount_paid": str(order_after_replay.amount_paid)},
+                    passed, ms, None if passed else "Duplicate webhook was not recognized as a no-op",
+                ))
+            except Exception as exc:
+                ms = int((time.monotonic() - t0) * 1000)
+                results.append(_diag_entry("Duplicate Webhook Idempotency", "n/a", "POST", False, {}, {}, False, ms, str(exc)))
+
+    # ── Cross-user access denied ─────────────────────────────────────────────
+    t0 = time.monotonic()
+    if order_id is not None:
+        try:
+            other_user = {"firebase_uid": "dev-other-firebase-uid"}
+            await payment_service.get_order(order_id, other_user)
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Cross-User Access Denied", f"/api/v1/payment-orders/{order_id}", "GET", True,
+                {}, {}, False, ms, "Expected 404 for a different payer but the order was returned",
+            ))
+        except HTTPException as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            passed = exc.status_code == 404
+            results.append(_diag_entry(
+                "Cross-User Access Denied", f"/api/v1/payment-orders/{order_id}", "GET", True,
+                {}, {"status_code": exc.status_code}, passed, ms,
+                None if passed else f"Expected 404, got {exc.status_code}",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry("Cross-User Access Denied", "n/a", "GET", True, {}, {}, False, ms, str(exc)))
+
+    # ── Priority 2/4 scenarios: pending/verification, tampering, expiry, concurrency ──
+    from app.gateways import deterministic_sandbox as sandbox
+    from app.config import get_settings as _get_settings
+    from app.repositories.registration_repository import RegistrationRepository
+
+    scenario_event_ids: List[int] = []
+
+    async def _mk_scenario_event(scenario_label: str) -> int:
+        """Each Priority 2/4 scenario needs its own registration, and a given
+        (event, user) pair can only hold one registration — so each scenario
+        gets its own throwaway paid event rather than reusing test_event_id
+        (which the earlier P01-style scenarios already registered/paid on)."""
+        async with pool.acquire() as conn2:
+            svc2 = EventsService(conn2)
+            created = await svc2.create_event(
+                EventCreate(
+                    title=f"DIAG_PAYMENT_{scenario_label}_{ts_key}",
+                    description="Dev diagnostic paid event. Safe to ignore.",
+                    start_datetime=start_dt,
+                    end_datetime=end_dt,
+                    timezone="Asia/Kolkata",
+                    is_virtual=True,
+                    virtual_url="https://meet.example.com/dev-payment-diagnostic",
+                    capacity=5,
+                ),
+                actor,
+            )
+            eid = created["event_id"]
+            await svc2.update_status(eid, EventStatusUpdate(status="published"), actor)
+            await conn2.execute(
+                "UPDATE events SET is_free = false, ticket_price = 100.00 WHERE event_id = $1", eid
+            )
+            await PaymentRepository(conn2).create_new_config_version(
+                configuration_key=f"diag-{scenario_label}-{ts_key}",
+                event_id=eid,
+                base_amount=Decimal("100.00"),
+                gst_enabled=True,
+                gst_rate=Decimal("18.00"),
+                gst_mode="exclusive",
+                convenience_fee_enabled=False,
+                convenience_fee_type="fixed",
+                convenience_fee_value=Decimal("0.00"),
+                seat_hold_minutes=15,
+                payment_session_expiry_minutes=15,
+                created_by=user["firebase_uid"],
+            )
+        scenario_event_ids.append(eid)
+        return eid
+
+    async def _fresh_order(scenario_label: str) -> Optional[Dict[str, Any]]:
+        """Create a throwaway event, register, and create an order on it.
+        Returns a dict with event_id/registration_id/order_id/idempotency_key."""
+        eid = await _mk_scenario_event(scenario_label)
+        reg = await registration_service.register_for_event(
+            eid, user, RegisterRequest(attendee_note=f"diag:{scenario_label}")
+        )
+        key = f"diag-{scenario_label}-{ts_key}-{reg.registration_id}"
+        order = await payment_service.create_order(reg.registration_id, user, key)
+        return {"event_id": eid, "registration_id": reg.registration_id, "order_id": order.order_id, "idempotency_key": key}
+
+    async def _timeline_count(order_id_: str) -> int:
+        try:
+            t = await payment_service.get_developer_timeline(order_id_)
+            return len(t.entries)
+        except Exception:
+            return -1
+
+    # ── Pending payment ───────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    pending_ctx: Optional[Dict[str, Any]] = None
+    try:
+        ctx = await _fresh_order("pending")
+        bg = BackgroundTasks()
+        attempt = await payment_service.create_attempt(ctx["order_id"], user, CreatePaymentAttemptRequest(scenario="PENDING"), bg)
+        order_after = await payment_service.get_order(ctx["order_id"], user)
+        ms = int((time.monotonic() - t0) * 1000)
+        passed = attempt.status == "pending" and order_after.registration_status == "payment_verification"
+        pending_ctx = {**ctx, "attempt_id": attempt.attempt_id} if passed else None
+        results.append(_diag_entry(
+            "Pending Payment", f"/api/v1/payment-orders/{ctx['order_id']}/attempts", "POST", True,
+            {"scenario": "PENDING", "idempotency_key": ctx["idempotency_key"]},
+            {
+                "correlation_id": ctx["order_id"], "idempotency_key": ctx["idempotency_key"],
+                "attempt_status": attempt.status, "order_status": order_after.status,
+                "registration_status": order_after.registration_status,
+                "timeline_entries": await _timeline_count(ctx["order_id"]),
+            },
+            passed, ms, None if passed else "Expected attempt=pending, registration=payment_verification",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Pending Payment", "n/a", "POST", True, {}, {}, False, ms, str(exc)))
+
+    # ── Pending → Success ─────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    if pending_ctx is not None:
+        try:
+            async with pool.acquire() as conn2:
+                row = await conn2.fetchrow(
+                    "SELECT gateway_order_ref, amount, currency FROM payment_attempts WHERE public_attempt_number = $1",
+                    pending_ctx["attempt_id"],
+                )
+            settings = _get_settings()
+            raw_body, sig = sandbox.build_signed_delivery(
+                row["gateway_order_ref"], "SUCCESS", row["amount"], row["currency"], settings.payment_sandbox_signing_secret
+            )
+            ack = await payment_service.process_webhook(sandbox.GATEWAY_NAME, raw_body, sig)
+            order_after = await payment_service.get_order(pending_ctx["order_id"], user)
+            ms = int((time.monotonic() - t0) * 1000)
+            passed = ack.processing_status == "processed" and order_after.status == "paid" and order_after.registration_status == "registered"
+            results.append(_diag_entry(
+                "Pending → Success", "/api/v1/payment-gateways/deterministic_sandbox/webhook", "POST", False,
+                {"correlation_id": pending_ctx["order_id"]},
+                {
+                    "correlation_id": pending_ctx["order_id"], "processing_status": ack.processing_status,
+                    "order_status": order_after.status, "registration_status": order_after.registration_status,
+                    "timeline_entries": await _timeline_count(pending_ctx["order_id"]),
+                },
+                passed, ms, None if passed else "Expected processed/paid/registered",
+            ))
+        except Exception as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry("Pending → Success", "n/a", "POST", False, {}, {}, False, ms, str(exc)))
+    else:
+        results.append(_diag_entry("Pending → Success", "n/a", "POST", False, {}, {}, False, 0, "skipped: Pending Payment setup failed"))
+
+    # ── Pending → Failure ─────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    try:
+        ctx = await _fresh_order("pending-fail")
+        bg = BackgroundTasks()
+        attempt = await payment_service.create_attempt(ctx["order_id"], user, CreatePaymentAttemptRequest(scenario="PENDING"), bg)
+        async with pool.acquire() as conn2:
+            row = await conn2.fetchrow(
+                "SELECT gateway_order_ref, amount, currency FROM payment_attempts WHERE public_attempt_number = $1",
+                attempt.attempt_id,
+            )
+        settings = _get_settings()
+        raw_body, sig = sandbox.build_signed_delivery(
+            row["gateway_order_ref"], "FAILURE", row["amount"], row["currency"], settings.payment_sandbox_signing_secret
+        )
+        ack = await payment_service.process_webhook(sandbox.GATEWAY_NAME, raw_body, sig)
+        order_after = await payment_service.get_order(ctx["order_id"], user)
+        ms = int((time.monotonic() - t0) * 1000)
+        passed = ack.processing_status == "processed" and order_after.registration_status == "payment_failed"
+        results.append(_diag_entry(
+            "Pending → Failure", "/api/v1/payment-gateways/deterministic_sandbox/webhook", "POST", False,
+            {"correlation_id": ctx["order_id"]},
+            {
+                "correlation_id": ctx["order_id"], "processing_status": ack.processing_status,
+                "registration_status": order_after.registration_status,
+                "timeline_entries": await _timeline_count(ctx["order_id"]),
+            },
+            passed, ms, None if passed else "Expected processed/payment_failed",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Pending → Failure", "n/a", "POST", False, {}, {}, False, ms, str(exc)))
+
+    # ── Invalid signature ──────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    try:
+        import uuid as _uuid
+        fake_body = f'{{"event_id":"{_uuid.uuid4().hex}","event_type":"payment.captured","gateway_order_ref":"sbx_ord_diag_nonexistent"}}'.encode()
+        ack = await payment_service.process_webhook(sandbox.GATEWAY_NAME, fake_body, "0" * 64)
+        ms = int((time.monotonic() - t0) * 1000)
+        passed = ack.processing_status == "rejected"
+        results.append(_diag_entry(
+            "Invalid Webhook Signature", "/api/v1/payment-gateways/deterministic_sandbox/webhook", "POST", False,
+            {}, {"processing_status": ack.processing_status}, passed, ms,
+            None if passed else "Expected rejected",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Invalid Webhook Signature", "n/a", "POST", False, {}, {}, False, ms, str(exc)))
+
+    # ── Amount mismatch ────────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    try:
+        ctx = await _fresh_order("amount-mismatch")
+        bg = BackgroundTasks()
+        attempt = await payment_service.create_attempt(ctx["order_id"], user, CreatePaymentAttemptRequest(scenario="PENDING"), bg)
+        async with pool.acquire() as conn2:
+            row = await conn2.fetchrow(
+                "SELECT gateway_order_ref, currency FROM payment_attempts WHERE public_attempt_number = $1", attempt.attempt_id
+            )
+        settings = _get_settings()
+        raw_body, sig = sandbox.build_signed_delivery(
+            row["gateway_order_ref"], "SUCCESS", Decimal("1.00"), row["currency"], settings.payment_sandbox_signing_secret
+        )
+        ack = await payment_service.process_webhook(sandbox.GATEWAY_NAME, raw_body, sig)
+        order_after = await payment_service.get_order(ctx["order_id"], user)
+        ms = int((time.monotonic() - t0) * 1000)
+        passed = ack.processing_status == "rejected" and order_after.amount_paid == Decimal("0.00")
+        results.append(_diag_entry(
+            "Amount Mismatch", "/api/v1/payment-gateways/deterministic_sandbox/webhook", "POST", False,
+            {"correlation_id": ctx["order_id"], "claimed_amount": "1.00"},
+            {"processing_status": ack.processing_status, "amount_paid": str(order_after.amount_paid)},
+            passed, ms, None if passed else "Expected rejected, amount_paid=0.00",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Amount Mismatch", "n/a", "POST", False, {}, {}, False, ms, str(exc)))
+
+    # ── Currency mismatch ──────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    try:
+        ctx = await _fresh_order("currency-mismatch")
+        bg = BackgroundTasks()
+        attempt = await payment_service.create_attempt(ctx["order_id"], user, CreatePaymentAttemptRequest(scenario="PENDING"), bg)
+        async with pool.acquire() as conn2:
+            row = await conn2.fetchrow(
+                "SELECT gateway_order_ref, amount FROM payment_attempts WHERE public_attempt_number = $1", attempt.attempt_id
+            )
+        settings = _get_settings()
+        raw_body, sig = sandbox.build_signed_delivery(
+            row["gateway_order_ref"], "SUCCESS", row["amount"], "USD", settings.payment_sandbox_signing_secret
+        )
+        ack = await payment_service.process_webhook(sandbox.GATEWAY_NAME, raw_body, sig)
+        order_after = await payment_service.get_order(ctx["order_id"], user)
+        ms = int((time.monotonic() - t0) * 1000)
+        passed = ack.processing_status == "rejected" and order_after.amount_paid == Decimal("0.00")
+        results.append(_diag_entry(
+            "Currency Mismatch", "/api/v1/payment-gateways/deterministic_sandbox/webhook", "POST", False,
+            {"correlation_id": ctx["order_id"], "claimed_currency": "USD"},
+            {"processing_status": ack.processing_status, "amount_paid": str(order_after.amount_paid)},
+            passed, ms, None if passed else "Expected rejected, amount_paid=0.00",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Currency Mismatch", "n/a", "POST", False, {}, {}, False, ms, str(exc)))
+
+    # ── Seat-hold expiry ──────────────────────────────────────────────────────
+    t0 = time.monotonic()
+    try:
+        seat_expiry_event_id = await _mk_scenario_event("seat-expiry")
+        reg = await registration_service.register_for_event(
+            seat_expiry_event_id, user, RegisterRequest(attendee_note="diag:seat-expiry")
+        )
+        async with pool.acquire() as conn2:
+            await conn2.execute(
+                "UPDATE registrations SET hold_expires_at = now() - interval '1 minute' WHERE registration_id = $1",
+                reg.registration_id,
+            )
+        try:
+            await payment_service.create_order(reg.registration_id, user, f"diag-expiry-{ts_key}-{reg.registration_id}")
+            ms = int((time.monotonic() - t0) * 1000)
+            results.append(_diag_entry(
+                "Seat-Hold Expiry Blocks Order", f"/api/v1/registrations/{reg.registration_id}/payment-order", "POST", True,
+                {"registration_id": reg.registration_id}, {}, False, ms, "Expected 409 seat_hold_expired but order was created",
+            ))
+        except HTTPException as exc:
+            ms = int((time.monotonic() - t0) * 1000)
+            passed = exc.status_code == 409 and exc.detail == "seat_hold_expired"
+            results.append(_diag_entry(
+                "Seat-Hold Expiry Blocks Order", f"/api/v1/registrations/{reg.registration_id}/payment-order", "POST", True,
+                {"registration_id": reg.registration_id}, {"status_code": exc.status_code, "detail": exc.detail},
+                passed, ms, None if passed else f"Expected 409 seat_hold_expired, got {exc.status_code} {exc.detail}",
+            ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Seat-Hold Expiry Blocks Order", "n/a", "POST", True, {}, {}, False, ms, str(exc)))
+
+    # ── Success after seat expiry → PAYMENT_CAPTURED_AFTER_SEAT_EXPIRY ────────
+    t0 = time.monotonic()
+    try:
+        ctx = await _fresh_order("success-after-expiry")
+        gw_ref = sandbox.create_gateway_order_ref()
+        async with pool.acquire() as conn2:
+            order_row = await conn2.fetchrow("SELECT id, final_amount, currency FROM payment_orders WHERE public_order_number = $1", ctx["order_id"])
+            next_num = await conn2.fetchval("SELECT COALESCE(MAX(attempt_number),0)+1 FROM payment_attempts WHERE order_id=$1", order_row["id"])
+            await conn2.execute(
+                """INSERT INTO payment_attempts (public_attempt_number, order_id, attempt_number, gateway, scenario, amount, currency, gateway_order_ref, status)
+                   VALUES ($1,$2,$3,$4,'SUCCESS',$5,$6,$7,'initiated')""",
+                f"ATT-diag-{ts_key}-{ctx['registration_id']}", order_row["id"], next_num, sandbox.GATEWAY_NAME,
+                order_row["final_amount"], order_row["currency"], gw_ref,
+            )
+            await conn2.execute(
+                "UPDATE registrations SET hold_expires_at = now() - interval '1 minute' WHERE registration_id = $1",
+                ctx["registration_id"],
+            )
+        settings = _get_settings()
+        raw_body, sig = sandbox.build_signed_delivery(gw_ref, "SUCCESS", order_row["final_amount"], order_row["currency"], settings.payment_sandbox_signing_secret)
+        ack = await payment_service.process_webhook(sandbox.GATEWAY_NAME, raw_body, sig)
+        order_after = await payment_service.get_order(ctx["order_id"], user)
+        async with pool.acquire() as conn2:
+            exc_row = await conn2.fetchrow(
+                "SELECT exception_type FROM payment_exceptions WHERE registration_id = $1 ORDER BY created_at DESC LIMIT 1",
+                ctx["registration_id"],
+            )
+        ms = int((time.monotonic() - t0) * 1000)
+        passed = (
+            ack.processing_status == "processed"
+            and order_after.status == "paid"
+            and order_after.registration_status != "registered"
+            and exc_row is not None and exc_row["exception_type"] == "PAYMENT_CAPTURED_AFTER_SEAT_EXPIRY"
+        )
+        results.append(_diag_entry(
+            "Success After Seat Expiry", "/api/v1/payment-gateways/deterministic_sandbox/webhook", "POST", False,
+            {"correlation_id": ctx["order_id"]},
+            {
+                "correlation_id": ctx["order_id"], "order_status": order_after.status,
+                "registration_status": order_after.registration_status,
+                "exception_created": exc_row["exception_type"] if exc_row else None,
+                "timeline_entries": await _timeline_count(ctx["order_id"]),
+            },
+            passed, ms, None if passed else "Expected paid order, non-registered registration, and an open exception",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Success After Seat Expiry", "n/a", "POST", False, {}, {}, False, ms, str(exc)))
+
+    # ── Concurrency: double-click attempt creation on one order ──────────────
+    t0 = time.monotonic()
+    try:
+        import asyncio as _asyncio
+
+        ctx = await _fresh_order("concurrency")
+        bg1, bg2 = BackgroundTasks(), BackgroundTasks()
+        results_pair = await _asyncio.gather(
+            payment_service.create_attempt(ctx["order_id"], user, CreatePaymentAttemptRequest(scenario="SUCCESS"), bg1),
+            payment_service.create_attempt(ctx["order_id"], user, CreatePaymentAttemptRequest(scenario="SUCCESS"), bg2),
+            return_exceptions=True,
+        )
+        ms = int((time.monotonic() - t0) * 1000)
+        outcomes = []
+        no_500 = True
+        for res in results_pair:
+            if isinstance(res, HTTPException):
+                outcomes.append(f"HTTP {res.status_code} {res.detail}")
+                if res.status_code >= 500:
+                    no_500 = False
+            elif isinstance(res, Exception):
+                outcomes.append(f"unhandled: {res!r}")
+                no_500 = False
+            else:
+                outcomes.append(f"attempt {res.attempt_number} {res.status}")
+        order_after = await payment_service.get_order(ctx["order_id"], user)
+        passed = no_500 and order_after.amount_paid in (Decimal("0.00"), Decimal("118.00"))
+        results.append(_diag_entry(
+            "Concurrent Double-Click Attempt Creation", f"/api/v1/payment-orders/{ctx['order_id']}/attempts", "POST", True,
+            {"correlation_id": ctx["order_id"], "concurrent_requests": 2},
+            {"outcomes": outcomes, "amount_paid": str(order_after.amount_paid), "no_500": no_500},
+            passed, ms, None if passed else "Expected no 500s and amount_paid never partial/doubled",
+        ))
+    except Exception as exc:
+        ms = int((time.monotonic() - t0) * 1000)
+        results.append(_diag_entry("Concurrent Double-Click Attempt Creation", "n/a", "POST", True, {}, {}, False, ms, str(exc)))
+
+    # ── Cleanup ───────────────────────────────────────────────────────────────
+    for eid in ([test_event_id] if test_event_id is not None else []) + scenario_event_ids:
+        async with pool.acquire() as conn:
+            try:
+                await EventsService(conn).update_status(eid, EventStatusUpdate(status="cancelled"), actor)
+            except Exception:
+                pass
+
+    passed_count = sum(1 for r in results if r["status"] == "PASS")
+    failed_count = sum(1 for r in results if r["status"] == "FAIL")
+    return {
+        "status": "ok",
+        "category": "Payments",
+        "total": len(results),
+        "passed": passed_count,
+        "failed": failed_count,
+        "test_event_id": test_event_id,
+        "results": results,
+        "run_by": user["firebase_uid"],
+        "run_at": run_ts.isoformat() + "Z",
     }

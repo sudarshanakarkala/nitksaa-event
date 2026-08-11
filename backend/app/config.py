@@ -44,6 +44,14 @@ class Settings(BaseSettings):
     smtp_password: Optional[str] = Field(None, alias="SMTP_PASSWORD")
     app_public_base_url: str = Field("http://localhost:8000", alias="APP_PUBLIC_BASE_URL")
 
+    # Payments (Phase 0 — deterministic sandbox gateway only)
+    payment_gateway_mode: str = Field("deterministic_sandbox", alias="PAYMENT_GATEWAY_MODE")
+    payment_sandbox_signing_secret: str = Field(
+        "dev-payment-sandbox-secret-change-me", alias="PAYMENT_SANDBOX_SIGNING_SECRET"
+    )
+    payment_webhook_max_age_seconds: int = Field(300, alias="PAYMENT_WEBHOOK_MAX_AGE_SECONDS")
+    payment_diagnostics_enabled: bool = Field(True, alias="PAYMENT_DIAGNOSTICS_ENABLED")
+
     @property
     def events_db_dsn(self) -> str:
         if self.events_db_url:

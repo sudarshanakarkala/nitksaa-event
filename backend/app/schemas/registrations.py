@@ -1,5 +1,6 @@
 """Week 3 registration request and response schemas."""
 from datetime import datetime
+from decimal import Decimal
 from typing import Any, Dict, List, Optional
 
 from pydantic import BaseModel, Field
@@ -49,6 +50,9 @@ class RegistrationResponse(BaseModel):
       attendee_note    — maps from registrations.notes
       join_url         — only present when user is registered for a published virtual event;
                          never present in public event APIs
+      hold_expires_at  — only meaningful while status is a hold-bearing state
+                         (seat_held/payment_pending/payment_verification/payment_failed);
+                         None once registered/cancelled
     """
 
     registration_id: int
@@ -67,6 +71,7 @@ class RegistrationResponse(BaseModel):
     cancelled_at: Optional[datetime] = None
     confirmation_email_status: Optional[str] = None
     confirmation_email_sent_at: Optional[datetime] = None
+    hold_expires_at: Optional[datetime] = None
     join_url: Optional[str] = None
     event: Optional[EventSummary] = None
     updated_at: Optional[datetime] = None
@@ -83,6 +88,8 @@ class RegistrationEligibilityResponse(BaseModel):
     message: str
     registered_count: Optional[int] = None
     capacity: Optional[int] = None
+    payment_required: bool = False
+    ticket_price: Optional[Decimal] = None
 
 
 class MyRegistrationsListResponse(BaseModel):

@@ -48,6 +48,7 @@ _REG_WITH_EVENT = """
         r.cancelled_at,
         r.confirmation_email_status,
         r.confirmation_email_sent_at,
+        r.hold_expires_at,
         r.updated_at,
         e.title          AS event_title,
         e.start_datetime,
@@ -86,6 +87,79 @@ class RegistrationRepository:
             firebase_uid,
         )
 
+    # ── Paid-event seat holds (migration 014) ──────────────────────────────
+    # Statuses that occupy a seat while a paid registration is in flight or
+    # confirmed. Free events never produce rows in the non-'registered' states
+    # here, so these queries are safe to use for both free and paid events.
+    _IN_FLIGHT_OR_CONFIRMED = (
+        "registered", "seat_held", "payment_pending", "payment_verification", "payment_failed",
+    )
+
+    async def get_active_or_held_for_user(
+        self, event_id: int, firebase_uid: str
+    ) -> Optional[asyncpg.Record]:
+        return await self.conn.fetchrow(
+            """SELECT registration_id, status FROM registrations
+               WHERE event_id = $1 AND firebase_uid = $2
+                 AND status = ANY($3::text[])""",
+            event_id,
+            firebase_uid,
+            list(self._IN_FLIGHT_OR_CONFIRMED),
+        )
+
+    async def count_active_or_held(self, event_id: int) -> int:
+        val = await self.conn.fetchval(
+            """SELECT COUNT(*) FROM registrations
+               WHERE event_id = $1 AND status = ANY($2::text[])""",
+            event_id,
+            list(self._IN_FLIGHT_OR_CONFIRMED),
+        )
+        return int(val)
+
+    async def expire_stale_holds(self, event_id: int) -> None:
+        """Release seat holds whose hold_expires_at has passed. Called lazily
+        before capacity/uniqueness checks — there is no background sweeper."""
+        await self.conn.execute(
+            """
+            UPDATE registrations
+            SET status = 'cancelled', cancelled_at = now(), updated_at = now()
+            WHERE event_id = $1
+              AND status IN ('seat_held', 'payment_pending', 'payment_verification', 'payment_failed')
+              AND hold_expires_at IS NOT NULL
+              AND hold_expires_at < now()
+            """,
+            event_id,
+        )
+
+    async def get_by_id(self, registration_id: int) -> Optional[asyncpg.Record]:
+        return await self.conn.fetchrow(
+            "SELECT * FROM registrations WHERE registration_id = $1", registration_id
+        )
+
+    async def set_status(self, registration_id: int, status: str) -> None:
+        await self.conn.execute(
+            "UPDATE registrations SET status = $2, updated_at = now() WHERE registration_id = $1",
+            registration_id,
+            status,
+        )
+
+    async def extend_hold(self, registration_id: int, new_hold_expires_at: datetime) -> None:
+        """Push the seat-hold deadline out — used when a payment enters
+        verification, so a legitimately-pending confirmation doesn't lose the
+        seat mid-check. Only extends; never shortens (a caller passing an
+        earlier timestamp than the current one is very likely a bug, so it's
+        a no-op rather than silently pulling the deadline in)."""
+        await self.conn.execute(
+            """
+            UPDATE registrations
+            SET hold_expires_at = $2, updated_at = now()
+            WHERE registration_id = $1
+              AND (hold_expires_at IS NULL OR hold_expires_at < $2)
+            """,
+            registration_id,
+            new_hold_expires_at,
+        )
+
     async def insert(
         self,
         event_id: int,
@@ -97,8 +171,15 @@ class RegistrationRepository:
         batch_year_snapshot: Optional[int],
         branch_snapshot: Optional[str],
         notes: Optional[str],
+        status: str = "registered",
+        hold_expires_at: Optional[datetime] = None,
     ) -> int:
-        """Insert a new registration row. Returns the new registration_id."""
+        """Insert a new registration row. Returns the new registration_id.
+
+        status/hold_expires_at default to the free-event path unchanged;
+        the paid-event seat-hold path passes status='seat_held' plus a
+        hold_expires_at deadline computed from the event's payment config.
+        """
         return int(
             await self.conn.fetchval(
                 """
@@ -106,8 +187,8 @@ class RegistrationRepository:
                     event_id, firebase_uid, ref_id,
                     email, phone,
                     fullname_snapshot, batch_year_snapshot, branch_snapshot,
-                    notes, status
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'registered')
+                    notes, status, hold_expires_at
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
                 RETURNING registration_id
                 """,
                 event_id,
@@ -119,6 +200,8 @@ class RegistrationRepository:
                 batch_year_snapshot,
                 branch_snapshot,
                 notes,
+                status,
+                hold_expires_at,
             )
         )
 
