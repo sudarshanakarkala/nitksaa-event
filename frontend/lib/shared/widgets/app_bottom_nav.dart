@@ -65,41 +65,47 @@ class AppBottomNav extends ConsumerWidget {
     // NavigationBar requires at least 2 destinations.
     // When unauthenticated, show a simple bar with Events + login prompt.
     if (destinations.length < 2) {
-      return SizedBox(
-        height: 40,
-        child: Row(
-          mainAxisAlignment: MainAxisAlignment.spaceAround,
-          children: [
-            _buildSingleNavItem(
-              context: context,
-              icon: Icons.calendar_month_outlined,
-              selectedIcon: Icons.calendar_month,
-              label: 'Events',
-              isActive: currentIndex == 0,
-              onTap: () => context.go(AppRoutes.home),
-            ),
-            _buildSingleNavItem(
-              context: context,
-              icon: Icons.login_outlined,
-              selectedIcon: Icons.login,
-              label: 'Login',
-              isActive: false,
-              onTap: () => context.go(AppRoutes.login),
-            ),
-          ],
+      return SafeArea(
+        top: false,
+        child: SizedBox(
+          height: 40,
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceAround,
+            children: [
+              _buildSingleNavItem(
+                context: context,
+                icon: Icons.calendar_month_outlined,
+                selectedIcon: Icons.calendar_month,
+                label: 'Events',
+                isActive: currentIndex == 0,
+                onTap: () => context.go(AppRoutes.home),
+              ),
+              _buildSingleNavItem(
+                context: context,
+                icon: Icons.login_outlined,
+                selectedIcon: Icons.login,
+                label: 'Login',
+                isActive: false,
+                onTap: () => context.go(AppRoutes.login),
+              ),
+            ],
+          ),
         ),
       );
     }
 
-    return NavigationBar(
-      selectedIndex: currentIndex,
-      onDestinationSelected: (index) {
-        final route = destinationRoutes[index];
-        if (route != GoRouterState.of(context).uri.toString()) {
-          context.go(route);
-        }
-      },
-      destinations: destinations,
+    return SafeArea(
+      top: false,
+      child: NavigationBar(
+        selectedIndex: currentIndex,
+        onDestinationSelected: (index) {
+          final route = destinationRoutes[index];
+          if (route != GoRouterState.of(context).uri.toString()) {
+            context.go(route);
+          }
+        },
+        destinations: destinations,
+      ),
     );
   }
 

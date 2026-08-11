@@ -480,9 +480,11 @@ class _EventRegistrationsScreenState
       ),
       bottomNavigationBar: isWebScreen
           ? null
-          : NavigationBar(
-              selectedIndex: 2,
-              onDestinationSelected: (index) {
+          : SafeArea(
+              top: false,
+              child: NavigationBar(
+                selectedIndex: 2,
+                onDestinationSelected: (index) {
                 if (index == 0) context.go(AppRoutes.home);
                 if (index == 1) context.go(AppRoutes.myEvents);
               },
@@ -501,6 +503,7 @@ class _EventRegistrationsScreenState
                 ),
               ],
             ),
+      ),
     );
   }
 

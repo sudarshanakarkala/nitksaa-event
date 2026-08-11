@@ -64,64 +64,66 @@ class _SplashScreenState extends State<SplashScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: Center(
-        child: SingleChildScrollView(
-          child: Padding(
-            padding: const EdgeInsets.all(40.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const Text(
-                  'NITKSAA',
-                  style: TextStyle(
-                    fontSize: 32,
-                    fontWeight: FontWeight.bold,
-                    color: Color(0xFFC9952A),
-                    letterSpacing: 0.5,
+      body: SafeArea(
+        child: Center(
+          child: SingleChildScrollView(
+            child: Padding(
+              padding: const EdgeInsets.all(40.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const Text(
+                    'NITKSAA',
+                    style: TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Color(0xFFC9952A),
+                      letterSpacing: 0.5,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 12),
-                Text(
-                  'EVENT PLATFORM · ALPHA',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: secondaryTextColor,
-                    letterSpacing: 1.2,
-                    fontWeight: FontWeight.w500,
+                  const SizedBox(height: 12),
+                  Text(
+                    'EVENT PLATFORM · ALPHA',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: secondaryTextColor,
+                      letterSpacing: 1.2,
+                      fontWeight: FontWeight.w500,
+                    ),
                   ),
-                ),
-                const SizedBox(height: 32),
-                Container(
-                  width: 72,
-                  height: 72,
-                  decoration: BoxDecoration(
-                    color: const Color(0xFFC9952A).withValues(alpha: 0.15),
-                    borderRadius: BorderRadius.circular(18),
+                  const SizedBox(height: 32),
+                  Container(
+                    width: 72,
+                    height: 72,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFC9952A).withValues(alpha: 0.15),
+                      borderRadius: BorderRadius.circular(18),
+                    ),
+                    child: const Icon(
+                      Icons.calendar_today_outlined,
+                      size: 36,
+                      color: Color(0xFFC9952A),
+                    ),
                   ),
-                  child: const Icon(
-                    Icons.calendar_today_outlined,
-                    size: 36,
-                    color: Color(0xFFC9952A),
+                  const SizedBox(height: 32),
+                  const SizedBox(
+                    width: 32,
+                    height: 32,
+                    child: CircularProgressIndicator(
+                      strokeWidth: 3,
+                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFC9952A)),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 32),
-                const SizedBox(
-                  width: 32,
-                  height: 32,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 3,
-                    valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFC9952A)),
+                  const SizedBox(height: 14),
+                  Text(
+                    'Connecting…',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: textColor.withValues(alpha: 0.4),
+                    ),
                   ),
-                ),
-                const SizedBox(height: 14),
-                Text(
-                  'Connecting…',
-                  style: TextStyle(
-                    fontSize: 12,
-                    color: textColor.withValues(alpha: 0.4),
-                  ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -135,57 +137,59 @@ class _SplashScreenState extends State<SplashScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'NITKSAA',
-              style: TextStyle(
-                fontSize: 30,
-                fontWeight: FontWeight.bold,
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                'NITKSAA',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.bold,
+                  color: Color(0xFFC9952A),
+                  letterSpacing: -0.5,
+                ),
+              ),
+              const SizedBox(height: 4),
+              const Text(
+                'EVENT PLATFORM · ALPHA',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0x99FFFFFF), // 60% opacity
+                  letterSpacing: 1.0,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 28),
+              Container(
+                width: 60,
+                height: 60,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC9952A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(16),
+                ),
+                child: const Icon(
+                  Icons.calendar_today_outlined,
+                  size: 32,
+                  color: Color(0xFFC9952A),
+                ),
+              ),
+              const SizedBox(height: 28),
+              const CupertinoActivityIndicator(
+                radius: 13,
                 color: Color(0xFFC9952A),
-                letterSpacing: -0.5,
               ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'EVENT PLATFORM · ALPHA',
-              style: TextStyle(
-                fontSize: 11,
-                color: Color(0x99FFFFFF), // 60% opacity
-                letterSpacing: 1.0,
-                fontWeight: FontWeight.w500,
+              const SizedBox(height: 12),
+              const Text(
+                'Connecting…',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Color(0x66FFFFFF), // 40% opacity
+                ),
               ),
-            ),
-            const SizedBox(height: 28),
-            Container(
-              width: 60,
-              height: 60,
-              decoration: BoxDecoration(
-                color: const Color(0xFFC9952A).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(16),
-              ),
-              child: const Icon(
-                Icons.calendar_today_outlined,
-                size: 32,
-                color: Color(0xFFC9952A),
-              ),
-            ),
-            const SizedBox(height: 28),
-            const CupertinoActivityIndicator(
-              radius: 13,
-              color: Color(0xFFC9952A),
-            ),
-            const SizedBox(height: 12),
-            const Text(
-              'Connecting…',
-              style: TextStyle(
-                fontSize: 10,
-                color: Color(0x66FFFFFF), // 40% opacity
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );
@@ -197,59 +201,61 @@ class _SplashScreenState extends State<SplashScreen> {
 
     return Scaffold(
       backgroundColor: bgColor,
-      body: Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Text(
-              'NITKSAA',
-              style: TextStyle(
-                fontSize: 28,
-                fontWeight: FontWeight.w600,
-                color: Color(0xFFC9952A),
+      body: SafeArea(
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Text(
+                'NITKSAA',
+                style: TextStyle(
+                  fontSize: 28,
+                  fontWeight: FontWeight.w600,
+                  color: Color(0xFFC9952A),
+                ),
               ),
-            ),
-            const SizedBox(height: 4),
-            const Text(
-              'EVENT PLATFORM · ALPHA',
-              style: TextStyle(
-                fontSize: 11,
-                color: Color(0x80FFFFFF), // 50% opacity
-                letterSpacing: 1.1,
+              const SizedBox(height: 4),
+              const Text(
+                'EVENT PLATFORM · ALPHA',
+                style: TextStyle(
+                  fontSize: 11,
+                  color: Color(0x80FFFFFF), // 50% opacity
+                  letterSpacing: 1.1,
+                ),
               ),
-            ),
-            const SizedBox(height: 28),
-            Container(
-              width: 56,
-              height: 56,
-              decoration: BoxDecoration(
-                color: const Color(0xFFC9952A).withValues(alpha: 0.15),
-                borderRadius: BorderRadius.circular(14),
+              const SizedBox(height: 28),
+              Container(
+                width: 56,
+                height: 56,
+                decoration: BoxDecoration(
+                  color: const Color(0xFFC9952A).withValues(alpha: 0.15),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(
+                  Icons.calendar_today_outlined,
+                  size: 28,
+                  color: Color(0xFFC9952A),
+                ),
               ),
-              child: const Icon(
-                Icons.calendar_today_outlined,
-                size: 28,
-                color: Color(0xFFC9952A),
+              const SizedBox(height: 28),
+              const SizedBox(
+                width: 24,
+                height: 24,
+                child: CircularProgressIndicator(
+                  strokeWidth: 2,
+                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFC9952A)),
+                ),
               ),
-            ),
-            const SizedBox(height: 28),
-            const SizedBox(
-              width: 24,
-              height: 24,
-              child: CircularProgressIndicator(
-                strokeWidth: 2,
-                valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFC9952A)),
+              const SizedBox(height: 10),
+              const Text(
+                'Connecting…',
+                style: TextStyle(
+                  fontSize: 10,
+                  color: Color(0x4DFFFFFF), // 30% opacity
+                ),
               ),
-            ),
-            const SizedBox(height: 10),
-            const Text(
-              'Connecting…',
-              style: TextStyle(
-                fontSize: 10,
-                color: Color(0x4DFFFFFF), // 30% opacity
-              ),
-            ),
-          ],
+            ],
+          ),
         ),
       ),
     );

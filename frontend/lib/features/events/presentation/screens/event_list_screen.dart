@@ -1486,7 +1486,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               )
             : null,
         body: SafeArea(
-          bottom: false,
           child: Row(
             children: [
               if (sidebar != null) sidebar,
@@ -1494,7 +1493,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ],
           ),
         ),
-        bottomNavigationBar: const AppBottomNav(currentIndex: 0),
+        bottomNavigationBar: SafeArea(
+          top: false,
+          child: const AppBottomNav(currentIndex: 0),
+        ),
       ),
     );
   }

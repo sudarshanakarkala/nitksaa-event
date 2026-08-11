@@ -380,103 +380,106 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     if (isWebScreen) {
       return Scaffold(
         appBar: appBar,
-        body: Center(
-          child: Container(
-            constraints: const BoxConstraints(maxWidth: 1200),
-            padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Expanded(
-                  flex: 7,
-                  child: SingleChildScrollView(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        if (event.bannerUrl != null || event.thumbnailUrl != null)
-                          ClipRRect(
-                            borderRadius: BorderRadius.circular(12),
-                            child: Image.network(
-                              event.bannerUrl ?? event.thumbnailUrl!,
-                              height: 320,
-                              width: double.infinity,
-                              fit: BoxFit.cover,
-                              errorBuilder: (_, __, ___) => Container(
+        body: SafeArea(
+          top: false,
+          child: Center(
+            child: Container(
+              constraints: const BoxConstraints(maxWidth: 1200),
+              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    flex: 7,
+                    child: SingleChildScrollView(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          if (event.bannerUrl != null || event.thumbnailUrl != null)
+                            ClipRRect(
+                              borderRadius: BorderRadius.circular(12),
+                              child: Image.network(
+                                event.bannerUrl ?? event.thumbnailUrl!,
                                 height: 320,
-                                color: Colors.grey.withOpacity(0.2),
-                                child: const Icon(Icons.photo, size: 64),
+                                width: double.infinity,
+                                fit: BoxFit.cover,
+                                errorBuilder: (_, __, ___) => Container(
+                                  height: 320,
+                                  color: Colors.grey.withOpacity(0.2),
+                                  child: const Icon(Icons.photo, size: 64),
+                                ),
                               ),
                             ),
-                          ),
-                        const SizedBox(height: 24),
-                        Text(
-                          event.title,
-                          style: Theme.of(context).textTheme.headlineMedium?.copyWith(
-                                fontWeight: FontWeight.bold,
-                                color: isDark ? Colors.white : const Color(0xFF0D1B3E),
-                              ),
-                        ),
-                        if (event.tagline != null) ...[
-                          const SizedBox(height: 6),
+                          const SizedBox(height: 24),
                           Text(
-                            event.tagline!,
-                            style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                  color: Colors.grey,
-                                  fontStyle: FontStyle.italic,
+                            event.title,
+                            style: Theme.of(context).textTheme.headlineMedium?.copyWith(
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : const Color(0xFF0D1B3E),
                                 ),
                           ),
+                          if (event.tagline != null) ...[
+                            const SizedBox(height: 6),
+                            Text(
+                              event.tagline!,
+                              style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                                    color: Colors.grey,
+                                    fontStyle: FontStyle.italic,
+                                  ),
+                            ),
+                          ],
+                          const SizedBox(height: 16),
+                          _buildMaterialMetaGrid(event),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 16),
+                          _buildAboutSection(event),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 16),
+                          _buildSponsorsSection(event, isDark),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 16),
+                          _buildAgendaSection(event),
+                          const SizedBox(height: 24),
+                          const Divider(),
+                          const SizedBox(height: 16),
+                          _buildSpeakersSection(event),
                         ],
-                        const SizedBox(height: 16),
-                        _buildMaterialMetaGrid(event),
-                        const SizedBox(height: 24),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        _buildAboutSection(event),
-                        const SizedBox(height: 24),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        _buildSponsorsSection(event, isDark),
-                        const SizedBox(height: 24),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        _buildAgendaSection(event),
-                        const SizedBox(height: 24),
-                        const Divider(),
-                        const SizedBox(height: 16),
-                        _buildSpeakersSection(event),
-                      ],
+                      ),
                     ),
                   ),
-                ),
-                const SizedBox(width: 32),
-                Expanded(
-                  flex: 3,
-                  child: Card(
-                    elevation: 4,
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                    color: isDark ? const Color(0xFF131E30) : Colors.white,
-                    child: SingleChildScrollView(
-                      child: Padding(
-                        padding: const EdgeInsets.all(16.0),
-                        child: Column(
-                          mainAxisSize: MainAxisSize.min,
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Registration',
-                              style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
-                            ),
-                            const SizedBox(height: 12),
-                            if (isAdmin) _buildCapacityBar(event, isDark),
-                            const SizedBox(height: 16),
-                            _buildRegistrationCTA(state, isIOS: false),
-                          ],
+                  const SizedBox(width: 32),
+                  Expanded(
+                    flex: 3,
+                    child: Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                      color: isDark ? const Color(0xFF131E30) : Colors.white,
+                      child: SingleChildScrollView(
+                        child: Padding(
+                          padding: const EdgeInsets.all(16.0),
+                          child: Column(
+                            mainAxisSize: MainAxisSize.min,
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              const Text(
+                                'Registration',
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+                              ),
+                              const SizedBox(height: 12),
+                              if (isAdmin) _buildCapacityBar(event, isDark),
+                              const SizedBox(height: 16),
+                              _buildRegistrationCTA(state, isIOS: false),
+                            ],
+                          ),
                         ),
                       ),
                     ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
           ),
         ),
@@ -485,73 +488,76 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       // Android / Mobile Material Layout
       return Scaffold(
         appBar: appBar,
-        body: SingleChildScrollView(
-          padding: const EdgeInsets.all(16.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (event.bannerUrl != null || event.thumbnailUrl != null)
-                ClipRRect(
-                  borderRadius: BorderRadius.circular(12),
-                  child: Image.network(
-                    event.bannerUrl ?? event.thumbnailUrl!,
-                    height: 180,
-                    width: double.infinity,
-                    fit: BoxFit.cover,
-                    errorBuilder: (_, __, ___) => Container(
+        body: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.all(16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                if (event.bannerUrl != null || event.thumbnailUrl != null)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(12),
+                    child: Image.network(
+                      event.bannerUrl ?? event.thumbnailUrl!,
                       height: 180,
-                      color: Colors.grey.withOpacity(0.2),
-                      child: const Icon(Icons.photo, size: 48),
+                      width: double.infinity,
+                      fit: BoxFit.cover,
+                      errorBuilder: (_, __, ___) => Container(
+                        height: 180,
+                        color: Colors.grey.withOpacity(0.2),
+                        child: const Icon(Icons.photo, size: 48),
+                      ),
                     ),
                   ),
-                ),
-              const SizedBox(height: 16),
-              Text(
-                event.title,
-                style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
-              ),
-              if (event.tagline != null) ...[
-                const SizedBox(height: 4),
-                Text(
-                  event.tagline!,
-                  style: const TextStyle(fontSize: 14, color: Colors.grey, fontStyle: FontStyle.italic),
-                ),
-              ],
-              const SizedBox(height: 16),
-              _buildMaterialMetaRow(Icons.calendar_today, _formatDate(event.startDatetime)),
-              _buildMaterialMetaRow(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime)),
-              _buildMaterialMetaRow(
-                event.isVirtual ? Icons.videocam : Icons.location_on,
-                event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
-                onTap: (event.locationMapsUrl != null && event.locationMapsUrl!.isNotEmpty)
-                    ? () => _launchUrl(event.locationMapsUrl!)
-                    : null,
-              ),
-              const SizedBox(height: 16),
-              const Divider(),
-              if (isAdmin) ...[
-                const SizedBox(height: 8),
-                _buildCapacityBar(event, isDark),
                 const SizedBox(height: 16),
+                Text(
+                  event.title,
+                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                ),
+                if (event.tagline != null) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    event.tagline!,
+                    style: const TextStyle(fontSize: 14, color: Colors.grey, fontStyle: FontStyle.italic),
+                  ),
+                ],
+                const SizedBox(height: 16),
+                _buildMaterialMetaRow(Icons.calendar_today, _formatDate(event.startDatetime)),
+                _buildMaterialMetaRow(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime)),
+                _buildMaterialMetaRow(
+                  event.isVirtual ? Icons.videocam : Icons.location_on,
+                  event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
+                  onTap: (event.locationMapsUrl != null && event.locationMapsUrl!.isNotEmpty)
+                      ? () => _launchUrl(event.locationMapsUrl!)
+                      : null,
+                ),
+                const SizedBox(height: 16),
+                const Divider(),
+                if (isAdmin) ...[
+                  const SizedBox(height: 8),
+                  _buildCapacityBar(event, isDark),
+                  const SizedBox(height: 16),
+                ],
+                _buildRegistrationCTA(state, isIOS: false),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                _buildAboutSection(event),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                _buildSponsorsSection(event, isDark),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                _buildAgendaSection(event),
+                const SizedBox(height: 16),
+                const Divider(),
+                const SizedBox(height: 16),
+                _buildSpeakersSection(event),
               ],
-              _buildRegistrationCTA(state, isIOS: false),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 16),
-              _buildAboutSection(event),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 16),
-              _buildSponsorsSection(event, isDark),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 16),
-              _buildAgendaSection(event),
-              const SizedBox(height: 16),
-              const Divider(),
-              const SizedBox(height: 16),
-              _buildSpeakersSection(event),
-            ],
+            ),
           ),
         ),
       );
