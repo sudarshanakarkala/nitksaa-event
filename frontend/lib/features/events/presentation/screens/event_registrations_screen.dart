@@ -1,6 +1,6 @@
 import 'dart:convert' show utf8;
 
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -10,9 +10,6 @@ import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 import '../../../../shared/widgets/app_sidebar.dart';
-
-// ignore: avoid_web_libraries_in_flutter
-import 'dart:html' as html;
 
 class EventRegistrationsScreen extends ConsumerStatefulWidget {
   const EventRegistrationsScreen({super.key, required this.eventId});
@@ -279,22 +276,21 @@ class _EventRegistrationsScreenState
     return buffer.toString();
   }
 
-  void _exportToCsv() {
+  Future<void> _exportToCsv() async {
     if (_sortedAttendees.isEmpty) return;
     final csv = _generateCsv();
     final filename = 'event_${widget.eventId}_registrations.csv';
-    
-    if (kIsWeb) {
-      // For web, use dart:html to download
-      // Convert to UTF-8 bytes for proper encoding
-      final bytes = utf8.encode(csv);
-      final blob = html.Blob([bytes], 'text/csv');
-      final url = html.Url.createObjectUrlFromBlob(blob);
-      final anchor = html.AnchorElement(href: url)
-        ..setAttribute('download', filename)
-        ..click();
-      html.Url.revokeObjectUrl(url);
-    }
+
+    // Convert to UTF-8 bytes for proper encoding
+    final bytes = utf8.encode(csv);
+
+    // Cross-platform file save (works on web, Android, iOS, desktop)
+    await FileSaver.instance.saveFile(
+      name: filename.replaceAll('.csv', ''),
+      bytes: bytes,
+      ext: 'csv',
+      mimeType: MimeType.csv,
+    );
   }
 
   @override
