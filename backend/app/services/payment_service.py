@@ -368,6 +368,28 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
     gateway_order_ref = payload.get("gateway_order_ref", "")
     hash_ = sandbox.payload_hash(raw_body)
 
+    # WP3: webhook freshness. issued_at is part of the signed body (see
+    # deterministic_sandbox.build_webhook_payload), so this is never trusted
+    # from an unsigned source — it's only meaningful once signature_valid is
+    # confirmed below, but computed here so both signature and freshness
+    # errors are available at the same point in the flow.
+    issued_at = payload.get("issued_at")
+    now_epoch = datetime.now(timezone.utc).timestamp()
+    timestamp_error: Optional[str] = None
+    if issued_at is None:
+        timestamp_error = "timestamp_missing"
+    else:
+        try:
+            issued_at_val = float(issued_at)
+        except (TypeError, ValueError):
+            timestamp_error = "timestamp_malformed"
+        else:
+            age_seconds = now_epoch - issued_at_val
+            if age_seconds > settings.payment_webhook_max_age_seconds:
+                timestamp_error = "timestamp_stale"
+            elif age_seconds < -settings.payment_webhook_max_future_skew_seconds:
+                timestamp_error = "timestamp_future_skew"
+
     pool = await get_pool()
     async with pool.acquire() as conn:
         pay_repo = PaymentRepository(conn)
@@ -403,6 +425,24 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
                 entity_type="payment_webhook",
                 entity_id=webhook_row["id"],
                 context={"gateway": gateway},
+            )
+            return WebhookAckResponse(status="rejected", processing_status="rejected")
+
+        if timestamp_error:
+            # Positioned after the signature gate (a forged/unsigned stale
+            # timestamp never reaches here) and before any attempt/order
+            # lookup or business-state mutation. Duplicate protection above
+            # is unaffected by this: a replay of an event_id already
+            # recorded is caught by the webhook_row is None branch first,
+            # regardless of its timestamp, so freshness is enforced
+            # specifically for events seen for the first time.
+            await pay_repo.mark_webhook_processed(webhook_row["id"], "rejected", timestamp_error)
+            await audit_service.emit(
+                actor_uid="system",
+                event_type="payment_webhook_timestamp_rejected",
+                entity_type="payment_webhook",
+                entity_id=webhook_row["id"],
+                context={"gateway": gateway, "reason": timestamp_error},
             )
             return WebhookAckResponse(status="rejected", processing_status="rejected")
 

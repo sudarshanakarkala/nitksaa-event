@@ -1,4 +1,12 @@
-"""Admin-only event management and check-in endpoints."""
+"""Admin-only event management and check-in endpoints.
+
+Authorization: production Firebase-JWT-backed RBAC via
+app.middleware.admin_auth (platform_admin, or event_admin scoped to the
+event_id in the route) — migrated off the development-only
+app.middleware.dev_auth placeholder in the operational-readiness sprint.
+Two routes have no event_id to scope to (create, list-all) and are
+platform_admin-only.
+"""
 import csv
 import io
 from typing import List, Dict, Any, Optional
@@ -7,82 +15,107 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.database import get_pool
-from app.middleware.dev_auth import get_admin_user
+from app.middleware.admin_auth import require_event_admin, require_platform_role
 from app.repositories.registration_repository import RegistrationRepository
-from app.schemas.checkins import CheckInCreate, CheckInResponse, CheckInAttemptResponse, QRVerifyResponse
-from app.schemas.events import EventCreate, EventUpdate, EventResponse, SessionCreate, SessionResponse
+from app.schemas.checkins import CheckInCreate, CheckInResponse, QRVerifyResponse
+from app.schemas.event_create import EventCreate
+from app.schemas.event_response import EventResponse
+from app.schemas.event_status import EventStatusUpdate
+from app.schemas.event_update import EventUpdate
+from app.schemas.events import SessionCreate, SessionResponse
 from app.schemas.registrations import (
     AdminAttendeeItem,
     AdminAttendeeListResponse,
     AdminRegistrationItem,
     AdminRegistrationListResponse,
 )
+from app.services import audit_service
 from app.services.checkin_service import CheckInService
-from app.services.event_service import EventService
+from app.services.events_service import EventsService
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
+# GET /events (list-all) previously returned every event unbounded;
+# EventsService.list_events is paginated (shared with the public/events.py
+# listing implementation). This default keeps existing admin-tooling
+# behavior close to "just give me everything" for realistic event counts
+# while gaining real pagination support — see the sprint report's API
+# compatibility section for the exact classification of this change.
+_LIST_ALL_DEFAULT_PER_PAGE = 200
+
 
 # ── Event CRUD ────────────────────────────────────────────────────────────────
+# Delegates to EventsService/EventsRepository — the same already-correct,
+# already-audited data-access layer app/api/events.py uses (that router is
+# unchanged: still dev-auth-gated, still shared test-fixture
+# infrastructure). This router supplies real RBAC on top of the identical
+# service layer, rather than maintaining a second, independent
+# implementation. EventsService audits every mutation itself
+# (event_created/event_updated/event_published/event_unpublished/
+# event_cancelled/event_completed) — no separate audit_service.emit call
+# is needed here.
 
 @router.post("/events", response_model=EventResponse, status_code=201)
 async def create_event(
     body: EventCreate,
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
-        svc = EventService(conn)
-        event = await svc.create_event(body, user)
-        return dict(event)
+        svc = EventsService(conn)
+        return await svc.create_event(body, user)
 
 
 @router.patch("/events/{event_id}", response_model=EventResponse)
 async def update_event(
     event_id: int,
     body: EventUpdate,
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
-        svc = EventService(conn)
-        event = await svc.update_event(event_id, body, user)
-        return dict(event)
+        svc = EventsService(conn)
+        return await svc.update_event(event_id, body, user)
 
 
 @router.post("/events/{event_id}/publish", response_model=EventResponse)
 async def publish_event(
     event_id: int,
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
-        svc = EventService(conn)
-        event = await svc.publish_event(event_id, user)
-        return dict(event)
+        svc = EventsService(conn)
+        return await svc.update_status(event_id, EventStatusUpdate(status="published"), user)
 
 
 @router.post("/events/{event_id}/close", response_model=EventResponse)
 async def close_event(
     event_id: int,
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
+    """'Close' maps to status='completed' — the active schema's status
+    vocabulary (draft/published/cancelled/completed) has no separate
+    'closed' value; 'completed' is the correct real-world meaning of an
+    admin explicitly closing a (necessarily published) event. See the
+    sprint report for the alternatives considered."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        svc = EventService(conn)
-        event = await svc.close_event(event_id, user)
-        return dict(event)
+        svc = EventsService(conn)
+        return await svc.update_status(event_id, EventStatusUpdate(status="completed"), user)
 
 
 @router.get("/events", response_model=List[EventResponse])
 async def list_all_events(
-    user: Dict[str, Any] = Depends(get_admin_user),
+    page: int = Query(1, ge=1),
+    per_page: int = Query(_LIST_ALL_DEFAULT_PER_PAGE, ge=1, le=500),
+    user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
-        svc = EventService(conn)
-        events = await svc.list_all_events()
-        return [dict(e) for e in events]
+        svc = EventsService(conn)
+        events, _total = await svc.list_events(page=page, per_page=per_page)
+        return events
 
 
 # ── Sessions ──────────────────────────────────────────────────────────────────
@@ -91,13 +124,12 @@ async def list_all_events(
 async def create_session(
     event_id: int,
     body: SessionCreate,
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
-        svc = EventService(conn)
-        session = await svc.create_session(event_id, body, user)
-        return dict(session)
+        svc = EventsService(conn)
+        return await svc.create_session(event_id, body, user)
 
 
 # ── Registrations & Attendees (admin) ────────────────────────────────────────
@@ -109,7 +141,7 @@ async def export_attendees(
     event_id: int,
     search: Optional[str] = Query(None),
     batch_year: Optional[int] = Query(None),
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     """CSV export of active attendees. UTF-8 with BOM for Excel compatibility.
 
@@ -160,7 +192,7 @@ async def list_attendees(
     batch_year: Optional[int] = Query(None, description="Exact batch year filter"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     """Operational attendee list — active registrations only (status='registered').
 
@@ -190,7 +222,7 @@ async def list_registrations(
     status: Optional[str] = Query(None, description="registered | cancelled"),
     page: int = Query(1, ge=1),
     per_page: int = Query(50, ge=1, le=200),
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     """Audit view — all registration statuses. Supports status filter.
 
@@ -220,7 +252,7 @@ async def list_registrations(
 async def verify_qr(
     event_id: int,
     qr_token: str = Query(...),
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -232,19 +264,26 @@ async def verify_qr(
 async def check_in(
     event_id: int,
     body: CheckInCreate,
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
         svc = CheckInService(conn)
         checkin = await svc.check_in(event_id, body, user)
-        return dict(checkin)
+    await audit_service.emit(
+        actor_uid=user["firebase_uid"],
+        event_type="check_in_created",
+        entity_type="registration",
+        entity_id=checkin["registration_id"],
+        context={"event_id": event_id, "checkin_id": checkin["checkin_id"]},
+    )
+    return dict(checkin)
 
 
 @router.get("/events/{event_id}/check-ins", response_model=List[CheckInResponse])
 async def list_checkins(
     event_id: int,
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -253,13 +292,23 @@ async def list_checkins(
         return [dict(c) for c in checkins]
 
 
-@router.get("/events/{event_id}/check-in-attempts", response_model=List[CheckInAttemptResponse])
+@router.get("/events/{event_id}/check-in-attempts")
 async def list_checkin_attempts(
     event_id: int,
-    user: Dict[str, Any] = Depends(get_admin_user),
+    user: Dict[str, Any] = Depends(require_event_admin),
 ):
+    """PARTIAL capability: no check_in_attempts table exists in the active
+    schema (it targeted a superseded migration) — there is nowhere to read
+    rejected/invalid scan attempts from. Returns an honest 501 rather than
+    fabricating empty or synthetic data. See the admin-event-schema
+    -alignment sprint report and the operations runbook's Known
+    Limitations for the product/schema decision behind this."""
     pool = await get_pool()
     async with pool.acquire() as conn:
-        svc = CheckInService(conn)
-        attempts = await svc.list_attempts(event_id)
-        return [dict(a) for a in attempts]
+        event = await conn.fetchval("SELECT EXISTS(SELECT 1 FROM events WHERE event_id = $1)", event_id)
+    if not event:
+        raise HTTPException(status_code=404, detail="event_not_found")
+    raise HTTPException(
+        status_code=501,
+        detail="check_in_attempt_logging_not_supported_by_current_schema",
+    )

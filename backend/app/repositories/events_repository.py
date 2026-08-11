@@ -2,6 +2,7 @@ from typing import Optional, List, Tuple, Dict, Any
 import asyncpg
 
 from app.schemas.event_create import EventCreate
+from app.schemas.events import SessionCreate
 
 
 _SELECT_WITH_CREATOR = """
@@ -113,6 +114,43 @@ class EventsRepository:
         )
         return await self.get_event(event_id)
 
+    async def update_event_if_status(
+        self, event_id: int, expected_status: str, fields: Dict[str, Any]
+    ) -> Optional[asyncpg.Record]:
+        """Atomic conditional update — the actual concurrency guard for
+        status transitions (used by EventsService.update_status).
+
+        Sprint 3 Verification Closure: concurrent publish/close calls were
+        reproduced racing through the old check-then-act pattern
+        (SELECT current status, validate transition in Python, then an
+        unconditional UPDATE) — every caller that read the pre-transition
+        status before any writer committed passed validation and both
+        wrote AND both audited, even though only one of them represented
+        a genuine transition. This method makes the WHERE clause the
+        actual source of truth, the same principle already used
+        throughout the payment domain and the check_ins uniqueness index:
+        a concurrent caller whose expected_status no longer matches
+        (because a race winner already moved it) updates zero rows and
+        gets None back — the caller turns that into a clean 409, not a
+        spurious second "success" with a duplicate audit entry.
+        """
+        set_parts = []
+        values: List[Any] = []
+        for key, val in fields.items():
+            values.append(val)
+            set_parts.append(f"{key} = ${len(values)}")
+        set_parts.append("updated_at = NOW()")
+        values.append(event_id)
+        event_idx = len(values)
+        values.append(expected_status)
+        status_idx = len(values)
+        query = (
+            f"UPDATE events SET {', '.join(set_parts)} "
+            f"WHERE event_id = ${event_idx} AND status = ${status_idx} RETURNING *"
+        )
+        return await self.conn.fetchrow(query, *values)
+        return await self.get_event(event_id)
+
     async def list_events(
         self,
         page: int,
@@ -196,6 +234,40 @@ class EventsRepository:
             FROM events e
             WHERE e.event_id = $1 AND e.status = 'published'
             """,
+            event_id,
+        )
+
+    # ── Sessions ─────────────────────────────────────────────────────────────
+    # sessions table (migration 002) has no capacity/status columns — the
+    # public SessionCreate/SessionResponse fields for those were dropped
+    # (see app/schemas/events.py) rather than fabricated. Public field
+    # names location/track_name/starts_at/ends_at are kept stable and
+    # mapped here to the real columns location_text/track/start_datetime/
+    # end_datetime.
+
+    async def create_session(self, event_id: int, data: SessionCreate) -> asyncpg.Record:
+        return await self.conn.fetchrow(
+            """
+            INSERT INTO sessions (
+                event_id, title, description, speaker_name,
+                location_text, track, start_datetime, end_datetime, sort_order
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)
+            RETURNING *
+            """,
+            event_id,
+            data.title,
+            data.description,
+            data.speaker_name,
+            data.location,
+            data.track_name,
+            data.starts_at,
+            data.ends_at,
+            data.sort_order,
+        )
+
+    async def list_sessions(self, event_id: int) -> List[asyncpg.Record]:
+        return await self.conn.fetch(
+            "SELECT * FROM sessions WHERE event_id = $1 ORDER BY sort_order ASC, start_datetime ASC",
             event_id,
         )
 

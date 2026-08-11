@@ -53,6 +53,15 @@ class RegistrationResponse(BaseModel):
       hold_expires_at  — only meaningful while status is a hold-bearing state
                          (seat_held/payment_pending/payment_verification/payment_failed);
                          None once registered/cancelled
+      latest_order_id  — the most recent payment_orders.public_order_number for this
+                         registration, any order status (created/payment_pending/paid/
+                         expired/cancelled). None if no order was ever created (e.g. a
+                         free-event registration). Read-only lookup, added so a client
+                         can reach GET /payment-orders/{id} and the attendee timeline
+                         for registrations whose status has moved past the payable
+                         window (registered/payment_verification), where
+                         POST /payment-order's create-or-reuse behavior no longer
+                         applies.
     """
 
     registration_id: int
@@ -75,6 +84,7 @@ class RegistrationResponse(BaseModel):
     join_url: Optional[str] = None
     event: Optional[EventSummary] = None
     updated_at: Optional[datetime] = None
+    latest_order_id: Optional[str] = None
 
     model_config = {"from_attributes": True}
 

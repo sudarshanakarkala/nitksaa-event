@@ -1,62 +1,49 @@
-import json
-from pydantic import BaseModel, field_validator
-from typing import Optional, Dict, Any
+"""Check-in schemas, aligned to the real check_ins table (checkin_id,
+registration_id, event_id, session_id, scanned_by, scanned_at, result).
+
+The original design assumed a separate "attendee" entity (attendee_id),
+a qr_token/ref_id/firebase_uid copied onto the check-in row, and free-text
+method/notes/metadata fields — none of that has a backing column.
+registration_id is the attendee identity (registrations IS the attendee
+record); qr_token lookup happens via registrations.qrtoken, not a copy on
+check_ins. See the admin-event-schema-alignment sprint report.
+
+CheckInAttemptResponse was removed: no check_in_attempts table exists in
+the active schema — the list-attempts route returns 501, not a fabricated
+empty/degraded response.
+"""
+from pydantic import BaseModel, ConfigDict, Field
+from typing import Optional
 from datetime import datetime
-
-
-def _parse_jsonb(v: Any) -> Any:
-    if isinstance(v, str):
-        return json.loads(v)
-    return v
 
 
 class CheckInCreate(BaseModel):
     qr_token: str
     session_id: Optional[int] = None
-    notes: Optional[str] = None
 
 
 class CheckInResponse(BaseModel):
-    check_in_id: int
+    """Public field names checked_in_at/checked_in_by are kept stable via
+    validation_alias, reading from the real columns scanned_at/scanned_by."""
+
+    model_config = ConfigDict(populate_by_name=True)
+
+    checkin_id: int
     event_id: int
-    session_id: Optional[int]
-    registration_id: Optional[int]
-    attendee_id: Optional[int]
-    ref_id: Optional[str]
-    firebase_uid: Optional[str]
-    qr_token: Optional[str]
-    checked_in_at: datetime
-    checked_in_by: Optional[str]
-    method: str
-    notes: Optional[str]
-    metadata: Optional[Dict[str, Any]]
-
-    @field_validator("metadata", mode="before")
-    @classmethod
-    def parse_metadata(cls, v: Any) -> Any:
-        return _parse_jsonb(v)
-
-
-class CheckInAttemptResponse(BaseModel):
-    attempt_id: int
-    event_id: Optional[int]
-    qr_token: Optional[str]
-    registration_id: Optional[int]
-    attendee_id: Optional[int]
-    attempt_status: str
-    attempted_by: Optional[str]
-    attempted_at: datetime
-    notes: Optional[str]
+    session_id: Optional[int] = None
+    registration_id: int
+    checked_in_at: datetime = Field(validation_alias="scanned_at")
+    checked_in_by: str = Field(validation_alias="scanned_by")
+    result: str
 
 
 class QRVerifyResponse(BaseModel):
     valid: bool
     qr_token: str
-    registration_id: Optional[int]
-    attendee_id: Optional[int]
-    full_name: Optional[str]
-    email: Optional[str]
-    ref_id: Optional[str]
-    registration_status: Optional[str]
+    registration_id: Optional[int] = None
+    full_name: Optional[str] = None
+    email: Optional[str] = None
+    ref_id: Optional[str] = None
+    registration_status: Optional[str] = None
     already_checked_in: bool
     message: str

@@ -46,6 +46,26 @@ _TEST_ALUMNI_2 = {
 
 _ADMIN = {"X-Dev-User": "admin"}
 
+# Dedicated fixture-only identity, permanently granted platform_admin via a
+# direct DB row (see _seed_fixture_admin below) — used ONLY to create the
+# throwaway events these tests exercise, via admin_events.py's real-RBAC
+# create/publish routes. events.py's own admin routes (POST /api/v1/events,
+# PATCH /api/v1/events/{id}/status) were migrated off dev-auth in the
+# admin-auth-unification sprint, so the previous X-Dev-User-based fixture
+# setup here no longer works; admin_events.py's equivalent routes (already
+# fully functional per the admin-event-schema-alignment sprint) are the
+# real-RBAC replacement. Same identity/UID as test_admin_rbac.py's
+# _FIXTURE_ADMIN — same row, reused across files, not a new concept.
+_FIXTURE_ADMIN = {
+    "firebase_uid": "TEST_ALUMNI_UID_043",
+    "sub": "fixture.admin.rbac@nitksaa.dev",
+    "email": "fixture.admin.rbac@nitksaa.dev",
+    "fullname": "Fixture Admin RBAC Test",
+    "user_type": "alumni",
+    "ref_id": "NITK2018CS043",
+    "graduation_year": 2018,
+}
+
 
 def _alumni_bearer_headers(identity: dict = _TEST_ALUMNI) -> dict:
     from app.middleware.auth import make_access_token
@@ -54,12 +74,33 @@ def _alumni_bearer_headers(identity: dict = _TEST_ALUMNI) -> dict:
     return {"Authorization": f"Bearer {token}"}
 
 
+@pytest.fixture(autouse=True)
+def _seed_fixture_admin():
+    _db_exec(
+        """
+        INSERT INTO event_users (firebase_uid, email, fullname, user_type, ref_id, graduation_year)
+        VALUES ($1, $2, $3, $4, $5, $6)
+        ON CONFLICT (firebase_uid) DO NOTHING
+        """,
+        _FIXTURE_ADMIN["firebase_uid"], _FIXTURE_ADMIN["email"], _FIXTURE_ADMIN["fullname"],
+        _FIXTURE_ADMIN["user_type"], _FIXTURE_ADMIN["ref_id"], _FIXTURE_ADMIN["graduation_year"],
+    )
+    _db_exec(
+        """
+        INSERT INTO payment_platform_roles (firebase_uid, role, granted_by)
+        VALUES ($1, 'platform_admin', 'test_fixture_bootstrap')
+        ON CONFLICT (firebase_uid, role) WHERE revoked_at IS NULL DO NOTHING
+        """,
+        _FIXTURE_ADMIN["firebase_uid"],
+    )
+
+
 def _mk_paid_event(client, uid_suffix: str, *, capacity: int = 10, base_amount: str = "100.00") -> int:
     """Create + publish a throwaway paid event with a published payment config.
     Returns the event_id. Uses the same live services a real admin call would
-    (not a direct DB write) — see app/api/events.py + dev_diagnostics.py."""
+    (not a direct DB write) — see app/api/admin_events.py + dev_diagnostics.py."""
     r = client.post(
-        "/api/v1/events",
+        "/api/v1/admin/events",
         json={
             "title": f"TEST PAID EVENT {uid_suffix}",
             "description": "Created by pytest",
@@ -71,11 +112,11 @@ def _mk_paid_event(client, uid_suffix: str, *, capacity: int = 10, base_amount: 
             "is_free": False,
             "ticket_price": base_amount,
         },
-        headers=_ADMIN,
+        headers=_alumni_bearer_headers(_FIXTURE_ADMIN),
     )
     assert r.status_code == 201, r.text
-    event_id = r.json()["event"]["event_id"]
-    r = client.patch(f"/api/v1/events/{event_id}/status", json={"status": "published"}, headers=_ADMIN)
+    event_id = r.json()["event_id"]
+    r = client.post(f"/api/v1/admin/events/{event_id}/publish", headers=_alumni_bearer_headers(_FIXTURE_ADMIN))
     assert r.status_code == 200, r.text
     r = client.post(
         "/api/v1/dev/diagnostics/payments/configuration/import",
@@ -364,6 +405,60 @@ def test_payment_diagnostics_full_flow(client):
     assert not failed, f"payment diagnostics had failures: {failed}"
     assert body["passed"] == body["total"]
     assert body["total"] >= 6  # setup + pricing + seat-hold + order + failed + retry + duplicate + cross-user
+
+
+def test_latest_order_id_tracks_registration_through_payment_lifecycle(client):
+    """RegistrationResponse.latest_order_id (returning-attendee sprint
+    addition): a registration with no order yet reports None; once an
+    order exists it's reported even after the registration moves past the
+    payable window (registered/paid) — this is the whole point of the
+    field, since POST /payment-order's create-or-reuse behavior stops
+    applying once status leaves seat_held/payment_pending/payment_failed."""
+    import uuid
+
+    event_id = _mk_paid_event(client, f"latestorder-{uuid.uuid4().hex[:8]}")
+    headers = _alumni_bearer_headers()
+
+    r = client.post(f"/api/v1/events/{event_id}/register", json={}, headers=headers)
+    assert r.status_code == 201, r.text
+    reg = r.json()
+    assert reg["status"] == "seat_held"
+    assert reg["latest_order_id"] is None
+
+    r = client.get(f"/api/v1/events/{event_id}/my-registration", headers=headers)
+    assert r.json()["latest_order_id"] is None
+
+    r = client.post(
+        f"/api/v1/registrations/{reg['registration_id']}/payment-order",
+        json={"idempotency_key": f"latestorder-key-{reg['registration_id']}"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    order_id = r.json()["order_id"]
+
+    r = client.post(
+        f"/api/v1/payment-orders/{order_id}/attempts",
+        json={"scenario": "SUCCESS"},
+        headers=headers,
+    )
+    assert r.status_code == 201, r.text
+    assert r.json()["status"] == "captured"
+
+    r = client.get(f"/api/v1/events/{event_id}/my-registration", headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["status"] == "registered"
+    assert body["latest_order_id"] == order_id
+
+    r = client.get("/api/v1/my/registrations", headers=headers)
+    assert r.status_code == 200, r.text
+    mine = next(x for x in r.json()["registrations"] if x["registration_id"] == reg["registration_id"])
+    assert mine["latest_order_id"] == order_id
+
+    # And the order it points to is reachable + correctly owned.
+    r = client.get(f"/api/v1/payment-orders/{order_id}", headers=headers)
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "paid"
 
 
 # ─────────────────────────────────────────────────────────────────────────────

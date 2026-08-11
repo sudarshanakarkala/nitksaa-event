@@ -1588,10 +1588,10 @@ async def run_attendee_management_diagnostics(
             ms = int((time.monotonic() - t0) * 1000)
             results.append(_uc("UC-07", "cancelled visible in registrations audit", False, {"duration_ms": ms}, str(exc)))
 
-        # UC-08: admin required — verify endpoint is wired to get_admin_user
+        # UC-08: admin required — verify endpoint is wired to real RBAC
         # (Middleware enforcement is structural — confirmed in admin_events.py route definitions.)
         results.append(_uc("UC-08", "admin auth required (structural check)", True,
-            {"note": "All /api/v1/admin/* routes use Depends(get_admin_user). Verified in admin_events.py source."}))
+            {"note": "All /api/v1/admin/* routes use require_platform_role/require_event_admin (app.middleware.admin_auth). Verified in admin_events.py source."}))
 
     passed_count = sum(1 for r in results if r["status"] == "PASS")
     failed_count = sum(1 for r in results if r["status"] == "FAIL")
