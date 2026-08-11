@@ -5,7 +5,7 @@ from app.config import get_settings
 from app.database import get_pool, close_pool
 from app.api import (
     health, events, admin_events, auth, dev_diagnostics, alumni, registrations,
-    people, sponsors_partners, week5_diagnostics,
+    people, sponsors_partners, week5_diagnostics, payments,
 )
 
 
@@ -50,3 +50,4 @@ app.include_router(alumni.router)
 app.include_router(registrations.router)
 app.include_router(people.router)
 app.include_router(sponsors_partners.router)
+app.include_router(payments.router)
