@@ -8,6 +8,7 @@ Column mapping (DB → API alias where names differ):
 Admin note: admin attendee/registration endpoints ignore show_attendee_list.
   show_attendee_list controls public visibility only; admins always have access.
 """
+import secrets
 from datetime import datetime
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -50,6 +51,9 @@ _REG_WITH_EVENT = """
         r.confirmation_email_sent_at,
         r.hold_expires_at,
         r.updated_at,
+        (SELECT po.public_order_number FROM payment_orders po
+         WHERE po.registration_id = r.registration_id
+         ORDER BY po.created_at DESC LIMIT 1) AS latest_order_id,
         e.title          AS event_title,
         e.start_datetime,
         e.end_datetime,
@@ -131,6 +135,43 @@ class RegistrationRepository:
             event_id,
         )
 
+    async def expire_all_stale_holds(self) -> List[asyncpg.Record]:
+        """Explicit, auditable, global counterpart to expire_stale_holds()
+        (WP4). Same policy, same status list, same condition — just batched
+        across all events instead of scoped to one, and returning the
+        affected rows so the caller can emit an audit event per row. Does
+        not replace or modify expire_stale_holds(), which stays exactly as
+        it is for the existing inline lazy-expiry call in
+        registration_service.register_for_event.
+
+        Idempotent (a second run's WHERE matches nothing already
+        'cancelled') and concurrency-safe under Postgres MVCC without any
+        additional locking — the same UPDATE...WHERE...RETURNING mechanism
+        this codebase already relies on elsewhere (see
+        test_concurrent_double_click_registration_only_one_succeeds).
+        'registered' (confirmed/paid) rows are never matched by this
+        WHERE clause, so a confirmed registration can never be cancelled
+        by this sweep."""
+        return await self.conn.fetch(
+            """
+            UPDATE registrations
+            SET status = 'cancelled', cancelled_at = now(), updated_at = now()
+            WHERE status IN ('seat_held', 'payment_pending', 'payment_verification', 'payment_failed')
+              AND hold_expires_at IS NOT NULL
+              AND hold_expires_at < now()
+            RETURNING registration_id, event_id
+            """
+        )
+
+    async def get_by_qrtoken(self, qrtoken: str) -> Optional[asyncpg.Record]:
+        """Check-in lookup key. registrations.qrtoken (unique) is the only
+        QR/check-in token this schema has — there is no separate
+        'attendee' entity or token table; the registration row itself is
+        the check-in identity."""
+        return await self.conn.fetchrow(
+            "SELECT * FROM registrations WHERE qrtoken = $1", qrtoken
+        )
+
     async def get_by_id(self, registration_id: int) -> Optional[asyncpg.Record]:
         return await self.conn.fetchrow(
             "SELECT * FROM registrations WHERE registration_id = $1", registration_id
@@ -179,6 +220,13 @@ class RegistrationRepository:
         status/hold_expires_at default to the free-event path unchanged;
         the paid-event seat-hold path passes status='seat_held' plus a
         hold_expires_at deadline computed from the event's payment config.
+
+        qrtoken (unique) is generated here — this column previously went
+        unpopulated by every registration path, which meant the check-in
+        subsystem (CheckInService.verify_qr/check_in, keyed on
+        registrations.qrtoken) could never find a real registration.
+        Fixed as part of the admin-event-schema-alignment sprint; see that
+        sprint's report.
         """
         return int(
             await self.conn.fetchval(
@@ -187,8 +235,8 @@ class RegistrationRepository:
                     event_id, firebase_uid, ref_id,
                     email, phone,
                     fullname_snapshot, batch_year_snapshot, branch_snapshot,
-                    notes, status, hold_expires_at
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+                    notes, status, hold_expires_at, qrtoken
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
                 RETURNING registration_id
                 """,
                 event_id,
@@ -202,6 +250,7 @@ class RegistrationRepository:
                 notes,
                 status,
                 hold_expires_at,
+                secrets.token_urlsafe(16),
             )
         )
 

@@ -13,6 +13,7 @@ import hashlib
 import hmac
 import json
 import secrets
+import time
 import uuid
 from decimal import Decimal
 from typing import Any, Dict, Tuple
@@ -68,6 +69,11 @@ def build_webhook_payload(
         "gateway_order_ref": gateway_order_ref,
         "amount": str(amount),
         "currency": currency,
+        # UTC epoch seconds. Part of the signed body (canonicalize() sorts
+        # keys and signs the whole payload), so this cannot be altered
+        # post-signing without invalidating the signature — see
+        # payment_service.process_webhook's freshness gate.
+        "issued_at": int(time.time()),
     }
     if event_type == "payment.captured":
         payload["gateway_payment_ref"] = _create_gateway_payment_ref()

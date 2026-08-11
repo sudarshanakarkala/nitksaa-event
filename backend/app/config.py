@@ -50,7 +50,20 @@ class Settings(BaseSettings):
         "dev-payment-sandbox-secret-change-me", alias="PAYMENT_SANDBOX_SIGNING_SECRET"
     )
     payment_webhook_max_age_seconds: int = Field(300, alias="PAYMENT_WEBHOOK_MAX_AGE_SECONDS")
+    payment_webhook_max_future_skew_seconds: int = Field(
+        30, alias="PAYMENT_WEBHOOK_MAX_FUTURE_SKEW_SECONDS"
+    )
     payment_diagnostics_enabled: bool = Field(True, alias="PAYMENT_DIAGNOSTICS_ENABLED")
+
+    # Payment RBAC (production foundation) — comma-separated firebase_uids
+    # that are always treated as platform_admin, independent of
+    # payment_platform_roles rows. This is the bootstrap mechanism: the
+    # first platform_admin has no one to grant them the role via the API,
+    # so ops lists them here instead. Every subsequent grant goes through
+    # the payment-roles API and is stored in payment_platform_roles.
+    platform_admin_firebase_uids_raw: str = Field(
+        "", alias="PLATFORM_ADMIN_FIREBASE_UIDS"
+    )
 
     @property
     def events_db_dsn(self) -> str:
@@ -67,6 +80,14 @@ class Settings(BaseSettings):
     @property
     def origins_list(self) -> list[str]:
         return [origin.strip() for origin in self.allowed_origins.split(",") if origin.strip()]
+
+    @property
+    def platform_admin_firebase_uids(self) -> list[str]:
+        return [
+            uid.strip()
+            for uid in self.platform_admin_firebase_uids_raw.split(",")
+            if uid.strip()
+        ]
 
     def _postgres_url(self, database: str) -> str:
         url = f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{database}"

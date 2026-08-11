@@ -68,6 +68,7 @@ def _format_registration(row: Dict[str, Any]) -> RegistrationResponse:
         join_url=join_url,
         event=event,
         updated_at=row.get("updated_at"),
+        latest_order_id=row.get("latest_order_id"),
     )
 
 

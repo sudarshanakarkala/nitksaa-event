@@ -93,6 +93,102 @@ class PaymentRepository:
             )
         return row
 
+    async def create_draft_config(
+        self,
+        configuration_key: str,
+        event_id: int,
+        base_amount: Decimal,
+        gst_enabled: bool,
+        gst_rate: Decimal,
+        gst_mode: str,
+        convenience_fee_enabled: bool,
+        convenience_fee_type: str,
+        convenience_fee_value: Decimal,
+        seat_hold_minutes: int,
+        payment_session_expiry_minutes: int,
+        created_by: str,
+    ) -> asyncpg.Record:
+        """Production config lifecycle (WP1): insert a new status='draft'
+        row. Does not touch any currently-published row — unlike
+        create_new_config_version (dev-diagnostics import path), nothing is
+        retired until publish_draft_config runs. version = previous max for
+        this configuration_key + 1, same append-only numbering."""
+        prev_version = await self.conn.fetchval(
+            "SELECT COALESCE(MAX(version), 0) FROM payment_configurations WHERE configuration_key = $1",
+            configuration_key,
+        )
+        return await self.conn.fetchrow(
+            """
+            INSERT INTO payment_configurations (
+                configuration_key, event_id, version, base_amount,
+                gst_enabled, gst_rate, gst_mode,
+                convenience_fee_enabled, convenience_fee_type, convenience_fee_value,
+                seat_hold_minutes, payment_session_expiry_minutes,
+                status, created_by
+            ) VALUES (
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft', $13
+            )
+            RETURNING *
+            """,
+            configuration_key,
+            event_id,
+            prev_version + 1,
+            base_amount,
+            gst_enabled,
+            gst_rate,
+            gst_mode,
+            convenience_fee_enabled,
+            convenience_fee_type,
+            convenience_fee_value,
+            seat_hold_minutes,
+            payment_session_expiry_minutes,
+            created_by,
+        )
+
+    async def list_configs_for_event(self, event_id: int) -> List[asyncpg.Record]:
+        return await self.conn.fetch(
+            """
+            SELECT * FROM payment_configurations
+            WHERE event_id = $1
+            ORDER BY version DESC
+            """,
+            event_id,
+        )
+
+    async def publish_draft_config(self, configuration_id: int) -> asyncpg.Record:
+        """Transition a status='draft' row to 'published', retiring the
+        event's currently-published row (if any) in the same transaction.
+        Raises asyncpg.exceptions.UniqueViolationError if a concurrent
+        publish for the same event wins the race — the partial unique index
+        uq_payment_configurations_active_event is the actual source of
+        truth for "at most one published config per event", same pattern as
+        payment_orders/payment_attempts elsewhere in this module."""
+        async with self.conn.transaction():
+            draft = await self.conn.fetchrow(
+                "SELECT * FROM payment_configurations WHERE id = $1 AND status = 'draft'",
+                configuration_id,
+            )
+            if not draft:
+                return None
+            await self.conn.execute(
+                """
+                UPDATE payment_configurations
+                SET status = 'retired', updated_at = now()
+                WHERE event_id = $1 AND status = 'published'
+                """,
+                draft["event_id"],
+            )
+            row = await self.conn.fetchrow(
+                """
+                UPDATE payment_configurations
+                SET status = 'published', updated_at = now()
+                WHERE id = $1
+                RETURNING *
+                """,
+                configuration_id,
+            )
+        return row
+
     # ── Orders ────────────────────────────────────────────────────────────
 
     async def get_active_order_for_registration(
@@ -352,6 +448,42 @@ class PaymentRepository:
             webhook_id,
             status,
             error_code,
+        )
+
+    # ── Explicit lifecycle expiry (WP4) ───────────────────────────────────
+
+    async def expire_stale_orders(self) -> List[asyncpg.Record]:
+        """Explicit, idempotent, concurrency-safe stale-order sweep.
+
+        A single UPDATE...WHERE...RETURNING: idempotent because a second
+        run's WHERE matches nothing already 'expired', and concurrency-safe
+        under Postgres MVCC without any explicit locking primitive — two
+        concurrent callers targeting overlapping rows serialize naturally
+        (the second's WHERE re-evaluates after the first commits and finds
+        the rows no longer match 'created'/'payment_pending').
+
+        The NOT EXISTS guard is deliberate and goes beyond a naive
+        "past expires_at" check: an order with a payment attempt still
+        in flight with the gateway (initiated/pending/requires_verification)
+        must never be expired out from under it — same race this codebase
+        already defends against for registrations via
+        PAYMENT_CAPTURED_AFTER_SEAT_EXPIRY, applied here to the order row.
+        'paid'/'cancelled'/already-'expired' orders are excluded by the
+        status filter, so captured funds are never touched.
+        """
+        return await self.conn.fetch(
+            """
+            UPDATE payment_orders
+            SET status = 'expired', updated_at = now()
+            WHERE status IN ('created', 'payment_pending')
+              AND expires_at < now()
+              AND NOT EXISTS (
+                  SELECT 1 FROM payment_attempts pa
+                  WHERE pa.order_id = payment_orders.id
+                    AND pa.status IN ('initiated', 'pending', 'requires_verification')
+              )
+            RETURNING id, public_order_number, event_id, registration_id
+            """
         )
 
     # ── Verification (pending → requires_verification) ───────────────────

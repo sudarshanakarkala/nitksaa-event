@@ -10,6 +10,7 @@ from app.repositories.sponsors_partners_repository import SponsorsRepository, Pa
 from app.schemas.event_create import EventCreate
 from app.schemas.event_status import EventStatusUpdate
 from app.schemas.event_update import EventUpdate
+from app.schemas.events import SessionCreate
 from app.services.slug_service import SlugService
 
 _VALID_TRANSITIONS: Dict[str, set] = {
@@ -154,10 +155,45 @@ class EventsService:
         elif new_status == "cancelled":
             extra["cancelled_at"] = datetime.now(timezone.utc)
             audit_type = "event_cancelled"
+        elif new_status == "completed":
+            audit_type = "event_completed"
 
-        record = await self.repo.update_event(event_id, {"status": new_status, **extra})
+        # Conditional on the status we actually read (Sprint 3
+        # Verification Closure — reproduced two concurrent callers both
+        # reading the same pre-transition status, both passing validation,
+        # both writing, both auditing a "success" for what was really one
+        # transition and one redundant no-op. The WHERE clause is the
+        # real guard, same principle as payment_orders/payment_attempts
+        # and the check_ins uniqueness index: a caller that loses the
+        # race updates zero rows and must not audit a success it didn't
+        # actually cause.
+        record = await self.repo.update_event_if_status(event_id, current, {"status": new_status, **extra})
+        if record is None:
+            raise HTTPException(
+                status_code=409,
+                detail=f"status_changed_concurrently_expected_{current}",
+            )
         await self._audit(user["firebase_uid"], audit_type, event_id)
         return _enrich(self._to_dict(record))
+
+    # ── Admin: Sessions ──────────────────────────────────────────────────────
+
+    async def create_session(
+        self, event_id: int, data: SessionCreate, user: Dict[str, Any]
+    ) -> Dict[str, Any]:
+        existing = await self.repo.get_event(event_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="event_not_found")
+        record = await self.repo.create_session(event_id, data)
+        await self._audit(user["firebase_uid"], "session_created", event_id)
+        return self._to_dict(record)
+
+    async def list_sessions(self, event_id: int) -> List[Dict[str, Any]]:
+        existing = await self.repo.get_event(event_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="event_not_found")
+        rows = await self.repo.list_sessions(event_id)
+        return [self._to_dict(r) for r in rows]
 
     def _validate_for_publish(self, event: Dict[str, Any]) -> None:
         required = ["title", "description", "start_datetime", "end_datetime", "timezone", "capacity"]

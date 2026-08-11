@@ -1,94 +1,154 @@
 """
-NITKSAA Event Platform — Alpha backend test suite.
+NITKSAA Event Platform — event lifecycle + public-visibility test suite.
+
+Rewritten in the admin-event-schema-alignment sprint. Every test in this
+file previously targeted a superseded schema/auth mechanism
+(X-Dev-User admin_events.py routes, legacy EventCreate/CheckInResponse
+field names) — see that sprint's report for the full classification of
+what was fixed vs. retired vs. superseded by test_admin_rbac.py /
+test_admin_event_management.py. What remains here focuses on coverage
+those newer, more targeted files don't already provide: PUBLIC
+(unauthenticated) event/session visibility, and event-lifecycle business
+rules (draft/publish/close/registration-blocking) traced end-to-end
+through the real schema.
 
 Each test scenario is fully self-contained:
   - creates its own event/registration data using UUID-based unique ids
   - does NOT depend on fixture ordering or shared mutable state
-  - does NOT assume any fixed event_id, registration_id, or QR token
-
-Run from the repo root:
-    pytest backend/tests -v
-
-Run from backend/:
-    pytest tests -v
-
-Prerequisites:
-  - events_db running and migrated
-  - backend/.env with correct EVENTS_DB_URL
-  - APP_ENV=development (set in .env)
+  - does NOT assume any fixed event_id or registration_id
 """
 import uuid
+
 import pytest
 
-# ── Auth header shortcuts ─────────────────────────────────────────────────────
-ADMIN = {"X-Dev-User": "admin"}
-ATTENDEE = {"X-Dev-User": "attendee"}
+_PLATFORM_ADMIN = {
+    "firebase_uid": "TEST_ALUMNI_UID_060",
+    "sub": "platform.admin.evtflow@nitksaa.dev",
+    "email": "platform.admin.evtflow@nitksaa.dev",
+    "fullname": "Platform Admin EvtFlow Test",
+    "user_type": "alumni",
+    "ref_id": "NITK2018CS060",
+    "graduation_year": 2018,
+}
 
-# A future date used for all test events so capacity/window rules never fire.
-_FUTURE = "2027-06-15T10:00:00+05:30"
+# Seeded in both alumni_db and events_db — see test_payments.py's
+# _TEST_ALUMNI docstring. Needed here because /register requires a real
+# alumni_db lookup to succeed, not just an events_db event_users row.
+_TEST_ALUMNI = {
+    "firebase_uid": "TEST_ALUMNI_UID_001",
+    "sub": "ravi.test@nitksaa.dev",
+    "email": "ravi.test@nitksaa.dev",
+    "fullname": "Ravi Shankar Test",
+    "user_type": "alumni",
+    "ref_id": "NITK2020CS001",
+    "graduation_year": 2020,
+}
+_TEST_ALUMNI_2 = {
+    "firebase_uid": "TEST_ALUMNI_UID_002",
+    "sub": "priya.test@nitksaa.dev",
+    "email": "priya.test@nitksaa.dev",
+    "fullname": "Priya Kumari Test",
+    "user_type": "alumni",
+    "ref_id": "NITK2019EC002",
+    "graduation_year": 2019,
+}
 
+_FUTURE_START = "2027-06-15T10:00:00+05:30"
+_FUTURE_END = "2027-06-15T12:00:00+05:30"
 
-# ── Helpers ───────────────────────────────────────────────────────────────────
 
 def uid() -> str:
-    """Short collision-resistant suffix — safe for slugs, emails, ref_ids."""
     return uuid.uuid4().hex[:10]
 
 
-def _make_event(client, *, publish: bool = False, capacity: int = 50) -> dict:
-    """Create a draft event; optionally publish it. Returns the event dict."""
+def _bearer(identity: dict) -> dict:
+    from app.middleware.auth import make_access_token
+
+    token = make_access_token(dict(identity))
+    return {"Authorization": f"Bearer {token}"}
+
+
+def _as_platform_admin(monkeypatch) -> None:
+    from app.config import get_settings
+
+    monkeypatch.setenv("PLATFORM_ADMIN_FIREBASE_UIDS", _PLATFORM_ADMIN["firebase_uid"])
+    get_settings.cache_clear()
+
+
+def _clear_bootstrap(monkeypatch) -> None:
+    from app.config import get_settings
+
+    monkeypatch.delenv("PLATFORM_ADMIN_FIREBASE_UIDS", raising=False)
+    get_settings.cache_clear()
+
+
+def _db_exec(query: str, *args) -> None:
+    import asyncio
+
+    import asyncpg
+
+    from app.config import get_settings
+
+    async def _run():
+        conn = await asyncpg.connect(dsn=get_settings().events_db_dsn)
+        try:
+            await conn.execute(query, *args)
+        finally:
+            await conn.close()
+
+    asyncio.run(_run())
+
+
+@pytest.fixture(autouse=True)
+def _seed_test_identities():
+    for identity in (_PLATFORM_ADMIN, _TEST_ALUMNI, _TEST_ALUMNI_2):
+        _db_exec(
+            """
+            INSERT INTO event_users (firebase_uid, email, fullname, user_type, ref_id, graduation_year)
+            VALUES ($1, $2, $3, $4, $5, $6)
+            ON CONFLICT (firebase_uid) DO NOTHING
+            """,
+            identity["firebase_uid"], identity["email"], identity["fullname"],
+            identity["user_type"], identity["ref_id"], identity["graduation_year"],
+        )
+
+
+def _make_event(client, admin_headers: dict, *, publish: bool = False, capacity: int = 50) -> dict:
+    """Create a draft event via the real (now-fixed) admin_events.py
+    create route; optionally publish it. Returns the event dict."""
     s = uid()
     r = client.post(
         "/api/v1/admin/events",
         json={
-            "slug": f"test-{s}",
             "title": f"Test Event {s}",
             "description": "Created by pytest",
-            "starts_at": _FUTURE,
+            "start_datetime": _FUTURE_START,
+            "end_datetime": _FUTURE_END,
+            "location_text": "Test Venue",
+            "is_virtual": False,
             "capacity": capacity,
         },
-        headers=ADMIN,
+        headers=admin_headers,
     )
     assert r.status_code == 201, f"event create failed: {r.text}"
     event = r.json()
     if publish:
-        r2 = client.post(
-            f"/api/v1/admin/events/{event['event_id']}/publish",
-            headers=ADMIN,
-        )
+        r2 = client.post(f"/api/v1/admin/events/{event['event_id']}/publish", headers=admin_headers)
         assert r2.status_code == 200, f"event publish failed: {r2.text}"
         event = r2.json()
     return event
 
 
-def _make_registration(client, event_id: int, *, ref_id: str = None) -> dict:
-    """Register a fresh attendee on the given event. Returns the registration dict."""
-    s = uid()
-    r = client.post(
-        f"/api/v1/events/{event_id}/register",
-        json={
-            "full_name": f"Test Alumnus {s}",
-            "email": f"user-{s}@example.com",
-            "ref_id": ref_id or f"NITK-{s}",
-        },
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 201, f"registration failed: {r.text}"
-    return r.json()
-
-
 # ─────────────────────────────────────────────────────────────────────────────
-# A. Health endpoints
+# A. Health endpoints (unchanged — never touched the broken schema)
 # ─────────────────────────────────────────────────────────────────────────────
 
 def test_health_endpoints(client):
-    # Root health — no auth, no DB required
     r = client.get("/healthz")
     assert r.status_code == 200
     assert r.json()["status"] == "ok"
     assert r.json()["service"] == "NITKSAA Event API"
 
-    # API health — confirms DB connectivity
     r = client.get("/api/v1/health")
     assert r.status_code == 200
     data = r.json()
@@ -100,441 +160,241 @@ def test_health_endpoints(client):
 
 # ─────────────────────────────────────────────────────────────────────────────
 # B. Event lifecycle: create → draft not public → publish → visible publicly
+#
+# VALID BUSINESS TEST, STALE AUTH + STALE SCHEMA — repaired. Covers public
+# (unauthenticated) event visibility, which test_admin_rbac.py never
+# touches (that file is entirely about the authenticated admin surface).
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_event_create_publish_and_public_visibility(client):
-    # --- Create as draft ---
-    event = _make_event(client)
-    event_id = event["event_id"]
-    assert event_id > 0
-    assert event["status"] == "draft"
-    assert event["created_by"] == "dev-admin-firebase-uid"
+def test_event_create_publish_and_public_visibility(client, monkeypatch):
+    try:
+        _as_platform_admin(monkeypatch)
+        admin_headers = _bearer(_PLATFORM_ADMIN)
 
-    # Draft must NOT appear in public listing
-    public_ids = [e["event_id"] for e in client.get("/api/v1/events").json()]
-    assert event_id not in public_ids, "draft event must not appear in public listing"
+        event = _make_event(client, admin_headers)
+        event_id = event["event_id"]
+        assert event_id > 0
+        assert event["status"] == "draft"
+        assert event["created_by_firebase_uid"] == _PLATFORM_ADMIN["firebase_uid"]
 
-    # Accessing draft via public detail endpoint must return 400
-    r = client.get(f"/api/v1/events/{event_id}")
-    assert r.status_code == 400
-    assert r.json()["detail"] == "event_not_published"
+        # Public listing is paginated and shared across the whole dev DB
+        # (many other tests' events accumulate in it), so searching it for
+        # one specific event_id is unreliable — the deterministic signal
+        # is the public DETAIL endpoint's 404-vs-200 transition, which is
+        # exactly what "not public yet" / "now public" means.
+        r = client.get(f"/api/v1/events/public/{event_id}")
+        assert r.status_code == 404, r.text
 
-    # --- Publish ---
-    r = client.post(f"/api/v1/admin/events/{event_id}/publish", headers=ADMIN)
-    assert r.status_code == 200
-    assert r.json()["status"] == "published"
-    assert r.json()["event_id"] == event_id
+        r = client.post(f"/api/v1/admin/events/{event_id}/publish", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "published"
+        assert r.json()["event_id"] == event_id
 
-    # Attempting to publish again must return 400 (already published)
-    r = client.post(f"/api/v1/admin/events/{event_id}/publish", headers=ADMIN)
-    assert r.status_code == 400
-    assert r.json()["detail"] == "only_draft_events_can_be_published"
+        # Publishing an already-published event is not a valid transition.
+        r = client.post(f"/api/v1/admin/events/{event_id}/publish", headers=admin_headers)
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"] == "invalid_status_transition_published_to_published"
 
-    # Published event appears in public listing
-    public_ids = [e["event_id"] for e in client.get("/api/v1/events").json()]
-    assert event_id in public_ids, "published event must appear in public listing"
+        r = client.get(f"/api/v1/events/public/{event_id}")
+        assert r.status_code == 200, r.text
+        detail = r.json()["event"]
+        assert detail["status"] == "published"
+        assert detail["event_id"] == event_id
 
-    # Public detail returns correct data
-    r = client.get(f"/api/v1/events/{event_id}")
-    assert r.status_code == 200
-    detail = r.json()
-    assert detail["status"] == "published"
-    assert detail["event_id"] == event_id
-    assert detail["slug"].startswith("test-")
-
-    # Admin can also see draft events in admin listing
-    admin_ids = [e["event_id"] for e in
-                 client.get("/api/v1/admin/events", headers=ADMIN).json()]
-    assert event_id in admin_ids
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# C. Registration lifecycle and duplicate prevention
-# ─────────────────────────────────────────────────────────────────────────────
-
-def test_attendee_registration_and_duplicates(client):
-    event = _make_event(client, publish=True)
-    event_id = event["event_id"]
-    s = uid()
-    email = f"rajesh-{s}@example.com"
-    ref_id = f"NITK-REF-{s}"
-
-    # --- Successful registration ---
-    r = client.post(
-        f"/api/v1/events/{event_id}/register",
-        json={"full_name": "Rajesh Nair", "email": email, "ref_id": ref_id},
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 201, r.text
-    reg = r.json()
-
-    assert reg["registration_id"] > 0
-    assert reg["event_id"] == event_id
-    assert reg["status"] == "registered"
-    assert reg["registration_source"] == "api_alpha"
-    assert reg["email"] == email
-    assert reg["qr_token"].startswith("nitksaa_evt_"), (
-        f"QR token must start with 'nitksaa_evt_', got: {reg['qr_token']}"
-    )
-    # metadata must deserialise to an empty dict (not a raw string)
-    assert isinstance(reg["metadata"], dict)
-
-    # Auth context injected: firebase_uid and ref_id populated from dev user
-    assert reg["firebase_uid"] == "dev-attendee-firebase-uid"
-    assert reg["ref_id"] == ref_id
-
-    # --- Duplicate by email (same event) → 409 ---
-    r = client.post(
-        f"/api/v1/events/{event_id}/register",
-        json={"full_name": "Same Email Different Name", "email": email},
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 409
-    assert r.json()["detail"] == "registration_duplicate"
-
-    # --- Duplicate by ref_id (different email, same ref_id) → 409 ---
-    r = client.post(
-        f"/api/v1/events/{event_id}/register",
-        json={
-            "full_name": "Different Email Same Ref",
-            "email": f"other-{uid()}@example.com",
-            "ref_id": ref_id,
-        },
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 409
-    assert r.json()["detail"] == "registration_duplicate"
-
-    # --- Same email on a DIFFERENT event is allowed ---
-    event2 = _make_event(client, publish=True)
-    r = client.post(
-        f"/api/v1/events/{event2['event_id']}/register",
-        json={"full_name": "Rajesh Different Event", "email": email},
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 201, (
-        f"same email on different event should succeed, got {r.status_code}: {r.text}"
-    )
-
-    # --- Registration detail accessible by authenticated user ---
-    reg_id = reg["registration_id"]
-    r = client.get(
-        f"/api/v1/events/{event_id}/registrations/{reg_id}",
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 200
-    assert r.json()["registration_id"] == reg_id
+        # Admin can also see draft/published events in the admin listing.
+        admin_ids = [e["event_id"] for e in client.get("/api/v1/admin/events", headers=admin_headers).json()]
+        assert event_id in admin_ids
+    finally:
+        _clear_bootstrap(monkeypatch)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# D. QR verify → check-in → status change → duplicates → attempt audit log
+# C. Registration duplicate prevention — OBSOLETE (business rule retired)
+#
+# The original test asserted duplicate-by-email and duplicate-by-ref_id
+# both produce 409 registration_duplicate. The current registration
+# system (app/services/registration_service.py) does not check email or
+# ref_id at all — duplicate prevention is entirely firebase_uid-scoped
+# (RegistrationRepository.get_active_for_user /
+# get_active_or_held_for_user, detail="already_registered"), enforced via
+# uq_registrations_active. Two different firebase_uids with the same
+# email/ref_id can both register today; that is current, intended
+# behavior (alumni identity is Firebase-UID-based, not email-based), not
+# a regression to chase. The firebase_uid-scoped duplicate rule this
+# retired test used to (accidentally) also exercise is already covered
+# for paid events by test_payments.py::test_duplicate_registration_returns_promptly_no_hang
+# and test_concurrent_double_click_registration_only_one_succeeds, which
+# hit the same shared code path register_for_event uses regardless of
+# is_paid_event. See tests/test_admin_event_management.py for a
+# dedicated free-event duplicate-registration check (the one branch of
+# that shared path the payment suite doesn't exercise).
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_qr_verify_checkin_and_duplicate_attempts(client):
-    event = _make_event(client, publish=True)
-    event_id = event["event_id"]
-    reg = _make_registration(client, event_id)
-    reg_id = reg["registration_id"]
-    qr = reg["qr_token"]
 
-    # 1 ── Verify QR before check-in ─────────────────────────────────────────
-    r = client.get(
-        f"/api/v1/admin/events/{event_id}/check-ins/verify",
-        params={"qr_token": qr},
-        headers=ADMIN,
-    )
-    assert r.status_code == 200
-    v = r.json()
-    assert v["valid"] is True
-    assert v["already_checked_in"] is False
-    assert v["message"] == "ready_to_checkin"
-    assert v["registration_id"] == reg_id
-    assert v["full_name"] == reg["full_name"]
-    assert v["registration_status"] == "registered"
-
-    # 2 ── Check-in succeeds ──────────────────────────────────────────────────
-    r = client.post(
-        f"/api/v1/admin/events/{event_id}/check-ins",
-        json={"qr_token": qr},
-        headers=ADMIN,
-    )
-    assert r.status_code == 201, r.text
-    ci = r.json()
-    assert ci["qr_token"] == qr
-    assert ci["registration_id"] == reg_id
-    assert ci["event_id"] == event_id
-    assert ci["method"] == "qr"
-    assert ci["checked_in_by"] == "dev-admin-firebase-uid"
-    assert isinstance(ci["metadata"], dict)
-
-    # 3 ── Registration status changed to checked_in ──────────────────────────
-    regs = client.get(
-        f"/api/v1/admin/events/{event_id}/registrations",
-        headers=ADMIN,
-    ).json()
-    status_map = {r["registration_id"]: r["status"] for r in regs}
-    assert status_map[reg_id] == "checked_in", (
-        f"Expected registration {reg_id} status='checked_in', got '{status_map.get(reg_id)}'"
-    )
-
-    # 4 ── Duplicate check-in → 409 ──────────────────────────────────────────
-    r = client.post(
-        f"/api/v1/admin/events/{event_id}/check-ins",
-        json={"qr_token": qr},
-        headers=ADMIN,
-    )
-    assert r.status_code == 409
-    assert r.json()["detail"] == "already_checked_in"
-
-    # 5 ── Invalid QR token → 404 ─────────────────────────────────────────────
-    r = client.post(
-        f"/api/v1/admin/events/{event_id}/check-ins",
-        json={"qr_token": "nitksaa_evt_INVALID_TOKEN_PYTEST_XYZ"},
-        headers=ADMIN,
-    )
-    assert r.status_code == 404
-    assert r.json()["detail"] == "invalid_qr_token"
-
-    # 6 ── Verify QR after check-in reflects new state ────────────────────────
-    r = client.get(
-        f"/api/v1/admin/events/{event_id}/check-ins/verify",
-        params={"qr_token": qr},
-        headers=ADMIN,
-    )
-    assert r.status_code == 200
-    v = r.json()
-    assert v["valid"] is True
-    assert v["already_checked_in"] is True
-    assert v["registration_status"] == "checked_in"
-    assert v["message"] == "already_checked_in"
-
-    # 7 ── Check-in list contains the record ─────────────────────────────────
-    r = client.get(
-        f"/api/v1/admin/events/{event_id}/check-ins",
-        headers=ADMIN,
-    )
-    assert r.status_code == 200
-    checkins = r.json()
-    ci_reg_ids = [c["registration_id"] for c in checkins]
-    assert reg_id in ci_reg_ids
-
-    # 8 ── Attempt audit log contains success, duplicate, and invalid ─────────
-    r = client.get(
-        f"/api/v1/admin/events/{event_id}/check-in-attempts",
-        headers=ADMIN,
-    )
-    assert r.status_code == 200
-    attempts = r.json()
-    logged_statuses = {a["attempt_status"] for a in attempts}
-    assert "success" in logged_statuses, (
-        f"'success' not found in attempt log statuses: {logged_statuses}"
-    )
-    assert "duplicate" in logged_statuses, (
-        f"'duplicate' not found in attempt log statuses: {logged_statuses}"
-    )
-    assert "invalid" in logged_statuses, (
-        f"'invalid' not found in attempt log statuses: {logged_statuses}"
-    )
-
-    # Verify successful attempt has correct qr_token logged
-    success_attempts = [a for a in attempts if a["attempt_status"] == "success"]
-    assert any(a["qr_token"] == qr for a in success_attempts), (
-        "success attempt must record the correct qr_token"
-    )
+# ─────────────────────────────────────────────────────────────────────────────
+# D. QR verify → check-in → duplicate/invalid — DUPLICATED BY NEW TESTS +
+#    OBSOLETE assertions
+#
+# The original test asserted (a) a successful check-in changes
+# registrations.status to 'checked_in' — explicitly decided against this
+# sprint (check-in is represented entirely by a check_ins row; the
+# payment-domain status machine is never touched — see the sprint
+# report's "check-in status" decision) — and (b) a check-in-attempts
+# audit log with success/duplicate/invalid entries — no check_in_attempts
+# table exists in the active schema (PARTIAL, 501, by explicit decision).
+# Both assertions test retired/never-existed behavior. The valid parts of
+# this flow (verify eligible → check in → duplicate rejected → invalid
+# token rejected → list reflects it) are covered by
+# tests/test_admin_event_management.py against the real, fixed schema.
+# ─────────────────────────────────────────────────────────────────────────────
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # E. Closed event blocks further registration
+#
+# VALID BUSINESS TEST, STALE AUTH + STALE SCHEMA — repaired. "Close" now
+# maps to status='completed' (see the sprint report's "close semantics"
+# decision — the active status model has no separate 'closed' value).
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_closed_event_blocks_registration(client):
-    event = _make_event(client, publish=True)
-    event_id = event["event_id"]
+def test_completed_event_blocks_registration(client, monkeypatch):
+    try:
+        _as_platform_admin(monkeypatch)
+        admin_headers = _bearer(_PLATFORM_ADMIN)
+        event = _make_event(client, admin_headers, publish=True)
+        event_id = event["event_id"]
 
-    # Register one attendee before closing (proves it works while open)
-    reg = _make_registration(client, event_id)
-    assert reg["status"] == "registered"
+        # Register one attendee before closing (proves it works while open).
+        r = client.post(f"/api/v1/events/{event_id}/register", json={}, headers=_bearer(_TEST_ALUMNI))
+        assert r.status_code == 201, r.text
+        assert r.json()["status"] == "registered"
 
-    # Close the event
-    r = client.post(f"/api/v1/admin/events/{event_id}/close", headers=ADMIN)
+        r = client.post(f"/api/v1/admin/events/{event_id}/close", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "completed"
+
+        # Closing again is not a valid transition (completed has no outgoing transitions).
+        r = client.post(f"/api/v1/admin/events/{event_id}/close", headers=admin_headers)
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"] == "invalid_status_transition_completed_to_completed"
+
+        # Registration on a non-published event is blocked.
+        r = client.post(f"/api/v1/events/{event_id}/register", json={}, headers=_bearer(_TEST_ALUMNI_2))
+        assert r.status_code == 409, r.text
+        assert r.json()["detail"] == "event_not_published"
+
+        # Public detail also reflects non-published (404 — public detail
+        # only ever returns published events).
+        r = client.get(f"/api/v1/events/public/{event_id}")
+        assert r.status_code == 404, r.text
+    finally:
+        _clear_bootstrap(monkeypatch)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# F. Access control — public (no-auth) visibility only
+#
+# The original test's admin-403 assertions (attendee/no-auth denied on
+# admin_events.py routes) are DUPLICATED BY test_admin_rbac.py, which
+# covers every one of the 13 routes × every denial scenario (unauthenticated,
+# invalid token, attendee, wrong-event event_admin, spoofed dev header,
+# revoked grant) far more thoroughly than this single test did. What's
+# NOT covered elsewhere: that the public event/session endpoints require
+# no auth at all — kept here.
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_public_endpoints_require_no_auth(client, monkeypatch):
+    try:
+        _as_platform_admin(monkeypatch)
+        event = _make_event(client, _bearer(_PLATFORM_ADMIN), publish=True)
+        event_id = event["event_id"]
+    finally:
+        _clear_bootstrap(monkeypatch)
+
+    r = client.get("/api/v1/events/public")
     assert r.status_code == 200
-    assert r.json()["status"] == "closed"
+    assert isinstance(r.json()["events"], list)
 
-    # Closing again must fail (not a valid transition from closed)
-    r = client.post(f"/api/v1/admin/events/{event_id}/close", headers=ADMIN)
-    assert r.status_code == 400
-    assert r.json()["detail"] == "event_cannot_be_closed"
+    r = client.get(f"/api/v1/events/public/{event_id}")
+    assert r.status_code == 200
+    assert r.json()["event"]["event_id"] == event_id
 
-    # Registration on closed event must be blocked
-    r = client.post(
-        f"/api/v1/events/{event_id}/register",
-        json={"full_name": "Late Comer", "email": f"late-{uid()}@example.com"},
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 400
-    assert r.json()["detail"] == "event_not_published"
-
-    # Public detail must also return 400 (closed ≠ published)
-    r = client.get(f"/api/v1/events/{event_id}")
-    assert r.status_code == 400
-    assert r.json()["detail"] == "event_not_published"
-
-
-# ─────────────────────────────────────────────────────────────────────────────
-# F. Access control
-# ─────────────────────────────────────────────────────────────────────────────
-
-def test_access_control(client):
-    event = _make_event(client, publish=True)
-    event_id = event["event_id"]
-
-    # Attendee → create event (admin endpoint) → 403
-    r = client.post(
-        "/api/v1/admin/events",
-        json={"slug": f"blocked-{uid()}", "title": "Blocked", "starts_at": _FUTURE},
-        headers=ATTENDEE,
-    )
+    # Attendee endpoints, by contrast, do require auth.
+    r = client.post(f"/api/v1/events/{event_id}/register", json={})
     assert r.status_code == 403
-    assert r.json()["detail"] == "admin_required"
-
-    # Attendee → list registrations (admin endpoint) → 403
-    r = client.get(
-        f"/api/v1/admin/events/{event_id}/registrations",
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 403
-    assert r.json()["detail"] == "admin_required"
-
-    # Attendee → check-in (admin endpoint) → 403
-    r = client.post(
-        f"/api/v1/admin/events/{event_id}/check-ins",
-        json={"qr_token": "nitksaa_evt_whatever"},
-        headers=ATTENDEE,
-    )
-    assert r.status_code == 403
-    assert r.json()["detail"] == "admin_required"
-
-    # No auth → register → 401
-    r = client.post(
-        f"/api/v1/events/{event_id}/register",
-        json={"full_name": "No Auth User", "email": f"noauth-{uid()}@example.com"},
-    )
-    assert r.status_code == 401
-
-    # No auth → public event list → 200 (no auth required)
-    r = client.get("/api/v1/events")
-    assert r.status_code == 200
-    assert isinstance(r.json(), list)
-
-    # No auth → public event detail → 200 (no auth required)
-    r = client.get(f"/api/v1/events/{event_id}")
-    assert r.status_code == 200
-    assert r.json()["event_id"] == event_id
-
-    # No auth → public sessions list → 200 (no auth required)
-    r = client.get(f"/api/v1/events/{event_id}/sessions")
-    assert r.status_code == 200
-    assert isinstance(r.json(), list)
 
 
 # ─────────────────────────────────────────────────────────────────────────────
-# G. Admin listings: sessions, attendees, update event, admin event list
+# G. Admin listings: sessions, attendees, registrations, event update
+#
+# VALID BUSINESS TEST, STALE SCHEMA — repaired. Covers session creation
+# and the admin listing endpoints' actual (wrapped, not bare-list)
+# response shape — test_admin_rbac.py checks authorization on these
+# routes but not their response contents. (No public session-listing
+# endpoint exists in the active API — the original test's assumption of
+# one was itself stale; not carried forward.)
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_admin_listings_and_sessions(client):
-    event = _make_event(client, publish=True)
-    event_id = event["event_id"]
+def test_admin_listings_and_sessions(client, monkeypatch):
+    try:
+        _as_platform_admin(monkeypatch)
+        admin_headers = _bearer(_PLATFORM_ADMIN)
+        event = _make_event(client, admin_headers, publish=True)
+        event_id = event["event_id"]
 
-    # ── Sessions ─────────────────────────────────────────────────────────────
-    # No sessions yet — public endpoint returns empty list
-    r = client.get(f"/api/v1/events/{event_id}/sessions")
-    assert r.status_code == 200
-    assert r.json() == []
+        r = client.post(
+            f"/api/v1/admin/events/{event_id}/sessions",
+            json={"title": "Opening Keynote", "speaker_name": "Prof. Ramesh Kumar",
+                  "location": "Main Auditorium", "starts_at": _FUTURE_START, "ends_at": _FUTURE_END,
+                  "sort_order": 1},
+            headers=admin_headers,
+        )
+        assert r.status_code == 201, r.text
+        session = r.json()
+        assert session["session_id"] > 0
+        assert session["event_id"] == event_id
+        assert session["title"] == "Opening Keynote"
+        assert session["location"] == "Main Auditorium"
+        assert session["sort_order"] == 1
 
-    # Create a session (admin)
-    r = client.post(
-        f"/api/v1/admin/events/{event_id}/sessions",
-        json={
-            "title": "Opening Keynote",
-            "speaker_name": "Prof. Ramesh Kumar",
-            "location": "Main Auditorium",
-            "starts_at": _FUTURE,
-            "sort_order": 1,
-        },
-        headers=ADMIN,
-    )
-    assert r.status_code == 201, r.text
-    session = r.json()
-    assert session["session_id"] > 0
-    assert session["event_id"] == event_id
-    assert session["title"] == "Opening Keynote"
-    assert session["status"] == "scheduled"
-    assert session["sort_order"] == 1
+        # ── Event update (PATCH) ──────────────────────────────────────────
+        r = client.patch(
+            f"/api/v1/admin/events/{event_id}",
+            json={"description": "Updated by pytest PATCH test"},
+            headers=admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["description"] == "Updated by pytest PATCH test"
 
-    # Session now appears in public sessions list
-    r = client.get(f"/api/v1/events/{event_id}/sessions")
-    assert r.status_code == 200
-    sessions = r.json()
-    assert len(sessions) == 1
-    assert sessions[0]["session_id"] == session["session_id"]
+        # ── Attendees list (wrapped response, not a bare list) ─────────────
+        r = client.get(f"/api/v1/admin/events/{event_id}/attendees", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["attendees"] == []
+        assert r.json()["total"] == 0
 
-    # ── Event update (PATCH) ──────────────────────────────────────────────────
-    r = client.patch(
-        f"/api/v1/admin/events/{event_id}",
-        json={"description": "Updated by pytest PATCH test"},
-        headers=ADMIN,
-    )
-    assert r.status_code == 200
-    assert r.json()["description"] == "Updated by pytest PATCH test"
+        reg1 = client.post(f"/api/v1/events/{event_id}/register", json={}, headers=_bearer(_TEST_ALUMNI))
+        reg2 = client.post(f"/api/v1/events/{event_id}/register", json={}, headers=_bearer(_TEST_ALUMNI_2))
+        assert reg1.status_code == 201, reg1.text
+        assert reg2.status_code == 201, reg2.text
 
-    # ── Attendees list ────────────────────────────────────────────────────────
-    # No registrations yet — attendee list is empty
-    r = client.get(f"/api/v1/admin/events/{event_id}/attendees", headers=ADMIN)
-    assert r.status_code == 200
-    assert r.json() == []
+        r = client.get(f"/api/v1/admin/events/{event_id}/attendees", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        body = r.json()
+        assert body["total"] == 2
+        attendee_reg_ids = {a["registration_id"] for a in body["attendees"]}
+        assert reg1.json()["registration_id"] in attendee_reg_ids
+        assert reg2.json()["registration_id"] in attendee_reg_ids
 
-    # Register two attendees
-    reg1 = _make_registration(client, event_id)
-    reg2 = _make_registration(client, event_id)
+        # ── Admin registrations list ────────────────────────────────────────
+        r = client.get(f"/api/v1/admin/events/{event_id}/registrations", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        reg_body = r.json()
+        assert reg_body["total"] == 2
 
-    r = client.get(f"/api/v1/admin/events/{event_id}/attendees", headers=ADMIN)
-    assert r.status_code == 200
-    attendees = r.json()
-    assert len(attendees) == 2
-    for a in attendees:
-        assert a["event_id"] == event_id
-        assert a["attendee_type"] == "alumni"
-        assert a["display_name"]  # not empty
-
-    attendee_reg_ids = {a["registration_id"] for a in attendees}
-    assert reg1["registration_id"] in attendee_reg_ids
-    assert reg2["registration_id"] in attendee_reg_ids
-
-    # ── Admin registrations list ──────────────────────────────────────────────
-    r = client.get(f"/api/v1/admin/events/{event_id}/registrations", headers=ADMIN)
-    assert r.status_code == 200
-    regs = r.json()
-    assert len(regs) == 2
-    for reg in regs:
-        assert reg["event_id"] == event_id
-        assert reg["qr_token"].startswith("nitksaa_evt_")
-        assert isinstance(reg["metadata"], dict)
-
-    # ── Admin all-events list includes this event ─────────────────────────────
-    r = client.get("/api/v1/admin/events", headers=ADMIN)
-    assert r.status_code == 200
-    all_ids = [e["event_id"] for e in r.json()]
-    assert event_id in all_ids
-
-    # ── Check-in with session_id ──────────────────────────────────────────────
-    session_id = session["session_id"]
-    qr = reg1["qr_token"]
-    r = client.post(
-        f"/api/v1/admin/events/{event_id}/check-ins",
-        json={"qr_token": qr, "session_id": session_id, "notes": "pytest checkin"},
-        headers=ADMIN,
-    )
-    assert r.status_code == 201, r.text
-    ci = r.json()
-    assert ci["session_id"] == session_id
-    assert ci["notes"] == "pytest checkin"
+        # ── Admin all-events list includes this event ───────────────────────
+        r = client.get("/api/v1/admin/events", headers=admin_headers)
+        assert r.status_code == 200, r.text
+        all_ids = [e["event_id"] for e in r.json()]
+        assert event_id in all_ids
+    finally:
+        _clear_bootstrap(monkeypatch)

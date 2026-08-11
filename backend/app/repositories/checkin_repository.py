@@ -1,15 +1,24 @@
-from typing import Optional, List
+from typing import List, Optional
 import asyncpg
-import json
 
 
 class CheckInRepository:
+    """check_ins (migration 004 + uniqueness index 019). Columns:
+    checkin_id, registration_id, event_id, session_id, scanned_by,
+    scanned_at, result. No qr_token/attendee_id/ref_id/firebase_uid/
+    method/notes/metadata columns exist — the registration row itself is
+    the check-in identity (registrations.qrtoken), and result is a plain
+    enum (success/duplicate/invalid), not a free-text log. There is no
+    check_in_attempts table — attempt logging for rejected/invalid scans
+    is not supported by the active schema (see CheckInService and the
+    admin-event-schema-alignment sprint report)."""
+
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
 
     async def find_existing_checkin(self, event_id: int, registration_id: int) -> Optional[asyncpg.Record]:
         return await self.conn.fetchrow(
-            "SELECT * FROM check_ins WHERE event_id=$1 AND registration_id=$2",
+            "SELECT * FROM check_ins WHERE event_id = $1 AND registration_id = $2",
             event_id, registration_id,
         )
 
@@ -17,55 +26,26 @@ class CheckInRepository:
         self,
         event_id: int,
         registration_id: int,
-        attendee_id: int,
-        qr_token: str,
-        checked_in_by: str,
         session_id: Optional[int],
-        ref_id: Optional[str],
-        firebase_uid: Optional[str],
-        notes: Optional[str],
+        scanned_by: str,
     ) -> asyncpg.Record:
+        """Relies on uq_check_ins_event_registration (migration 019) as
+        the actual source of truth for duplicate prevention — the
+        find_existing_checkin call in CheckInService is a fast path, not
+        the guarantee itself. Raises asyncpg.exceptions.UniqueViolationError
+        on a losing race; the caller translates that into the same
+        already_checked_in response a sequential duplicate gets."""
         return await self.conn.fetchrow(
             """
-            INSERT INTO check_ins (
-                event_id, session_id, registration_id, attendee_id,
-                ref_id, firebase_uid, qr_token,
-                checked_in_by, method, notes
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'qr',$9) RETURNING *
+            INSERT INTO check_ins (event_id, registration_id, session_id, scanned_by, result)
+            VALUES ($1, $2, $3, $4, 'success')
+            RETURNING *
             """,
-            event_id, session_id, registration_id, attendee_id,
-            ref_id, firebase_uid, qr_token, checked_in_by, notes,
+            event_id, registration_id, session_id, scanned_by,
         )
 
     async def list_by_event(self, event_id: int) -> List[asyncpg.Record]:
         return await self.conn.fetch(
-            "SELECT * FROM check_ins WHERE event_id=$1 ORDER BY checked_in_at ASC",
-            event_id,
-        )
-
-    async def log_attempt(
-        self,
-        event_id: Optional[int],
-        qr_token: str,
-        registration_id: Optional[int],
-        attendee_id: Optional[int],
-        attempt_status: str,
-        attempted_by: Optional[str],
-        notes: Optional[str],
-    ) -> None:
-        await self.conn.execute(
-            """
-            INSERT INTO check_in_attempts (
-                event_id, qr_token, registration_id, attendee_id,
-                attempt_status, attempted_by, notes
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7)
-            """,
-            event_id, qr_token, registration_id, attendee_id,
-            attempt_status, attempted_by, notes,
-        )
-
-    async def list_attempts_by_event(self, event_id: int) -> List[asyncpg.Record]:
-        return await self.conn.fetch(
-            "SELECT * FROM check_in_attempts WHERE event_id=$1 ORDER BY attempted_at DESC",
+            "SELECT * FROM check_ins WHERE event_id = $1 ORDER BY scanned_at ASC",
             event_id,
         )
