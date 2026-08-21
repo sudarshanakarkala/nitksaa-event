@@ -23,7 +23,13 @@ import asyncpg
 from fastapi import BackgroundTasks, HTTPException
 
 from app.database import get_pool
-from app.gateways import deterministic_sandbox as sandbox
+from app.gateways import registry as gateway_registry
+from app.gateways.base import (
+    GatewayWebhookUnparseableError,
+    NormalizedStatus,
+    payload_hash as _gateway_payload_hash,
+)
+from app.gateways.registry import GatewayDisabledError, UnknownGatewayError
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.registration_repository import RegistrationRepository
 from app.schemas.payments import (
@@ -249,7 +255,15 @@ async def create_attempt(
     background_tasks: BackgroundTasks,
 ) -> PaymentAttemptResponse:
     firebase_uid = user["firebase_uid"]
-    if body.scenario not in sandbox.SUPPORTED_SCENARIOS:
+    settings = get_settings()
+    try:
+        gateway = gateway_registry.get_active_gateway(settings)
+    except (UnknownGatewayError, GatewayDisabledError):
+        # Server-side misconfiguration (unknown/disabled gateway selected in
+        # settings) — fail closed, never silently fall back to another
+        # gateway or let the attendee choose one.
+        raise HTTPException(status_code=503, detail="payment_gateway_unavailable")
+    if body.scenario not in gateway.supported_scenarios:
         raise HTTPException(status_code=422, detail="unsupported_scenario")
 
     pool = await get_pool()
@@ -276,7 +290,7 @@ async def create_attempt(
             )
             raise HTTPException(status_code=409, detail=detail)
 
-        gateway_order_ref = sandbox.create_gateway_order_ref()
+        gateway_order_ref = gateway.create_gateway_order_ref()
         try:
             async with conn.transaction():
                 attempt_number = await pay_repo.next_attempt_number(order["id"])
@@ -284,7 +298,7 @@ async def create_attempt(
                     public_attempt_number=_public_id("ATT"),
                     order_id=order["id"],
                     attempt_number=attempt_number,
-                    gateway=sandbox.GATEWAY_NAME,
+                    gateway=gateway.name,
                     scenario=body.scenario,
                     amount=order["final_amount"],
                     currency=order["currency"],
@@ -307,20 +321,20 @@ async def create_attempt(
         context={"order_id": order["id"], "scenario": body.scenario},
     )
 
-    settings = get_settings()
-    raw_body, signature = sandbox.build_signed_delivery(
+    initiation = gateway.create_payment(
         gateway_order_ref=gateway_order_ref,
-        scenario=body.scenario,
         amount=order["final_amount"],
         currency=order["currency"],
-        secret=settings.payment_sandbox_signing_secret,
+        scenario=body.scenario,
     )
-    if sandbox.is_delayed_scenario(body.scenario):
+    if initiation.delayed_webhook:
+        delayed = initiation.delayed_webhook
         background_tasks.add_task(
-            _deliver_delayed_webhook, raw_body, signature, sandbox.DELAYED_SCENARIO_DELAY_SECONDS
+            _deliver_delayed_webhook, gateway.name, delayed.raw_body, delayed.signature, delayed.delay_seconds
         )
-    else:
-        await process_webhook(sandbox.GATEWAY_NAME, raw_body, signature)
+    elif initiation.immediate_webhook:
+        immediate = initiation.immediate_webhook
+        await process_webhook(gateway.name, immediate.raw_body, immediate.signature)
         # Immediate scenarios resolve synchronously above — re-read the attempt
         # so the response reflects the outcome, not the pre-webhook 'initiated' row.
         async with pool.acquire() as conn:
@@ -337,23 +351,42 @@ async def create_attempt(
     )
 
 
-async def _deliver_delayed_webhook(raw_body: bytes, signature: str, delay_seconds: int) -> None:
+async def _deliver_delayed_webhook(gateway_name: str, raw_body: bytes, signature: str, delay_seconds: int) -> None:
     import asyncio
 
     await asyncio.sleep(delay_seconds)
     try:
-        await process_webhook(sandbox.GATEWAY_NAME, raw_body, signature)
+        await process_webhook(gateway_name, raw_body, signature)
     except Exception:
         _log.exception("[payments] delayed sandbox webhook delivery failed")
 
 
 async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> WebhookAckResponse:
     settings = get_settings()
-    signature_valid = sandbox.verify_signature(raw_body, signature, settings.payment_sandbox_signing_secret)
 
     try:
-        payload: Dict[str, Any] = json.loads(raw_body)
-    except (ValueError, TypeError):
+        gateway_obj = gateway_registry.get_enabled_gateway(gateway, settings)
+    except (UnknownGatewayError, GatewayDisabledError):
+        # Defense in depth: the HTTP route (app.api.payments) already
+        # rejects an unknown/disabled gateway before calling this function,
+        # but process_webhook is also called directly (delayed sandbox
+        # delivery, dev diagnostics) and must not trust its own caller
+        # blindly, especially since `gateway` originates from an
+        # attacker-controlled URL path segment on the primary call path.
+        await audit_service.emit(
+            actor_uid="system",
+            event_type="payment_webhook_unknown_gateway",
+            entity_type="payment_webhook",
+            entity_id=0,
+            context={"gateway": gateway},
+        )
+        return WebhookAckResponse(status="rejected", processing_status="rejected")
+
+    signature_valid = gateway_obj.verify_webhook(raw_body, signature)
+
+    try:
+        event = gateway_obj.parse_webhook(raw_body)
+    except GatewayWebhookUnparseableError:
         await audit_service.emit(
             actor_uid="system",
             event_type="payment_webhook_unparseable",
@@ -363,17 +396,16 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
         )
         return WebhookAckResponse(status="rejected", processing_status="rejected")
 
-    event_id = payload.get("event_id", "")
-    event_type = payload.get("event_type", "")
-    gateway_order_ref = payload.get("gateway_order_ref", "")
-    hash_ = sandbox.payload_hash(raw_body)
+    event_id = event.event_id
+    gateway_order_ref = event.gateway_order_ref
+    hash_ = _gateway_payload_hash(raw_body)
 
     # WP3: webhook freshness. issued_at is part of the signed body (see
     # deterministic_sandbox.build_webhook_payload), so this is never trusted
     # from an unsigned source — it's only meaningful once signature_valid is
     # confirmed below, but computed here so both signature and freshness
     # errors are available at the same point in the flow.
-    issued_at = payload.get("issued_at")
+    issued_at = event.issued_at_raw
     now_epoch = datetime.now(timezone.utc).timestamp()
     timestamp_error: Optional[str] = None
     if issued_at is None:
@@ -400,7 +432,7 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
         webhook_row = await pay_repo.record_webhook_event(
             gateway=gateway,
             gateway_event_id=event_id,
-            event_type=event_type,
+            event_type=event.raw_event_type,
             payload_hash=hash_,
             signature_valid=signature_valid,
             correlated_order_id=order["id"] if order else None,
@@ -457,7 +489,7 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
             )
             return WebhookAckResponse(status="rejected", processing_status="rejected")
 
-        if str(payload.get("currency")) != attempt["currency"] or Decimal(str(payload.get("amount", "0"))) != Decimal(attempt["amount"]):
+        if str(event.currency) != attempt["currency"] or Decimal(event.amount_raw) != Decimal(attempt["amount"]):
             await pay_repo.mark_webhook_processed(webhook_row["id"], "rejected", "amount_or_currency_mismatch")
             await audit_service.emit(
                 actor_uid="system",
@@ -486,8 +518,8 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
                 )
                 return WebhookAckResponse(status="ok", processing_status="duplicate")
 
-            if event_type == "payment.captured":
-                await pay_repo.update_attempt_captured(attempt["id"], payload.get("gateway_payment_ref", ""))
+            if event.status == NormalizedStatus.PAYMENT_SUCCESS:
+                await pay_repo.update_attempt_captured(attempt["id"], event.gateway_payment_ref)
                 # Financial state is preserved unconditionally — the money
                 # side of this always happens, regardless of what state the
                 # registration/seat is in. What varies below is only whether
@@ -547,11 +579,11 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
                     )
                     await _send_payment_confirmation_email(conn, registration)
 
-            elif event_type == "payment.failed":
+            elif event.status == NormalizedStatus.PAYMENT_FAILED:
                 await pay_repo.update_attempt_failed(
                     attempt["id"],
-                    payload.get("failure_code", "UNKNOWN"),
-                    payload.get("failure_message", "Payment failed"),
+                    event.failure_code,
+                    event.failure_message,
                 )
                 if registration and registration["status"] in ("seat_held", "payment_pending", "payment_verification"):
                     await reg_repo.set_status(registration["registration_id"], "payment_failed")
@@ -562,7 +594,7 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
                     context={"order_id": order["id"]},
                 )
 
-            elif event_type == "payment.pending":
+            elif event.status == NormalizedStatus.PAYMENT_PENDING:
                 await pay_repo.update_attempt_status(attempt["id"], "pending")
                 if registration and registration["status"] in ("seat_held", "payment_pending"):
                     await reg_repo.set_status(registration["registration_id"], "payment_verification")
@@ -580,7 +612,7 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
                     context={"order_id": order["id"]},
                 )
 
-            elif event_type == "payment.cancelled":
+            elif event.status == NormalizedStatus.PAYMENT_CANCELLED:
                 await pay_repo.update_attempt_status(attempt["id"], "cancelled")
                 if registration and registration["status"] in ("seat_held", "payment_pending", "payment_verification"):
                     await reg_repo.set_status(registration["registration_id"], "payment_failed")

@@ -100,3 +100,19 @@ class ExpireOrdersResponse(BaseModel):
 class ExpireHoldsResponse(BaseModel):
     expired_count: int
     expired_registration_ids: List[int]
+
+
+# ── Gateway registry diagnostics (Sprint 7 — read-only, no secrets) ────────
+
+class GatewayInfo(BaseModel):
+    name: str
+    enabled: bool
+    capabilities: List[str]
+    supported_scenarios: List[str]
+
+
+class GatewayConfigResponse(BaseModel):
+    environment: str
+    configured_gateway_mode: str
+    active_gateway: Optional[str] = None
+    gateways: List[GatewayInfo]
