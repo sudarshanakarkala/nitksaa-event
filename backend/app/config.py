@@ -44,7 +44,9 @@ class Settings(BaseSettings):
     smtp_password: Optional[str] = Field(None, alias="SMTP_PASSWORD")
     app_public_base_url: str = Field("http://localhost:8000", alias="APP_PUBLIC_BASE_URL")
 
-    # Payments (Phase 0 — deterministic sandbox gateway only)
+    # Payments — gateway-neutral foundation (Sprint 7). payment_gateway_mode
+    # selects which app.gateways.registry entry payment initiation uses;
+    # server-side config only, never client-supplied (see app/gateways/registry.py).
     payment_gateway_mode: str = Field("deterministic_sandbox", alias="PAYMENT_GATEWAY_MODE")
     payment_sandbox_signing_secret: str = Field(
         "dev-payment-sandbox-secret-change-me", alias="PAYMENT_SANDBOX_SIGNING_SECRET"
@@ -54,6 +56,13 @@ class Settings(BaseSettings):
         30, alias="PAYMENT_WEBHOOK_MAX_FUTURE_SKEW_SECONDS"
     )
     payment_diagnostics_enabled: bool = Field(True, alias="PAYMENT_DIAGNOSTICS_ENABLED")
+    # Fail-closed guard (DeterministicSandboxGateway.is_enabled): the
+    # no-real-money sandbox gateway must never be silently reachable in a
+    # real production deployment. False unless explicitly opted in — see
+    # app/gateways/deterministic_sandbox.py.
+    payment_sandbox_allow_in_production: bool = Field(
+        False, alias="PAYMENT_SANDBOX_ALLOW_IN_PRODUCTION"
+    )
 
     # Payment RBAC (production foundation) — comma-separated firebase_uids
     # that are always treated as platform_admin, independent of

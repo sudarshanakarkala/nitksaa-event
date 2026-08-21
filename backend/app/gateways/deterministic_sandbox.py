@@ -16,7 +16,18 @@ import secrets
 import time
 import uuid
 from decimal import Decimal
-from typing import Any, Dict, Tuple
+from typing import Any, Dict, FrozenSet, Optional, Tuple
+
+from app.gateways.base import (
+    DelayedWebhookDelivery,
+    GatewayCapability,
+    GatewayInitiationResult,
+    GatewayWebhookUnparseableError,
+    NormalizedGatewayEvent,
+    NormalizedStatus,
+    PaymentGateway,
+    SignedWebhookDelivery,
+)
 
 GATEWAY_NAME = "deterministic_sandbox"
 
@@ -109,3 +120,94 @@ def build_signed_delivery(
     raw_body = canonicalize(payload)
     signature = sign(raw_body, secret)
     return raw_body, signature
+
+
+_STATUS_BY_EVENT_TYPE = {
+    "payment.captured": NormalizedStatus.PAYMENT_SUCCESS,
+    "payment.failed": NormalizedStatus.PAYMENT_FAILED,
+    "payment.pending": NormalizedStatus.PAYMENT_PENDING,
+    "payment.cancelled": NormalizedStatus.PAYMENT_CANCELLED,
+}
+
+
+class DeterministicSandboxGateway(PaymentGateway):
+    """Gateway-interface adapter over the module-level functions above.
+
+    The functions themselves are untouched (dev_diagnostics.py's security/
+    scenario runner calls them directly, exercising the sandbox
+    implementation itself rather than the generic dispatch path — that is
+    intentional and stays as-is). This class is the only thing
+    payment_service and the gateway registry are allowed to know about.
+    """
+
+    name = GATEWAY_NAME
+    capabilities = frozenset(
+        {
+            GatewayCapability.CREATE_PAYMENT,
+            GatewayCapability.PROCESS_WEBHOOK,
+            GatewayCapability.VERIFY_WEBHOOK,
+        }
+    )
+    supported_scenarios: FrozenSet[str] = frozenset(SUPPORTED_SCENARIOS)
+
+    def is_enabled(self, settings: Any) -> bool:
+        # A deterministic, no-real-money gateway must never be silently
+        # reachable in a real production deployment — that would let
+        # "payment" succeed without any money actually moving. Off by
+        # default in production; explicit opt-in only (e.g. a demo/staging
+        # environment that happens to run with APP_ENV=production).
+        if settings.app_env == "production" and not settings.payment_sandbox_allow_in_production:
+            return False
+        return True
+
+    def create_gateway_order_ref(self) -> str:
+        return create_gateway_order_ref()
+
+    def create_payment(
+        self,
+        *,
+        gateway_order_ref: str,
+        amount: Decimal,
+        currency: str,
+        scenario: Optional[str] = None,
+    ) -> GatewayInitiationResult:
+        if scenario not in SUPPORTED_SCENARIOS:
+            raise ValueError(f"unsupported sandbox scenario: {scenario!r}")
+        from app.config import get_settings
+
+        secret = get_settings().payment_sandbox_signing_secret
+        raw_body, signature = build_signed_delivery(gateway_order_ref, scenario, amount, currency, secret)
+        if is_delayed_scenario(scenario):
+            return GatewayInitiationResult(
+                gateway_order_ref=gateway_order_ref,
+                delayed_webhook=DelayedWebhookDelivery(raw_body, signature, DELAYED_SCENARIO_DELAY_SECONDS),
+            )
+        return GatewayInitiationResult(
+            gateway_order_ref=gateway_order_ref,
+            immediate_webhook=SignedWebhookDelivery(raw_body, signature),
+        )
+
+    def verify_webhook(self, raw_body: bytes, signature: str) -> bool:
+        from app.config import get_settings
+
+        secret = get_settings().payment_sandbox_signing_secret
+        return verify_signature(raw_body, signature, secret)
+
+    def parse_webhook(self, raw_body: bytes) -> NormalizedGatewayEvent:
+        try:
+            payload: Dict[str, Any] = json.loads(raw_body)
+        except (ValueError, TypeError) as exc:
+            raise GatewayWebhookUnparseableError(str(exc)) from exc
+        event_type = payload.get("event_type", "")
+        return NormalizedGatewayEvent(
+            event_id=payload.get("event_id", ""),
+            status=_STATUS_BY_EVENT_TYPE.get(event_type, NormalizedStatus.UNKNOWN),
+            raw_event_type=event_type,
+            gateway_order_ref=payload.get("gateway_order_ref", ""),
+            amount_raw=str(payload.get("amount", "0")),
+            currency=payload.get("currency"),
+            issued_at_raw=payload.get("issued_at"),
+            gateway_payment_ref=payload.get("gateway_payment_ref", ""),
+            failure_code=payload.get("failure_code", "UNKNOWN"),
+            failure_message=payload.get("failure_message", "Payment failed"),
+        )

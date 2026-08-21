@@ -15,7 +15,10 @@ from typing import Any, Dict
 import asyncpg
 from fastapi import APIRouter, Depends, HTTPException
 
+from app.config import get_settings
 from app.database import get_pool
+from app.gateways import registry as gateway_registry
+from app.gateways.registry import GatewayDisabledError, UnknownGatewayError
 from app.middleware.admin_auth import (
     require_event_admin,
     require_event_payment_read_access,
@@ -27,6 +30,7 @@ from app.schemas.payment_admin import (
     EventPaymentAdminGrantResponse,
     ExpireHoldsResponse,
     ExpireOrdersResponse,
+    GatewayConfigResponse,
     PaymentConfigAdminResponse,
     PaymentConfigDraftCreateRequest,
     PaymentConfigListResponse,
@@ -213,3 +217,38 @@ async def trigger_expire_stale_registration_holds(
     user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
 ) -> Dict[str, Any]:
     return await payment_lifecycle_service.expire_stale_registration_holds(user["firebase_uid"])
+
+
+# ── Gateway registry diagnostics (Sprint 7) ─────────────────────────────────
+
+@router.get("/payments/gateway-config", response_model=GatewayConfigResponse)
+async def get_gateway_configuration(
+    user: Dict[str, Any] = Depends(
+        require_platform_role("platform_admin", "finance_operator", "auditor", "support")
+    ),
+) -> Dict[str, Any]:
+    """Read-only view of the server-side gateway registry — which gateways
+    are registered, which is active, and whether each is currently enabled.
+    No secrets: gateway signing secrets are never included in this or any
+    other response (see app/gateways/*.py — secrets are read from settings
+    inside adapter methods, never returned)."""
+    settings = get_settings()
+    gateways = [
+        {
+            "name": gw.name,
+            "enabled": gw.is_enabled(settings),
+            "capabilities": sorted(c.value for c in gw.capabilities),
+            "supported_scenarios": sorted(gw.supported_scenarios),
+        }
+        for gw in (gateway_registry.get_gateway(name) for name in gateway_registry.list_registered_gateways())
+    ]
+    try:
+        active_gateway = gateway_registry.get_active_gateway(settings).name
+    except (UnknownGatewayError, GatewayDisabledError):
+        active_gateway = None
+    return {
+        "environment": settings.app_env,
+        "configured_gateway_mode": settings.payment_gateway_mode,
+        "active_gateway": active_gateway,
+        "gateways": gateways,
+    }

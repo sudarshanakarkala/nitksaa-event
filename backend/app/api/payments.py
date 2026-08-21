@@ -9,6 +9,9 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 
+from app.config import get_settings
+from app.gateways import registry as gateway_registry
+from app.gateways.registry import GatewayDisabledError, UnknownGatewayError
 from app.middleware.auth import get_current_user
 from app.schemas.payments import (
     CreatePaymentAttemptRequest,
@@ -104,7 +107,12 @@ async def receive_payment_webhook(
     request: Request,
     x_sandbox_signature: str = Header(default=""),
 ) -> WebhookAckResponse:
-    if gateway != "deterministic_sandbox":
+    # Registry-backed, not a hardcoded name check: an unregistered or
+    # environment-disabled gateway is rejected the same way a genuinely
+    # unknown one is (existence-hiding — both return the same 404/detail).
+    try:
+        gateway_registry.get_enabled_gateway(gateway, get_settings())
+    except (UnknownGatewayError, GatewayDisabledError):
         raise HTTPException(status_code=404, detail="unknown_gateway")
     raw_body = await request.body()
     return await payment_service.process_webhook(gateway, raw_body, x_sandbox_signature)
