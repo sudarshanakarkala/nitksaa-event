@@ -1,0 +1,201 @@
+### NITKSAA Event — Payment API Examples
+### Live-verified against a local dev instance (APP_ENV=development) on 2026-08-22.
+### @baseUrl and @token are placeholders — see PAYMENT_API_INTEGRATION_GUIDE.md for how a
+### backend access token is minted (POST /api/v1/auth/firebase after a real Firebase login;
+### dev-only test identities use app.middleware.auth.make_access_token directly).
+
+@baseUrl = http://127.0.0.1:8000
+@token = REPLACE_WITH_BEARER_TOKEN
+@adminToken = REPLACE_WITH_PLATFORM_ADMIN_BEARER_TOKEN
+
+### 1. Server-computed pricing
+GET {{baseUrl}}/api/v1/events/14760/payment-pricing
+Authorization: Bearer {{token}}
+
+### Expected 200:
+# {
+#   "event_id": 14760, "configuration_key": "doc-DOC1787411618", "currency": "INR",
+#   "base_amount": "100.00", "gst_enabled": true, "gst_rate": "18.00", "gst_mode": "exclusive",
+#   "tax_amount": "18.00", "convenience_fee_enabled": false, "convenience_fee": "0.00",
+#   "final_amount": "118.00",
+#   "line_items": [
+#     {"label": "Registration fee", "amount": "100.00"},
+#     {"label": "GST (18.00%)", "amount": "18.00"}
+#   ]
+# }
+
+### 2. Register (paid event -> seat_held)
+POST {{baseUrl}}/api/v1/events/14760/register
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"attendee_note": "doc verification"}
+
+### Expected 201: {"registration_id": 5665, "status": "seat_held", "hold_expires_at": "...", ...}
+
+### 3. Create payment order (idempotent on idempotency_key)
+POST {{baseUrl}}/api/v1/registrations/5665/payment-order
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"idempotency_key": "client-generated-uuid-001"}
+
+### Expected 201:
+# {
+#   "order_id": "ORD-IinxJRey-TyC", "registration_id": 5665, "event_id": 14760,
+#   "currency": "INR", "base_amount": "100.00", "tax_amount": "18.00",
+#   "convenience_fee": "0.00", "final_amount": "118.00", "amount_paid": "0.00",
+#   "outstanding_amount": "118.00", "status": "created", "registration_status": "payment_pending",
+#   "expires_at": "2026-08-22T15:29:04.156142Z", "can_pay": true, "can_retry": true,
+#   "safe_message": "Complete payment to confirm your registration."
+# }
+
+### 3b. Repeat with the SAME idempotency_key -> same order, still 201
+POST {{baseUrl}}/api/v1/registrations/5665/payment-order
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"idempotency_key": "client-generated-uuid-001"}
+
+### 4. Create a payment attempt (sandbox SUCCESS)
+POST {{baseUrl}}/api/v1/payment-orders/ORD-IinxJRey-TyC/attempts
+Authorization: Bearer {{token}}
+Content-Type: application/json
+
+{"scenario": "SUCCESS"}
+
+### Expected 201 (already resolved — sandbox webhook processed synchronously):
+# {
+#   "attempt_id": "ATT-sMWzjpgVOm6t", "order_id": "ORD-IinxJRey-TyC", "attempt_number": 1,
+#   "gateway": "deterministic_sandbox", "status": "captured", "scenario": "SUCCESS",
+#   "initiated_at": "2026-08-22T15:14:04.252047Z"
+# }
+
+### 5. Get order after capture
+GET {{baseUrl}}/api/v1/payment-orders/ORD-IinxJRey-TyC
+Authorization: Bearer {{token}}
+
+### Expected 200: status=paid, registration_status=registered, amount_paid=118.00, can_pay=false
+
+### 6. Attendee-safe timeline
+GET {{baseUrl}}/api/v1/payment-orders/ORD-IinxJRey-TyC/timeline
+Authorization: Bearer {{token}}
+
+### Expected 200: 5 entries with friendly `label`s (Seat reserved / Payment order created /
+### Payment started / Payment successful / Registration confirmed)
+
+### 7. Failure -> retry -> success
+# POST .../attempts {"scenario":"FAILURE"}  -> 201 status=failed
+# GET  .../payment-orders/{id}              -> registration_status=payment_failed, can_retry=true
+# POST .../attempts {"scenario":"SUCCESS"}  -> 201 attempt_number=2, status=captured
+# POST .../attempts {"scenario":"SUCCESS"}  -> 409 payment_order_not_payable (terminal order)
+
+### 8. Pending -> verification
+# POST .../attempts {"scenario":"PENDING"}        -> 201 status=pending
+# GET  .../payment-orders/{id}                    -> registration_status=payment_verification,
+#                                                     can_retry=false
+# POST .../payment-attempts/{id}/verify           -> 200 status=pending (checked promptly)
+
+### 9. Cross-user denial (different bearer token against someone else's order)
+GET {{baseUrl}}/api/v1/payment-orders/ORD-IinxJRey-TyC
+Authorization: Bearer {{OTHER_USERS_TOKEN}}
+
+### Expected 404: {"detail": "payment_order_not_found"}
+
+### 10. Unauthenticated request
+GET {{baseUrl}}/api/v1/events/14760/payment-pricing
+
+### Expected 403: {"detail": "Not authenticated"}
+
+### 11. Webhook: unknown gateway
+POST {{baseUrl}}/api/v1/payment-gateways/fake_gateway/webhook
+Content-Type: application/json
+X-Sandbox-Signature: bogus
+
+{}
+
+### Expected 404: {"detail": "unknown_gateway"}
+
+### 12. Webhook: invalid signature
+POST {{baseUrl}}/api/v1/payment-gateways/deterministic_sandbox/webhook
+Content-Type: application/json
+X-Sandbox-Signature: bogus
+
+{"event_id": "some-unique-uuid", "event_type": "payment.captured", "gateway_order_ref": "sbx_ord_x", "amount": "1.00", "currency": "INR", "issued_at": 9999999999}
+
+### Expected 200: {"status": "rejected", "processing_status": "rejected"}
+### (signature is checked before the timestamp gate, so this is rejected on signature, not "future_skew")
+
+### 13. Admin: gateway registry config (requires platform_admin/finance_operator/auditor/support)
+GET {{baseUrl}}/api/v1/admin/payments/gateway-config
+Authorization: Bearer {{adminToken}}
+
+### Expected 200:
+# {
+#   "environment": "development", "configured_gateway_mode": "deterministic_sandbox",
+#   "active_gateway": "deterministic_sandbox",
+#   "gateways": [{
+#     "name": "deterministic_sandbox", "enabled": true,
+#     "capabilities": ["create_payment", "process_webhook", "verify_webhook"],
+#     "supported_scenarios": ["CANCELLED", "DELAYED_FAILURE", "DELAYED_SUCCESS", "FAILURE", "PENDING", "SUCCESS"]
+#   }]
+# }
+### No secrets in this payload (payment_sandbox_signing_secret is never returned).
+
+### 14. Admin: gateway registry config without a qualifying role -> 403
+GET {{baseUrl}}/api/v1/admin/payments/gateway-config
+Authorization: Bearer {{token}}
+
+### Expected 403: {"detail": "payment_role_required"}
+
+### 15. Admin: WP1 config lifecycle — create draft
+POST {{baseUrl}}/api/v1/admin/events/14760/payment-configurations
+Authorization: Bearer {{adminToken}}
+Content-Type: application/json
+
+{
+  "configuration_key": "doc-draft-verify",
+  "base_amount": "200.00",
+  "gst_enabled": true,
+  "gst_rate": "18.00",
+  "gst_mode": "exclusive",
+  "seat_hold_minutes": 15,
+  "payment_session_expiry_minutes": 15
+}
+
+### Expected 201: {"configuration_id": ..., "status": "draft", ...}
+
+### 16. Admin: validate draft
+POST {{baseUrl}}/api/v1/admin/events/14760/payment-configurations/{{configId}}/validate
+Authorization: Bearer {{adminToken}}
+
+### Expected 200: {"configuration_id": ..., "valid": true, "errors": []}
+
+### 17. Admin: publish draft
+POST {{baseUrl}}/api/v1/admin/events/14760/payment-configurations/{{configId}}/publish
+Authorization: Bearer {{adminToken}}
+
+### Expected 200: status="published"; the event's previously-published config row is retired
+### in the same transaction.
+
+### 18. Admin: publish again on an already-published config -> 409
+POST {{baseUrl}}/api/v1/admin/events/14760/payment-configurations/{{configId}}/publish
+Authorization: Bearer {{adminToken}}
+
+### Expected 409: {"detail": "payment_configuration_not_a_draft"}
+
+### 19. Admin: explicit expiry sweep (platform_admin only)
+POST {{baseUrl}}/api/v1/admin/payments/lifecycle/expire-orders
+Authorization: Bearer {{adminToken}}
+
+### Expected 200: {"expired_count": 0, "expired_order_ids": []}  (when nothing is eligible)
+
+### 20. Dev diagnostics: resolve a stuck pending attempt (development env only)
+POST {{baseUrl}}/api/v1/dev/diagnostics/payments/attempts/{{attemptId}}/resolve
+X-Dev-User: admin
+Content-Type: application/json
+
+{"outcome": "SUCCESS"}
+
+### Expected 200: {"status":"ok","processing_status":"processed","order_status":"paid",
+###                "registration_status":"registered", ...}
