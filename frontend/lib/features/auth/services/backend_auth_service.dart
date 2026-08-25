@@ -20,7 +20,7 @@ class BackendAuthService {
     return Dio(
       BaseOptions(
         baseUrl: baseUrl,
-        connectTimeout: const Duration(seconds: 10),
+        connectTimeout: const Duration(seconds: 30),
         receiveTimeout: const Duration(seconds: 90),
         sendTimeout: const Duration(seconds: 90),
         headers: const {'Content-Type': 'application/json'},

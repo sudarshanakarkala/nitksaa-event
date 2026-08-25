@@ -79,7 +79,7 @@ def _send_smtp_sync(
     email_to: str,
 ) -> None:
     """Synchronous SMTP send. Called via asyncio.to_thread to avoid blocking the event loop."""
-    with smtplib.SMTP(smtp_host, smtp_port, timeout=10) as smtp:
+    with smtplib.SMTP(smtp_host, smtp_port, timeout=30) as smtp:
         smtp.starttls()
         smtp.login(smtp_user, smtp_password)
         smtp.sendmail(from_addr, [email_to], msg_string)
