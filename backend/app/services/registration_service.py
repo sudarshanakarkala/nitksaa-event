@@ -171,6 +171,8 @@ async def register_for_event(
         join_url=_resolve_join_url(full_row),
     )
 
+    print(f"Email send result: {email_result.status}, error={email_result.error}")
+
     email_action = "EMAIL_SENT" if email_result.status == "sent" else "EMAIL_FAILED"
     await analytics_service.log_event_activity(
         action_type=email_action,

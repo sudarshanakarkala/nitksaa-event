@@ -211,3 +211,29 @@ class EventsRepository:
             """,
             event_id,
         ))
+
+    async def delete_event(self, event_id: int) -> None:
+        """Delete an event and all its related data."""
+        # Delete related data first (cascade would be better with foreign keys)
+        await self.conn.execute(
+            "DELETE FROM event_sponsors WHERE event_id = $1",
+            event_id,
+        )
+        await self.conn.execute(
+            "DELETE FROM event_people WHERE event_id = $1",
+            event_id,
+        )
+        await self.conn.execute(
+            "DELETE FROM sessions WHERE event_id = $1",
+            event_id,
+        )
+        await self.conn.execute(
+            "DELETE FROM registrations WHERE event_id = $1",
+            event_id,
+        )
+
+        # Finally delete the event itself
+        await self.conn.execute(
+            "DELETE FROM events WHERE event_id = $1",
+            event_id,
+        )

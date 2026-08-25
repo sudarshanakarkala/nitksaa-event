@@ -107,3 +107,15 @@ async def update_event(
         svc = EventsService(conn)
         event = await svc.update_event(event_id, body, user)
     return {"status": "ok", "event": event}
+
+
+@router.delete("/events/{event_id}")
+async def delete_event(
+    event_id: int,
+    user: Dict[str, Any] = Depends(get_admin_user),
+) -> Dict[str, Any]:
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        svc = EventsService(conn)
+        await svc.delete_event(event_id, user)
+    return {"status": "ok"}

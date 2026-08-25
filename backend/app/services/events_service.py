@@ -213,7 +213,7 @@ class EventsService:
         return _enrich(self._to_dict(record))
 
     def _validate_for_publish(self, event: Dict[str, Any]) -> None:
-        required = ["title", "description", "start_datetime", "end_datetime", "timezone", "capacity"]
+        required = ["title", "description", "start_datetime", "end_datetime", "timezone"]
         if event.get("is_virtual"):
             required.append("virtual_url")
         else:
@@ -317,3 +317,15 @@ class EventsService:
         d["partners"] = [dict(r) for r in partner_rows]
 
         return d
+
+    # ── Admin: Delete ────────────────────────────────────────────────────────
+
+    async def delete_event(
+        self, event_id: int, user: Dict[str, Any]
+    ) -> None:
+        existing = await self.repo.get_event(event_id)
+        if not existing:
+            raise HTTPException(status_code=404, detail="event_not_found")
+
+        await self.repo.delete_event(event_id)
+        await self._audit(user["firebase_uid"], "event_deleted", event_id)
