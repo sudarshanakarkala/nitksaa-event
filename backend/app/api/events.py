@@ -2,24 +2,13 @@
 
 Route order matters: /events/public must be registered before /events/{event_id}
 so FastAPI does not consume the literal "public" as an integer event_id.
-
-Authorization (admin routes): real Firebase-JWT-backed RBAC via
-app.middleware.admin_auth — migrated off the development-only
-app.middleware.dev_auth placeholder in the admin-auth-unification sprint.
-create/list (no event_id to scope to) are platform_admin-only; get/update/
-status (event_id in path) are platform_admin or the event's own
-event_admin — the same policy admin_events.py already uses for the
-equivalent routes. This router and admin_events.py both delegate to the
-same EventsService/EventsRepository data-access layer (unchanged by this
-sprint); see the admin-auth-unification sprint report for why both
-surfaces are kept rather than merged.
 """
 from typing import Any, Dict, Optional
 
 from fastapi import APIRouter, Depends, Query
 
 from app.database import get_pool
-from app.middleware.admin_auth import require_event_admin, require_platform_role
+from app.middleware.dev_auth import get_admin_user
 from app.schemas.event_create import EventCreate
 from app.schemas.event_status import EventStatusUpdate
 from app.schemas.event_update import EventUpdate
@@ -52,12 +41,12 @@ async def get_public_event(event_id: int) -> Dict[str, Any]:
     return {"event": event}
 
 
-# ── Admin routes (platform_admin, or event_admin scoped to event_id) ───────────
+# ── Admin routes (require X-Dev-User: admin header in development) ─────────────
 
 @router.post("/events", status_code=201)
 async def create_event(
     body: EventCreate,
-    user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
+    user: Dict[str, Any] = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -73,7 +62,7 @@ async def list_events(
     status: Optional[str] = Query(default=None),
     is_virtual: Optional[bool] = Query(default=None),
     search: Optional[str] = Query(default=None),
-    user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
+    user: Dict[str, Any] = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -85,7 +74,7 @@ async def list_events(
 @router.get("/events/{event_id}")
 async def get_event(
     event_id: int,
-    user: Dict[str, Any] = Depends(require_event_admin),
+    user: Dict[str, Any] = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -98,7 +87,7 @@ async def get_event(
 async def update_event_status(
     event_id: int,
     body: EventStatusUpdate,
-    user: Dict[str, Any] = Depends(require_event_admin),
+    user: Dict[str, Any] = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -111,7 +100,7 @@ async def update_event_status(
 async def update_event(
     event_id: int,
     body: EventUpdate,
-    user: Dict[str, Any] = Depends(require_event_admin),
+    user: Dict[str, Any] = Depends(get_admin_user),
 ) -> Dict[str, Any]:
     pool = await get_pool()
     async with pool.acquire() as conn:
