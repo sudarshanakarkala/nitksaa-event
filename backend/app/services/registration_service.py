@@ -76,9 +76,9 @@ async def register_for_event(
     event_id: int, user: Dict[str, Any], body: RegisterRequest
 ) -> RegistrationResponse:
     firebase_uid = user["firebase_uid"]
-    ref_id = user.get("ref_id")
+    ref_id = await alumni_service.resolve_alumni_ref_id(user)
 
-    if user.get("user_type") not in ["alumni", "admin"] or not ref_id:
+    if not ref_id:
         raise HTTPException(status_code=403, detail="alumni_only")
 
     profile = await alumni_service.get_alumni_profile_by_ref_id(ref_id)
@@ -332,7 +332,8 @@ async def get_registration_eligibility(
     event_id: int, user: Dict[str, Any]
 ) -> RegistrationEligibilityResponse:
     firebase_uid = user["firebase_uid"]
-    ref_id = user.get("ref_id")
+    ref_id = await alumni_service.resolve_alumni_ref_id(user)
+    print(f"Checking registration eligibility for event {event_id}, user {firebase_uid}, ref_id {ref_id}")
 
     def _ineligible(msg: str) -> RegistrationEligibilityResponse:
         return RegistrationEligibilityResponse(
@@ -342,11 +343,11 @@ async def get_registration_eligibility(
             message=msg,
         )
 
-    if user.get("user_type") not in ["alumni", "admin"] or not ref_id:
-        return _ineligible(user.get("user_type") + "Only alumni can register for events.")
+    if user["user_type"] !='admin' and not ref_id:
+        return _ineligible("Only alumni can register for events.")
 
     profile = await alumni_service.get_alumni_profile_by_ref_id(ref_id)
-    if not profile or not alumni_service.is_alumni_active(profile.get("registrationstatus")):
+    if user["user_type"] !='admin' and (not profile or not alumni_service.is_alumni_active(profile.get("registrationstatus"))):
         return _ineligible("Alumni account is not active.")
 
     pool = await get_pool()
