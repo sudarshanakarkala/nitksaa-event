@@ -633,6 +633,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   
   // Fees
   late List<Map<String, String>> _fees;
+
+  // Registration fees — overall quantity limits (attached to the event)
+  late final TextEditingController _regMinQuantity;
+  late final TextEditingController _regMaxQuantity;
   
   var _isSaving = false;
   var _currentStep = 0;
@@ -700,6 +704,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     
     // Initialize fees
     _fees = [];
+    
+    // Initialize registration fee quantity limits (event level)
+    _regMinQuantity = TextEditingController(
+      text: event?.registrationMinQuantity?.toString() ?? '',
+    );
+    _regMaxQuantity = TextEditingController(
+      text: event?.registrationMaxQuantity?.toString() ?? '',
+    );
     
     // Initialize sessions (convert EventSession to Map)
     _sessions = event?.sessions.map((sess) {
@@ -771,6 +783,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _bannerUrl.dispose();
     _capacity.dispose();
     _ticketPrice.dispose();
+    _regMinQuantity.dispose();
+    _regMaxQuantity.dispose();
     super.dispose();
   }
 
@@ -1133,8 +1147,39 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Fees Section ──
-        _buildSectionHeader('Fees'),
+        // ── Registration Fees Section (main form — attached to event) ──
+        _buildSectionHeader('Registration Fees'),
+        const SizedBox(height: 16),
+        Text(
+          'Quantity limits below apply to the event registration as a whole.',
+          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+        ),
+        const SizedBox(height: 12),
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: _buildTextField(
+                _regMinQuantity,
+                'Min Quantity',
+                hint: 'e.g., 1',
+                keyboardType: TextInputType.number,
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: _buildTextField(
+                _regMaxQuantity,
+                'Max Quantity',
+                hint: 'e.g., 5',
+                keyboardType: TextInputType.number,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 28),
+        // ── Fee Tiers Section ──
+        _buildSectionHeader('Fee Tiers'),
         const SizedBox(height: 16),
         _buildFeesSection(),
       ],
@@ -1395,11 +1440,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return '₹${parsed.toStringAsFixed(2)}';
   }
 
-  String _formatFeeQty(String min, String max) {
-    final minT = min.trim();
-    final maxT = max.trim();
-    if (minT.isEmpty && maxT.isEmpty) return 'Any';
-    return '$minT - $maxT';
+  double get _feesTotal {
+    var total = 0.0;
+    for (final fee in _fees) {
+      total += double.tryParse((fee['fee_amount'] ?? '').trim()) ?? 0.0;
+    }
+    return total;
   }
 
   Widget _buildFeeTableHeaderCell(String label) {
@@ -1457,14 +1503,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               child: SingleChildScrollView(
                 scrollDirection: Axis.horizontal,
                 child: SizedBox(
-                  width: 580,
+                  width: 460,
                   child: Table(
                     columnWidths: const {
                       0: FlexColumnWidth(2.2),
                       1: FlexColumnWidth(1.4),
-                      2: FlexColumnWidth(1.2),
-                      3: FlexColumnWidth(1.6),
-                      4: IntrinsicColumnWidth(),
+                      2: FlexColumnWidth(1.6),
+                      3: IntrinsicColumnWidth(),
                     },
                     border: TableBorder(
                       horizontalInside: BorderSide(color: Colors.grey.shade200, width: 1),
@@ -1479,7 +1524,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           _buildFeeTableHeaderCell('Fee Name'),
                           _buildFeeTableHeaderCell('Fee Type'),
                           _buildFeeTableHeaderCell('Amount'),
-                          _buildFeeTableHeaderCell('Quantity'),
                           const Padding(padding: EdgeInsets.all(8)),
                         ],
                       ),
@@ -1490,9 +1534,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                             _buildFeeTableCell(fee['fee_name'] ?? '', bold: true),
                             _buildFeeTableCell(_feeTypeLabel(fee['fee_type'] ?? '')),
                             _buildFeeTableCell(_formatFeeAmount(fee['fee_amount'] ?? '')),
-                            _buildFeeTableCell(
-                              _formatFeeQty(fee['min_quantity'] ?? '', fee['max_quantity'] ?? ''),
-                            ),
                             Padding(
                               padding: EdgeInsets.zero,
                               child: Row(
@@ -1516,6 +1557,21 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           ],
                         );
                       }),
+                      // ── Total row ──
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC9952A).withValues(alpha: 0.12),
+                        ),
+                        children: [
+                          _buildFeeTableCell('Total', bold: true),
+                          _buildFeeTableCell(''),
+                          _buildFeeTableCell(
+                            _formatFeeAmount(_feesTotal.toString()),
+                            bold: true,
+                          ),
+                          const Padding(padding: EdgeInsets.all(8)),
+                        ],
+                      ),
                     ],
                   ),
                 ),
@@ -1957,12 +2013,6 @@ void _showFeeDialog(int? editIndex) {
     final amountCtrl = TextEditingController(
       text: editIndex != null ? _fees[editIndex]['fee_amount'] ?? '' : '',
     );
-    final minQtyCtrl = TextEditingController(
-      text: editIndex != null ? _fees[editIndex]['min_quantity'] ?? '' : '',
-    );
-    final maxQtyCtrl = TextEditingController(
-      text: editIndex != null ? _fees[editIndex]['max_quantity'] ?? '' : '',
-    );
     var selectedType = editIndex != null ? _fees[editIndex]['fee_type'] ?? 'PARTICIPATION' : 'PARTICIPATION';
     var attemptedSave = false;
 
@@ -1972,12 +2022,8 @@ void _showFeeDialog(int? editIndex) {
         builder: (context, setDialogState) {
           final name = nameCtrl.text.trim();
           final amountText = amountCtrl.text.trim();
-          final minText = minQtyCtrl.text.trim();
-          final maxText = maxQtyCtrl.text.trim();
 
           final amountValue = double.tryParse(amountText);
-          final minValue = minText.isEmpty ? null : int.tryParse(minText);
-          final maxValue = maxText.isEmpty ? null : int.tryParse(maxText);
 
           final nameError = name.isEmpty ? 'Fee name is required' : null;
           final amountError = amountText.isEmpty
@@ -1987,23 +2033,9 @@ void _showFeeDialog(int? editIndex) {
                   : amountValue < 0
                       ? 'Amount must be 0 or more'
                       : null;
-          final minError = minText.isNotEmpty && minValue == null
-              ? 'Enter a whole number'
-              : minValue != null && minValue < 0
-                  ? 'Min quantity must be 0 or more'
-                  : null;
-          final maxError = maxText.isNotEmpty && maxValue == null
-              ? 'Enter a whole number'
-              : maxValue != null && maxValue < 0
-                  ? 'Max quantity must be 0 or more'
-                  : (minValue != null && maxValue != null && maxValue < minValue)
-                      ? 'Max quantity cannot be less than min'
-                      : null;
 
           final canSave = nameError == null &&
-              amountError == null &&
-              minError == null &&
-              maxError == null;
+              amountError == null;
 
           String? errorText(String? error) => attemptedSave ? error : null;
 
@@ -2055,41 +2087,6 @@ void _showFeeDialog(int? editIndex) {
                     keyboardType: const TextInputType.numberWithOptions(decimal: true),
                     onChanged: (_) => setDialogState(() {}),
                   ),
-                  const SizedBox(height: 12),
-                  Row(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Expanded(
-                        child: TextField(
-                          controller: minQtyCtrl,
-                          decoration: InputDecoration(
-                            labelText: 'Min Quantity',
-                            hintText: 'e.g., 1',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                            errorText: errorText(minError),
-                          ),
-                          keyboardType: TextInputType.number,
-                          onChanged: (_) => setDialogState(() {}),
-                        ),
-                      ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: TextField(
-                          controller: maxQtyCtrl,
-                          decoration: InputDecoration(
-                            labelText: 'Max Quantity',
-                            hintText: 'e.g., 5',
-                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                            errorText: errorText(maxError),
-                          ),
-                          keyboardType: TextInputType.number,
-                          onChanged: (_) => setDialogState(() {}),
-                        ),
-                      ),
-                    ],
-                  ),
                 ],
               ),
             ),
@@ -2105,8 +2102,6 @@ void _showFeeDialog(int? editIndex) {
                       'fee_name': nameCtrl.text.trim(),
                       'fee_type': selectedType,
                       'fee_amount': amountCtrl.text.trim(),
-                      'min_quantity': minQtyCtrl.text.trim(),
-                      'max_quantity': maxQtyCtrl.text.trim(),
                     };
                     if (editIndex == null) {
                       _fees.add(fee);
@@ -2751,6 +2746,53 @@ void _showFeeDialog(int? editIndex) {
       return;
     }
 
+    // Validate registration fee quantity limits (event level)
+    final regMinQtyText = _regMinQuantity.text.trim();
+    final regMaxQtyText = _regMaxQuantity.text.trim();
+    final regMinQty = regMinQtyText.isEmpty ? null : int.tryParse(regMinQtyText);
+    final regMaxQty = regMaxQtyText.isEmpty ? null : int.tryParse(regMaxQtyText);
+
+    if (regMinQtyText.isNotEmpty && regMinQty == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Min quantity must be a whole number')),
+        );
+      }
+      return;
+    }
+    if (regMinQty != null && regMinQty < 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Min quantity must be 0 or more')),
+        );
+      }
+      return;
+    }
+    if (regMaxQtyText.isNotEmpty && regMaxQty == null) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Max quantity must be a whole number')),
+        );
+      }
+      return;
+    }
+    if (regMaxQty != null && regMaxQty < 0) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Max quantity must be 0 or more')),
+        );
+      }
+      return;
+    }
+    if (regMinQty != null && regMaxQty != null && regMaxQty < regMinQty) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Max quantity cannot be less than min quantity')),
+        );
+      }
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
@@ -2772,6 +2814,8 @@ void _showFeeDialog(int? editIndex) {
         'capacity': _capacity.text.trim().isEmpty ? null : int.tryParse(_capacity.text.trim()),
         'is_free': _isFree,
         'ticket_price': _isFree ? null : double.tryParse(_ticketPrice.text.trim()),
+        'registration_min_quantity': regMinQty,
+        'registration_max_quantity': regMaxQty,
         'thumbnail_url': _thumbnailUrl.text.trim().isEmpty ? null : _thumbnailUrl.text.trim(),
         'banner_url': _bannerUrl.text.trim().isEmpty ? null : _bannerUrl.text.trim(),
         if (_registrationOpensAt.text.trim().isNotEmpty)
@@ -2805,8 +2849,6 @@ void _showFeeDialog(int? editIndex) {
           'fee_name': fee['fee_name'],
           'fee_type': fee['fee_type'],
           'fee_amount': double.tryParse((fee['fee_amount'] ?? '').trim()) ?? 0,
-          'min_quantity': int.tryParse((fee['min_quantity'] ?? '').trim()),
-          'max_quantity': int.tryParse((fee['max_quantity'] ?? '').trim()),
         }).toList(),
       };
 

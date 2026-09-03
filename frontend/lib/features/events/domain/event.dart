@@ -129,6 +129,8 @@ class AppEvent {
     this.thumbnailUrl,
     this.bannerUrl,
     this.capacity,
+    this.registrationMinQuantity,
+    this.registrationMaxQuantity,
     this.registrationOpensAt,
     this.registrationClosesAt,
     this.publishedAt,
@@ -155,6 +157,8 @@ class AppEvent {
   final String? thumbnailUrl;
   final String? bannerUrl;
   final int? capacity;
+  final int? registrationMinQuantity;
+  final int? registrationMaxQuantity;
   final DateTime? registrationOpensAt;
   final DateTime? registrationClosesAt;
   final DateTime? publishedAt;
@@ -184,6 +188,8 @@ class AppEvent {
       thumbnailUrl: json['thumbnail_url'] as String?,
       bannerUrl: json['banner_url'] as String?,
       capacity: json['capacity'] as int?,
+      registrationMinQuantity: json['registration_min_quantity'] as int?,
+      registrationMaxQuantity: json['registration_max_quantity'] as int?,
       registrationOpensAt: json['registration_opens_at'] != null
           ? DateTime.parse(json['registration_opens_at'] as String).toLocal()
           : null,
