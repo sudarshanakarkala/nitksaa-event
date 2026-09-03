@@ -631,6 +631,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   // Sponsors
   late List<Map<String, String>> _sponsors;
   
+  // Fees
+  late List<Map<String, String>> _fees;
+  
   var _isSaving = false;
   var _currentStep = 0;
   
@@ -694,6 +697,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       'logo_url': sp.logoUrl ?? '',
       'website_url': sp.websiteUrl ?? '',
     }).toList() ?? [];
+    
+    // Initialize fees
+    _fees = [];
     
     // Initialize sessions (convert EventSession to Map)
     _sessions = event?.sessions.map((sess) {
@@ -807,9 +813,34 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                   padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
                   child: Row(
                     children: [
-                      _buildStepIndicator(0, 'General', 'Event details, date, location'),
-                      Expanded(child: Divider(color: _currentStep > 0 ? const Color(0xFFC9952A) : Colors.grey.shade300, thickness: 2)),
-                      _buildStepIndicator(1, 'People & Agenda', 'Sponsors, speakers and sessions'),
+                      Flexible(
+                        flex: 2,
+                        child: _buildStepIndicator(0, 'General', 'Event details, date, location'),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Divider(
+                          color: _currentStep > 0 ? const Color(0xFFC9952A) : Colors.grey.shade300,
+                          thickness: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        flex: 3,
+                        child: _buildStepIndicator(1, 'People & Agenda', 'Sponsors, speakers and sessions'),
+                      ),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Divider(
+                          color: _currentStep > 1 ? const Color(0xFFC9952A) : Colors.grey.shade300,
+                          thickness: 2,
+                        ),
+                      ),
+                      const SizedBox(width: 8),
+                      Flexible(
+                        flex: 2,
+                        child: _buildStepIndicator(2, 'Fees', 'Registration fee tiers'),
+                      ),
                     ],
                   ),
                 ),
@@ -818,7 +849,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                 Expanded(
                   child: SingleChildScrollView(
                     padding: const EdgeInsets.all(24),
-                    child: _currentStep == 0 ? _buildStep1() : _buildStep2(),
+                    child: _currentStep == 0
+                        ? _buildStep1()
+                        : _currentStep == 1
+                            ? _buildStep2()
+                            : _buildStep3(),
                   ),
                 ),
                 // Bottom actions
@@ -854,6 +889,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                               icon: const Icon(Icons.arrow_forward),
                               label: const Text('Next'),
                             )
+                          else if (_currentStep == 1)
+                            FilledButton.icon(
+                              onPressed: () => setState(() => _currentStep = 2),
+                              icon: const Icon(Icons.arrow_forward),
+                              label: const Text('Next'),
+                            )
                           else
                             FilledButton(
                               onPressed: _isSaving ? null : _save,
@@ -877,8 +918,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final isCompleted = _currentStep > step;
     final color = isCompleted || isActive ? const Color(0xFFC9952A) : Colors.grey;
     final isNarrow = MediaQuery.of(context).size.width < 600;
+    final canNavigate = step == 0 || _isStep1Complete;
     return GestureDetector(
-      onTap: step == 0 || (step == 1 && _isStep1Complete) ? () => setState(() => _currentStep = step) : null,
+      onTap: canNavigate ? () => setState(() => _currentStep = step) : null,
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -896,13 +938,29 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                   : Text('${step + 1}', style: TextStyle(fontWeight: FontWeight.bold, color: isActive ? const Color(0xFFC9952A) : Colors.grey, fontSize: 14)),
             ),
           ),
-          const SizedBox(width: 8),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isActive || isCompleted ? const Color(0xFFC9952A) : Colors.grey)),
-              if (!isNarrow) Text(subtitle, style: const TextStyle(fontSize: 10, color: Colors.grey)),
-            ],
+          const SizedBox(width: 6),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  title,
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                  softWrap: false,
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isActive || isCompleted ? const Color(0xFFC9952A) : Colors.grey),
+                ),
+                if (!isNarrow)
+                  Text(
+                    subtitle,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    softWrap: false,
+                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                  ),
+              ],
+            ),
           ),
         ],
       ),
@@ -1067,6 +1125,18 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         _buildSectionHeader('Sessions'),
         const SizedBox(height: 16),
         _buildSessionsSection(),
+      ],
+    );
+  }
+
+  Widget _buildStep3() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // ── Fees Section ──
+        _buildSectionHeader('Fees'),
+        const SizedBox(height: 16),
+        _buildFeesSection(),
       ],
     );
   }
@@ -1295,6 +1365,168 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           onPressed: () => _showSpeakerDialog(null),
           icon: const Icon(Icons.add),
           label: const Text('Add Speaker'),
+        ),
+      ],
+    );
+  }
+// ── Fee type options ────────────────────────────────────────────────────
+  static const List<String> _feeTypeOptions = [
+    'PARTICIPATION',
+    'ACCOMMODATION',
+    'CONTRIBUTIONS',
+    'FOOD_PASS',
+    'MERCHANDISE',
+    'OTHER',
+  ];
+
+  String _feeTypeLabel(String type) {
+    return type
+        .split('_')
+        .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+        .join(' ');
+  }
+
+  String _formatFeeAmount(String amount) {
+    final parsed = double.tryParse(amount);
+    if (parsed == null) return amount.isEmpty ? '—' : amount;
+    if (parsed == parsed.roundToDouble()) {
+      return '₹${parsed.toInt()}';
+    }
+    return '₹${parsed.toStringAsFixed(2)}';
+  }
+
+  String _formatFeeQty(String min, String max) {
+    final minT = min.trim();
+    final maxT = max.trim();
+    if (minT.isEmpty && maxT.isEmpty) return 'Any';
+    return '$minT - $maxT';
+  }
+
+  Widget _buildFeeTableHeaderCell(String label) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(
+        label,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12,
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.onSurfaceVariant,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeeTableCell(String text, {bool bold = false}) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      child: Text(
+        text,
+        maxLines: 1,
+        overflow: TextOverflow.ellipsis,
+        style: TextStyle(
+          fontSize: 12.5,
+          fontWeight: bold ? FontWeight.w600 : FontWeight.normal,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFeesSection() {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Fee table
+        if (_fees.isEmpty)
+          Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              'No fees added yet',
+              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+            ),
+          )
+        else
+          Container(
+            decoration: BoxDecoration(
+              border: Border.all(color: Colors.grey.shade300),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: ClipRRect(
+              borderRadius: BorderRadius.circular(8),
+              child: SingleChildScrollView(
+                scrollDirection: Axis.horizontal,
+                child: SizedBox(
+                  width: 580,
+                  child: Table(
+                    columnWidths: const {
+                      0: FlexColumnWidth(2.2),
+                      1: FlexColumnWidth(1.4),
+                      2: FlexColumnWidth(1.2),
+                      3: FlexColumnWidth(1.6),
+                      4: IntrinsicColumnWidth(),
+                    },
+                    border: TableBorder(
+                      horizontalInside: BorderSide(color: Colors.grey.shade200, width: 1),
+                    ),
+                    defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+                    children: [
+                      TableRow(
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFC9952A).withValues(alpha: 0.08),
+                        ),
+                        children: [
+                          _buildFeeTableHeaderCell('Fee Name'),
+                          _buildFeeTableHeaderCell('Fee Type'),
+                          _buildFeeTableHeaderCell('Amount'),
+                          _buildFeeTableHeaderCell('Quantity'),
+                          const Padding(padding: EdgeInsets.all(8)),
+                        ],
+                      ),
+                      ...List.generate(_fees.length, (index) {
+                        final fee = _fees[index];
+                        return TableRow(
+                          children: [
+                            _buildFeeTableCell(fee['fee_name'] ?? '', bold: true),
+                            _buildFeeTableCell(_feeTypeLabel(fee['fee_type'] ?? '')),
+                            _buildFeeTableCell(_formatFeeAmount(fee['fee_amount'] ?? '')),
+                            _buildFeeTableCell(
+                              _formatFeeQty(fee['min_quantity'] ?? '', fee['max_quantity'] ?? ''),
+                            ),
+                            Padding(
+                              padding: EdgeInsets.zero,
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  IconButton(
+                                    icon: const Icon(Icons.edit, size: 18),
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () => _showFeeDialog(index),
+                                  ),
+                                  IconButton(
+                                    icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                                    visualDensity: VisualDensity.compact,
+                                    onPressed: () {
+                                      setState(() => _fees.removeAt(index));
+                                    },
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        );
+                      }),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        const SizedBox(height: 12),
+        FilledButton.tonalIcon(
+          onPressed: () => _showFeeDialog(null),
+          icon: const Icon(Icons.add),
+          label: const Text('Add Fee'),
         ),
       ],
     );
@@ -1710,6 +1942,183 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                   });
                   Navigator.pop(context);
                 } : null,
+                child: const Text('Save'),
+              ),
+            ],
+          );
+        },
+      ),
+    );
+  }
+void _showFeeDialog(int? editIndex) {
+    final nameCtrl = TextEditingController(
+      text: editIndex != null ? _fees[editIndex]['fee_name'] ?? '' : '',
+    );
+    final amountCtrl = TextEditingController(
+      text: editIndex != null ? _fees[editIndex]['fee_amount'] ?? '' : '',
+    );
+    final minQtyCtrl = TextEditingController(
+      text: editIndex != null ? _fees[editIndex]['min_quantity'] ?? '' : '',
+    );
+    final maxQtyCtrl = TextEditingController(
+      text: editIndex != null ? _fees[editIndex]['max_quantity'] ?? '' : '',
+    );
+    var selectedType = editIndex != null ? _fees[editIndex]['fee_type'] ?? 'PARTICIPATION' : 'PARTICIPATION';
+    var attemptedSave = false;
+
+    showDialog(
+      context: context,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setDialogState) {
+          final name = nameCtrl.text.trim();
+          final amountText = amountCtrl.text.trim();
+          final minText = minQtyCtrl.text.trim();
+          final maxText = maxQtyCtrl.text.trim();
+
+          final amountValue = double.tryParse(amountText);
+          final minValue = minText.isEmpty ? null : int.tryParse(minText);
+          final maxValue = maxText.isEmpty ? null : int.tryParse(maxText);
+
+          final nameError = name.isEmpty ? 'Fee name is required' : null;
+          final amountError = amountText.isEmpty
+              ? 'Fee amount is required'
+              : amountValue == null
+                  ? 'Enter a valid amount'
+                  : amountValue < 0
+                      ? 'Amount must be 0 or more'
+                      : null;
+          final minError = minText.isNotEmpty && minValue == null
+              ? 'Enter a whole number'
+              : minValue != null && minValue < 0
+                  ? 'Min quantity must be 0 or more'
+                  : null;
+          final maxError = maxText.isNotEmpty && maxValue == null
+              ? 'Enter a whole number'
+              : maxValue != null && maxValue < 0
+                  ? 'Max quantity must be 0 or more'
+                  : (minValue != null && maxValue != null && maxValue < minValue)
+                      ? 'Max quantity cannot be less than min'
+                      : null;
+
+          final canSave = nameError == null &&
+              amountError == null &&
+              minError == null &&
+              maxError == null;
+
+          String? errorText(String? error) => attemptedSave ? error : null;
+
+          return AlertDialog(
+            title: Text(editIndex == null ? 'Add Fee' : 'Edit Fee'),
+            content: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  TextField(
+                    controller: nameCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Fee Name *',
+                      hintText: 'e.g., Early Bird',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      errorText: errorText(nameError),
+                    ),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  DropdownButtonFormField<String>(
+                    value: selectedType,
+                    isDense: true,
+                    decoration: InputDecoration(
+                      labelText: 'Fee Type *',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    items: _feeTypeOptions.map((type) => DropdownMenuItem(
+                      value: type,
+                      child: Text(_feeTypeLabel(type)),
+                    )).toList(),
+                    onChanged: (value) {
+                      setDialogState(() => selectedType = value ?? 'PARTICIPATION');
+                    },
+                    dropdownColor: Theme.of(context).cardColor,
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    controller: amountCtrl,
+                    decoration: InputDecoration(
+                      labelText: 'Fee Amount (₹) *',
+                      hintText: 'e.g., 499',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                      errorText: errorText(amountError),
+                    ),
+                    keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                    onChanged: (_) => setDialogState(() {}),
+                  ),
+                  const SizedBox(height: 12),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Expanded(
+                        child: TextField(
+                          controller: minQtyCtrl,
+                          decoration: InputDecoration(
+                            labelText: 'Min Quantity',
+                            hintText: 'e.g., 1',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            errorText: errorText(minError),
+                          ),
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                      ),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: TextField(
+                          controller: maxQtyCtrl,
+                          decoration: InputDecoration(
+                            labelText: 'Max Quantity',
+                            hintText: 'e.g., 5',
+                            border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                            errorText: errorText(maxError),
+                          ),
+                          keyboardType: TextInputType.number,
+                          onChanged: (_) => setDialogState(() {}),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(context),
+                child: const Text('Cancel'),
+              ),
+              FilledButton(
+                onPressed: canSave ? () {
+                  setState(() {
+                    final fee = {
+                      'fee_name': nameCtrl.text.trim(),
+                      'fee_type': selectedType,
+                      'fee_amount': amountCtrl.text.trim(),
+                      'min_quantity': minQtyCtrl.text.trim(),
+                      'max_quantity': maxQtyCtrl.text.trim(),
+                    };
+                    if (editIndex == null) {
+                      _fees.add(fee);
+                    } else {
+                      _fees[editIndex] = fee;
+                    }
+                  });
+                  Navigator.pop(context);
+                } : () {
+                  attemptedSave = true;
+                  setDialogState(() {});
+                },
                 child: const Text('Save'),
               ),
             ],
@@ -2390,6 +2799,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           'speaker_name': session['speaker'],
           'start_datetime': '${session['start_time']}:00$offset',
           'end_datetime': '${session['end_time']}:00$offset',
+        }).toList(),
+        // Add fees data
+        'fees': _fees.map((fee) => {
+          'fee_name': fee['fee_name'],
+          'fee_type': fee['fee_type'],
+          'fee_amount': double.tryParse((fee['fee_amount'] ?? '').trim()) ?? 0,
+          'min_quantity': int.tryParse((fee['min_quantity'] ?? '').trim()),
+          'max_quantity': int.tryParse((fee['max_quantity'] ?? '').trim()),
         }).toList(),
       };
 
