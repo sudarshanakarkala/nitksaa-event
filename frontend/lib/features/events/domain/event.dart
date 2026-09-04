@@ -125,10 +125,13 @@ class AppEvent {
     required this.timezone,
     this.locationText,
     this.locationMapsUrl,
+    this.virtualUrl,
     required this.isVirtual,
     this.thumbnailUrl,
     this.bannerUrl,
     this.capacity,
+    this.isFree = true,
+    this.ticketPrice,
     this.registrationMinQuantity,
     this.registrationMaxQuantity,
     this.registrationOpensAt,
@@ -153,10 +156,18 @@ class AppEvent {
   final String timezone;
   final String? locationText;
   final String? locationMapsUrl;
+  final String? virtualUrl;
   final bool isVirtual;
   final String? thumbnailUrl;
   final String? bannerUrl;
   final int? capacity;
+  /// Nullable on purpose: (1) older server payloads may omit `is_free` for
+  /// events created before the column existed, and (2) Dart on the web (DDC)
+  /// can read a non-nullable field as `null` for instances that were created
+  /// before hot reload added it — a non-nullable `bool` would then throw a
+  /// runtime `TypeError`. Consumers must fall back (e.g. `event.isFree ?? true`).
+  final bool? isFree;
+  final double? ticketPrice;
   final int? registrationMinQuantity;
   final int? registrationMaxQuantity;
   final DateTime? registrationOpensAt;
@@ -184,10 +195,13 @@ class AppEvent {
       timezone: json['timezone'] as String,
       locationText: json['location_text'] as String?,
       locationMapsUrl: json['location_maps_url'] as String?,
+      virtualUrl: json['virtual_url'] as String?,
       isVirtual: json['is_virtual'] as bool? ?? false,
       thumbnailUrl: json['thumbnail_url'] as String?,
       bannerUrl: json['banner_url'] as String?,
       capacity: json['capacity'] as int?,
+      isFree: json['is_free'] as bool? ?? true,
+      ticketPrice: _parseTicketPrice(json['ticket_price']),
       registrationMinQuantity: json['registration_min_quantity'] as int?,
       registrationMaxQuantity: json['registration_max_quantity'] as int?,
       registrationOpensAt: json['registration_opens_at'] != null
@@ -218,6 +232,16 @@ class AppEvent {
           .map(EventPartner.fromJson)
           .toList(),
     );
+  }
+
+  /// Parses `ticket_price` from the API. The backend stores it as NUMERIC
+  /// (Decimal), which may be serialized as a JSON number (`num`) or a string
+  /// (e.g. `"150.00"`) depending on the FastAPI version, so both forms plus
+  /// `null` must be handled.
+  static double? _parseTicketPrice(dynamic value) {
+    if (value == null) return null;
+    if (value is num) return value.toDouble();
+    return double.tryParse(value.toString());
   }
 }
 

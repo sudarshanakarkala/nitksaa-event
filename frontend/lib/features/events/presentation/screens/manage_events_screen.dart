@@ -671,7 +671,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _locationMapsUrl = TextEditingController(text: event?.locationMapsUrl ?? '');
     _locationSearchController.text = event?.locationText ?? '';
     _locationSelected = event?.locationText != null && event!.locationText!.isNotEmpty;
-    _virtualUrl = TextEditingController(text: '');
+    _virtualUrl = TextEditingController(text: event?.virtualUrl ?? '');
     
     _registrationOpensAt = TextEditingController(text: event?.registrationOpensAt != null 
       ? _formatDateTimeOnly(event!.registrationOpensAt!) 
@@ -684,8 +684,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _bannerUrl = TextEditingController(text: event?.bannerUrl ?? '');
     
     _capacity = TextEditingController(text: event?.capacity?.toString() ?? '');
-    _isFree = true;
-    _ticketPrice = TextEditingController(text: '');
+    _isFree = event?.isFree ?? true;
+    _ticketPrice = TextEditingController(text: event?.ticketPrice?.toString() ?? '');
     
     // Initialize speakers (convert EventPerson to Map)
     _speakers = event?.speakers.map((sp) => {
