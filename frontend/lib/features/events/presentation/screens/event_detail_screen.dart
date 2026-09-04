@@ -188,6 +188,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           ? () => _launchUrl(event.locationMapsUrl!)
                           : null,
                     ),
+                    _buildCupertinoMetaRow(
+                      CupertinoIcons.money_dollar,
+                      _eventFeeLabel(event),
+                      textSecondary,
+                    ),
                     const SizedBox(height: 16),
                     _buildCupertinoDivider(isDark),
                     if (isAdmin) ...[
@@ -532,6 +537,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       ? () => _launchUrl(event.locationMapsUrl!)
                       : null,
                 ),
+                _buildMaterialMetaRow(Icons.currency_rupee, _eventFeeLabel(event)),
                 const SizedBox(height: 16),
                 const Divider(),
                 if (isAdmin) ...[
@@ -610,6 +616,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               ? () => _launchUrl(event.locationMapsUrl!)
               : null,
         ),
+        _buildMetaGridItem(Icons.currency_rupee, _eventFeeLabel(event)),
       ],
     );
   }
@@ -1660,6 +1667,24 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final hours = difference.inHours % 24;
     final minutes = difference.inMinutes % 60;
     return '${days.toString().padLeft(2, '0')} Days: ${hours.toString().padLeft(2, '0')} hours: ${minutes.toString().padLeft(2, '0')} Minutes';
+  }
+
+  bool _isPaidEvent(AppEvent event) {
+    return !(event.isFree ?? true) &&
+        (event.ticketPrice?.isFinite ?? false) &&
+        (event.ticketPrice! > 0);
+  }
+
+  /// 'Event Fee: ₹X' for paid events, otherwise 'Free Event'.
+  String _eventFeeLabel(AppEvent event) {
+    if (_isPaidEvent(event)) {
+      final price = event.ticketPrice!;
+      final amountText = price == price.roundToDouble()
+          ? price.toInt().toString()
+          : price.toStringAsFixed(2);
+      return 'Event Fee: ₹$amountText';
+    }
+    return 'Free Event';
   }
 
   Widget _buildCountdownSection({
