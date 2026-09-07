@@ -64,6 +64,25 @@ class Settings(BaseSettings):
         False, alias="PAYMENT_SANDBOX_ALLOW_IN_PRODUCTION"
     )
 
+    # Razorpay (Test Mode slice). Server-only — never returned in an API
+    # response, never logged, never surfaced by diagnostics. A missing
+    # key_id/key_secret makes RazorpayGateway.is_enabled() return False, so
+    # payment initiation for a razorpay-configured event fails closed with a
+    # safe configuration error rather than attempting an un-authenticated call.
+    razorpay_key_id: str = Field("", alias="RAZORPAY_KEY_ID")
+    razorpay_key_secret: str = Field("", alias="RAZORPAY_KEY_SECRET")
+    razorpay_webhook_secret: str = Field("", alias="RAZORPAY_WEBHOOK_SECRET")
+    razorpay_mode: str = Field("test", alias="RAZORPAY_MODE")
+    razorpay_api_base: str = Field("https://api.razorpay.com/v1", alias="RAZORPAY_API_BASE")
+    # Network timeout (seconds) for every outbound Razorpay REST call.
+    razorpay_http_timeout_seconds: float = Field(20.0, alias="RAZORPAY_HTTP_TIMEOUT_SECONDS")
+
+    @property
+    def razorpay_configured(self) -> bool:
+        """True only when both credentials are present. RazorpayGateway keys
+        its fail-closed behaviour off this."""
+        return bool(self.razorpay_key_id and self.razorpay_key_secret)
+
     # Payment RBAC (production foundation) — comma-separated firebase_uids
     # that are always treated as platform_admin, independent of
     # payment_platform_roles rows. This is the bootstrap mechanism: the

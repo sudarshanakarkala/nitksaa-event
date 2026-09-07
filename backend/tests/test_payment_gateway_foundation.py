@@ -110,7 +110,8 @@ def _seed_fixture_identities():
     )
 
 
-def _mk_paid_event(client, uid_suffix: str, *, base_amount: str = "100.00") -> int:
+def _mk_paid_event(client, uid_suffix: str, *, base_amount: str = "100.00",
+                   gateway: str = "deterministic_sandbox") -> int:
     r = client.post(
         "/api/v1/admin/events",
         json={
@@ -139,6 +140,7 @@ def _mk_paid_event(client, uid_suffix: str, *, base_amount: str = "100.00") -> i
             "gst_enabled": False,
             "seat_hold_minutes": 15,
             "payment_session_expiry_minutes": 15,
+            "gateway": gateway,
         },
         headers=_ADMIN,
     )
@@ -160,29 +162,53 @@ def test_sandbox_gateway_conforms_to_interface():
     assert GatewayCapability.CREATE_PAYMENT in gateway.capabilities
     assert GatewayCapability.VERIFY_WEBHOOK in gateway.capabilities
     assert GatewayCapability.PROCESS_WEBHOOK in gateway.capabilities
-    # Not implemented anywhere yet — must not be silently declared supported.
-    assert GatewayCapability.REFUND not in gateway.capabilities
+    # Deterministic sandbox refunds were added in the Razorpay Test Mode
+    # sprint so the refund domain is exercisable without a real provider.
+    assert GatewayCapability.REFUND in gateway.capabilities
+    assert GatewayCapability.QUERY_REFUND in gateway.capabilities
+    # Still not supported: the sandbox has no separate provider-side state to
+    # query, and never treats a client-return as authoritative.
     assert GatewayCapability.QUERY_PAYMENT_STATUS not in gateway.capabilities
+    assert GatewayCapability.VERIFY_PAYMENT not in gateway.capabilities
     assert "SUCCESS" in gateway.supported_scenarios
 
 
 def test_unsupported_capability_raises_cleanly_not_a_fake_response():
-    """refund / query_payment_status / verify_payment are declared on the
-    interface but no adapter implements them yet (explicit instruction: do
-    not implement refunds merely because the interface anticipates them).
-    Calling them must raise, never return a fabricated success/failure."""
+    """A capability the sandbox does NOT declare must raise, never return a
+    fabricated response. query_payment_status and verify_payment remain
+    unsupported on the sandbox (no separate provider-side state; never
+    trusts a client-return)."""
     from app.gateways.base import GatewayCapabilityNotSupportedError
     from app.gateways.deterministic_sandbox import DeterministicSandboxGateway
 
     gateway = DeterministicSandboxGateway()
     with pytest.raises(GatewayCapabilityNotSupportedError):
-        gateway.refund()
-    with pytest.raises(GatewayCapabilityNotSupportedError):
-        gateway.query_refund()
-    with pytest.raises(GatewayCapabilityNotSupportedError):
         gateway.query_payment_status("sbx_ord_whatever")
     with pytest.raises(GatewayCapabilityNotSupportedError):
         gateway.verify_payment()
+    with pytest.raises(GatewayCapabilityNotSupportedError):
+        gateway.verify_checkout_signature(
+            provider_order_id="x", provider_payment_id="y", signature="z"
+        )
+
+
+def test_sandbox_refund_is_deterministic_processed():
+    """The sandbox's declared REFUND/QUERY_REFUND return a real
+    NormalizedRefundResult (processed at once — no settlement delay to
+    simulate), not GatewayCapabilityNotSupportedError."""
+    from app.gateways.base import NormalizedRefundStatus
+    from app.gateways.deterministic_sandbox import DeterministicSandboxGateway
+
+    gateway = DeterministicSandboxGateway()
+    result = gateway.refund(
+        provider_payment_id="sbx_pay_x", amount_minor=100, currency="INR",
+        idempotency_key="refund:order:1",
+    )
+    assert result.status == NormalizedRefundStatus.REFUND_PROCESSED
+    assert result.amount_minor == 100
+    assert result.provider_refund_id.startswith("sbx_rfnd_")
+    q = gateway.query_refund(provider_payment_id="sbx_pay_x", provider_refund_id=result.provider_refund_id)
+    assert q.status == NormalizedRefundStatus.REFUND_PROCESSED
 
 
 def test_parse_webhook_normalizes_provider_vocabulary():
@@ -286,13 +312,22 @@ def test_sandbox_enabled_in_production_with_explicit_opt_in(monkeypatch):
 # C. API-level: gateway selection is server-authoritative, fails closed
 # ─────────────────────────────────────────────────────────────────────────────
 
-def test_attempt_creation_fails_closed_when_gateway_mode_is_misconfigured(client, monkeypatch):
-    """Order/registration state must not be mutated by a request that can
-    never succeed — the attempt is simply never created, no 500, no
-    partial state."""
+def test_attempt_creation_fails_closed_when_order_gateway_is_unusable(client, monkeypatch):
+    """Gateway dispatch is per-order (payment_orders.gateway, snapshotted
+    from the published config). If that gateway is disabled/misconfigured
+    (razorpay with no credentials -> is_enabled() False), attempt creation
+    fails closed with 503 and never mutates order/attempt state — no 500,
+    no partial row, and it never silently falls back to another gateway."""
     from app.config import get_settings
 
-    event_id = _mk_paid_event(client, f"failclosed-{uuid.uuid4().hex[:8]}")
+    # Ensure razorpay has no usable credentials for this test.
+    for var in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"):
+        monkeypatch.delenv(var, raising=False)
+    get_settings.cache_clear()
+
+    event_id = _mk_paid_event(
+        client, f"failclosed-{uuid.uuid4().hex[:8]}", gateway="razorpay"
+    )
     headers = _bearer()
     r = client.post(f"/api/v1/events/{event_id}/register", json={}, headers=headers)
     reg = r.json()
@@ -302,19 +337,15 @@ def test_attempt_creation_fails_closed_when_gateway_mode_is_misconfigured(client
         headers=headers,
     )
     order = r.json()
+    assert order["order_id"], order
 
-    monkeypatch.setenv("PAYMENT_GATEWAY_MODE", "not_a_real_gateway")
+    r = client.post(
+        f"/api/v1/payment-orders/{order['order_id']}/attempts", json={}, headers=headers
+    )
+    assert r.status_code == 503, r.text
+    assert r.json()["detail"] == "payment_gateway_unavailable"
+
     get_settings.cache_clear()
-    try:
-        r = client.post(
-            f"/api/v1/payment-orders/{order['order_id']}/attempts", json={"scenario": "SUCCESS"}, headers=headers
-        )
-        assert r.status_code == 503
-        assert r.json()["detail"] == "payment_gateway_unavailable"
-    finally:
-        monkeypatch.delenv("PAYMENT_GATEWAY_MODE", raising=False)
-        get_settings.cache_clear()
-
     attempts = _db_fetch(
         "SELECT pa.id FROM payment_attempts pa JOIN payment_orders po ON pa.order_id = po.id "
         "WHERE po.public_order_number = $1",

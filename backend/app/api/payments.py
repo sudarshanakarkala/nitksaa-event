@@ -20,6 +20,8 @@ from app.schemas.payments import (
     PaymentOrderResponse,
     PaymentTimelineResponse,
     PricingBreakdownResponse,
+    VerifyCheckoutRequest,
+    VerifyCheckoutResponse,
     WebhookAckResponse,
 )
 from app.services import payment_service
@@ -99,6 +101,21 @@ async def verify_payment_attempt(
 
 
 @router.post(
+    "/api/v1/payment-orders/{order_id}/verify-checkout",
+    response_model=VerifyCheckoutResponse,
+)
+async def verify_payment_checkout(
+    order_id: str,
+    body: VerifyCheckoutRequest,
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> VerifyCheckoutResponse:
+    """Backend verification of a Razorpay Checkout return. The client-supplied
+    signature is only a first gate — the server independently queries
+    authoritative provider status before confirming the registration."""
+    return await payment_service.verify_checkout(order_id, user, body)
+
+
+@router.post(
     "/api/v1/payment-gateways/{gateway}/webhook",
     response_model=WebhookAckResponse,
 )
@@ -106,6 +123,8 @@ async def receive_payment_webhook(
     gateway: str,
     request: Request,
     x_sandbox_signature: str = Header(default=""),
+    x_razorpay_signature: str = Header(default=""),
+    x_razorpay_event_id: str = Header(default=""),
 ) -> WebhookAckResponse:
     # Registry-backed, not a hardcoded name check: an unregistered or
     # environment-disabled gateway is rejected the same way a genuinely
@@ -114,5 +133,14 @@ async def receive_payment_webhook(
         gateway_registry.get_enabled_gateway(gateway, get_settings())
     except (UnknownGatewayError, GatewayDisabledError):
         raise HTTPException(status_code=404, detail="unknown_gateway")
+    # Raw body bytes are passed through untouched — signature verification
+    # (sandbox HMAC and Razorpay HMAC alike) is over the exact received bytes,
+    # never a re-serialised copy.
     raw_body = await request.body()
-    return await payment_service.process_webhook(gateway, raw_body, x_sandbox_signature)
+    if gateway == "razorpay":
+        signature = x_razorpay_signature
+        provider_event_id = x_razorpay_event_id or None
+    else:
+        signature = x_sandbox_signature
+        provider_event_id = None
+    return await payment_service.process_webhook(gateway, raw_body, signature, provider_event_id)

@@ -25,6 +25,8 @@ from fastapi import BackgroundTasks, HTTPException
 from app.database import get_pool
 from app.gateways import registry as gateway_registry
 from app.gateways.base import (
+    GatewayCapability,
+    GatewayError,
     GatewayWebhookUnparseableError,
     NormalizedStatus,
     payload_hash as _gateway_payload_hash,
@@ -35,10 +37,12 @@ from app.repositories.registration_repository import RegistrationRepository
 from app.schemas.payments import (
     CreatePaymentAttemptRequest,
     PaymentAttemptResponse,
+    PaymentCheckout,
     PaymentOrderResponse,
     PaymentTimelineResponse,
     PricingBreakdownResponse,
     TimelineEntry,
+    VerifyCheckoutRequest,
     WebhookAckResponse,
 )
 from app.services import audit_service, email_service, pricing_service
@@ -196,6 +200,7 @@ async def create_order(
                     payer_firebase_uid=firebase_uid,
                     configuration_id=config["id"],
                     configuration_version=config["version"],
+                    gateway=config["gateway"] if "gateway" in config else "deterministic_sandbox",
                     currency=breakdown["currency"],
                     base_amount=breakdown["base_amount"],
                     tax_amount=breakdown["tax_amount"],
@@ -240,6 +245,17 @@ async def _load_order_for_user(
     return order
 
 
+def _gateway_for_order(order: asyncpg.Record):
+    """Resolve the enabled gateway an order was created against
+    (payment_orders.gateway snapshot). Returns None if it is unknown/disabled
+    — callers fall back to the legacy sandbox re-read behaviour."""
+    name = order["gateway"] if "gateway" in order else get_settings().payment_gateway_mode
+    try:
+        return gateway_registry.get_enabled_gateway(name, get_settings())
+    except (UnknownGatewayError, GatewayDisabledError):
+        return None
+
+
 async def get_order(public_order_number: str, user: Dict[str, Any]) -> PaymentOrderResponse:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -256,15 +272,6 @@ async def create_attempt(
 ) -> PaymentAttemptResponse:
     firebase_uid = user["firebase_uid"]
     settings = get_settings()
-    try:
-        gateway = gateway_registry.get_active_gateway(settings)
-    except (UnknownGatewayError, GatewayDisabledError):
-        # Server-side misconfiguration (unknown/disabled gateway selected in
-        # settings) — fail closed, never silently fall back to another
-        # gateway or let the attendee choose one.
-        raise HTTPException(status_code=503, detail="payment_gateway_unavailable")
-    if body.scenario not in gateway.supported_scenarios:
-        raise HTTPException(status_code=422, detail="unsupported_scenario")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -272,6 +279,26 @@ async def create_attempt(
         reg_repo = RegistrationRepository(conn)
         order = await _load_order_for_user(conn, public_order_number, firebase_uid)
         registration = await reg_repo.get_by_id(order["registration_id"])
+
+    # Gateway dispatch is per-order (payment_configurations.gateway, snapshotted
+    # onto payment_orders.gateway at create_order time) — NOT the global
+    # settings.payment_gateway_mode. This is what lets the ₹1 razorpay pilot
+    # event and every existing deterministic_sandbox event coexist.
+    order_gateway_name = order["gateway"] if "gateway" in order else settings.payment_gateway_mode
+    try:
+        gateway = gateway_registry.get_enabled_gateway(order_gateway_name, settings)
+    except (UnknownGatewayError, GatewayDisabledError):
+        # Unknown/disabled/misconfigured (e.g. razorpay with no credentials)
+        # — fail closed, never silently fall back to another gateway.
+        raise HTTPException(status_code=503, detail="payment_gateway_unavailable")
+    # `scenario` is only meaningful to gateways that declare supported_scenarios
+    # (the sandbox). A real gateway ignores it and determines its own outcome.
+    if gateway.supported_scenarios and body.scenario not in gateway.supported_scenarios:
+        raise HTTPException(status_code=422, detail="unsupported_scenario")
+
+    async with pool.acquire() as conn:
+        pay_repo = PaymentRepository(conn)
+        reg_repo = RegistrationRepository(conn)
 
         if order["status"] not in ("created", "payment_pending"):
             raise HTTPException(status_code=409, detail="payment_order_not_payable")
@@ -321,12 +348,34 @@ async def create_attempt(
         context={"order_id": order["id"], "scenario": body.scenario},
     )
 
-    initiation = gateway.create_payment(
-        gateway_order_ref=gateway_order_ref,
-        amount=order["final_amount"],
-        currency=order["currency"],
-        scenario=body.scenario,
-    )
+    try:
+        initiation = gateway.create_payment(
+            gateway_order_ref=gateway_order_ref,
+            amount=order["final_amount"],
+            currency=order["currency"],
+            scenario=body.scenario,
+        )
+    except GatewayError:
+        # Provider order creation failed (network, credentials, provider
+        # error). The attempt row exists but has no usable gateway order —
+        # mark it failed so it doesn't block retry, and surface a safe error.
+        _log.exception("[payments] gateway create_payment failed for attempt %s", attempt["id"])
+        async with pool.acquire() as conn:
+            await PaymentRepository(conn).update_attempt_failed(
+                attempt["id"], "GATEWAY_INITIATION_FAILED", "Could not start payment. Please try again."
+            )
+        raise HTTPException(status_code=502, detail="payment_gateway_error")
+
+    # A provider that mints its own order id (Razorpay) returns it here; it
+    # differs from the placeholder we generated. Persist the real reference so
+    # the later webhook / status query can correlate back to this attempt.
+    if initiation.gateway_order_ref and initiation.gateway_order_ref != gateway_order_ref:
+        async with pool.acquire() as conn:
+            await PaymentRepository(conn).update_attempt_gateway_order_ref(
+                attempt["id"], initiation.gateway_order_ref
+            )
+        gateway_order_ref = initiation.gateway_order_ref
+
     if initiation.delayed_webhook:
         delayed = initiation.delayed_webhook
         background_tasks.add_task(
@@ -340,6 +389,17 @@ async def create_attempt(
         async with pool.acquire() as conn:
             attempt = await PaymentRepository(conn).get_attempt_by_id(attempt["id"])
 
+    checkout = None
+    if initiation.checkout:
+        c = initiation.checkout
+        checkout = PaymentCheckout(
+            provider=gateway.name,
+            provider_order_id=c.provider_order_id,
+            key_id=c.key_id,
+            amount_minor=c.amount_minor,
+            currency=c.currency,
+        )
+
     return PaymentAttemptResponse(
         attempt_id=attempt["public_attempt_number"],
         order_id=order["public_order_number"],
@@ -348,6 +408,7 @@ async def create_attempt(
         status=attempt["status"],
         scenario=attempt["scenario"],
         initiated_at=attempt["initiated_at"],
+        checkout=checkout,
     )
 
 
@@ -361,7 +422,9 @@ async def _deliver_delayed_webhook(gateway_name: str, raw_body: bytes, signature
         _log.exception("[payments] delayed sandbox webhook delivery failed")
 
 
-async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> WebhookAckResponse:
+async def process_webhook(
+    gateway: str, raw_body: bytes, signature: str, provider_event_id: Optional[str] = None
+) -> WebhookAckResponse:
     settings = get_settings()
 
     try:
@@ -396,7 +459,10 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
         )
         return WebhookAckResponse(status="rejected", processing_status="rejected")
 
-    event_id = event.event_id
+    # Dedupe id: the provider's own event id (Razorpay X-Razorpay-Event-Id
+    # header, passed by the route) is preferred; otherwise the adapter's
+    # body-derived id (sandbox uuid, or Razorpay "<event>:<entity_id>").
+    event_id = provider_event_id or event.event_id
     gateway_order_ref = event.gateway_order_ref
     hash_ = _gateway_payload_hash(raw_body)
 
@@ -500,133 +566,260 @@ async def process_webhook(gateway: str, raw_body: bytes, signature: str) -> Webh
             )
             return WebhookAckResponse(status="rejected", processing_status="rejected")
 
-        async with conn.transaction():
-            locked_order = await conn.fetchrow(
-                "SELECT * FROM payment_orders WHERE id = $1 FOR UPDATE", order["id"]
+        async def _mark(status: str, error_code: Optional[str] = None) -> None:
+            await pay_repo.mark_webhook_processed(webhook_row["id"], status, error_code)
+
+        outcome = await _apply_gateway_outcome(
+            conn, attempt=attempt, order=order, event=event, mark_processed=_mark,
+            stale_attempt_audit_entity_id=webhook_row["id"],
+        )
+
+    if outcome == "duplicate":
+        return WebhookAckResponse(status="ok", processing_status="duplicate")
+    if outcome == "rejected":
+        return WebhookAckResponse(status="rejected", processing_status="rejected")
+    return WebhookAckResponse(status="ok", processing_status="processed")
+
+
+async def _apply_gateway_outcome(
+    conn: asyncpg.Connection,
+    *,
+    attempt: asyncpg.Record,
+    order: asyncpg.Record,
+    event,
+    mark_processed,
+    stale_attempt_audit_entity_id: int = 0,
+) -> str:
+    """Apply a normalized gateway outcome (from a verified webhook OR an
+    authoritative query_payment_status check) to the attempt / order /
+    registration under a row lock. Single source of truth for the
+    captured / failed / pending / cancelled state machine — the webhook path
+    and the checkout-verify path both funnel through here so they can never
+    diverge.
+
+    `mark_processed(status, error_code=None)` is the caller's bookkeeping
+    hook: the webhook path updates its payment_webhook_events row; the
+    verify path passes a no-op. Returns 'processed' | 'duplicate' |
+    'rejected'.
+    """
+    async with conn.transaction():
+        pay_repo = PaymentRepository(conn)
+        reg_repo = RegistrationRepository(conn)
+        locked_order = await conn.fetchrow(
+            "SELECT * FROM payment_orders WHERE id = $1 FOR UPDATE", order["id"]
+        )
+        registration = await reg_repo.get_by_id(locked_order["registration_id"])
+
+        if attempt["status"] not in ("initiated", "pending"):
+            await mark_processed("duplicate")
+            await audit_service.emit(
+                actor_uid="system",
+                event_type="payment_webhook_ignored_stale_attempt",
+                entity_type="payment_webhook",
+                entity_id=stale_attempt_audit_entity_id,
+                context={"attempt_id": attempt["id"], "attempt_status": attempt["status"]},
             )
-            reg_repo = RegistrationRepository(conn)
-            registration = await reg_repo.get_by_id(locked_order["registration_id"])
+            return "duplicate"
 
-            if attempt["status"] not in ("initiated", "pending"):
-                await pay_repo.mark_webhook_processed(webhook_row["id"], "duplicate")
-                await audit_service.emit(
-                    actor_uid="system",
-                    event_type="payment_webhook_ignored_stale_attempt",
-                    entity_type="payment_webhook",
-                    entity_id=webhook_row["id"],
-                    context={"attempt_id": attempt["id"], "attempt_status": attempt["status"]},
+        if event.status == NormalizedStatus.PAYMENT_SUCCESS:
+            await pay_repo.update_attempt_captured(attempt["id"], event.gateway_payment_ref)
+            # Financial state is preserved unconditionally — the money side of
+            # this always happens, regardless of what state the registration/
+            # seat is in. What varies below is only whether we're also allowed
+            # to auto-confirm the registration.
+            if Decimal(locked_order["amount_paid"]) < Decimal(locked_order["final_amount"]):
+                await pay_repo.mark_order_paid(locked_order["id"], Decimal(locked_order["final_amount"]))
+            already_confirmed = registration and registration["status"] == "registered"
+            hold_expired = (
+                registration
+                and not already_confirmed
+                and registration["status"] in _HOLD_BEARING_STATUSES
+                and _is_hold_expired(registration)
+            )
+
+            await mark_processed("processed")
+            await audit_service.emit(
+                actor_uid="system", event_type="payment_captured",
+                entity_type="payment_attempt", entity_id=attempt["id"],
+                context={"order_id": order["id"]},
+            )
+
+            if hold_expired:
+                existing_exc = await pay_repo.get_open_exception(
+                    "PAYMENT_CAPTURED_AFTER_SEAT_EXPIRY", attempt_id=attempt["id"]
                 )
-                return WebhookAckResponse(status="ok", processing_status="duplicate")
-
-            if event.status == NormalizedStatus.PAYMENT_SUCCESS:
-                await pay_repo.update_attempt_captured(attempt["id"], event.gateway_payment_ref)
-                # Financial state is preserved unconditionally — the money
-                # side of this always happens, regardless of what state the
-                # registration/seat is in. What varies below is only whether
-                # we're also allowed to auto-confirm the registration.
-                if Decimal(locked_order["amount_paid"]) < Decimal(locked_order["final_amount"]):
-                    await pay_repo.mark_order_paid(locked_order["id"], Decimal(locked_order["final_amount"]))
-                already_confirmed = registration and registration["status"] == "registered"
-                hold_expired = (
-                    registration
-                    and not already_confirmed
-                    and registration["status"] in _HOLD_BEARING_STATUSES
-                    and _is_hold_expired(registration)
-                )
-
-                await pay_repo.mark_webhook_processed(webhook_row["id"], "processed")
+                if not existing_exc:
+                    await pay_repo.create_exception(
+                        exception_type="PAYMENT_CAPTURED_AFTER_SEAT_EXPIRY",
+                        order_id=order["id"],
+                        attempt_id=attempt["id"],
+                        registration_id=registration["registration_id"],
+                        summary=(
+                            f"Payment captured for order {locked_order['public_order_number']} "
+                            f"after seat hold expired at {registration['hold_expires_at']}"
+                        ),
+                        detail={
+                            "hold_expires_at": str(registration["hold_expires_at"]),
+                            "captured_at": str(datetime.now(timezone.utc)),
+                            "final_amount": str(locked_order["final_amount"]),
+                        },
+                    )
                 await audit_service.emit(
-                    actor_uid="system", event_type="payment_captured",
+                    actor_uid="system", event_type="payment_captured_after_seat_expiry",
+                    entity_type="registration", entity_id=registration["registration_id"],
+                    context={"order_id": order["id"]},
+                )
+            elif registration and not already_confirmed:
+                await reg_repo.set_status(registration["registration_id"], "registered")
+                await audit_service.emit(
+                    actor_uid="system", event_type="registration_confirmed_by_payment",
+                    entity_type="registration", entity_id=registration["registration_id"],
+                    context={"order_id": order["id"]},
+                )
+                await _send_payment_confirmation_email(conn, registration)
+
+        elif event.status == NormalizedStatus.PAYMENT_FAILED:
+            await pay_repo.update_attempt_failed(
+                attempt["id"], event.failure_code, event.failure_message,
+            )
+            if registration and registration["status"] in ("seat_held", "payment_pending", "payment_verification"):
+                await reg_repo.set_status(registration["registration_id"], "payment_failed")
+            await mark_processed("processed")
+            await audit_service.emit(
+                actor_uid="system", event_type="payment_failed",
+                entity_type="payment_attempt", entity_id=attempt["id"],
+                context={"order_id": order["id"]},
+            )
+
+        elif event.status == NormalizedStatus.PAYMENT_PENDING:
+            await pay_repo.update_attempt_status(attempt["id"], "pending")
+            if registration and registration["status"] in ("seat_held", "payment_pending"):
+                await reg_repo.set_status(registration["registration_id"], "payment_verification")
+                await reg_repo.extend_hold(
+                    registration["registration_id"],
+                    datetime.now(timezone.utc) + timedelta(minutes=PENDING_VERIFICATION_HOLD_EXTENSION_MINUTES),
+                )
+            await mark_processed("processed")
+            await audit_service.emit(
+                actor_uid="system", event_type="payment_pending",
+                entity_type="payment_attempt", entity_id=attempt["id"],
+                context={"order_id": order["id"]},
+            )
+
+        elif event.status == NormalizedStatus.PAYMENT_CANCELLED:
+            await pay_repo.update_attempt_status(attempt["id"], "cancelled")
+            if registration and registration["status"] in ("seat_held", "payment_pending", "payment_verification"):
+                await reg_repo.set_status(registration["registration_id"], "payment_failed")
+            await mark_processed("processed")
+            await audit_service.emit(
+                actor_uid="system", event_type="payment_cancelled",
+                entity_type="payment_attempt", entity_id=attempt["id"],
+                context={"order_id": order["id"]},
+            )
+        else:
+            await mark_processed("rejected", "unknown_event_type")
+            return "rejected"
+
+    return "processed"
+
+
+async def verify_checkout(
+    public_order_number: str, user: Dict[str, Any], body: VerifyCheckoutRequest
+) -> "VerifyCheckoutResponse":
+    """Backend verification of a hosted-checkout (Razorpay) return.
+
+    The client's (order_id, payment_id, signature) triple is a FIRST GATE
+    only — a valid signature proves the values came from the gateway
+    unmodified, not that money moved. Confirmation happens strictly from
+    gw.query_payment_status() (authoritative, server-to-server), applied
+    through the same _apply_gateway_outcome state machine the webhook uses.
+    A browser that merely POSTs a fake success can never confirm a
+    registration.
+    """
+    from app.schemas.payments import VerifyCheckoutResponse
+
+    firebase_uid = user["firebase_uid"]
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        pay_repo = PaymentRepository(conn)
+        order = await _load_order_for_user(conn, public_order_number, firebase_uid)
+
+        gw = _gateway_for_order(order)
+        if gw is None or GatewayCapability.VERIFY_PAYMENT not in gw.capabilities:
+            raise HTTPException(status_code=409, detail="checkout_verification_not_supported")
+
+        attempt = await pay_repo.get_attempt_by_gateway_ref(body.razorpay_order_id)
+        if not attempt or attempt["order_id"] != order["id"]:
+            raise HTTPException(status_code=404, detail="payment_attempt_not_found")
+
+        # Server-stored provider order id must match what the client returned.
+        if attempt["gateway_order_ref"] != body.razorpay_order_id:
+            raise HTTPException(status_code=400, detail="checkout_order_mismatch")
+
+        sig_ok = gw.verify_checkout_signature(
+            provider_order_id=body.razorpay_order_id,
+            provider_payment_id=body.razorpay_payment_id,
+            signature=body.razorpay_signature,
+        )
+        if not sig_ok:
+            await audit_service.emit(
+                actor_uid="system", event_type="payment_checkout_signature_invalid",
+                entity_type="payment_attempt", entity_id=attempt["id"],
+                context={"order_id": order["id"]},
+            )
+            raise HTTPException(status_code=400, detail="checkout_signature_invalid")
+
+        try:
+            remote = gw.query_payment_status(body.razorpay_order_id)
+        except GatewayError:
+            _log.exception("[payments] query_payment_status failed during verify-checkout")
+            raise HTTPException(status_code=502, detail="payment_gateway_error")
+
+        # Never trust the browser-reported payment id either — confirm the
+        # provider's own record is for the same order and amount/currency.
+        if remote.status == NormalizedStatus.PAYMENT_SUCCESS:
+            if (
+                str(remote.currency) != attempt["currency"]
+                or Decimal(remote.amount_raw) != Decimal(attempt["amount"])
+            ):
+                await audit_service.emit(
+                    actor_uid="system", event_type="payment_checkout_amount_mismatch",
                     entity_type="payment_attempt", entity_id=attempt["id"],
                     context={"order_id": order["id"]},
                 )
+                raise HTTPException(status_code=400, detail="checkout_amount_mismatch")
 
-                if hold_expired:
-                    # Do not silently reconfirm an expired seat (possible
-                    # overbooking) and do not discard the payment — preserve
-                    # the captured funds and raise an exception for manual
-                    # resolution instead.
-                    existing_exc = await pay_repo.get_open_exception(
-                        "PAYMENT_CAPTURED_AFTER_SEAT_EXPIRY", attempt_id=attempt["id"]
-                    )
-                    if not existing_exc:
-                        await pay_repo.create_exception(
-                            exception_type="PAYMENT_CAPTURED_AFTER_SEAT_EXPIRY",
-                            order_id=order["id"],
-                            attempt_id=attempt["id"],
-                            registration_id=registration["registration_id"],
-                            summary=(
-                                f"Payment captured for order {locked_order['public_order_number']} "
-                                f"after seat hold expired at {registration['hold_expires_at']}"
-                            ),
-                            detail={
-                                "hold_expires_at": str(registration["hold_expires_at"]),
-                                "captured_at": str(datetime.now(timezone.utc)),
-                                "final_amount": str(locked_order["final_amount"]),
-                            },
-                        )
-                    await audit_service.emit(
-                        actor_uid="system", event_type="payment_captured_after_seat_expiry",
-                        entity_type="registration", entity_id=registration["registration_id"],
-                        context={"order_id": order["id"]},
-                    )
-                elif registration and not already_confirmed:
-                    await reg_repo.set_status(registration["registration_id"], "registered")
-                    await audit_service.emit(
-                        actor_uid="system", event_type="registration_confirmed_by_payment",
-                        entity_type="registration", entity_id=registration["registration_id"],
-                        context={"order_id": order["id"]},
-                    )
-                    await _send_payment_confirmation_email(conn, registration)
+        if attempt["status"] in ("initiated", "pending"):
+            async def _noop(_s: str, _e: Optional[str] = None) -> None:
+                return None
 
-            elif event.status == NormalizedStatus.PAYMENT_FAILED:
-                await pay_repo.update_attempt_failed(
-                    attempt["id"],
-                    event.failure_code,
-                    event.failure_message,
-                )
-                if registration and registration["status"] in ("seat_held", "payment_pending", "payment_verification"):
-                    await reg_repo.set_status(registration["registration_id"], "payment_failed")
-                await pay_repo.mark_webhook_processed(webhook_row["id"], "processed")
-                await audit_service.emit(
-                    actor_uid="system", event_type="payment_failed",
-                    entity_type="payment_attempt", entity_id=attempt["id"],
-                    context={"order_id": order["id"]},
-                )
+            await _apply_gateway_outcome(
+                conn, attempt=attempt, order=order, event=remote, mark_processed=_noop,
+            )
 
-            elif event.status == NormalizedStatus.PAYMENT_PENDING:
-                await pay_repo.update_attempt_status(attempt["id"], "pending")
-                if registration and registration["status"] in ("seat_held", "payment_pending"):
-                    await reg_repo.set_status(registration["registration_id"], "payment_verification")
-                    # Protect the seat while verification is in progress —
-                    # don't let it expire out from under a payment that may
-                    # still resolve to captured.
-                    await reg_repo.extend_hold(
-                        registration["registration_id"],
-                        datetime.now(timezone.utc) + timedelta(minutes=PENDING_VERIFICATION_HOLD_EXTENSION_MINUTES),
-                    )
-                await pay_repo.mark_webhook_processed(webhook_row["id"], "processed")
-                await audit_service.emit(
-                    actor_uid="system", event_type="payment_pending",
-                    entity_type="payment_attempt", entity_id=attempt["id"],
-                    context={"order_id": order["id"]},
-                )
+        order = await pay_repo.get_order_by_public_id(public_order_number)
+        attempt = await pay_repo.get_attempt_by_id(attempt["id"])
+        registration = await RegistrationRepository(conn).get_by_id(order["registration_id"])
 
-            elif event.status == NormalizedStatus.PAYMENT_CANCELLED:
-                await pay_repo.update_attempt_status(attempt["id"], "cancelled")
-                if registration and registration["status"] in ("seat_held", "payment_pending", "payment_verification"):
-                    await reg_repo.set_status(registration["registration_id"], "payment_failed")
-                await pay_repo.mark_webhook_processed(webhook_row["id"], "processed")
-                await audit_service.emit(
-                    actor_uid="system", event_type="payment_cancelled",
-                    entity_type="payment_attempt", entity_id=attempt["id"],
-                    context={"order_id": order["id"]},
-                )
-            else:
-                await pay_repo.mark_webhook_processed(webhook_row["id"], "rejected", "unknown_event_type")
-                return WebhookAckResponse(status="rejected", processing_status="rejected")
+    reg_status = registration["status"] if registration else "unknown"
+    confirmed = order["status"] == "paid" and reg_status == "registered"
+    if confirmed:
+        msg = "Payment confirmed. Your registration is complete."
+    elif remote.status == NormalizedStatus.PAYMENT_PENDING or attempt["status"] in ("pending", "requires_verification"):
+        msg = "Payment received — confirmation is still being verified. Please do not pay again."
+    elif attempt["status"] == "failed":
+        msg = "Payment was not completed. You may retry."
+    else:
+        msg = "Payment status could not be confirmed yet. Please check again shortly."
 
-        return WebhookAckResponse(status="ok", processing_status="processed")
+    return VerifyCheckoutResponse(
+        order_id=order["public_order_number"],
+        attempt_id=attempt["public_attempt_number"],
+        order_status=order["status"],
+        registration_status=reg_status,
+        payment_confirmed=confirmed,
+        safe_message=msg,
+    )
 
 
 async def _send_payment_confirmation_email(conn: asyncpg.Connection, registration: asyncpg.Record) -> None:
@@ -744,6 +937,61 @@ async def verify_attempt(public_attempt_number: str, user: Dict[str, Any]) -> Pa
         order = await pay_repo.get_order_by_id(attempt["order_id"])
         if not order or order["payer_firebase_uid"] != firebase_uid:
             raise HTTPException(status_code=404, detail="payment_attempt_not_found")
+
+        # Real-gateway path: query authoritative provider status and apply it
+        # through the shared state machine. Covers "manual Check Status",
+        # browser-callback-before-webhook, and missed/late webhook recovery.
+        gw = _gateway_for_order(order)
+        if (
+            gw is not None
+            and GatewayCapability.QUERY_PAYMENT_STATUS in gw.capabilities
+            and attempt["status"] in ("initiated", "pending", "requires_verification")
+            and attempt["gateway_order_ref"]
+        ):
+            try:
+                remote = gw.query_payment_status(attempt["gateway_order_ref"])
+            except GatewayError:
+                _log.warning("[payments] query_payment_status failed for attempt %s", attempt["id"])
+                remote = None
+            if remote is not None and remote.status in (
+                NormalizedStatus.PAYMENT_SUCCESS,
+                NormalizedStatus.PAYMENT_FAILED,
+                NormalizedStatus.PAYMENT_PENDING,
+            ):
+                amount_ok = (
+                    str(remote.currency) == attempt["currency"]
+                    and Decimal(remote.amount_raw) == Decimal(attempt["amount"])
+                )
+                if amount_ok or remote.status != NormalizedStatus.PAYMENT_SUCCESS:
+                    async def _noop(_s: str, _e: Optional[str] = None) -> None:
+                        return None
+
+                    await _apply_gateway_outcome(
+                        conn, attempt=attempt, order=order, event=remote, mark_processed=_noop,
+                    )
+                    attempt = await pay_repo.get_attempt_by_id(attempt["id"])
+                elif remote.status == NormalizedStatus.PAYMENT_SUCCESS and not amount_ok:
+                    await audit_service.emit(
+                        actor_uid="system", event_type="payment_verification_amount_mismatch",
+                        entity_type="payment_attempt", entity_id=attempt["id"],
+                        context={"order_id": order["id"]},
+                    )
+            await pay_repo.record_verification_check(attempt["id"])
+            attempt = await pay_repo.get_attempt_by_id(attempt["id"])
+            await audit_service.emit(
+                actor_uid=firebase_uid, event_type="payment_verification_checked",
+                entity_type="payment_attempt", entity_id=attempt["id"],
+                context={"order_id": order["id"], "status": attempt["status"]},
+            )
+            return PaymentAttemptResponse(
+                attempt_id=attempt["public_attempt_number"],
+                order_id=order["public_order_number"],
+                attempt_number=attempt["attempt_number"],
+                gateway=attempt["gateway"],
+                status=attempt["status"],
+                scenario=attempt["scenario"],
+                initiated_at=attempt["initiated_at"],
+            )
 
         if attempt["status"] not in ("pending", "requires_verification"):
             raise HTTPException(status_code=409, detail="attempt_not_verifiable")

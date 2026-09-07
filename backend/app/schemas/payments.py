@@ -71,6 +71,18 @@ class ResolvePendingAttemptRequest(BaseModel):
     outcome: str = Field(pattern="^(SUCCESS|FAILURE)$")
 
 
+class PaymentCheckout(BaseModel):
+    """Frontend-safe hosted-checkout payload (Razorpay Checkout). Public
+    values only — never key_secret / webhook_secret. amount_minor is paise
+    for INR; the server re-validates it against the order on verify-checkout."""
+
+    provider: str
+    provider_order_id: str
+    key_id: str
+    amount_minor: int
+    currency: str
+
+
 class PaymentAttemptResponse(BaseModel):
     attempt_id: str  # public_attempt_number
     order_id: str
@@ -79,6 +91,46 @@ class PaymentAttemptResponse(BaseModel):
     status: str
     scenario: Optional[str] = None
     initiated_at: datetime
+    # Present only for hosted-checkout gateways (Razorpay). None for the
+    # deterministic sandbox, which resolves in-process.
+    checkout: Optional[PaymentCheckout] = None
+
+
+class VerifyCheckoutRequest(BaseModel):
+    """Client-returned Razorpay Checkout identifiers. The signature is a first
+    gate only — the server independently queries authoritative provider
+    status before confirming anything."""
+
+    razorpay_payment_id: str = Field(..., min_length=1, max_length=64)
+    razorpay_order_id: str = Field(..., min_length=1, max_length=64)
+    razorpay_signature: str = Field(..., min_length=1, max_length=256)
+
+
+class VerifyCheckoutResponse(BaseModel):
+    order_id: str
+    attempt_id: str
+    order_status: str
+    registration_status: str
+    payment_confirmed: bool
+    safe_message: str
+
+
+class RefundStatusResponse(BaseModel):
+    """Attendee-safe refund view. `status` is one of:
+    refund_pending | refund_processed | refund_failed | none."""
+
+    refund_id: Optional[str] = None
+    registration_id: int
+    status: str
+    amount: Optional[Decimal] = None
+    currency: Optional[str] = None
+    requested_at: Optional[datetime] = None
+    finalized_at: Optional[datetime] = None
+    safe_message: str
+
+
+class CancelRegistrationRequest(BaseModel):
+    idempotency_key: str = Field(..., min_length=8, max_length=128)
 
 
 class TimelineEntry(BaseModel):
@@ -134,3 +186,4 @@ class PaymentConfigImportRequest(BaseModel):
     convenience_fee_value: Decimal = Field(Decimal("0"), ge=0)
     seat_hold_minutes: int = Field(15, gt=0)
     payment_session_expiry_minutes: int = Field(15, gt=0)
+    gateway: str = Field("deterministic_sandbox", pattern="^(deterministic_sandbox|razorpay)$")

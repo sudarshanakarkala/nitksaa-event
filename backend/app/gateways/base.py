@@ -37,6 +37,17 @@ class NormalizedStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class NormalizedRefundStatus(str, Enum):
+    """Provider-independent refund state. Adapters map their own vocabulary
+    (Razorpay: created/processed/failed) into these; the refund domain
+    (app.services.refund_service) branches on this enum only."""
+
+    REFUND_PENDING = "REFUND_PENDING"      # accepted, not yet settled
+    REFUND_PROCESSED = "REFUND_PROCESSED"  # provider reports done/settled
+    REFUND_FAILED = "REFUND_FAILED"        # provider rejected — retryable
+    UNKNOWN = "UNKNOWN"
+
+
 class GatewayCapability(str, Enum):
     """Operations a gateway may or may not support. See PaymentGateway
     docstring — declared per-adapter in `capabilities`, checked by the
@@ -75,19 +86,40 @@ class DelayedWebhookDelivery:
 
 
 @dataclass(frozen=True)
+class GatewayCheckout:
+    """Frontend-safe payload the client needs to open a hosted checkout
+    (Razorpay Checkout). Contains ONLY public values — never key_secret or
+    webhook_secret. `amount_minor` is the smallest currency unit (paise for
+    INR); the client must not be trusted to recompute it — it is echoed here
+    purely so the checkout widget can render, and is re-validated
+    server-side against the order on the verify-checkout call."""
+
+    provider_order_id: str
+    key_id: str
+    amount_minor: int
+    currency: str
+
+
+@dataclass(frozen=True)
 class GatewayInitiationResult:
-    """Result of PaymentGateway.create_payment(). Exactly one of
-    immediate_webhook / delayed_webhook is set today, because the only
-    adapter that exists (deterministic sandbox) simulates the whole round
-    trip itself. A real hosted-checkout gateway would instead populate a
-    (not-yet-defined) redirect/checkout field here and set neither webhook
-    field — deferred until a real provider is selected (see
-    REAL_GATEWAY_DECISION_REQUIRED), since adding that field now with no
-    consumer or adapter to exercise it would be speculative."""
+    """Result of PaymentGateway.create_payment().
+
+    - deterministic sandbox: sets immediate_webhook OR delayed_webhook (it
+      simulates the whole round trip in-process).
+    - hosted-checkout gateway (Razorpay): sets `checkout` and neither
+      webhook field — the real webhook arrives later over HTTP, and the
+      client drives the checkout widget with `checkout`.
+
+    `gateway_order_ref` is the authoritative provider-side order reference to
+    persist on the payment_attempts row. For a provider that mints the order
+    id itself (Razorpay `order_xxx`), this is that id — which may differ from
+    any placeholder the caller passed in; payment_service persists whatever
+    is returned here."""
 
     gateway_order_ref: str
     immediate_webhook: Optional[SignedWebhookDelivery] = None
     delayed_webhook: Optional[DelayedWebhookDelivery] = None
+    checkout: Optional[GatewayCheckout] = None
 
 
 @dataclass(frozen=True)
@@ -116,6 +148,20 @@ class NormalizedGatewayEvent:
     gateway_payment_ref: str = ""
     failure_code: str = "UNKNOWN"
     failure_message: str = "Payment failed"
+
+
+@dataclass(frozen=True)
+class NormalizedRefundResult:
+    """Provider-independent result of refund() / query_refund(). `amount_minor`
+    is the refunded amount in the smallest currency unit as the provider
+    reports it — the refund domain re-checks it against the internal row."""
+
+    provider_refund_id: str
+    status: "NormalizedRefundStatus"
+    amount_minor: int
+    currency: str
+    raw_status: str = ""
+    failure_reason: Optional[str] = None
 
 
 class GatewayError(Exception):
@@ -211,13 +257,42 @@ class PaymentGateway(ABC):
         is selected — see REAL_GATEWAY_DECISION_REQUIRED."""
         raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.QUERY_PAYMENT_STATUS)
 
-    def refund(self, **kwargs: Any) -> Any:
-        """Out of scope for this sprint by explicit instruction — declared
-        on the interface for future capability discovery only."""
+    def refund(
+        self,
+        *,
+        provider_payment_id: str,
+        amount_minor: int,
+        currency: str,
+        idempotency_key: str,
+    ) -> "NormalizedRefundResult":
+        """Create a full refund against a captured payment. Adapters that
+        declare GatewayCapability.REFUND override this. `idempotency_key` is
+        a stable per-logical-refund string the adapter should forward to the
+        provider's own idempotency mechanism where one exists (an extra
+        safeguard — the database uniqueness on payment_refunds is the
+        primary guarantee)."""
         raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.REFUND)
 
-    def query_refund(self, **kwargs: Any) -> Any:
+    def query_refund(
+        self,
+        *,
+        provider_payment_id: str,
+        provider_refund_id: str,
+    ) -> "NormalizedRefundResult":
+        """Authoritative provider-side refund status query, for refreshing a
+        pending/processing refund."""
         raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.QUERY_REFUND)
+
+    def verify_checkout_signature(
+        self, *, provider_order_id: str, provider_payment_id: str, signature: str
+    ) -> bool:
+        """First gate for a hosted-checkout return: verify the client-echoed
+        (order_id, payment_id, signature) triple cryptographically. This is
+        NOT authoritative on its own — payment_service always follows a
+        successful check with query_payment_status() against the provider
+        before confirming anything. Adapters without hosted checkout leave
+        this at the default (unsupported)."""
+        raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.VERIFY_PAYMENT)
 
 
 def payload_hash(raw_body: bytes) -> str:

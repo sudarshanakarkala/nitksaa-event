@@ -1693,6 +1693,7 @@ async def import_payment_configuration(
                 seat_hold_minutes=body.seat_hold_minutes,
                 payment_session_expiry_minutes=body.payment_session_expiry_minutes,
                 created_by=user["firebase_uid"],
+                gateway=body.gateway,
             )
     return {
         "status": "ok",

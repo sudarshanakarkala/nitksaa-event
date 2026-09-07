@@ -43,6 +43,7 @@ class PaymentRepository:
         seat_hold_minutes: int,
         payment_session_expiry_minutes: int,
         created_by: Optional[str],
+        gateway: str = "deterministic_sandbox",
     ) -> asyncpg.Record:
         """Dev-only helper (diagnostics config import). Configurations are
         append-only: retires the currently published row for the event (if
@@ -71,9 +72,9 @@ class PaymentRepository:
                     gst_enabled, gst_rate, gst_mode,
                     convenience_fee_enabled, convenience_fee_type, convenience_fee_value,
                     seat_hold_minutes, payment_session_expiry_minutes,
-                    status, created_by
+                    status, created_by, gateway
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'published', $13
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'published', $13, $14
                 )
                 RETURNING *
                 """,
@@ -90,6 +91,7 @@ class PaymentRepository:
                 seat_hold_minutes,
                 payment_session_expiry_minutes,
                 created_by,
+                gateway,
             )
         return row
 
@@ -107,6 +109,7 @@ class PaymentRepository:
         seat_hold_minutes: int,
         payment_session_expiry_minutes: int,
         created_by: str,
+        gateway: str = "deterministic_sandbox",
     ) -> asyncpg.Record:
         """Production config lifecycle (WP1): insert a new status='draft'
         row. Does not touch any currently-published row — unlike
@@ -124,9 +127,9 @@ class PaymentRepository:
                 gst_enabled, gst_rate, gst_mode,
                 convenience_fee_enabled, convenience_fee_type, convenience_fee_value,
                 seat_hold_minutes, payment_session_expiry_minutes,
-                status, created_by
+                status, created_by, gateway
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft', $13
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft', $13, $14
             )
             RETURNING *
             """,
@@ -143,6 +146,7 @@ class PaymentRepository:
             seat_hold_minutes,
             payment_session_expiry_minutes,
             created_by,
+            gateway,
         )
 
     async def list_configs_for_event(self, event_id: int) -> List[asyncpg.Record]:
@@ -241,15 +245,17 @@ class PaymentRepository:
         pricing_snapshot: Dict[str, Any],
         idempotency_key: str,
         expires_at: datetime,
+        gateway: str = "deterministic_sandbox",
     ) -> asyncpg.Record:
         return await self.conn.fetchrow(
             """
             INSERT INTO payment_orders (
                 public_order_number, registration_id, event_id, payer_firebase_uid,
                 configuration_id, configuration_version, currency, base_amount, tax_amount,
-                convenience_fee, final_amount, pricing_snapshot, idempotency_key, expires_at, status
+                convenience_fee, final_amount, pricing_snapshot, idempotency_key, expires_at,
+                gateway, status
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, 'created'
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, 'created'
             )
             RETURNING *
             """,
@@ -267,6 +273,7 @@ class PaymentRepository:
             json.dumps(pricing_snapshot, default=str),
             idempotency_key,
             expires_at,
+            gateway,
         )
 
     async def mark_order_payment_pending(self, order_id: int) -> None:
@@ -347,6 +354,17 @@ class PaymentRepository:
     ) -> Optional[asyncpg.Record]:
         return await self.conn.fetchrow(
             "SELECT * FROM payment_attempts WHERE gateway_order_ref = $1",
+            gateway_order_ref,
+        )
+
+    async def update_attempt_gateway_order_ref(
+        self, attempt_id: int, gateway_order_ref: str
+    ) -> None:
+        """Replace the placeholder gateway_order_ref with the real
+        provider-minted one (Razorpay order id) once create_payment returns."""
+        await self.conn.execute(
+            "UPDATE payment_attempts SET gateway_order_ref = $2, updated_at = now() WHERE id = $1",
+            attempt_id,
             gateway_order_ref,
         )
 
