@@ -24,6 +24,7 @@ class PaymentConfigDraftCreateRequest(BaseModel):
     convenience_fee_value: Decimal = Field(Decimal("0"), ge=0)
     seat_hold_minutes: int = Field(15, gt=0)
     payment_session_expiry_minutes: int = Field(15, gt=0)
+    gateway: str = Field("deterministic_sandbox", pattern="^(deterministic_sandbox|razorpay)$")
 
 
 class PaymentConfigAdminResponse(BaseModel):
@@ -42,6 +43,7 @@ class PaymentConfigAdminResponse(BaseModel):
     convenience_fee_value: Decimal
     seat_hold_minutes: int
     payment_session_expiry_minutes: int
+    gateway: str = "deterministic_sandbox"
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None

@@ -20,6 +20,7 @@ from app.services import audit_service
 
 _VALID_GST_MODES = ("inclusive", "exclusive")
 _VALID_FEE_TYPES = ("fixed", "percentage")
+_VALID_GATEWAYS = ("deterministic_sandbox", "razorpay")
 
 
 def validate_configuration(payload: Dict[str, Any]) -> List[str]:
@@ -63,6 +64,10 @@ def validate_configuration(payload: Dict[str, Any]) -> List[str]:
     if payment_session_expiry_minutes is None or int(payment_session_expiry_minutes) <= 0:
         errors.append("payment_session_expiry_minutes must be a positive integer")
 
+    gateway = payload.get("gateway", "deterministic_sandbox")
+    if gateway not in _VALID_GATEWAYS:
+        errors.append(f"gateway must be one of {_VALID_GATEWAYS}")
+
     return errors
 
 
@@ -83,6 +88,7 @@ def _config_view(row: asyncpg.Record) -> Dict[str, Any]:
         "convenience_fee_value": row["convenience_fee_value"],
         "seat_hold_minutes": row["seat_hold_minutes"],
         "payment_session_expiry_minutes": row["payment_session_expiry_minutes"],
+        "gateway": row["gateway"] if "gateway" in row else "deterministic_sandbox",
         "created_by": row["created_by"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
@@ -110,6 +116,7 @@ async def create_draft(event_id: int, payload: Dict[str, Any], user: Dict[str, A
             seat_hold_minutes=int(payload.get("seat_hold_minutes", 15)),
             payment_session_expiry_minutes=int(payload.get("payment_session_expiry_minutes", 15)),
             created_by=user["firebase_uid"],
+            gateway=payload.get("gateway", "deterministic_sandbox"),
         )
 
     await audit_service.emit(

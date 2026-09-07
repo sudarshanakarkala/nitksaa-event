@@ -14,6 +14,7 @@ from typing import Dict, List
 
 from app.gateways.base import GatewayError, PaymentGateway
 from app.gateways.deterministic_sandbox import DeterministicSandboxGateway
+from app.gateways.razorpay_gateway import RazorpayGateway
 
 _REGISTRY: Dict[str, PaymentGateway] = {}
 
@@ -23,6 +24,7 @@ def _register(gateway: PaymentGateway) -> None:
 
 
 _register(DeterministicSandboxGateway())
+_register(RazorpayGateway())
 
 
 class UnknownGatewayError(GatewayError):

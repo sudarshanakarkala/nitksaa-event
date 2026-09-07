@@ -24,6 +24,8 @@ from app.gateways.base import (
     GatewayInitiationResult,
     GatewayWebhookUnparseableError,
     NormalizedGatewayEvent,
+    NormalizedRefundResult,
+    NormalizedRefundStatus,
     NormalizedStatus,
     PaymentGateway,
     SignedWebhookDelivery,
@@ -146,6 +148,13 @@ class DeterministicSandboxGateway(PaymentGateway):
             GatewayCapability.CREATE_PAYMENT,
             GatewayCapability.PROCESS_WEBHOOK,
             GatewayCapability.VERIFY_WEBHOOK,
+            # Deterministic, no-real-money refunds — added so the refund
+            # domain (persistence, idempotency, concurrency, ownership,
+            # state machine) is exercisable end-to-end without a real
+            # provider. There is no settlement delay to simulate: a sandbox
+            # refund is 'processed' the instant it is created.
+            GatewayCapability.REFUND,
+            GatewayCapability.QUERY_REFUND,
         }
     )
     supported_scenarios: FrozenSet[str] = frozenset(SUPPORTED_SCENARIOS)
@@ -192,6 +201,37 @@ class DeterministicSandboxGateway(PaymentGateway):
 
         secret = get_settings().payment_sandbox_signing_secret
         return verify_signature(raw_body, signature, secret)
+
+    def refund(
+        self,
+        *,
+        provider_payment_id: str,
+        amount_minor: int,
+        currency: str,
+        idempotency_key: str,
+    ) -> NormalizedRefundResult:
+        # No async settlement in the sandbox — a refund is processed at once.
+        return NormalizedRefundResult(
+            provider_refund_id=f"sbx_rfnd_{secrets.token_urlsafe(12)}",
+            status=NormalizedRefundStatus.REFUND_PROCESSED,
+            amount_minor=amount_minor,
+            currency=currency,
+            raw_status="processed",
+        )
+
+    def query_refund(
+        self,
+        *,
+        provider_payment_id: str,
+        provider_refund_id: str,
+    ) -> NormalizedRefundResult:
+        return NormalizedRefundResult(
+            provider_refund_id=provider_refund_id,
+            status=NormalizedRefundStatus.REFUND_PROCESSED,
+            amount_minor=0,
+            currency="INR",
+            raw_status="processed",
+        )
 
     def parse_webhook(self, raw_body: bytes) -> NormalizedGatewayEvent:
         try:
