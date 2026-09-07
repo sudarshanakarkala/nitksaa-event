@@ -9,7 +9,7 @@ import {
   setAccessToken,
   setStoredUser,
 } from './sessionStorage';
-import { BASE_URL } from '../api/apiClient';
+import { BASE_URL, refreshBackendToken } from '../api/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -27,13 +27,24 @@ export function AuthProvider({ children }) {
         return;
       }
       try {
-        const response = await fetch(`${BASE_URL}/api/v1/auth/me`, {
+        let response = await fetch(`${BASE_URL}/api/v1/auth/me`, {
           headers: { Authorization: `Bearer ${token}` },
         });
+        // Stored backend JWT expired/invalid — try once to recover it from the
+        // still-live Firebase sign-in before dropping the session on reload.
+        if (response.status === 401) {
+          const fresh = await refreshBackendToken();
+          if (fresh) {
+            response = await fetch(`${BASE_URL}/api/v1/auth/me`, {
+              headers: { Authorization: `Bearer ${fresh}` },
+            });
+          }
+        }
         if (!response.ok) {
           clearSession();
         } else {
           const me = await response.json();
+          setStoredUser(me);
           setUser(me);
         }
       } catch {

@@ -4,6 +4,24 @@ import { createEvent, getEvent, updateEvent } from '../api/eventsApi';
 import EventEnrichmentPanel from './EventEnrichmentPanel';
 import '../styles/event-form.css';
 
+// Human-readable message for a failed save. A permission / server / network
+// failure keeps you signed in (see api/apiClient.js) — say so plainly instead
+// of surfacing a raw backend error slug.
+function friendlySaveError(err) {
+  switch (err?.category) {
+    case 'forbidden':
+      return 'You do not have permission to manage events. Ask a platform admin to grant you access — you are still signed in.';
+    case 'network':
+      return 'Could not reach the backend. Your session is still active — check the connection and try again.';
+    case 'server':
+      return 'The server hit an error saving this event. Your session is still active — please retry.';
+    case 'conflict':
+      return err.message || 'This event was changed elsewhere. Refresh and try again.';
+    default:
+      return err?.message || 'An unexpected error occurred.';
+  }
+}
+
 // ── Timezone options and UTC offset lookup ────────────────────────────────
 const TIMEZONES = [
   { label: 'India — IST (UTC+05:30)',      value: 'Asia/Kolkata' },
@@ -242,7 +260,7 @@ export default function EventFormPage() {
         navigate(`/events/${newId}/edit`);
       }
     } catch (err) {
-      setApiError(err.message);
+      setApiError(friendlySaveError(err));
       setSaving(false);
     }
   }

@@ -20,10 +20,8 @@ export async function exportAttendeesCSV(eventId, { search, batch_year } = {}) {
   const qs = params.toString() ? `?${params}` : '';
 
   const token   = getAccessToken();
-  const devUser = import.meta.env.VITE_DEV_USER;
   const headers = {
-    ...(token   ? { Authorization: `Bearer ${token}` } : {}),
-    ...(devUser ? { 'X-Dev-User': devUser }            : {}),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
   };
 
   const response = await fetch(
