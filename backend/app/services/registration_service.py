@@ -343,7 +343,7 @@ async def get_registration_eligibility(
         )
 
     if user.get("user_type") not in ["alumni", "admin"] or not ref_id:
-        return _ineligible(user.get("user_type") + "Only alumni can register for events.")
+        return _ineligible("Only alumni can register for events.")
 
     profile = await alumni_service.get_alumni_profile_by_ref_id(ref_id)
     if not profile or not alumni_service.is_alumni_active(profile.get("registrationstatus")):
