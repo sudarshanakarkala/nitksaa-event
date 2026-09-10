@@ -23,6 +23,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   final TextEditingController _notesController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
   final TextEditingController _phoneController = TextEditingController();
+  int _selectedPassCount = 1;
 
   @override
   void dispose() {
@@ -1292,6 +1293,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     _notesController.clear();
     _emailController.text = state.alumniProfile?['email'] ?? auth.session?.email ?? '';
     _phoneController.text = state.alumniProfile?['phone'] ?? '';
+    _selectedPassCount = _passOptions(event).first;
 
     if (isIOS) {
       showCupertinoModalPopup(
@@ -1360,6 +1362,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         children: [
                           _buildEventHeader(event, isDark),
                           _buildReadOnlyField('Badge name', state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? '', isDark),
+                          _buildPassesDropdown(event, isDark),
                           _buildEditableField('Email', _emailController, 'your@email.com', isDark),
                           _buildEditableField('Phone', _phoneController, 'Phone number', isDark),
                           _buildEditableField('Notes (optional)', _notesController, 'Dietary preferences, accessibility needs…', isDark),
@@ -1372,7 +1375,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                 Navigator.pop(context);
                                 await _submitRegistration();
                               },
-                              child: const Text('Confirm registration', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                              child: const Text('Proceed to Checkout', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -1420,6 +1423,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     const SizedBox(height: 16),
                     _buildEventHeader(event, isDark),
                     _buildReadOnlyField('Badge name', state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? '', isDark),
+                    _buildPassesDropdown(event, isDark),
                     _buildEditableField('Email', _emailController, 'your@email.com', isDark),
                     _buildEditableField('Phone', _phoneController, 'Phone number', isDark),
                     _buildEditableField('Notes (optional)', _notesController, 'Dietary preferences, accessibility needs…', isDark),
@@ -1437,7 +1441,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           Navigator.pop(context);
                           await _submitRegistration();
                         },
-                        child: const Text('Confirm registration', style: TextStyle(fontWeight: FontWeight.bold)),
+                        child: const Text('Proceed to Checkout', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
                     ),
                     const SizedBox(height: 16),
@@ -1541,6 +1545,82 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
+  /// Integer options for the "No of passes" dropdown: min..max inclusive.
+  /// Falls back to 1 (min) and 4 (max) when the event doesn't define them.
+  List<int> _passOptions(AppEvent event) {
+    var min = event.registrationMinQuantity ?? 1;
+    var max = event.registrationMaxQuantity ?? 4;
+    if (min < 1) min = 1;
+    if (max < min) max = min;
+    return List<int>.generate(max - min + 1, (i) => min + i);
+  }
+
+  /// Single-select dropdown for the number of passes (registration quantity).
+  Widget _buildPassesDropdown(AppEvent event, bool isDark) {
+    final options = _passOptions(event);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12.0),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'No of passes',
+            style: TextStyle(
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+            ),
+          ),
+          const SizedBox(height: 6),
+          DropdownButtonFormField<int>(
+            initialValue: _selectedPassCount,
+            isExpanded: true,
+            decoration: InputDecoration(
+              hintText: 'Select number of passes',
+              hintStyle: TextStyle(fontSize: 13, color: isDark ? Colors.white38 : Colors.black38),
+              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              filled: true,
+              fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+              border: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                ),
+              ),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: BorderSide(
+                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                ),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(8),
+                borderSide: const BorderSide(
+                  color: Color(0xFFC9952A),
+                  width: 1.5,
+                ),
+              ),
+            ),
+            items: options
+                .map((n) => DropdownMenuItem<int>(
+                      value: n,
+                      child: Text(
+                        '$n',
+                        style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black),
+                      ),
+                    ))
+                .toList(),
+            onChanged: (value) {
+              if (value != null) {
+                setState(() => _selectedPassCount = value);
+              }
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
   Widget _buildInfoBox(bool isDark) {
     final infoBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF3FA);
     final infoText = isDark ? const Color(0xFF8B9AB8) : const Color(0xFF5A6A8A);
@@ -1602,7 +1682,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   Future<void> _submitRegistration() async {
     final success = await ref
         .read(eventDetailProvider(widget.eventId).notifier)
-        .register(widget.eventId, _notesController.text);
+        .register(widget.eventId, _notesController.text, quantity: _selectedPassCount);
 
     if (mounted) {
       if (success) {

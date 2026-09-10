@@ -202,10 +202,18 @@ class EventsRepository {
     return MyEventRegistration.fromJson(response.data ?? <String, dynamic>{});
   }
 
-  Future<Map<String, dynamic>> registerForEvent(int eventId, String accessToken, String attendeeNote) async {
+  Future<Map<String, dynamic>> registerForEvent(
+    int eventId,
+    String accessToken,
+    String attendeeNote, {
+    int? quantity,
+  }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/events/$eventId/register',
-      data: {'attendee_note': attendeeNote},
+      data: {
+        'attendee_note': attendeeNote,
+        'quantity': ?quantity,
+      },
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
     return response.data ?? <String, dynamic>{};
