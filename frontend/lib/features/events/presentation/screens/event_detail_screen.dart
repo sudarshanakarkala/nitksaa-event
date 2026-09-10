@@ -1371,9 +1371,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             width: double.infinity,
                             child: CupertinoButton(
                               color: const Color(0xFFC9952A),
-                              onPressed: () async {
+                              onPressed: () {
                                 Navigator.pop(context);
-                                await _submitRegistration();
+                                _proceedToCheckout(event);
                               },
                               child: const Text('Proceed to Checkout', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
                             ),
@@ -1437,9 +1437,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
-                        onPressed: () async {
+                        onPressed: () {
                           Navigator.pop(context);
-                          await _submitRegistration();
+                          _proceedToCheckout(event);
                         },
                         child: const Text('Proceed to Checkout', style: TextStyle(fontWeight: FontWeight.bold)),
                       ),
@@ -1676,6 +1676,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         const Divider(height: 1),
         const SizedBox(height: 16),
       ],
+    );
+  }
+
+  /// Navigates to the checkout screen with the chosen pass count and notes.
+  void _proceedToCheckout(AppEvent event) {
+    final notes = Uri.encodeComponent(_notesController.text);
+    context.push(
+      '/events/${event.eventId}/checkout?quantity=$_selectedPassCount&notes=$notes',
     );
   }
 

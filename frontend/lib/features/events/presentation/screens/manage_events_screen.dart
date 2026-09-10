@@ -1161,7 +1161,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             Expanded(
               child: _buildTextField(
                 _regMinQuantity,
-                'Min Quantity',
+                'Min Count Per Registration',
                 hint: 'e.g., 1',
                 keyboardType: TextInputType.number,
               ),
@@ -1170,7 +1170,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             Expanded(
               child: _buildTextField(
                 _regMaxQuantity,
-                'Max Quantity',
+                'Max Count Per Registration',
                 hint: 'e.g., 5',
                 keyboardType: TextInputType.number,
               ),
@@ -2755,7 +2755,7 @@ void _showFeeDialog(int? editIndex) {
     if (regMinQtyText.isNotEmpty && regMinQty == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Min quantity must be a whole number')),
+          const SnackBar(content: Text('Min count must be a whole number')),
         );
       }
       return;
@@ -2763,7 +2763,7 @@ void _showFeeDialog(int? editIndex) {
     if (regMinQty != null && regMinQty < 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Min quantity must be 0 or more')),
+          const SnackBar(content: Text('Min count must be 0 or more')),
         );
       }
       return;
@@ -2771,7 +2771,7 @@ void _showFeeDialog(int? editIndex) {
     if (regMaxQtyText.isNotEmpty && regMaxQty == null) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Max quantity must be a whole number')),
+          const SnackBar(content: Text('Max count must be a whole number')),
         );
       }
       return;
@@ -2779,7 +2779,7 @@ void _showFeeDialog(int? editIndex) {
     if (regMaxQty != null && regMaxQty < 0) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Max quantity must be 0 or more')),
+          const SnackBar(content: Text('Max count must be 0 or more')),
         );
       }
       return;
@@ -2787,7 +2787,7 @@ void _showFeeDialog(int? editIndex) {
     if (regMinQty != null && regMaxQty != null && regMaxQty < regMinQty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Max quantity cannot be less than min quantity')),
+          const SnackBar(content: Text('Max count cannot be less than min count')),
         );
       }
       return;
