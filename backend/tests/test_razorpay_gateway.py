@@ -43,9 +43,13 @@ def test_adapter_registered_in_registry():
 
 def test_is_enabled_false_without_credentials(monkeypatch):
     from app.config import get_settings
-    monkeypatch.delenv("RAZORPAY_KEY_ID", raising=False)
-    monkeypatch.delenv("RAZORPAY_KEY_SECRET", raising=False)
+    # setenv("") — an explicit empty env var overrides any value coming from
+    # backend/.env (env source outranks the dotenv source in pydantic-settings),
+    # so this stays correct whether or not real test creds are present locally.
+    monkeypatch.setenv("RAZORPAY_KEY_ID", "")
+    monkeypatch.setenv("RAZORPAY_KEY_SECRET", "")
     get_settings.cache_clear()
+    assert get_settings().razorpay_configured is False
     assert _gw().is_enabled(get_settings()) is False
 
 

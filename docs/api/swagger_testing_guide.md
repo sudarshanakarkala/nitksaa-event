@@ -153,7 +153,7 @@ Firebase Login
 ```bash
 cd apps/event_app
 flutter run -d chrome \
-  --dart-define=DEV_DIAGNOSTICS_EMAIL=Username2026@gmail.com \
+  --dart-define=DEV_DIAGNOSTICS_EMAIL=UUsername2026@gmail.com \
   --dart-define=DEV_DIAGNOSTICS_PASSWORD=Password2026
 ```
 
@@ -180,7 +180,7 @@ curl -s -X POST \
   "https://identitytoolkit.googleapis.com/v1/accounts:signInWithPassword?key=${FIREBASE_API_KEY}" \
   -H "Content-Type: application/json" \
   -d '{
-    "email": "Username2026@gmail.com",
+    "email": "UUsername2026@gmail.com",
     "password": "Password2026",
     "returnSecureToken": true
   }'
@@ -214,7 +214,7 @@ From the response, copy the `idToken` field value.
 ## 5. Test Account
 
 ```text
-Email:           Username2026@gmail.com
+Email:           UUsername2026@gmail.com
 Password:        Password2026
 Firebase UID:    fxvOA6JInMM2OPKb3vuSV7qJwtI3
 Alumni ref_id:   NITK2026IT001
@@ -224,7 +224,7 @@ alumni_db:       Active (eligible to register)
 
 > If this user logs in as `user_type = "other"` instead of `"alumni"`, check:
 > - `ALUMNI_DB_URL` is set in `.env` and pointing to `alumni_db`
-> - The email `Username2026@gmail.com` is mapped in `event_users` with a non-null `ref_id`
+> - The email `UUsername2026@gmail.com` is mapped in `event_users` with a non-null `ref_id`
 > - The corresponding record exists in `alumni_db.alumni` with `registrationstatus` in `{'Active', 'Self-Verified'}`
 
 ---
