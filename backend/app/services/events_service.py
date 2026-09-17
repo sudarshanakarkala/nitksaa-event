@@ -1,10 +1,12 @@
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 import asyncpg
 from fastapi import HTTPException
 
 from app.repositories.events_repository import EventsRepository
+from app.repositories.payment_repository import PaymentRepository
 from app.repositories.people_repository import PeopleRepository
 from app.repositories.sponsors_partners_repository import SponsorsRepository, PartnersRepository
 from app.schemas.event_create import EventCreate
@@ -174,7 +176,40 @@ class EventsService:
                 detail=f"status_changed_concurrently_expected_{current}",
             )
         await self._audit(user["firebase_uid"], audit_type, event_id)
+        if new_status == "published":
+            await self._ensure_payment_configuration(self._to_dict(record), user)
         return _enrich(self._to_dict(record))
+
+    async def _ensure_payment_configuration(self, event: Dict[str, Any], user: Dict[str, Any]) -> None:
+        """Auto-provision a baseline Razorpay payment configuration for a
+        newly-published paid event that doesn't have one yet. The admin
+        portal's event form only sets events.ticket_price — it has no UI to
+        create a payment_configurations row — so without this, every
+        admin-created paid event would be unpayable in the payment app.
+        Idempotent (skipped once a published configuration exists) and a
+        no-op for free events."""
+        if event.get("is_free") or not event.get("ticket_price"):
+            return
+        event_id = event["event_id"]
+        pay_repo = PaymentRepository(self.conn)
+        if await pay_repo.get_published_config_for_event(event_id):
+            return
+        await pay_repo.create_new_config_version(
+            configuration_key=f"auto-event-{event_id}",
+            event_id=event_id,
+            base_amount=Decimal(str(event["ticket_price"])),
+            gst_enabled=False,
+            gst_rate=Decimal("0"),
+            gst_mode="exclusive",
+            convenience_fee_enabled=False,
+            convenience_fee_type="fixed",
+            convenience_fee_value=Decimal("0"),
+            seat_hold_minutes=15,
+            payment_session_expiry_minutes=15,
+            created_by=user["firebase_uid"],
+            gateway="razorpay",
+        )
+        await self._audit(user["firebase_uid"], "payment_configuration_auto_created", event_id)
 
     # ── Admin: Sessions ──────────────────────────────────────────────────────
 

@@ -23,7 +23,7 @@ dart-defines:
 
 ```bash
 flutter run \
-  --dart-define=DEV_DIAGNOSTICS_EMAIL=Username2026@gmail.com \
+  --dart-define=DEV_DIAGNOSTICS_EMAIL=UUsername2026@gmail.com \
   --dart-define=DEV_DIAGNOSTICS_PASSWORD=Password2026
 ```
 

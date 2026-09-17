@@ -1657,6 +1657,62 @@ def _require_payment_diagnostics_enabled() -> None:
         raise HTTPException(status_code=404, detail="not_found")
 
 
+@router.get("/razorpay-checkout-harness")
+async def razorpay_checkout_harness(order_id: str = Query(..., min_length=6, max_length=64)):
+    """Development-only manual Razorpay Test-Mode Checkout harness.
+
+    Serves a tiny self-contained page so a human can complete a hosted
+    Checkout payment during live backend E2E validation (there is no
+    server-side way to complete a Razorpay standard Checkout payment). Only
+    reachable when APP_ENV=development AND payment_diagnostics_enabled.
+    Carries the public key_id only — never a secret. Not a product surface;
+    delete after E2E closure.
+    """
+    from fastapi.responses import HTMLResponse
+
+    _require_development()
+    _require_payment_diagnostics_enabled()
+    settings = get_settings()
+    if not settings.razorpay_configured:
+        raise HTTPException(status_code=409, detail="razorpay_not_configured")
+    key_id = settings.razorpay_key_id
+    safe_order = "".join(c for c in order_id if c.isalnum() or c == "_")
+    html = f"""<!doctype html><html><head><meta charset="utf-8">
+<title>NITKSAA ₹1 Razorpay Test Checkout</title>
+<style>body{{font:15px/1.5 -apple-system,system-ui,sans-serif;margin:40px auto;max-width:640px}}
+button{{font-size:16px;padding:12px 22px;border:0;border-radius:8px;background:#3395ff;color:#fff;cursor:pointer}}
+pre{{background:#f4f4f5;padding:16px;border-radius:8px;white-space:pre-wrap;word-break:break-all}}
+code{{background:#f4f4f5;padding:1px 5px;border-radius:4px}}.ok{{color:#0a7a2f;font-weight:600}}.err{{color:#c0392b;font-weight:600}}</style>
+</head><body>
+<h2>NITKSAA — ₹1.00 Razorpay <b>Test Mode</b> (UPI / Netbanking)</h2>
+<p>Order: <code>{safe_order}</code> · ₹1.00 (100 paise) · INR · key <code>{key_id}</code></p>
+<ul><li><b>UPI:</b> pick UPI → VPA <code>success@razorpay</code> → Pay (auto-succeeds). Failure test: <code>failure@razorpay</code>.</li>
+<li><b>Netbanking:</b> pick Netbanking → any test bank → click <b>Success</b> on the mock bank page.</li></ul>
+<p><button id="pay">Pay ₹1.00 (Test)</button></p>
+<h3>Copy this block back to Claude Code:</h3><pre id="out">(nothing yet — click Pay)</pre>
+<script src="https://checkout.razorpay.com/v1/checkout.js"></script>
+<script>
+var out=document.getElementById('out');
+document.getElementById('pay').onclick=function(){{
+  var rzp=new Razorpay({{
+    key:"{key_id}", order_id:"{safe_order}", amount:100, currency:"INR",
+    name:"NITKSAA Event", description:"Razorpay Payment Validation (₹1 pilot)",
+    method:{{upi:true,netbanking:true,card:false,wallet:false,paylater:false,emi:false}},
+    handler:function(r){{out.className='ok';out.textContent=
+      "PAYMENT SUCCESS — paste this to Claude Code:\\n\\n"+
+      "razorpay_payment_id = "+r.razorpay_payment_id+"\\n"+
+      "razorpay_order_id   = "+r.razorpay_order_id+"\\n"+
+      "razorpay_signature  = "+r.razorpay_signature+"\\n";}},
+    modal:{{ondismiss:function(){{out.className='err';out.textContent="Checkout dismissed. Click Pay to retry.";}}}}
+  }});
+  rzp.on('payment.failed',function(r){{out.className='err';
+    out.textContent="PAYMENT FAILED — tell Claude Code:\\n\\n"+JSON.stringify(r.error,null,2);}});
+  rzp.open();
+}};
+</script></body></html>"""
+    return HTMLResponse(content=html)
+
+
 @router.post("/payments/configuration/import")
 async def import_payment_configuration(
     body: PaymentConfigImportRequest,
