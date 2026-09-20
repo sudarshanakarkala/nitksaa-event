@@ -208,6 +208,10 @@ class EventsService:
             payment_session_expiry_minutes=15,
             created_by=user["firebase_uid"],
             gateway="razorpay",
+            # Admin-portal-published events must never silently become
+            # Live-charging — LIVE requires an explicit, platform_admin-gated
+            # publish through the payment-config admin API.
+            payment_mode="test",
         )
         await self._audit(user["firebase_uid"], "payment_configuration_auto_created", event_id)
 

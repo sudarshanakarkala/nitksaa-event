@@ -123,9 +123,14 @@ async def receive_payment_webhook(
     gateway: str,
     request: Request,
     x_sandbox_signature: str = Header(default=""),
-    x_razorpay_signature: str = Header(default=""),
-    x_razorpay_event_id: str = Header(default=""),
 ) -> WebhookAckResponse:
+    """Generic webhook route — deterministic_sandbox only. Razorpay TEST/LIVE
+    separation (spec §5) requires knowing which credential profile to verify
+    against *before* touching the body, so razorpay deliveries use the two
+    explicit mode-specific routes below instead; hitting this route with
+    gateway=razorpay 404s the same way any other unregistered gateway does."""
+    if gateway == "razorpay":
+        raise HTTPException(status_code=404, detail="unknown_gateway")
     # Registry-backed, not a hardcoded name check: an unregistered or
     # environment-disabled gateway is rejected the same way a genuinely
     # unknown one is (existence-hiding — both return the same 404/detail).
@@ -134,13 +139,63 @@ async def receive_payment_webhook(
     except (UnknownGatewayError, GatewayDisabledError):
         raise HTTPException(status_code=404, detail="unknown_gateway")
     # Raw body bytes are passed through untouched — signature verification
-    # (sandbox HMAC and Razorpay HMAC alike) is over the exact received bytes,
-    # never a re-serialised copy.
+    # is over the exact received bytes, never a re-serialised copy.
     raw_body = await request.body()
-    if gateway == "razorpay":
-        signature = x_razorpay_signature
-        provider_event_id = x_razorpay_event_id or None
-    else:
-        signature = x_sandbox_signature
-        provider_event_id = None
-    return await payment_service.process_webhook(gateway, raw_body, signature, provider_event_id)
+    return await payment_service.process_webhook(gateway, raw_body, x_sandbox_signature, None)
+
+
+async def _receive_razorpay_webhook(
+    *, payment_mode: str, request: Request, x_razorpay_signature: str, x_razorpay_event_id: str
+) -> WebhookAckResponse:
+    try:
+        gateway_registry.get_enabled_gateway("razorpay", get_settings())
+    except (UnknownGatewayError, GatewayDisabledError):
+        raise HTTPException(status_code=404, detail="unknown_gateway")
+    raw_body = await request.body()
+    return await payment_service.process_webhook(
+        "razorpay",
+        raw_body,
+        x_razorpay_signature,
+        x_razorpay_event_id or None,
+        payment_mode=payment_mode,
+    )
+
+
+@router.post(
+    "/api/v1/payment-gateways/razorpay/test/webhook",
+    response_model=WebhookAckResponse,
+)
+async def receive_razorpay_test_webhook(
+    request: Request,
+    x_razorpay_signature: str = Header(default=""),
+    x_razorpay_event_id: str = Header(default=""),
+) -> WebhookAckResponse:
+    """Verified with RAZORPAY_TEST_WEBHOOK_SECRET only. Configure this exact
+    URL as a separate webhook in the Razorpay Dashboard while in TEST mode —
+    see docs/payments/RAZORPAY_TEST_LIVE_MODE_SEPARATION_REPORT.md."""
+    return await _receive_razorpay_webhook(
+        payment_mode="test",
+        request=request,
+        x_razorpay_signature=x_razorpay_signature,
+        x_razorpay_event_id=x_razorpay_event_id,
+    )
+
+
+@router.post(
+    "/api/v1/payment-gateways/razorpay/live/webhook",
+    response_model=WebhookAckResponse,
+)
+async def receive_razorpay_live_webhook(
+    request: Request,
+    x_razorpay_signature: str = Header(default=""),
+    x_razorpay_event_id: str = Header(default=""),
+) -> WebhookAckResponse:
+    """Verified with RAZORPAY_LIVE_WEBHOOK_SECRET only. Configure this exact
+    URL as a separate webhook in the Razorpay Dashboard while in LIVE mode —
+    never reuse the TEST webhook's URL or secret."""
+    return await _receive_razorpay_webhook(
+        payment_mode="live",
+        request=request,
+        x_razorpay_signature=x_razorpay_signature,
+        x_razorpay_event_id=x_razorpay_event_id,
+    )

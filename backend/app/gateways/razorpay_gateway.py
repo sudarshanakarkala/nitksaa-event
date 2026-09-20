@@ -76,6 +76,21 @@ _REFUND_STATUS_MAP = {
 }
 
 
+_KEY_PREFIX = {"test": "rzp_test_", "live": "rzp_live_"}
+
+
+class RazorpayModeCredentialError(GatewayError):
+    """Fail-closed guard: `payment_mode` was missing/invalid, the
+    corresponding credential profile is unconfigured, or the configured
+    key_id doesn't carry that mode's expected rzp_test_/rzp_live_ prefix.
+    Raised instead of silently using the other mode's credentials or an
+    unprefixed key — see app/config.py Settings.razorpay_credentials_for."""
+
+    def __init__(self, payment_mode: Optional[str], reason: str):
+        self.payment_mode = payment_mode
+        super().__init__(f"razorpay {payment_mode!r} credentials {reason}")
+
+
 class RazorpayApiError(GatewayError):
     """A Razorpay REST call returned a non-2xx status or could not be reached.
     The message is deliberately generic — no secrets, no full response body."""
@@ -138,11 +153,29 @@ class _RazorpayClient:
             raise RazorpayApiError(operation or f"{method} {path}", resp.status_code) from exc
 
 
-def _build_client(settings: Any) -> _RazorpayClient:
+def _resolve_credentials(settings: Any, payment_mode: Optional[str]) -> tuple[str, str, str]:
+    """(key_id, key_secret, webhook_secret) for `payment_mode`, fail-closed.
+    Never returns credentials from a mode other than the one requested —
+    this is the single choke point every Razorpay call goes through."""
+    if payment_mode not in ("test", "live"):
+        raise RazorpayModeCredentialError(payment_mode, "payment_mode must be 'test' or 'live'")
+    key_id, key_secret, webhook_secret = settings.razorpay_credentials_for(payment_mode)
+    if not key_id or not key_secret:
+        raise RazorpayModeCredentialError(payment_mode, "are not configured")
+    expected_prefix = _KEY_PREFIX[payment_mode]
+    if not key_id.startswith(expected_prefix):
+        raise RazorpayModeCredentialError(
+            payment_mode, f"key_id does not start with {expected_prefix!r}"
+        )
+    return key_id, key_secret, webhook_secret
+
+
+def _build_client(settings: Any, payment_mode: Optional[str]) -> _RazorpayClient:
     """Overridable seam for tests (monkeypatch this to inject a fake)."""
+    key_id, key_secret, _ = _resolve_credentials(settings, payment_mode)
     return _RazorpayClient(
-        key_id=settings.razorpay_key_id,
-        key_secret=settings.razorpay_key_secret,
+        key_id=key_id,
+        key_secret=key_secret,
         api_base=settings.razorpay_api_base,
         timeout=settings.razorpay_http_timeout_seconds,
     )
@@ -165,13 +198,16 @@ class RazorpayGateway(PaymentGateway):
     supported_scenarios: FrozenSet[str] = frozenset()
 
     def is_enabled(self, settings: Any) -> bool:
-        # Fail closed: no credentials -> unusable. Also require a recognised
-        # mode so a typo in RAZORPAY_MODE can't silently run.
-        if not settings.razorpay_configured:
-            return False
-        if settings.razorpay_mode not in ("test", "live"):
-            return False
-        return True
+        # Fail closed: usable only if at least one credential profile
+        # (TEST or LIVE) is actually configured. Per-call mode resolution
+        # (which profile, and the rzp_test_/rzp_live_ prefix check) happens
+        # in _resolve_credentials for the specific payment_mode in play —
+        # this is only the coarse "is Razorpay reachable at all" gate the
+        # registry checks before a mode is even known (e.g. the webhook
+        # route's {gateway} segment).
+        test_key_id, test_key_secret, _ = settings.razorpay_credentials_for("test")
+        live_key_id, live_key_secret, _ = settings.razorpay_credentials_for("live")
+        return bool((test_key_id and test_key_secret) or (live_key_id and live_key_secret))
 
     # ── initiation ────────────────────────────────────────────────────────
 
@@ -188,6 +224,7 @@ class RazorpayGateway(PaymentGateway):
         amount: Decimal,
         currency: str,
         scenario: Optional[str] = None,
+        payment_mode: Optional[str] = None,
     ) -> GatewayInitiationResult:
         if currency != "INR":
             raise GatewayError("razorpay adapter supports INR only")
@@ -195,7 +232,8 @@ class RazorpayGateway(PaymentGateway):
 
         settings = get_settings()
         amount_minor = rupees_to_paise(amount)
-        client = _build_client(settings)
+        key_id, _, _ = _resolve_credentials(settings, payment_mode)
+        client = _build_client(settings, payment_mode)
         body = {
             "amount": amount_minor,
             "currency": "INR",
@@ -211,7 +249,7 @@ class RazorpayGateway(PaymentGateway):
             gateway_order_ref=provider_order_id,
             checkout=GatewayCheckout(
                 provider_order_id=provider_order_id,
-                key_id=settings.razorpay_key_id,
+                key_id=key_id,
                 amount_minor=amount_minor,
                 currency="INR",
             ),
@@ -220,11 +258,19 @@ class RazorpayGateway(PaymentGateway):
     # ── checkout return (first gate) ──────────────────────────────────────
 
     def verify_checkout_signature(
-        self, *, provider_order_id: str, provider_payment_id: str, signature: str
+        self,
+        *,
+        provider_order_id: str,
+        provider_payment_id: str,
+        signature: str,
+        payment_mode: Optional[str] = None,
     ) -> bool:
         from app.config import get_settings
 
-        secret = get_settings().razorpay_key_secret
+        try:
+            _, secret, _ = _resolve_credentials(get_settings(), payment_mode)
+        except RazorpayModeCredentialError:
+            return False
         if not secret or not signature:
             return False
         expected = hmac.new(
@@ -236,10 +282,12 @@ class RazorpayGateway(PaymentGateway):
 
     # ── authoritative status ─────────────────────────────────────────────
 
-    def query_payment_status(self, gateway_order_ref: str) -> NormalizedGatewayEvent:
+    def query_payment_status(
+        self, gateway_order_ref: str, *, payment_mode: Optional[str] = None
+    ) -> NormalizedGatewayEvent:
         from app.config import get_settings
 
-        client = _build_client(get_settings())
+        client = _build_client(get_settings(), payment_mode)
         data = client.request(
             "GET", f"/orders/{gateway_order_ref}/payments", operation="orders.payments"
         )
@@ -275,10 +323,15 @@ class RazorpayGateway(PaymentGateway):
 
     # ── webhook ──────────────────────────────────────────────────────────
 
-    def verify_webhook(self, raw_body: bytes, signature: str) -> bool:
+    def verify_webhook(
+        self, raw_body: bytes, signature: str, *, payment_mode: Optional[str] = None
+    ) -> bool:
         from app.config import get_settings
 
-        secret = get_settings().razorpay_webhook_secret
+        try:
+            _, _, secret = _resolve_credentials(get_settings(), payment_mode)
+        except RazorpayModeCredentialError:
+            return False
         if not secret or not signature:
             return False
         expected = hmac.new(secret.encode("utf-8"), raw_body, hashlib.sha256).hexdigest()
@@ -328,12 +381,17 @@ class RazorpayGateway(PaymentGateway):
         amount_minor: int,
         currency: str,
         idempotency_key: str,
+        payment_mode: Optional[str] = None,
     ) -> NormalizedRefundResult:
         from app.config import get_settings
 
         if currency != "INR":
             raise GatewayError("razorpay adapter supports INR only")
-        client = _build_client(get_settings())
+        # payment_mode must be the mode the original payment was captured
+        # under (refund_service snapshots it onto the refund row) — resolving
+        # credentials here means a live payment can only ever be refunded
+        # with live credentials, and vice versa; never a cross-mode fallback.
+        client = _build_client(get_settings(), payment_mode)
         data = client.request(
             "POST",
             f"/payments/{provider_payment_id}/refund",
@@ -345,11 +403,15 @@ class RazorpayGateway(PaymentGateway):
         return self._refund_to_result(data)
 
     def query_refund(
-        self, *, provider_payment_id: str, provider_refund_id: str
+        self,
+        *,
+        provider_payment_id: str,
+        provider_refund_id: str,
+        payment_mode: Optional[str] = None,
     ) -> NormalizedRefundResult:
         from app.config import get_settings
 
-        client = _build_client(get_settings())
+        client = _build_client(get_settings(), payment_mode)
         data = client.request(
             "GET", f"/refunds/{provider_refund_id}", operation="refunds.fetch"
         )
@@ -372,6 +434,7 @@ class RazorpayGateway(PaymentGateway):
 __all__ = [
     "RazorpayGateway",
     "RazorpayApiError",
+    "RazorpayModeCredentialError",
     "GATEWAY_NAME",
     "rupees_to_paise",
     "paise_to_rupees_str",

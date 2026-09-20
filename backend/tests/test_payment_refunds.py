@@ -268,3 +268,49 @@ def test_free_registration_cancellation_no_refund(client):
     assert r.json()["status"] == "none"
     assert _db("SELECT status FROM registrations WHERE registration_id=$1", reg["registration_id"], val=True) == "cancelled"
     assert _db("SELECT count(*) FROM payment_refunds WHERE registration_id=$1", reg["registration_id"], val=True) == 0
+
+
+# ── TEST/LIVE mode separation ─────────────────────────────────────────────
+
+def test_full_refund_snapshots_test_payment_mode(client):
+    """Every refund created through the normal flow snapshots the mode the
+    payment was actually captured under. The default here is 'test' — no
+    LIVE credentials exist anywhere in this project (see
+    docs/payments/RAZORPAY_LOCAL_CREDENTIAL_CONFIGURATION_REPORT.md)."""
+    eid = _mk_event(client, uuid.uuid4().hex[:8], is_free=False)
+    reg, _ = _paid_registered(client, eid)
+    rid = reg["registration_id"]
+    r = client.post(f"/api/v1/registrations/{rid}/cancel",
+                    json={"idempotency_key": f"cancel-{uuid.uuid4().hex}"}, headers=_bearer())
+    assert r.status_code == 200, r.text
+    assert r.json()["payment_mode"] == "test"
+    assert r.json()["real_money"] is False
+    assert _db("SELECT payment_mode FROM payment_refunds WHERE registration_id=$1", rid, val=True) == "test"
+
+
+def test_cross_mode_refund_is_structurally_rejected(client):
+    """Defence-in-depth: even if a data-integrity bug ever let a captured
+    attempt's payment_mode disagree with its order's (impossible through the
+    normal API — both descend from the same config snapshot), refund_service
+    must fail closed rather than refund through the wrong credential
+    profile. Simulated here by forcing that disagreement directly in the DB,
+    since the API itself cannot produce it."""
+    eid = _mk_event(client, uuid.uuid4().hex[:8], is_free=False)
+    reg, order = _paid_registered(client, eid)
+    rid = reg["registration_id"]
+
+    _db(
+        """UPDATE payment_attempts SET payment_mode = 'live'
+           WHERE order_id = (SELECT id FROM payment_orders WHERE public_order_number = $1)
+             AND status = 'captured'""",
+        order["order_id"],
+    )
+
+    r = client.post(f"/api/v1/registrations/{rid}/cancel",
+                    json={"idempotency_key": f"cancel-{uuid.uuid4().hex}"}, headers=_bearer())
+    assert r.status_code == 409, r.text
+    assert r.json()["detail"] == "refund_mode_mismatch"
+
+    # Fails closed before any mutation: no refund row, registration untouched.
+    assert _db("SELECT count(*) FROM payment_refunds WHERE registration_id=$1", rid, val=True) == 0
+    assert _db("SELECT status FROM registrations WHERE registration_id=$1", rid, val=True) == "registered"

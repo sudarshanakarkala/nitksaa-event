@@ -331,7 +331,7 @@ def _webhook(client, event, *, order_ref, event_id, amount_paise=100, created_at
     if bad_sig:
         sig = "00" + sig[2:]
     return client.post(
-        "/api/v1/payment-gateways/razorpay/webhook",
+        "/api/v1/payment-gateways/razorpay/test/webhook",
         content=raw,
         headers={"X-Razorpay-Signature": sig, "X-Razorpay-Event-Id": event_id,
                  "Content-Type": "application/json"},
@@ -428,3 +428,69 @@ def test_webhook_unknown_order_rejected(client):
     _mk_razorpay_event(client, uuid.uuid4().hex[:8])
     r = _webhook(client, "payment.captured", order_ref="order_NOPE", event_id=f"evt_{uuid.uuid4().hex}")
     assert r.json()["processing_status"] == "rejected"
+
+
+# ── TEST/LIVE mode separation ─────────────────────────────────────────────
+
+def test_attempt_and_order_carry_test_mode_metadata(client):
+    """The dev-diagnostics import path (used by _mk_razorpay_event) doesn't
+    set payment_mode explicitly, so it defaults to 'test' — every order/
+    attempt created against it must say so, safely, with real_money=False."""
+    event_id = _mk_razorpay_event(client, uuid.uuid4().hex[:8])
+    _, order, attempt = _register_and_initiate(client, event_id)
+    assert order["payment_mode"] == "test"
+    assert order["real_money"] is False
+    assert attempt["payment_mode"] == "test"
+    assert attempt["real_money"] is False
+
+
+def test_generic_webhook_route_rejects_razorpay(client):
+    """Razorpay must use the mode-specific routes — the legacy generic route
+    now 404s for it exactly like an unregistered gateway would."""
+    r = client.post(
+        "/api/v1/payment-gateways/razorpay/webhook",
+        content=b"{}",
+        headers={"X-Sandbox-Signature": "irrelevant", "Content-Type": "application/json"},
+    )
+    assert r.status_code == 404
+
+
+def test_live_webhook_route_rejects_test_signed_delivery(client):
+    """No RAZORPAY_LIVE_* credentials are configured in this fixture — a
+    delivery to the LIVE route must fail closed (invalid signature), never
+    fall back to checking it against the TEST secret."""
+    event_id = _mk_razorpay_event(client, uuid.uuid4().hex[:8])
+    _, order, attempt = _register_and_initiate(client, event_id)
+    ref = attempt["checkout"]["provider_order_id"]
+    raw, sig = fakes.webhook_body_and_sig("payment.captured", order_id=ref, amount_paise=100)
+    r = client.post(
+        "/api/v1/payment-gateways/razorpay/live/webhook",
+        content=raw,
+        headers={"X-Razorpay-Signature": sig, "X-Razorpay-Event-Id": f"evt_{uuid.uuid4().hex}",
+                 "Content-Type": "application/json"},
+    )
+    assert r.json()["processing_status"] == "rejected"
+    assert _db_fetchval("SELECT status FROM payment_orders WHERE public_order_number=$1", order["order_id"]) != "paid"
+
+
+def test_live_signed_webhook_for_test_order_is_mode_mismatch_rejected(monkeypatch, client):
+    """Even with valid LIVE credentials configured and a correctly
+    LIVE-signed delivery, a TEST-mode order must not be confirmed by it —
+    cross-mode webhook application is rejected regardless of signature
+    validity (spec §18/§21: cross-mode must be structurally impossible)."""
+    fakes.set_razorpay_live_env(monkeypatch)
+    event_id = _mk_razorpay_event(client, uuid.uuid4().hex[:8])
+    _, order, attempt = _register_and_initiate(client, event_id)
+    assert order["payment_mode"] == "test"
+    ref = attempt["checkout"]["provider_order_id"]
+    raw, sig = fakes.webhook_body_and_sig(
+        "payment.captured", order_id=ref, amount_paise=100, webhook_secret="live_whsec_fake"
+    )
+    r = client.post(
+        "/api/v1/payment-gateways/razorpay/live/webhook",
+        content=raw,
+        headers={"X-Razorpay-Signature": sig, "X-Razorpay-Event-Id": f"evt_{uuid.uuid4().hex}",
+                 "Content-Type": "application/json"},
+    )
+    assert r.json()["processing_status"] == "rejected"
+    assert _db_fetchval("SELECT status FROM payment_orders WHERE public_order_number=$1", order["order_id"]) != "paid"

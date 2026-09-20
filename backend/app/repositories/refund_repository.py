@@ -35,19 +35,20 @@ class RefundRepository:
         idempotency_key: str,
         reason: str,
         requested_by: str,
+        payment_mode: str = "test",
     ) -> asyncpg.Record:
         return await self.conn.fetchrow(
             """
             INSERT INTO payment_refunds (
                 public_refund_number, registration_id, payment_order_id,
                 payment_attempt_id, gateway, provider_payment_id, amount,
-                currency, idempotency_key, reason, requested_by, status
-            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,'pending')
+                currency, idempotency_key, reason, requested_by, payment_mode, status
+            ) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,'pending')
             RETURNING *
             """,
             public_refund_number, registration_id, payment_order_id,
             payment_attempt_id, gateway, provider_payment_id, amount,
-            currency, idempotency_key, reason, requested_by,
+            currency, idempotency_key, reason, requested_by, payment_mode,
         )
 
     async def get_by_idempotency_key(self, idempotency_key: str) -> Optional[asyncpg.Record]:

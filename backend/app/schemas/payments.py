@@ -49,6 +49,11 @@ class PaymentOrderResponse(BaseModel):
     can_pay: bool
     can_retry: bool
     safe_message: str
+    # TEST/LIVE separation (never a secret) — see docs/payments/
+    # RAZORPAY_TEST_LIVE_MODE_SEPARATION_REPORT.md. real_money is derived
+    # (payment_mode == "live") so a client never has to reimplement the rule.
+    payment_mode: str = "test"
+    real_money: bool = False
 
 
 class CreatePaymentAttemptRequest(BaseModel):
@@ -94,6 +99,8 @@ class PaymentAttemptResponse(BaseModel):
     # Present only for hosted-checkout gateways (Razorpay). None for the
     # deterministic sandbox, which resolves in-process.
     checkout: Optional[PaymentCheckout] = None
+    payment_mode: str = "test"
+    real_money: bool = False
 
 
 class VerifyCheckoutRequest(BaseModel):
@@ -127,6 +134,8 @@ class RefundStatusResponse(BaseModel):
     requested_at: Optional[datetime] = None
     finalized_at: Optional[datetime] = None
     safe_message: str
+    payment_mode: Optional[str] = None
+    real_money: bool = False
 
 
 class CancelRegistrationRequest(BaseModel):

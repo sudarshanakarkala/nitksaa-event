@@ -25,6 +25,10 @@ class PaymentConfigDraftCreateRequest(BaseModel):
     seat_hold_minutes: int = Field(15, gt=0)
     payment_session_expiry_minutes: int = Field(15, gt=0)
     gateway: str = Field("deterministic_sandbox", pattern="^(deterministic_sandbox|razorpay)$")
+    # TEST is always safe to draft/publish; LIVE additionally requires
+    # platform_admin + valid rzp_live_-prefixed credentials at publish time
+    # (see payment_config_service.validate_configuration / publish).
+    payment_mode: str = Field("test", pattern="^(test|live)$")
 
 
 class PaymentConfigAdminResponse(BaseModel):
@@ -44,6 +48,8 @@ class PaymentConfigAdminResponse(BaseModel):
     seat_hold_minutes: int
     payment_session_expiry_minutes: int
     gateway: str = "deterministic_sandbox"
+    payment_mode: str = "test"
+    real_money: bool = False
     created_by: Optional[str] = None
     created_at: datetime
     updated_at: Optional[datetime] = None
@@ -111,6 +117,10 @@ class GatewayInfo(BaseModel):
     enabled: bool
     capabilities: List[str]
     supported_scenarios: List[str]
+    # Razorpay only (None for every other gateway) — whether each mode's
+    # credential profile is configured. Never a secret: presence only.
+    test_mode_configured: Optional[bool] = None
+    live_mode_configured: Optional[bool] = None
 
 
 class GatewayConfigResponse(BaseModel):

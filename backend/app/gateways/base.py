@@ -221,14 +221,22 @@ class PaymentGateway(ABC):
         amount: Decimal,
         currency: str,
         scenario: Optional[str] = None,
+        payment_mode: Optional[str] = None,
     ) -> GatewayInitiationResult:
         """Initiate a payment with this gateway. `scenario` is meaningful
-        only to gateways that declare `supported_scenarios` (sandbox only)."""
+        only to gateways that declare `supported_scenarios` (sandbox only).
+        `payment_mode` ("test"/"live") selects which credential profile a
+        mode-aware gateway (Razorpay) uses; adapters without that concept
+        (the sandbox) ignore it."""
 
     @abstractmethod
-    def verify_webhook(self, raw_body: bytes, signature: str) -> bool:
+    def verify_webhook(
+        self, raw_body: bytes, signature: str, *, payment_mode: Optional[str] = None
+    ) -> bool:
         """Cryptographically verify an inbound webhook delivery. Must not
-        raise on a malformed/absent signature — return False."""
+        raise on a malformed/absent signature — return False. `payment_mode`
+        selects which webhook secret a mode-aware gateway checks against;
+        ignored by adapters without that concept."""
 
     @abstractmethod
     def parse_webhook(self, raw_body: bytes) -> NormalizedGatewayEvent:
@@ -248,7 +256,9 @@ class PaymentGateway(ABC):
         query_payment_status only."""
         raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.VERIFY_PAYMENT)
 
-    def query_payment_status(self, gateway_order_ref: str) -> NormalizedGatewayEvent:
+    def query_payment_status(
+        self, gateway_order_ref: str, *, payment_mode: Optional[str] = None
+    ) -> NormalizedGatewayEvent:
         """Authoritative server-side status query against the gateway
         itself (for reconciliation / stuck-payment recovery). Not supported
         by the sandbox: there is no separate gateway-side state to query
@@ -264,13 +274,16 @@ class PaymentGateway(ABC):
         amount_minor: int,
         currency: str,
         idempotency_key: str,
+        payment_mode: Optional[str] = None,
     ) -> "NormalizedRefundResult":
         """Create a full refund against a captured payment. Adapters that
         declare GatewayCapability.REFUND override this. `idempotency_key` is
         a stable per-logical-refund string the adapter should forward to the
         provider's own idempotency mechanism where one exists (an extra
         safeguard — the database uniqueness on payment_refunds is the
-        primary guarantee)."""
+        primary guarantee). `payment_mode` must match the mode the original
+        payment was captured under — a mode-aware adapter resolves
+        credentials from it and fails closed on a mismatch/missing value."""
         raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.REFUND)
 
     def query_refund(
@@ -278,13 +291,19 @@ class PaymentGateway(ABC):
         *,
         provider_payment_id: str,
         provider_refund_id: str,
+        payment_mode: Optional[str] = None,
     ) -> "NormalizedRefundResult":
         """Authoritative provider-side refund status query, for refreshing a
         pending/processing refund."""
         raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.QUERY_REFUND)
 
     def verify_checkout_signature(
-        self, *, provider_order_id: str, provider_payment_id: str, signature: str
+        self,
+        *,
+        provider_order_id: str,
+        provider_payment_id: str,
+        signature: str,
+        payment_mode: Optional[str] = None,
     ) -> bool:
         """First gate for a hosted-checkout return: verify the client-echoed
         (order_id, payment_id, signature) triple cryptographically. This is

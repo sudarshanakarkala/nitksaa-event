@@ -320,12 +320,15 @@ def test_attempt_creation_fails_closed_when_order_gateway_is_unusable(client, mo
     no partial row, and it never silently falls back to another gateway."""
     from app.config import get_settings
 
-    # Ensure razorpay has no usable credentials for this test. An explicit
-    # empty env var overrides any real value in backend/.env (env source
-    # outranks the dotenv source in pydantic-settings).
-    for var in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET"):
-        monkeypatch.setenv(var, "")
-    get_settings.cache_clear()
+    # Ensure razorpay has no usable credentials for this test — TEST, LIVE,
+    # and the legacy fallback vars alike. An explicit empty env var overrides
+    # any real value in backend/.env (env source outranks the dotenv source
+    # in pydantic-settings); is_enabled() is True if EITHER profile is
+    # configured, so clearing only the legacy vars is not enough once real
+    # RAZORPAY_LIVE_* credentials exist locally.
+    from tests import _razorpay_fakes as fakes
+
+    fakes.clear_razorpay_env(monkeypatch)
 
     event_id = _mk_paid_event(
         client, f"failclosed-{uuid.uuid4().hex[:8]}", gateway="razorpay"

@@ -108,20 +108,58 @@ class FakeRazorpayClient:
 
 
 def install(monkeypatch) -> None:
-    """Point the adapter at the fake and reset knobs."""
+    """Point the adapter at the fake and reset knobs. The fake ignores which
+    mode it was called for — credential *resolution* (fail-closed
+    prefix/missing checks) is exercised separately via _resolve_credentials,
+    not through this seam."""
     reset()
     import app.gateways.razorpay_gateway as rg
-    monkeypatch.setattr(rg, "_build_client", lambda settings: FakeRazorpayClient())
+    monkeypatch.setattr(rg, "_build_client", lambda settings, payment_mode: FakeRazorpayClient())
 
 
 def set_razorpay_env(monkeypatch, *, key_id="rzp_test_fake", key_secret="secret_fake",
                      webhook_secret="whsec_fake", mode="test") -> None:
+    """Legacy-var seed (RAZORPAY_KEY_ID/...): exercises the TEST-profile
+    back-compat fallback in Settings.razorpay_credentials_for."""
     from app.config import get_settings
 
     monkeypatch.setenv("RAZORPAY_KEY_ID", key_id)
     monkeypatch.setenv("RAZORPAY_KEY_SECRET", key_secret)
     monkeypatch.setenv("RAZORPAY_WEBHOOK_SECRET", webhook_secret)
     monkeypatch.setenv("RAZORPAY_MODE", mode)
+    get_settings.cache_clear()
+
+
+def set_razorpay_test_env(monkeypatch, *, key_id="rzp_test_fake", key_secret="secret_fake",
+                          webhook_secret="whsec_fake") -> None:
+    from app.config import get_settings
+
+    monkeypatch.setenv("RAZORPAY_TEST_KEY_ID", key_id)
+    monkeypatch.setenv("RAZORPAY_TEST_KEY_SECRET", key_secret)
+    monkeypatch.setenv("RAZORPAY_TEST_WEBHOOK_SECRET", webhook_secret)
+    get_settings.cache_clear()
+
+
+def set_razorpay_live_env(monkeypatch, *, key_id="rzp_live_fake", key_secret="live_secret_fake",
+                          webhook_secret="live_whsec_fake") -> None:
+    from app.config import get_settings
+
+    monkeypatch.setenv("RAZORPAY_LIVE_KEY_ID", key_id)
+    monkeypatch.setenv("RAZORPAY_LIVE_KEY_SECRET", key_secret)
+    monkeypatch.setenv("RAZORPAY_LIVE_WEBHOOK_SECRET", webhook_secret)
+    get_settings.cache_clear()
+
+
+def clear_razorpay_env(monkeypatch) -> None:
+    """Blank every Razorpay credential var (legacy + test + live)."""
+    from app.config import get_settings
+
+    for name in (
+        "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET",
+        "RAZORPAY_TEST_KEY_ID", "RAZORPAY_TEST_KEY_SECRET", "RAZORPAY_TEST_WEBHOOK_SECRET",
+        "RAZORPAY_LIVE_KEY_ID", "RAZORPAY_LIVE_KEY_SECRET", "RAZORPAY_LIVE_WEBHOOK_SECRET",
+    ):
+        monkeypatch.setenv(name, "")
     get_settings.cache_clear()
 
 

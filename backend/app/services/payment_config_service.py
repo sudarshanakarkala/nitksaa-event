@@ -23,11 +23,21 @@ _VALID_FEE_TYPES = ("fixed", "percentage")
 _VALID_GATEWAYS = ("deterministic_sandbox", "razorpay")
 
 
-def validate_configuration(payload: Dict[str, Any]) -> List[str]:
+def validate_configuration(
+    payload: Dict[str, Any], *, require_live_credentials: bool = True
+) -> List[str]:
     """Pure validation — no DB access. Returns a list of error strings;
-    empty list means valid. Reused by both draft creation and the explicit
-    validate action, so a dry-run check and the actual write path can never
-    disagree."""
+    empty list means valid. Reused by draft creation, the explicit validate
+    action, and publish, so a dry-run check and the actual write path can
+    never disagree on everything except live-credential presence.
+
+    `require_live_credentials` is deliberately the one thing draft creation
+    opts out of (passes False): the spec's own wording ties the Live
+    credential/prefix check to *publishing* LIVE, not to preparing a LIVE
+    draft ahead of time (the whole point of "prepare LIVE mode safely" is
+    being able to draft a LIVE pilot config before Live credentials exist).
+    validate_draft() and publish() both use the default (True) — publishing
+    LIVE with no Live credentials configured must fail closed."""
     errors: List[str] = []
 
     currency = payload.get("currency", "INR")
@@ -68,6 +78,27 @@ def validate_configuration(payload: Dict[str, Any]) -> List[str]:
     if gateway not in _VALID_GATEWAYS:
         errors.append(f"gateway must be one of {_VALID_GATEWAYS}")
 
+    payment_mode = payload.get("payment_mode", "test")
+    if payment_mode not in ("test", "live"):
+        errors.append("payment_mode must be one of ('test', 'live')")
+    elif gateway == "razorpay" and payment_mode == "live" and require_live_credentials:
+        # Fail closed at draft/validate/publish time, not first-use: a live
+        # config must never be publishable unless real Live credentials with
+        # the correct rzp_live_ prefix already exist server-side.
+        from app.config import get_settings
+        from app.gateways.razorpay_gateway import _KEY_PREFIX
+
+        settings = get_settings()
+        key_id, key_secret, webhook_secret = settings.razorpay_credentials_for("live")
+        if not (key_id and key_secret and webhook_secret):
+            errors.append(
+                "gateway=razorpay with payment_mode=live requires "
+                "RAZORPAY_LIVE_KEY_ID, RAZORPAY_LIVE_KEY_SECRET and "
+                "RAZORPAY_LIVE_WEBHOOK_SECRET to all be configured"
+            )
+        elif not key_id.startswith(_KEY_PREFIX["live"]):
+            errors.append(f"RAZORPAY_LIVE_KEY_ID must start with {_KEY_PREFIX['live']!r}")
+
     return errors
 
 
@@ -89,6 +120,8 @@ def _config_view(row: asyncpg.Record) -> Dict[str, Any]:
         "seat_hold_minutes": row["seat_hold_minutes"],
         "payment_session_expiry_minutes": row["payment_session_expiry_minutes"],
         "gateway": row["gateway"] if "gateway" in row else "deterministic_sandbox",
+        "payment_mode": row["payment_mode"] if "payment_mode" in row else "test",
+        "real_money": (row["payment_mode"] if "payment_mode" in row else "test") == "live",
         "created_by": row["created_by"],
         "created_at": row["created_at"],
         "updated_at": row["updated_at"],
@@ -96,7 +129,7 @@ def _config_view(row: asyncpg.Record) -> Dict[str, Any]:
 
 
 async def create_draft(event_id: int, payload: Dict[str, Any], user: Dict[str, Any]) -> Dict[str, Any]:
-    errors = validate_configuration(payload)
+    errors = validate_configuration(payload, require_live_credentials=False)
     if errors:
         raise HTTPException(status_code=422, detail={"errors": errors})
 
@@ -117,6 +150,7 @@ async def create_draft(event_id: int, payload: Dict[str, Any], user: Dict[str, A
             payment_session_expiry_minutes=int(payload.get("payment_session_expiry_minutes", 15)),
             created_by=user["firebase_uid"],
             gateway=payload.get("gateway", "deterministic_sandbox"),
+            payment_mode=payload.get("payment_mode", "test"),
         )
 
     await audit_service.emit(
@@ -148,6 +182,18 @@ async def publish(event_id: int, configuration_id: int, user: Dict[str, Any]) ->
             raise HTTPException(status_code=404, detail="payment_configuration_not_found")
         if row["status"] != "draft":
             raise HTTPException(status_code=409, detail="payment_configuration_not_a_draft")
+
+        row_payment_mode = row["payment_mode"] if "payment_mode" in row else "test"
+        if row_payment_mode == "live":
+            # LIVE publish is restricted to the highest-trust role regardless
+            # of who created the draft — event_admin alone is not enough.
+            # The route-level Depends can't see the row's mode before this
+            # point, so the gate lives here.
+            from app.middleware.admin_auth import _resolve_platform_roles
+
+            roles = await _resolve_platform_roles(user["firebase_uid"])
+            if "platform_admin" not in roles:
+                raise HTTPException(status_code=403, detail="live_publish_requires_platform_admin")
 
         errors = validate_configuration(dict(row))
         if errors:

@@ -64,24 +64,63 @@ class Settings(BaseSettings):
         False, alias="PAYMENT_SANDBOX_ALLOW_IN_PRODUCTION"
     )
 
-    # Razorpay (Test Mode slice). Server-only — never returned in an API
-    # response, never logged, never surfaced by diagnostics. A missing
-    # key_id/key_secret makes RazorpayGateway.is_enabled() return False, so
-    # payment initiation for a razorpay-configured event fails closed with a
-    # safe configuration error rather than attempting an un-authenticated call.
+    # Razorpay — legacy single-profile credentials. DEPRECATED: kept only as
+    # a back-compat seed for the TEST profile (see razorpay_credentials_for)
+    # so an existing local .env with only these three vars keeps working.
+    # New deployments should set RAZORPAY_TEST_* / RAZORPAY_LIVE_* instead.
+    # Server-only — never returned in an API response, never logged, never
+    # surfaced by diagnostics.
     razorpay_key_id: str = Field("", alias="RAZORPAY_KEY_ID")
     razorpay_key_secret: str = Field("", alias="RAZORPAY_KEY_SECRET")
     razorpay_webhook_secret: str = Field("", alias="RAZORPAY_WEBHOOK_SECRET")
     razorpay_mode: str = Field("test", alias="RAZORPAY_MODE")
+
+    # Razorpay TEST/LIVE mode separation. Two fully independent credential
+    # profiles — a payment_mode of "test" only ever resolves to the
+    # razorpay_test_* triple, "live" only ever to razorpay_live_*. There is
+    # no fallback from live to test or vice versa (see
+    # razorpay_credentials_for + RazorpayGateway fail-closed prefix check).
+    razorpay_test_key_id: str = Field("", alias="RAZORPAY_TEST_KEY_ID")
+    razorpay_test_key_secret: str = Field("", alias="RAZORPAY_TEST_KEY_SECRET")
+    razorpay_test_webhook_secret: str = Field("", alias="RAZORPAY_TEST_WEBHOOK_SECRET")
+    razorpay_live_key_id: str = Field("", alias="RAZORPAY_LIVE_KEY_ID")
+    razorpay_live_key_secret: str = Field("", alias="RAZORPAY_LIVE_KEY_SECRET")
+    razorpay_live_webhook_secret: str = Field("", alias="RAZORPAY_LIVE_WEBHOOK_SECRET")
+
     razorpay_api_base: str = Field("https://api.razorpay.com/v1", alias="RAZORPAY_API_BASE")
     # Network timeout (seconds) for every outbound Razorpay REST call.
     razorpay_http_timeout_seconds: float = Field(20.0, alias="RAZORPAY_HTTP_TIMEOUT_SECONDS")
 
+    def razorpay_credentials_for(self, payment_mode: str) -> tuple[str, str, str]:
+        """(key_id, key_secret, webhook_secret) for `payment_mode`, with NO
+        cross-mode fallback. "test" additionally falls back to the legacy
+        RAZORPAY_KEY_ID/KEY_SECRET/WEBHOOK_SECRET vars when RAZORPAY_TEST_*
+        is blank, purely for existing-deployment back-compat — "live" never
+        falls back to anything. Returns empty strings (never raises) when
+        unconfigured; callers (RazorpayGateway) are responsible for failing
+        closed."""
+        if payment_mode == "live":
+            return (
+                self.razorpay_live_key_id,
+                self.razorpay_live_key_secret,
+                self.razorpay_live_webhook_secret,
+            )
+        if payment_mode == "test":
+            return (
+                self.razorpay_test_key_id or self.razorpay_key_id,
+                self.razorpay_test_key_secret or self.razorpay_key_secret,
+                self.razorpay_test_webhook_secret or self.razorpay_webhook_secret,
+            )
+        return ("", "", "")
+
     @property
     def razorpay_configured(self) -> bool:
-        """True only when both credentials are present. RazorpayGateway keys
-        its fail-closed behaviour off this."""
-        return bool(self.razorpay_key_id and self.razorpay_key_secret)
+        """True only when both TEST-profile credentials are present
+        (legacy-fallback inclusive). Retained for existing callers that
+        don't yet reason about mode; RazorpayGateway.is_enabled() now checks
+        per-mode via razorpay_credentials_for."""
+        key_id, key_secret, _ = self.razorpay_credentials_for("test")
+        return bool(key_id and key_secret)
 
     # Payment RBAC (production foundation) — comma-separated firebase_uids
     # that are always treated as platform_admin, independent of

@@ -13,6 +13,7 @@ from decimal import Decimal
 import pytest
 
 from app.services.payment_config_service import validate_configuration
+from tests import _razorpay_fakes as fakes
 
 _PLATFORM_ADMIN = {
     "firebase_uid": "TEST_ALUMNI_UID_010",
@@ -257,6 +258,50 @@ def test_validate_configuration_rejects_non_positive_durations():
     assert any("seat_hold_minutes" in e for e in errors)
     errors = validate_configuration(_draft_payload("unit", payment_session_expiry_minutes=0))
     assert any("payment_session_expiry_minutes" in e for e in errors)
+
+
+def test_validate_configuration_rejects_live_razorpay_without_live_credentials(monkeypatch):
+    from app.config import get_settings
+
+    fakes.clear_razorpay_env(monkeypatch)
+    try:
+        errors = validate_configuration(_draft_payload("unit", gateway="razorpay", payment_mode="live"))
+        assert any("RAZORPAY_LIVE" in e for e in errors)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_validate_configuration_rejects_live_razorpay_with_test_prefixed_live_key(monkeypatch):
+    from app.config import get_settings
+
+    fakes.set_razorpay_live_env(monkeypatch, key_id="rzp_test_wrongprefix")
+    try:
+        errors = validate_configuration(_draft_payload("unit", gateway="razorpay", payment_mode="live"))
+        assert any("rzp_live_" in e for e in errors)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_validate_configuration_accepts_live_razorpay_with_valid_live_credentials(monkeypatch):
+    from app.config import get_settings
+
+    fakes.set_razorpay_live_env(monkeypatch)
+    try:
+        errors = validate_configuration(_draft_payload("unit", gateway="razorpay", payment_mode="live"))
+        assert errors == []
+    finally:
+        get_settings.cache_clear()
+
+
+def test_validate_configuration_test_mode_never_requires_live_credentials(monkeypatch):
+    from app.config import get_settings
+
+    fakes.clear_razorpay_env(monkeypatch)
+    try:
+        errors = validate_configuration(_draft_payload("unit", gateway="razorpay", payment_mode="test"))
+        assert errors == []
+    finally:
+        get_settings.cache_clear()
 
 
 # ─────────────────────────────────────────────────────────────────────────────
@@ -548,5 +593,120 @@ def test_event_admin_scoped_to_own_event_only(client, monkeypatch):
             headers=event_admin_headers,
         )
         assert r.status_code == 403
+    finally:
+        _clear_bootstrap(monkeypatch)
+
+
+# ─────────────────────────────────────────────────────────────────────────────
+# C. TEST/LIVE mode separation — publish-time gates
+# ─────────────────────────────────────────────────────────────────────────────
+
+def test_live_draft_can_be_created_without_live_credentials(client, monkeypatch):
+    """Preparing a LIVE draft ahead of receiving real Live credentials must
+    be possible — that is the whole point of "prepare LIVE mode safely"
+    (spec §7/§20). Only *publishing* LIVE requires credentials; drafting it
+    does not."""
+    fakes.clear_razorpay_env(monkeypatch)
+    event_id = _mk_unpaid_event(client, f"livedraftok-{uuid.uuid4().hex[:8]}")
+    try:
+        _as_platform_admin(monkeypatch)
+        headers = _bearer(_PLATFORM_ADMIN)
+        r = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations",
+            json=_draft_payload("livedraftok", gateway="razorpay", payment_mode="live"),
+            headers=headers,
+        )
+        assert r.status_code == 201, r.text
+        assert r.json()["payment_mode"] == "live"
+        assert r.json()["status"] == "draft"
+    finally:
+        _clear_bootstrap(monkeypatch)
+
+
+def test_live_publish_rejected_without_live_credentials_even_for_platform_admin(client, monkeypatch):
+    fakes.clear_razorpay_env(monkeypatch)
+    event_id = _mk_unpaid_event(client, f"livenocreds-{uuid.uuid4().hex[:8]}")
+    try:
+        _as_platform_admin(monkeypatch)
+        headers = _bearer(_PLATFORM_ADMIN)
+        draft = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations",
+            json=_draft_payload("livenocreds", gateway="razorpay", payment_mode="live"),
+            headers=headers,
+        ).json()
+        r = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations/{draft['configuration_id']}/publish",
+            headers=headers,
+        )
+        assert r.status_code == 422, r.text
+        assert any("RAZORPAY_LIVE" in e for e in r.json()["detail"]["errors"])
+    finally:
+        _clear_bootstrap(monkeypatch)
+
+
+def test_live_publish_requires_platform_admin_not_just_event_admin(client, monkeypatch):
+    """Even with valid Live credentials configured, an event_admin (who is
+    sufficient for every other publish) must not be able to publish a LIVE
+    config — only platform_admin may."""
+    fakes.set_razorpay_live_env(monkeypatch)
+    event_id = _mk_unpaid_event(client, f"liverbac-{uuid.uuid4().hex[:8]}")
+    try:
+        _as_platform_admin(monkeypatch)
+        admin_headers = _bearer(_PLATFORM_ADMIN)
+        client.post(
+            f"/api/v1/admin/events/{event_id}/payment-admins",
+            json={"firebase_uid": _EVENT_ADMIN["firebase_uid"]},
+            headers=admin_headers,
+        )
+        event_admin_headers = _bearer(_EVENT_ADMIN)
+        draft = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations",
+            json=_draft_payload("liverbac", gateway="razorpay", payment_mode="live"),
+            headers=event_admin_headers,
+        ).json()
+        assert draft["payment_mode"] == "live"
+
+        r = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations/{draft['configuration_id']}/publish",
+            headers=event_admin_headers,
+        )
+        assert r.status_code == 403, r.text
+        assert r.json()["detail"] == "live_publish_requires_platform_admin"
+
+        r2 = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations/{draft['configuration_id']}/publish",
+            headers=admin_headers,
+        )
+        assert r2.status_code == 200, r2.text
+        assert r2.json()["status"] == "published"
+        assert r2.json()["real_money"] is True
+    finally:
+        _clear_bootstrap(monkeypatch)
+
+
+def test_test_mode_publish_does_not_require_platform_admin(client, monkeypatch):
+    """Sanity check that the new LIVE-only gate didn't accidentally tighten
+    the existing TEST-mode publish path — event_admin remains sufficient."""
+    event_id = _mk_unpaid_event(client, f"testrbac-{uuid.uuid4().hex[:8]}")
+    try:
+        _as_platform_admin(monkeypatch)
+        admin_headers = _bearer(_PLATFORM_ADMIN)
+        client.post(
+            f"/api/v1/admin/events/{event_id}/payment-admins",
+            json={"firebase_uid": _EVENT_ADMIN["firebase_uid"]},
+            headers=admin_headers,
+        )
+        event_admin_headers = _bearer(_EVENT_ADMIN)
+        draft = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations",
+            json=_draft_payload("testrbac", gateway="razorpay", payment_mode="test"),
+            headers=event_admin_headers,
+        ).json()
+        r = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations/{draft['configuration_id']}/publish",
+            headers=event_admin_headers,
+        )
+        assert r.status_code == 200, r.text
+        assert r.json()["real_money"] is False
     finally:
         _clear_bootstrap(monkeypatch)

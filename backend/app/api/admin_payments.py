@@ -233,12 +233,24 @@ async def get_gateway_configuration(
     other response (see app/gateways/*.py — secrets are read from settings
     inside adapter methods, never returned)."""
     settings = get_settings()
+
+    def _mode_flags(gw) -> Dict[str, Any]:
+        if gw.name != "razorpay":
+            return {}
+        test_key_id, test_key_secret, _ = settings.razorpay_credentials_for("test")
+        live_key_id, live_key_secret, _ = settings.razorpay_credentials_for("live")
+        return {
+            "test_mode_configured": bool(test_key_id and test_key_secret),
+            "live_mode_configured": bool(live_key_id and live_key_secret),
+        }
+
     gateways = [
         {
             "name": gw.name,
             "enabled": gw.is_enabled(settings),
             "capabilities": sorted(c.value for c in gw.capabilities),
             "supported_scenarios": sorted(gw.supported_scenarios),
+            **_mode_flags(gw),
         }
         for gw in (gateway_registry.get_gateway(name) for name in gateway_registry.list_registered_gateways())
     ]

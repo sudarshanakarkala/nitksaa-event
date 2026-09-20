@@ -84,6 +84,10 @@ def _public_id(prefix: str) -> str:
     return f"{prefix}-{secrets.token_urlsafe(9)}"
 
 
+def _payment_mode_of(row: asyncpg.Record) -> str:
+    return row["payment_mode"] if "payment_mode" in row else "test"
+
+
 def _is_hold_expired(registration: Optional[asyncpg.Record]) -> bool:
     if not registration:
         return False
@@ -122,6 +126,7 @@ async def get_pricing(event_id: int) -> PricingBreakdownResponse:
 def _order_view(order: asyncpg.Record, registration_status: str) -> PaymentOrderResponse:
     outstanding = Decimal(order["final_amount"]) - Decimal(order["amount_paid"])
     can_pay = order["status"] in ("created", "payment_pending") and outstanding > 0
+    payment_mode = _payment_mode_of(order)
     if order["status"] == "paid":
         safe_message = "Payment complete. Your registration is confirmed."
     elif order["status"] == "expired":
@@ -151,6 +156,8 @@ def _order_view(order: asyncpg.Record, registration_status: str) -> PaymentOrder
         can_pay=can_pay,
         can_retry=can_pay and registration_status in ("payment_failed", "payment_pending", "seat_held"),
         safe_message=safe_message,
+        payment_mode=payment_mode,
+        real_money=payment_mode == "live",
     )
 
 
@@ -201,6 +208,7 @@ async def create_order(
                     configuration_id=config["id"],
                     configuration_version=config["version"],
                     gateway=config["gateway"] if "gateway" in config else "deterministic_sandbox",
+                    payment_mode=config["payment_mode"] if "payment_mode" in config else "test",
                     currency=breakdown["currency"],
                     base_amount=breakdown["base_amount"],
                     tax_amount=breakdown["tax_amount"],
@@ -285,6 +293,7 @@ async def create_attempt(
     # settings.payment_gateway_mode. This is what lets the ₹1 razorpay pilot
     # event and every existing deterministic_sandbox event coexist.
     order_gateway_name = order["gateway"] if "gateway" in order else settings.payment_gateway_mode
+    order_payment_mode = _payment_mode_of(order)
     try:
         gateway = gateway_registry.get_enabled_gateway(order_gateway_name, settings)
     except (UnknownGatewayError, GatewayDisabledError):
@@ -330,6 +339,7 @@ async def create_attempt(
                     amount=order["final_amount"],
                     currency=order["currency"],
                     gateway_order_ref=gateway_order_ref,
+                    payment_mode=order_payment_mode,
                 )
                 if order["status"] == "created":
                     await pay_repo.mark_order_payment_pending(order["id"])
@@ -354,6 +364,7 @@ async def create_attempt(
             amount=order["final_amount"],
             currency=order["currency"],
             scenario=body.scenario,
+            payment_mode=order_payment_mode,
         )
     except GatewayError:
         # Provider order creation failed (network, credentials, provider
@@ -383,7 +394,9 @@ async def create_attempt(
         )
     elif initiation.immediate_webhook:
         immediate = initiation.immediate_webhook
-        await process_webhook(gateway.name, immediate.raw_body, immediate.signature)
+        await process_webhook(
+            gateway.name, immediate.raw_body, immediate.signature, payment_mode=order_payment_mode
+        )
         # Immediate scenarios resolve synchronously above — re-read the attempt
         # so the response reflects the outcome, not the pre-webhook 'initiated' row.
         async with pool.acquire() as conn:
@@ -409,6 +422,8 @@ async def create_attempt(
         scenario=attempt["scenario"],
         initiated_at=attempt["initiated_at"],
         checkout=checkout,
+        payment_mode=order_payment_mode,
+        real_money=order_payment_mode == "live",
     )
 
 
@@ -423,8 +438,20 @@ async def _deliver_delayed_webhook(gateway_name: str, raw_body: bytes, signature
 
 
 async def process_webhook(
-    gateway: str, raw_body: bytes, signature: str, provider_event_id: Optional[str] = None
+    gateway: str,
+    raw_body: bytes,
+    signature: str,
+    provider_event_id: Optional[str] = None,
+    payment_mode: Optional[str] = None,
 ) -> WebhookAckResponse:
+    """`payment_mode` is set only when the delivery arrived on a
+    mode-specific route (.../razorpay/test/webhook or .../razorpay/live/
+    webhook — see app/api/payments.py). It selects which credential profile
+    `verify_webhook` checks the signature against, AND is cross-checked
+    against the matched order's own snapshotted payment_mode below — a
+    delivery on the wrong mode's route is rejected even if its signature
+    happens to verify. None for gateways without a mode concept (the
+    sandbox) and for internal calls (immediate/delayed sandbox delivery)."""
     settings = get_settings()
 
     try:
@@ -445,7 +472,7 @@ async def process_webhook(
         )
         return WebhookAckResponse(status="rejected", processing_status="rejected")
 
-    signature_valid = gateway_obj.verify_webhook(raw_body, signature)
+    signature_valid = gateway_obj.verify_webhook(raw_body, signature, payment_mode=payment_mode)
 
     try:
         event = gateway_obj.parse_webhook(raw_body)
@@ -552,6 +579,24 @@ async def process_webhook(
                 entity_type="payment_webhook",
                 entity_id=webhook_row["id"],
                 context={"gateway": gateway, "gateway_order_ref": gateway_order_ref},
+            )
+            return WebhookAckResponse(status="rejected", processing_status="rejected")
+
+        if payment_mode is not None and _payment_mode_of(order) != payment_mode:
+            # Delivered on the wrong mode's route (e.g. a TEST-signed
+            # delivery hitting .../razorpay/live/webhook, or vice versa) —
+            # fail closed even though signature/timestamp already passed.
+            # Never happens for a real Razorpay delivery (its webhook secret
+            # only ever verifies against the matching route), but a
+            # misconfigured Dashboard webhook or a replayed delivery against
+            # the wrong endpoint must not be allowed to apply.
+            await pay_repo.mark_webhook_processed(webhook_row["id"], "rejected", "webhook_mode_mismatch")
+            await audit_service.emit(
+                actor_uid="system",
+                event_type="payment_webhook_mode_mismatch",
+                entity_type="payment_webhook",
+                entity_id=webhook_row["id"],
+                context={"gateway": gateway, "route_mode": payment_mode, "order_mode": _payment_mode_of(order)},
             )
             return WebhookAckResponse(status="rejected", processing_status="rejected")
 
@@ -756,10 +801,12 @@ async def verify_checkout(
         if attempt["gateway_order_ref"] != body.razorpay_order_id:
             raise HTTPException(status_code=400, detail="checkout_order_mismatch")
 
+        order_payment_mode = _payment_mode_of(order)
         sig_ok = gw.verify_checkout_signature(
             provider_order_id=body.razorpay_order_id,
             provider_payment_id=body.razorpay_payment_id,
             signature=body.razorpay_signature,
+            payment_mode=order_payment_mode,
         )
         if not sig_ok:
             await audit_service.emit(
@@ -770,7 +817,7 @@ async def verify_checkout(
             raise HTTPException(status_code=400, detail="checkout_signature_invalid")
 
         try:
-            remote = gw.query_payment_status(body.razorpay_order_id)
+            remote = gw.query_payment_status(body.razorpay_order_id, payment_mode=order_payment_mode)
         except GatewayError:
             _log.exception("[payments] query_payment_status failed during verify-checkout")
             raise HTTPException(status_code=502, detail="payment_gateway_error")
@@ -949,7 +996,9 @@ async def verify_attempt(public_attempt_number: str, user: Dict[str, Any]) -> Pa
             and attempt["gateway_order_ref"]
         ):
             try:
-                remote = gw.query_payment_status(attempt["gateway_order_ref"])
+                remote = gw.query_payment_status(
+                    attempt["gateway_order_ref"], payment_mode=_payment_mode_of(order)
+                )
             except GatewayError:
                 _log.warning("[payments] query_payment_status failed for attempt %s", attempt["id"])
                 remote = None
@@ -991,6 +1040,8 @@ async def verify_attempt(public_attempt_number: str, user: Dict[str, Any]) -> Pa
                 status=attempt["status"],
                 scenario=attempt["scenario"],
                 initiated_at=attempt["initiated_at"],
+                payment_mode=_payment_mode_of(order),
+                real_money=_payment_mode_of(order) == "live",
             )
 
         if attempt["status"] not in ("pending", "requires_verification"):
@@ -1036,4 +1087,6 @@ async def verify_attempt(public_attempt_number: str, user: Dict[str, Any]) -> Pa
         status=attempt["status"],
         scenario=attempt["scenario"],
         initiated_at=attempt["initiated_at"],
+        payment_mode=_payment_mode_of(order),
+        real_money=_payment_mode_of(order) == "live",
     )

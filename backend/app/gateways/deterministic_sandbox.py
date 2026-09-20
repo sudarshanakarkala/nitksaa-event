@@ -179,7 +179,10 @@ class DeterministicSandboxGateway(PaymentGateway):
         amount: Decimal,
         currency: str,
         scenario: Optional[str] = None,
+        payment_mode: Optional[str] = None,
     ) -> GatewayInitiationResult:
+        # payment_mode is a Razorpay concept (test/live credential profile);
+        # the sandbox has no real credentials to select between and ignores it.
         if scenario not in SUPPORTED_SCENARIOS:
             raise ValueError(f"unsupported sandbox scenario: {scenario!r}")
         from app.config import get_settings
@@ -196,7 +199,9 @@ class DeterministicSandboxGateway(PaymentGateway):
             immediate_webhook=SignedWebhookDelivery(raw_body, signature),
         )
 
-    def verify_webhook(self, raw_body: bytes, signature: str) -> bool:
+    def verify_webhook(
+        self, raw_body: bytes, signature: str, *, payment_mode: Optional[str] = None
+    ) -> bool:
         from app.config import get_settings
 
         secret = get_settings().payment_sandbox_signing_secret
@@ -209,6 +214,7 @@ class DeterministicSandboxGateway(PaymentGateway):
         amount_minor: int,
         currency: str,
         idempotency_key: str,
+        payment_mode: Optional[str] = None,
     ) -> NormalizedRefundResult:
         # No async settlement in the sandbox — a refund is processed at once.
         return NormalizedRefundResult(
@@ -224,6 +230,7 @@ class DeterministicSandboxGateway(PaymentGateway):
         *,
         provider_payment_id: str,
         provider_refund_id: str,
+        payment_mode: Optional[str] = None,
     ) -> NormalizedRefundResult:
         return NormalizedRefundResult(
             provider_refund_id=provider_refund_id,

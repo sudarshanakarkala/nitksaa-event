@@ -70,6 +70,7 @@ def _view(registration_id: int, refund: Optional[asyncpg.Record]) -> RefundStatu
             registration_id=registration_id, status="none", safe_message=_safe_message("none")
         )
     attendee_status = _ATTENDEE_STATUS.get(refund["status"], "refund_pending")
+    payment_mode = refund["payment_mode"] if "payment_mode" in refund else "test"
     return RefundStatusResponse(
         refund_id=refund["public_refund_number"],
         registration_id=registration_id,
@@ -79,6 +80,8 @@ def _view(registration_id: int, refund: Optional[asyncpg.Record]) -> RefundStatu
         requested_at=refund["requested_at"],
         finalized_at=refund["finalized_at"],
         safe_message=_safe_message(attendee_status),
+        payment_mode=payment_mode,
+        real_money=payment_mode == "live",
     )
 
 
@@ -160,6 +163,22 @@ async def cancel_registration(
         if gw is None or GatewayCapability.REFUND not in gw.capabilities:
             raise HTTPException(status_code=409, detail="refund_not_supported")
 
+        # The refund's payment_mode is the mode the payment was actually
+        # captured under (the attempt's own snapshot) — never the order's,
+        # in case they could ever disagree. In this schema they cannot (both
+        # descend from the same config snapshot at order-creation time), but
+        # asserting it here means a future change that broke that invariant
+        # would fail loudly instead of silently refunding through the wrong
+        # credential profile. See test_cross_mode_refund_impossible.
+        captured_payment_mode = captured["payment_mode"] if "payment_mode" in captured else "test"
+        order_payment_mode = paid_order["payment_mode"] if "payment_mode" in paid_order else "test"
+        if captured_payment_mode != order_payment_mode:
+            _log.error(
+                "[refunds] payment_mode mismatch between attempt %s (%s) and order %s (%s) — refusing refund",
+                captured["id"], captured_payment_mode, paid_order["id"], order_payment_mode,
+            )
+            raise HTTPException(status_code=409, detail="refund_mode_mismatch")
+
         # ── create the internal refund row + cancel the registration ──
         existing_by_key = await refund_repo.get_by_idempotency_key(idempotency_key)
         if existing_by_key is not None:
@@ -183,6 +202,7 @@ async def cancel_registration(
                     idempotency_key=idempotency_key,
                     reason="attendee_cancellation",
                     requested_by=firebase_uid,
+                    payment_mode=captured_payment_mode,
                 )
                 await RegistrationRepository(conn).set_status(registration_id, "cancelled")
                 await conn.execute(
@@ -217,6 +237,7 @@ async def cancel_registration(
             amount_minor=amount_minor,
             currency=refund_row["currency"],
             idempotency_key=refund_row["idempotency_key"],
+            payment_mode=refund_row["payment_mode"] if "payment_mode" in refund_row else "test",
         )
     except GatewayError:
         _log.exception("[refunds] provider refund call failed for %s", refund_row["public_refund_number"])
@@ -265,6 +286,7 @@ async def _refresh_and_view(
             result = gw.query_refund(
                 provider_payment_id=refund["provider_payment_id"],
                 provider_refund_id=refund["provider_refund_id"],
+                payment_mode=refund["payment_mode"] if "payment_mode" in refund else "test",
             )
         except GatewayError:
             result = None

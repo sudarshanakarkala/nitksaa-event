@@ -44,6 +44,7 @@ class PaymentRepository:
         payment_session_expiry_minutes: int,
         created_by: Optional[str],
         gateway: str = "deterministic_sandbox",
+        payment_mode: str = "test",
     ) -> asyncpg.Record:
         """Dev-only helper (diagnostics config import). Configurations are
         append-only: retires the currently published row for the event (if
@@ -72,9 +73,9 @@ class PaymentRepository:
                     gst_enabled, gst_rate, gst_mode,
                     convenience_fee_enabled, convenience_fee_type, convenience_fee_value,
                     seat_hold_minutes, payment_session_expiry_minutes,
-                    status, created_by, gateway
+                    status, created_by, gateway, payment_mode
                 ) VALUES (
-                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'published', $13, $14
+                    $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'published', $13, $14, $15
                 )
                 RETURNING *
                 """,
@@ -92,6 +93,7 @@ class PaymentRepository:
                 payment_session_expiry_minutes,
                 created_by,
                 gateway,
+                payment_mode,
             )
         return row
 
@@ -110,6 +112,7 @@ class PaymentRepository:
         payment_session_expiry_minutes: int,
         created_by: str,
         gateway: str = "deterministic_sandbox",
+        payment_mode: str = "test",
     ) -> asyncpg.Record:
         """Production config lifecycle (WP1): insert a new status='draft'
         row. Does not touch any currently-published row — unlike
@@ -127,9 +130,9 @@ class PaymentRepository:
                 gst_enabled, gst_rate, gst_mode,
                 convenience_fee_enabled, convenience_fee_type, convenience_fee_value,
                 seat_hold_minutes, payment_session_expiry_minutes,
-                status, created_by, gateway
+                status, created_by, gateway, payment_mode
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft', $13, $14
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, 'draft', $13, $14, $15
             )
             RETURNING *
             """,
@@ -147,6 +150,7 @@ class PaymentRepository:
             payment_session_expiry_minutes,
             created_by,
             gateway,
+            payment_mode,
         )
 
     async def list_configs_for_event(self, event_id: int) -> List[asyncpg.Record]:
@@ -246,6 +250,7 @@ class PaymentRepository:
         idempotency_key: str,
         expires_at: datetime,
         gateway: str = "deterministic_sandbox",
+        payment_mode: str = "test",
     ) -> asyncpg.Record:
         return await self.conn.fetchrow(
             """
@@ -253,9 +258,9 @@ class PaymentRepository:
                 public_order_number, registration_id, event_id, payer_firebase_uid,
                 configuration_id, configuration_version, currency, base_amount, tax_amount,
                 convenience_fee, final_amount, pricing_snapshot, idempotency_key, expires_at,
-                gateway, status
+                gateway, payment_mode, status
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, 'created'
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, 'created'
             )
             RETURNING *
             """,
@@ -274,6 +279,7 @@ class PaymentRepository:
             idempotency_key,
             expires_at,
             gateway,
+            payment_mode,
         )
 
     async def mark_order_payment_pending(self, order_id: int) -> None:
@@ -319,13 +325,14 @@ class PaymentRepository:
         amount: Decimal,
         currency: str,
         gateway_order_ref: str,
+        payment_mode: str = "test",
     ) -> asyncpg.Record:
         return await self.conn.fetchrow(
             """
             INSERT INTO payment_attempts (
                 public_attempt_number, order_id, attempt_number, gateway, scenario,
-                amount, currency, gateway_order_ref, status
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, 'initiated')
+                amount, currency, gateway_order_ref, payment_mode, status
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'initiated')
             RETURNING *
             """,
             public_attempt_number,
@@ -336,6 +343,7 @@ class PaymentRepository:
             amount,
             currency,
             gateway_order_ref,
+            payment_mode,
         )
 
     async def get_attempt_by_public_id(self, public_attempt_number: str) -> Optional[asyncpg.Record]:
