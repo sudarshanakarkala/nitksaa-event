@@ -1,6 +1,7 @@
 from functools import lru_cache
 from pathlib import Path
 from typing import Optional
+from urllib.parse import quote
 
 from pydantic import Field
 from pydantic_settings import BaseSettings
@@ -157,7 +158,18 @@ class Settings(BaseSettings):
         ]
 
     def _postgres_url(self, database: str) -> str:
-        url = f"postgresql://{self.db_user}:{self.db_password}@{self.db_host}:{self.db_port}/{database}"
+        user = quote(self.db_user, safe="")
+        password = quote(self.db_password, safe="")
+        database = quote(database, safe="")
+
+        # Cloud Run + Cloud SQL Unix-domain socket.
+        if self.db_host.startswith("/"):
+            host = quote(self.db_host, safe="")
+            url = f"postgresql://{user}:{password}@/{database}?host={host}&port={self.db_port}"
+            return url
+
+        # Normal TCP connection for local/dev environments.
+        url = f"postgresql://{user}:{password}@{self.db_host}:{self.db_port}/{database}"
         if self.db_sslmode:
             return f"{url}?sslmode={self.db_sslmode}"
         return url
