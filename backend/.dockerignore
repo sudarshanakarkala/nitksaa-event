@@ -1,0 +1,40 @@
+# Build context is backend/. The Dockerfile copies only requirements.txt and
+# app/, so this mainly keeps the context small and guarantees local secrets
+# never reach the image even if a COPY is widened later.
+
+# Local env files and credentials
+.env
+.env.*
+**/.env
+**/.env.*
+*.pem
+*.key
+*.p12
+serviceAccountKey.json
+
+# Virtualenvs and Python caches
+.venv/
+venv/
+**/__pycache__/
+**/*.pyc
+**/*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Tests and local reports (not needed at runtime)
+tests/
+pytest.ini
+test-output/
+reports/
+*.log
+
+# VCS, IDE and OS metadata
+.git/
+.gitignore
+.vscode/
+.idea/
+.claude/
+**/.DS_Store
