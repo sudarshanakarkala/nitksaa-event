@@ -9,6 +9,7 @@ Thumbs.db
 *.swp
 *.swo
 *.bak
+*.pre-sdk
 *.cache
 *.orig
 *.rej
