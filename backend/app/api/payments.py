@@ -170,9 +170,9 @@ async def receive_razorpay_test_webhook(
     x_razorpay_signature: str = Header(default=""),
     x_razorpay_event_id: str = Header(default=""),
 ) -> WebhookAckResponse:
-    """Verified with RAZORPAY_TEST_WEBHOOK_SECRET only. Configure this exact
-    URL as a separate webhook in the Razorpay Dashboard while in TEST mode —
-    see docs/payments/RAZORPAY_TEST_LIVE_MODE_SEPARATION_REPORT.md."""
+    """Verified with RAZORPAY_WEBHOOK_SECRET, and only on a RAZORPAY_MODE=test
+    deployment (fails closed elsewhere). Configure this exact URL as the
+    webhook in the Razorpay Dashboard while in TEST mode."""
     return await _receive_razorpay_webhook(
         payment_mode="test",
         request=request,
@@ -190,9 +190,10 @@ async def receive_razorpay_live_webhook(
     x_razorpay_signature: str = Header(default=""),
     x_razorpay_event_id: str = Header(default=""),
 ) -> WebhookAckResponse:
-    """Verified with RAZORPAY_LIVE_WEBHOOK_SECRET only. Configure this exact
-    URL as a separate webhook in the Razorpay Dashboard while in LIVE mode —
-    never reuse the TEST webhook's URL or secret."""
+    """Verified with RAZORPAY_WEBHOOK_SECRET, and only on a RAZORPAY_MODE=live
+    deployment (fails closed elsewhere). Configure this exact URL as the
+    webhook in the Razorpay Dashboard while in LIVE mode — never reuse the
+    TEST webhook's URL or secret."""
     return await _receive_razorpay_webhook(
         payment_mode="live",
         request=request,

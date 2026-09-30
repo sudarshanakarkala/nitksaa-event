@@ -382,6 +382,17 @@ class PaymentRepository:
             order_id,
         )
 
+    async def get_unresolved_attempt(self, order_id: int) -> Optional[asyncpg.Record]:
+        """The order's in-flight attempt, if any — at most one exists
+        (uq_payment_attempts_unresolved_per_order, migration 020)."""
+        return await self.conn.fetchrow(
+            """
+            SELECT * FROM payment_attempts
+            WHERE order_id = $1 AND status IN ('initiated', 'pending', 'requires_verification')
+            """,
+            order_id,
+        )
+
     async def has_unresolved_attempt(self, order_id: int) -> bool:
         """True while an attempt is in flight OR stuck awaiting verification —
         retry must be blocked in both cases (see verify_attempt)."""

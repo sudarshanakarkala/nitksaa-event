@@ -9,12 +9,6 @@ from pydantic_settings import BaseSettings
 
 _ENV_FILE = Path(__file__).resolve().parent.parent / ".env"
 
-# Razorpay modes and the key_id prefix each one requires. Shared by
-# Settings.razorpay_credential_problem, RazorpayGateway and
-# payment_config_service so the fail-closed rules can never disagree.
-RAZORPAY_MODES = ("test", "live")
-RAZORPAY_KEY_PREFIX = {"test": "rzp_test_", "live": "rzp_live_"}
-
 
 class Settings(BaseSettings):
     app_env: str = Field("development", alias="APP_ENV")
@@ -58,11 +52,7 @@ class Settings(BaseSettings):
     payment_sandbox_signing_secret: str = Field(
         "dev-payment-sandbox-secret-change-me", alias="PAYMENT_SANDBOX_SIGNING_SECRET"
     )
-    # Oldest signed webhook `created_at` still accepted. Razorpay retries a
-    # failed delivery for 24 hours after event creation, so the default is
-    # 25 hours: a genuine retry must not be rejected as stale. Replay of an
-    # already-processed event is stopped by event-id dedupe, not by this.
-    payment_webhook_max_age_seconds: int = Field(90000, alias="PAYMENT_WEBHOOK_MAX_AGE_SECONDS")
+    payment_webhook_max_age_seconds: int = Field(300, alias="PAYMENT_WEBHOOK_MAX_AGE_SECONDS")
     payment_webhook_max_future_skew_seconds: int = Field(
         30, alias="PAYMENT_WEBHOOK_MAX_FUTURE_SKEW_SECONDS"
     )
@@ -75,56 +65,63 @@ class Settings(BaseSettings):
         False, alias="PAYMENT_SANDBOX_ALLOW_IN_PRODUCTION"
     )
 
-    # Razorpay — ONE active credential set per deployment. RAZORPAY_MODE
-    # declares which Razorpay mode these keys belong to: beta runs
-    # RAZORPAY_MODE=test with rzp_test_ keys, production RAZORPAY_MODE=live
-    # with rzp_live_ keys. A payment/refund/webhook whose payment_mode
-    # differs from RAZORPAY_MODE never resolves to these credentials (see
-    # razorpay_credential_problem). Server-only — never returned in an API
-    # response, never logged, never surfaced by diagnostics.
+    # Razorpay — legacy single-profile credentials. DEPRECATED: kept only as
+    # a back-compat seed for the TEST profile (see razorpay_credentials_for)
+    # so an existing local .env with only these three vars keeps working.
+    # New deployments should set RAZORPAY_TEST_* / RAZORPAY_LIVE_* instead.
+    # Server-only — never returned in an API response, never logged, never
+    # surfaced by diagnostics.
     razorpay_key_id: str = Field("", alias="RAZORPAY_KEY_ID")
     razorpay_key_secret: str = Field("", alias="RAZORPAY_KEY_SECRET")
     razorpay_webhook_secret: str = Field("", alias="RAZORPAY_WEBHOOK_SECRET")
     razorpay_mode: str = Field("test", alias="RAZORPAY_MODE")
 
+    # Razorpay TEST/LIVE mode separation. Two fully independent credential
+    # profiles — a payment_mode of "test" only ever resolves to the
+    # razorpay_test_* triple, "live" only ever to razorpay_live_*. There is
+    # no fallback from live to test or vice versa (see
+    # razorpay_credentials_for + RazorpayGateway fail-closed prefix check).
+    razorpay_test_key_id: str = Field("", alias="RAZORPAY_TEST_KEY_ID")
+    razorpay_test_key_secret: str = Field("", alias="RAZORPAY_TEST_KEY_SECRET")
+    razorpay_test_webhook_secret: str = Field("", alias="RAZORPAY_TEST_WEBHOOK_SECRET")
+    razorpay_live_key_id: str = Field("", alias="RAZORPAY_LIVE_KEY_ID")
+    razorpay_live_key_secret: str = Field("", alias="RAZORPAY_LIVE_KEY_SECRET")
+    razorpay_live_webhook_secret: str = Field("", alias="RAZORPAY_LIVE_WEBHOOK_SECRET")
+
     razorpay_api_base: str = Field("https://api.razorpay.com/v1", alias="RAZORPAY_API_BASE")
     # Network timeout (seconds) for every outbound Razorpay REST call.
     razorpay_http_timeout_seconds: float = Field(20.0, alias="RAZORPAY_HTTP_TIMEOUT_SECONDS")
 
-    def razorpay_credential_problem(self, payment_mode: Optional[str]) -> Optional[str]:
-        """None when the active credential set may serve `payment_mode`,
-        else a short secret-free reason. Fail closed on: an unknown
-        payment_mode, an invalid RAZORPAY_MODE, a payment_mode that isn't
-        this deployment's RAZORPAY_MODE, a missing key id/secret, or a key
-        id without the mode's rzp_test_/rzp_live_ prefix."""
-        if payment_mode not in RAZORPAY_MODES:
-            return "payment_mode must be 'test' or 'live'"
-        if self.razorpay_mode not in RAZORPAY_MODES:
-            return "are unavailable: RAZORPAY_MODE must be 'test' or 'live'"
-        if payment_mode != self.razorpay_mode:
-            return f"are unavailable: this deployment runs RAZORPAY_MODE={self.razorpay_mode}"
-        if not self.razorpay_key_id or not self.razorpay_key_secret:
-            return "are not configured"
-        expected_prefix = RAZORPAY_KEY_PREFIX[payment_mode]
-        if not self.razorpay_key_id.startswith(expected_prefix):
-            return f"key_id does not start with {expected_prefix!r}"
-        return None
-
-    def razorpay_credentials_for(self, payment_mode: Optional[str]) -> tuple[str, str, str]:
-        """(key_id, key_secret, webhook_secret) of the active set when it
-        may serve `payment_mode`, else empty strings. Never raises;
-        RazorpayGateway._resolve_credentials is the choke point that turns
-        a problem into RazorpayModeCredentialError."""
-        if self.razorpay_credential_problem(payment_mode) is not None:
-            return ("", "", "")
-        return (self.razorpay_key_id, self.razorpay_key_secret, self.razorpay_webhook_secret)
+    def razorpay_credentials_for(self, payment_mode: str) -> tuple[str, str, str]:
+        """(key_id, key_secret, webhook_secret) for `payment_mode`, with NO
+        cross-mode fallback. "test" additionally falls back to the legacy
+        RAZORPAY_KEY_ID/KEY_SECRET/WEBHOOK_SECRET vars when RAZORPAY_TEST_*
+        is blank, purely for existing-deployment back-compat — "live" never
+        falls back to anything. Returns empty strings (never raises) when
+        unconfigured; callers (RazorpayGateway) are responsible for failing
+        closed."""
+        if payment_mode == "live":
+            return (
+                self.razorpay_live_key_id,
+                self.razorpay_live_key_secret,
+                self.razorpay_live_webhook_secret,
+            )
+        if payment_mode == "test":
+            return (
+                self.razorpay_test_key_id or self.razorpay_key_id,
+                self.razorpay_test_key_secret or self.razorpay_key_secret,
+                self.razorpay_test_webhook_secret or self.razorpay_webhook_secret,
+            )
+        return ("", "", "")
 
     @property
     def razorpay_configured(self) -> bool:
-        """True only when the active credential set is usable for this
-        deployment's own RAZORPAY_MODE (valid mode, key id + secret present,
-        correct key prefix)."""
-        return self.razorpay_credential_problem(self.razorpay_mode) is None
+        """True only when both TEST-profile credentials are present
+        (legacy-fallback inclusive). Retained for existing callers that
+        don't yet reason about mode; RazorpayGateway.is_enabled() now checks
+        per-mode via razorpay_credentials_for."""
+        key_id, key_secret, _ = self.razorpay_credentials_for("test")
+        return bool(key_id and key_secret)
 
     # Payment RBAC (production foundation) — comma-separated firebase_uids
     # that are always treated as platform_admin, independent of

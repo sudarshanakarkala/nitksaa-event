@@ -148,6 +148,11 @@ class NormalizedGatewayEvent:
     gateway_payment_ref: str = ""
     failure_code: str = "UNKNOWN"
     failure_message: str = "Payment failed"
+    # Set only by a status query that found NO payment at all for the
+    # provider order (hosted checkout opened and closed without paying).
+    # `status` is still PAYMENT_PENDING for such an event, so a consumer that
+    # ignores this flag behaves exactly as before; webhooks never set it.
+    no_payment: bool = False
 
 
 @dataclass(frozen=True)
@@ -312,6 +317,22 @@ class PaymentGateway(ABC):
         before confirming anything. Adapters without hosted checkout leave
         this at the default (unsupported)."""
         raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.VERIFY_PAYMENT)
+
+    def rebuild_checkout(
+        self,
+        *,
+        gateway_order_ref: str,
+        amount: Decimal,
+        currency: str,
+        payment_mode: Optional[str] = None,
+    ) -> Optional[GatewayCheckout]:
+        """Re-issue the frontend checkout payload for an attempt whose
+        provider order already exists (the attendee closed hosted checkout
+        without paying), without calling the provider. None when this
+        gateway has no hosted checkout or `gateway_order_ref` is not a real
+        provider order yet — callers then keep the one-unresolved-attempt
+        rule. Default: None."""
+        return None
 
 
 def payload_hash(raw_body: bytes) -> str:

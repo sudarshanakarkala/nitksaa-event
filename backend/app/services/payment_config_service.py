@@ -16,11 +16,33 @@ from fastapi import HTTPException
 
 from app.database import get_pool
 from app.repositories.payment_repository import PaymentRepository
-from app.services import audit_service
+from app.services import audit_service, pricing_service
 
 _VALID_GST_MODES = ("inclusive", "exclusive")
 _VALID_FEE_TYPES = ("fixed", "percentage")
 _VALID_GATEWAYS = ("deterministic_sandbox", "razorpay")
+# Razorpay does not accept an order below INR 1.00 (100 paise).
+_RAZORPAY_MIN_FINAL_AMOUNT = Decimal("1.00")
+
+
+def _final_amount_or_none(payload: Dict[str, Any]) -> Any:
+    """The final payable amount create_order would charge for this
+    configuration (same pricing_service calculation, same defaults as
+    validate_configuration), or None when the pricing inputs are themselves
+    invalid — those are already reported as their own errors."""
+    try:
+        return pricing_service.calculate_price({
+            "currency": payload.get("currency", "INR"),
+            "base_amount": payload.get("base_amount"),
+            "gst_enabled": payload.get("gst_enabled", False),
+            "gst_rate": payload.get("gst_rate", Decimal("0")),
+            "gst_mode": payload.get("gst_mode", "exclusive"),
+            "convenience_fee_enabled": payload.get("convenience_fee_enabled", False),
+            "convenience_fee_type": payload.get("convenience_fee_type", "fixed"),
+            "convenience_fee_value": payload.get("convenience_fee_value", Decimal("0")),
+        })["final_amount"]
+    except (TypeError, ValueError, ArithmeticError):
+        return None
 
 
 def validate_configuration(
@@ -77,27 +99,35 @@ def validate_configuration(
     gateway = payload.get("gateway", "deterministic_sandbox")
     if gateway not in _VALID_GATEWAYS:
         errors.append(f"gateway must be one of {_VALID_GATEWAYS}")
+    elif gateway == "razorpay":
+        # Checked on the FINAL payable amount (after GST and convenience
+        # fee), i.e. exactly what create_order would send to Razorpay.
+        final_amount = _final_amount_or_none(payload)
+        if final_amount is not None and final_amount < _RAZORPAY_MIN_FINAL_AMOUNT:
+            errors.append("final payable amount must be at least INR 1.00 when gateway is razorpay")
 
     payment_mode = payload.get("payment_mode", "test")
     if payment_mode not in ("test", "live"):
         errors.append("payment_mode must be one of ('test', 'live')")
     elif gateway == "razorpay" and payment_mode == "live" and require_live_credentials:
         # Fail closed at draft/validate/publish time, not first-use: a live
-        # config must never be publishable unless real Live credentials with
-        # the correct rzp_live_ prefix already exist server-side.
-        from app.config import get_settings
-        from app.gateways.razorpay_gateway import _KEY_PREFIX
+        # config must never be publishable unless this deployment runs
+        # RAZORPAY_MODE=live with a complete rzp_live_ credential set.
+        from app.config import RAZORPAY_KEY_PREFIX, get_settings
 
         settings = get_settings()
-        key_id, key_secret, webhook_secret = settings.razorpay_credentials_for("live")
-        if not (key_id and key_secret and webhook_secret):
+        if settings.razorpay_mode != "live" or not (
+            settings.razorpay_key_id and settings.razorpay_key_secret and settings.razorpay_webhook_secret
+        ):
             errors.append(
-                "gateway=razorpay with payment_mode=live requires "
-                "RAZORPAY_LIVE_KEY_ID, RAZORPAY_LIVE_KEY_SECRET and "
-                "RAZORPAY_LIVE_WEBHOOK_SECRET to all be configured"
+                "gateway=razorpay with payment_mode=live requires this deployment to run "
+                "RAZORPAY_MODE=live with RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET and "
+                "RAZORPAY_WEBHOOK_SECRET all configured"
             )
-        elif not key_id.startswith(_KEY_PREFIX["live"]):
-            errors.append(f"RAZORPAY_LIVE_KEY_ID must start with {_KEY_PREFIX['live']!r}")
+        elif not settings.razorpay_key_id.startswith(RAZORPAY_KEY_PREFIX["live"]):
+            errors.append(
+                f"RAZORPAY_KEY_ID must start with {RAZORPAY_KEY_PREFIX['live']!r} when RAZORPAY_MODE=live"
+            )
 
     return errors
 

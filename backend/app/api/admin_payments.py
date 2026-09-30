@@ -237,11 +237,10 @@ async def get_gateway_configuration(
     def _mode_flags(gw) -> Dict[str, Any]:
         if gw.name != "razorpay":
             return {}
-        test_key_id, test_key_secret, _ = settings.razorpay_credentials_for("test")
-        live_key_id, live_key_secret, _ = settings.razorpay_credentials_for("live")
+        # Single active credential set: at most one of these is ever true.
         return {
-            "test_mode_configured": bool(test_key_id and test_key_secret),
-            "live_mode_configured": bool(live_key_id and live_key_secret),
+            "test_mode_configured": settings.razorpay_credential_problem("test") is None,
+            "live_mode_configured": settings.razorpay_credential_problem("live") is None,
         }
 
     gateways = [

@@ -117,8 +117,9 @@ class GatewayInfo(BaseModel):
     enabled: bool
     capabilities: List[str]
     supported_scenarios: List[str]
-    # Razorpay only (None for every other gateway) — whether each mode's
-    # credential profile is configured. Never a secret: presence only.
+    # Razorpay only (None for every other gateway) — whether the deployment's
+    # single active credential set can serve each mode (at most one is
+    # true). Never a secret: presence only.
     test_mode_configured: Optional[bool] = None
     live_mode_configured: Optional[bool] = None
 

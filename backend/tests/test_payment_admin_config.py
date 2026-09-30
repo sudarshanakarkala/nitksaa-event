@@ -260,13 +260,67 @@ def test_validate_configuration_rejects_non_positive_durations():
     assert any("payment_session_expiry_minutes" in e for e in errors)
 
 
+_MIN_AMOUNT_ERROR = "at least INR 1.00"
+
+
+@pytest.mark.parametrize("base_amount,accepted", [
+    ("0.00", False), ("0.99", False), ("1.00", True), ("250.00", True),
+])
+def test_validate_configuration_razorpay_minimum_final_amount(base_amount, accepted):
+    errors = validate_configuration(_draft_payload(
+        "unit", gateway="razorpay", payment_mode="test", base_amount=base_amount, gst_enabled=False,
+    ))
+    if accepted:
+        assert errors == []
+    else:
+        assert any(_MIN_AMOUNT_ERROR in e for e in errors), errors
+
+
+@pytest.mark.parametrize("overrides,accepted", [
+    # 0.90 + 18% exclusive GST = 1.06: base below 1.00, final payable above.
+    ({"base_amount": "0.90", "gst_enabled": True, "gst_rate": "18.00", "gst_mode": "exclusive"}, True),
+    # 0.50 + fixed 0.50 convenience fee = exactly 1.00.
+    ({"base_amount": "0.50", "gst_enabled": False, "convenience_fee_enabled": True,
+      "convenience_fee_type": "fixed", "convenience_fee_value": "0.50"}, True),
+    # 0.50 + fixed 0.49 convenience fee = 0.99.
+    ({"base_amount": "0.50", "gst_enabled": False, "convenience_fee_enabled": True,
+      "convenience_fee_type": "fixed", "convenience_fee_value": "0.49"}, False),
+    # 0.99 inclusive GST stays 0.99 payable.
+    ({"base_amount": "0.99", "gst_enabled": True, "gst_rate": "18.00", "gst_mode": "inclusive"}, False),
+])
+def test_validate_configuration_razorpay_minimum_checks_final_payable_amount(overrides, accepted):
+    errors = validate_configuration(_draft_payload("unit", gateway="razorpay", payment_mode="test", **overrides))
+    assert (not any(_MIN_AMOUNT_ERROR in e for e in errors)) is accepted, errors
+
+
+@pytest.mark.parametrize("base_amount", ["0.00", "0.50"])
+def test_validate_configuration_minimum_does_not_apply_to_sandbox(base_amount):
+    errors = validate_configuration(_draft_payload(
+        "unit", gateway="deterministic_sandbox", base_amount=base_amount, gst_enabled=False,
+    ))
+    assert errors == []
+
+
 def test_validate_configuration_rejects_live_razorpay_without_live_credentials(monkeypatch):
     from app.config import get_settings
 
     fakes.clear_razorpay_env(monkeypatch)
     try:
         errors = validate_configuration(_draft_payload("unit", gateway="razorpay", payment_mode="live"))
-        assert any("RAZORPAY_LIVE" in e for e in errors)
+        assert any("RAZORPAY_MODE=live" in e for e in errors)
+    finally:
+        get_settings.cache_clear()
+
+
+def test_validate_configuration_rejects_live_razorpay_on_test_deployment(monkeypatch):
+    """Complete, valid TEST credentials must not make a LIVE config
+    publishable — the deployment itself has to run RAZORPAY_MODE=live."""
+    from app.config import get_settings
+
+    fakes.set_razorpay_env(monkeypatch)
+    try:
+        errors = validate_configuration(_draft_payload("unit", gateway="razorpay", payment_mode="live"))
+        assert any("RAZORPAY_MODE=live" in e for e in errors)
     finally:
         get_settings.cache_clear()
 
@@ -623,6 +677,22 @@ def test_live_draft_can_be_created_without_live_credentials(client, monkeypatch)
         _clear_bootstrap(monkeypatch)
 
 
+def test_razorpay_draft_below_one_rupee_is_rejected(client, monkeypatch):
+    event_id = _mk_unpaid_event(client, f"rzpmin-{uuid.uuid4().hex[:8]}")
+    try:
+        _as_platform_admin(monkeypatch)
+        r = client.post(
+            f"/api/v1/admin/events/{event_id}/payment-configurations",
+            json=_draft_payload("rzpmin", gateway="razorpay", payment_mode="test",
+                                base_amount="0.99", gst_enabled=False),
+            headers=_bearer(_PLATFORM_ADMIN),
+        )
+        assert r.status_code == 422, r.text
+        assert any(_MIN_AMOUNT_ERROR in e for e in r.json()["detail"]["errors"])
+    finally:
+        _clear_bootstrap(monkeypatch)
+
+
 def test_live_publish_rejected_without_live_credentials_even_for_platform_admin(client, monkeypatch):
     fakes.clear_razorpay_env(monkeypatch)
     event_id = _mk_unpaid_event(client, f"livenocreds-{uuid.uuid4().hex[:8]}")
@@ -639,7 +709,7 @@ def test_live_publish_rejected_without_live_credentials_even_for_platform_admin(
             headers=headers,
         )
         assert r.status_code == 422, r.text
-        assert any("RAZORPAY_LIVE" in e for e in r.json()["detail"]["errors"])
+        assert any("RAZORPAY_MODE=live" in e for e in r.json()["detail"]["errors"])
     finally:
         _clear_bootstrap(monkeypatch)
 

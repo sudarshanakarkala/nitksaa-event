@@ -1,37 +1,53 @@
-"""Offline fake of the Razorpay REST surface used by RazorpayGateway.
+"""Offline, SDK-shaped fake of the razorpay.Client surface RazorpayGateway
+uses (razorpay==2.0.1): order.create, order.payments, payment.refund,
+refund.fetch, utility.verify_payment_signature and
+utility.verify_webhook_signature.
 
 Injected by monkeypatching app.gateways.razorpay_gateway._build_client. No
-network, deterministic. Only the six calls the adapter makes are modelled.
+network, deterministic. `utility` is the SDK's real Utility class (pure HMAC,
+no I/O), so signature tests exercise razorpay==2.0.1's own verification code.
 """
 from __future__ import annotations
 
 import hashlib
 import hmac
 import json
-import re
 import uuid
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
+
+from razorpay.errors import ServerError
+from razorpay.utility.utility import Utility
 
 
 # order_id -> {"amount": paise, "currency": "INR"}
 _ORDERS: Dict[str, Dict[str, Any]] = {}
 # refund_id -> refund dict
 _REFUNDS: Dict[str, Dict[str, Any]] = {}
+# Every SDK resource call the fake received, in order — lets tests assert the
+# SDK method, arguments, timeout and headers the adapter actually used.
+CALLS: List[Dict[str, Any]] = []
 
 # Test knobs
 STATE: Dict[str, Any] = {
-    "payment_status": "captured",   # what GET /orders/{id}/payments reports
+    "payment_status": "captured",   # what order.payments reports
     "payments_amount_override": None,  # force a mismatched amount (paise)
-    "refund_status": "processed",   # what POST refund / GET refund reports
-    "refund_raises": False,         # make the refund call raise RazorpayApiError
-    "orders_create_raises": False,
-    "payments_empty": False,        # GET /orders/{id}/payments returns no items
+    "refund_status": "processed",   # what payment.refund / refund.fetch report
+    "refund_raises": False,         # payment.refund raises the SDK's ServerError
+    "orders_create_raises": False,  # order.create raises the SDK's ServerError
+    "payments_empty": False,        # order.payments returns no items
+    "payment_id": None,             # fixed id for the order.payments item (else random)
+    "payments_raises": False,       # order.payments raises the SDK's ServerError
+    "payments_currency_override": None,  # force a mismatched currency
 }
+
+# Provider text the fake puts in SDK exceptions; must never surface.
+SDK_ERROR_TEXT = "provider says card 4111-1111 for payer@example.com failed"
 
 
 def reset() -> None:
     _ORDERS.clear()
     _REFUNDS.clear()
+    CALLS.clear()
     STATE.update(
         payment_status="captured",
         payments_amount_override=None,
@@ -39,12 +55,10 @@ def reset() -> None:
         refund_raises=False,
         orders_create_raises=False,
         payments_empty=False,
+        payment_id=None,
+        payments_raises=False,
+        payments_currency_override=None,
     )
-
-
-_ORDER_PAYMENTS_RE = re.compile(r"^/orders/([^/]+)/payments$")
-_REFUND_FETCH_RE = re.compile(r"^/refunds/([^/]+)$")
-_PAYMENT_REFUND_RE = re.compile(r"^/payments/([^/]+)/refund$")
 
 
 def _uid(prefix: str) -> str:
@@ -53,74 +67,92 @@ def _uid(prefix: str) -> str:
     return f"{prefix}_{uuid.uuid4().hex}"
 
 
+def _record(method: str, args: tuple, data: Optional[Dict[str, Any]], kwargs: Dict[str, Any]) -> None:
+    CALLS.append({"method": method, "args": args, "data": data or {}, "kwargs": dict(kwargs)})
+
+
+class _Order:
+    def create(self, data=None, **kwargs):
+        _record("order.create", (), data, kwargs)
+        if STATE["orders_create_raises"]:
+            raise ServerError(SDK_ERROR_TEXT)
+        oid = _uid("order")
+        _ORDERS[oid] = {"amount": int(data["amount"]), "currency": data.get("currency", "INR")}
+        return {"id": oid, "amount": int(data["amount"]),
+                "currency": data.get("currency", "INR"), "status": "created",
+                "receipt": data.get("receipt", "")}
+
+    def payments(self, order_id, data=None, **kwargs):
+        _record("order.payments", (order_id,), data, kwargs)
+        if STATE["payments_raises"]:
+            raise ServerError(SDK_ERROR_TEXT)
+        if STATE["payments_empty"]:
+            return {"count": 0, "items": []}
+        base = _ORDERS.get(order_id, {"amount": 100, "currency": "INR"})
+        amount = STATE["payments_amount_override"] or base["amount"]
+        return {"count": 1, "items": [{
+            "id": STATE["payment_id"] or _uid("pay"),
+            "order_id": order_id,
+            "amount": int(amount),
+            "currency": STATE["payments_currency_override"] or base["currency"],
+            "status": STATE["payment_status"],
+            "error_code": None if STATE["payment_status"] != "failed" else "BAD_CARD",
+            "error_description": None if STATE["payment_status"] != "failed" else "declined",
+        }]}
+
+
+class _Payment:
+    def refund(self, payment_id, data=None, **kwargs):
+        _record("payment.refund", (payment_id,), data, kwargs)
+        if STATE["refund_raises"]:
+            raise ServerError(SDK_ERROR_TEXT)
+        rid = _uid("rfnd")
+        rec = {"id": rid, "payment_id": payment_id, "amount": int(data["amount"]),
+               "currency": "INR", "status": STATE["refund_status"]}
+        _REFUNDS[rid] = rec
+        return rec
+
+
+class _Refund:
+    def fetch(self, refund_id, data=None, **kwargs):
+        _record("refund.fetch", (refund_id,), data, kwargs)
+        rec = dict(_REFUNDS.get(refund_id, {"id": refund_id, "amount": 100, "currency": "INR"}))
+        rec["status"] = STATE["refund_status"]
+        return rec
+
+
 class FakeRazorpayClient:
-    def request(self, method, path, *, json_body=None, headers=None, operation=""):
-        from app.gateways.razorpay_gateway import RazorpayApiError
+    def __init__(self, auth):
+        self.auth = auth
+        self.order = _Order()
+        self.payment = _Payment()
+        self.refund = _Refund()
+        # The SDK's real Utility: verify_payment_signature reads self.auth[1].
+        self.utility = Utility(self)
 
-        method = method.upper()
-        path = "/" + path.lstrip("/")
 
-        if method == "POST" and path == "/orders":
-            if STATE["orders_create_raises"]:
-                raise RazorpayApiError("orders.create", 502, "server_error")
-            oid = _uid("order")
-            _ORDERS[oid] = {"amount": int(json_body["amount"]), "currency": json_body.get("currency", "INR")}
-            return {"id": oid, "amount": int(json_body["amount"]),
-                    "currency": json_body.get("currency", "INR"), "status": "created",
-                    "receipt": json_body.get("receipt", "")}
+def _fake_build_client(settings, payment_mode):
+    # Same contract as the real seam: credentials come only from the real
+    # fail-closed _resolve_credentials for this payment_mode.
+    from app.gateways.razorpay_gateway import _resolve_credentials
 
-        m = _ORDER_PAYMENTS_RE.match(path)
-        if method == "GET" and m:
-            oid = m.group(1)
-            if STATE["payments_empty"]:
-                return {"count": 0, "items": []}
-            base = _ORDERS.get(oid, {"amount": 100, "currency": "INR"})
-            amount = STATE["payments_amount_override"] or base["amount"]
-            return {"count": 1, "items": [{
-                "id": _uid("pay"),
-                "order_id": oid,
-                "amount": int(amount),
-                "currency": base["currency"],
-                "status": STATE["payment_status"],
-                "error_code": None if STATE["payment_status"] != "failed" else "BAD_CARD",
-                "error_description": None if STATE["payment_status"] != "failed" else "declined",
-            }]}
-
-        m = _PAYMENT_REFUND_RE.match(path)
-        if method == "POST" and m:
-            if STATE["refund_raises"]:
-                raise RazorpayApiError("payments.refund", 502, "server_error")
-            pid = m.group(1)
-            rid = _uid("rfnd")
-            rec = {"id": rid, "payment_id": pid, "amount": int(json_body["amount"]),
-                   "currency": "INR", "status": STATE["refund_status"]}
-            _REFUNDS[rid] = rec
-            return rec
-
-        m = _REFUND_FETCH_RE.match(path)
-        if method == "GET" and m:
-            rid = m.group(1)
-            rec = dict(_REFUNDS.get(rid, {"id": rid, "amount": 100, "currency": "INR"}))
-            rec["status"] = STATE["refund_status"]
-            return rec
-
-        raise RazorpayApiError(operation or f"{method} {path}", 404, "not_found")
+    key_id, key_secret, _ = _resolve_credentials(settings, payment_mode)
+    return FakeRazorpayClient(auth=(key_id, key_secret))
 
 
 def install(monkeypatch) -> None:
-    """Point the adapter at the fake and reset knobs. The fake ignores which
-    mode it was called for — credential *resolution* (fail-closed
-    prefix/missing checks) is exercised separately via _resolve_credentials,
-    not through this seam."""
+    """Point the adapter at the fake and reset knobs. Only razorpay.Client
+    is faked — credential resolution (mode match, missing creds, key prefix)
+    still runs for every call."""
     reset()
     import app.gateways.razorpay_gateway as rg
-    monkeypatch.setattr(rg, "_build_client", lambda settings, payment_mode: FakeRazorpayClient())
+    monkeypatch.setattr(rg, "_build_client", _fake_build_client)
 
 
 def set_razorpay_env(monkeypatch, *, key_id="rzp_test_fake", key_secret="secret_fake",
                      webhook_secret="whsec_fake", mode="test") -> None:
-    """Legacy-var seed (RAZORPAY_KEY_ID/...): exercises the TEST-profile
-    back-compat fallback in Settings.razorpay_credentials_for."""
+    """Set the deployment's single active credential set (fake values).
+    Explicit env vars outrank backend/.env, so real local creds never leak in."""
     from app.config import get_settings
 
     monkeypatch.setenv("RAZORPAY_KEY_ID", key_id)
@@ -130,35 +162,18 @@ def set_razorpay_env(monkeypatch, *, key_id="rzp_test_fake", key_secret="secret_
     get_settings.cache_clear()
 
 
-def set_razorpay_test_env(monkeypatch, *, key_id="rzp_test_fake", key_secret="secret_fake",
-                          webhook_secret="whsec_fake") -> None:
-    from app.config import get_settings
-
-    monkeypatch.setenv("RAZORPAY_TEST_KEY_ID", key_id)
-    monkeypatch.setenv("RAZORPAY_TEST_KEY_SECRET", key_secret)
-    monkeypatch.setenv("RAZORPAY_TEST_WEBHOOK_SECRET", webhook_secret)
-    get_settings.cache_clear()
-
-
 def set_razorpay_live_env(monkeypatch, *, key_id="rzp_live_fake", key_secret="live_secret_fake",
                           webhook_secret="live_whsec_fake") -> None:
-    from app.config import get_settings
-
-    monkeypatch.setenv("RAZORPAY_LIVE_KEY_ID", key_id)
-    monkeypatch.setenv("RAZORPAY_LIVE_KEY_SECRET", key_secret)
-    monkeypatch.setenv("RAZORPAY_LIVE_WEBHOOK_SECRET", webhook_secret)
-    get_settings.cache_clear()
+    """Switch the fake deployment to RAZORPAY_MODE=live (fake values only)."""
+    set_razorpay_env(monkeypatch, key_id=key_id, key_secret=key_secret,
+                     webhook_secret=webhook_secret, mode="live")
 
 
 def clear_razorpay_env(monkeypatch) -> None:
-    """Blank every Razorpay credential var (legacy + test + live)."""
+    """Blank the active Razorpay credential set."""
     from app.config import get_settings
 
-    for name in (
-        "RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET",
-        "RAZORPAY_TEST_KEY_ID", "RAZORPAY_TEST_KEY_SECRET", "RAZORPAY_TEST_WEBHOOK_SECRET",
-        "RAZORPAY_LIVE_KEY_ID", "RAZORPAY_LIVE_KEY_SECRET", "RAZORPAY_LIVE_WEBHOOK_SECRET",
-    ):
+    for name in ("RAZORPAY_KEY_ID", "RAZORPAY_KEY_SECRET", "RAZORPAY_WEBHOOK_SECRET"):
         monkeypatch.setenv(name, "")
     get_settings.cache_clear()
 
