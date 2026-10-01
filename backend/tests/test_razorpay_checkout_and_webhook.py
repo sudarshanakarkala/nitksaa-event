@@ -1341,3 +1341,161 @@ def test_step6_test_signed_delivery_on_live_route_fails_closed_without_claim(cli
     assert r.status_code == 400 and r.json() == {"detail": "invalid_signature"}
     assert _event_rows(evt) == 0
     assert _snapshot(reg, order, attempt) == before
+
+
+# ── Product-owner compatibility URL: POST /api/v1/payments/webhook ───────
+# Same handler as .../razorpay/{mode}/webhook, mode taken from RAZORPAY_MODE.
+
+_COMPAT_URL = "/api/v1/payments/webhook"
+
+
+def _post_compat(client, raw, *, signature, event_id, extra_headers=None):
+    headers = {"X-Razorpay-Event-Id": event_id, "Content-Type": "application/json", **(extra_headers or {})}
+    if signature is not None:
+        headers["X-Razorpay-Signature"] = signature
+    return client.post(_COMPAT_URL, content=raw, headers=headers)
+
+
+@pytest.mark.parametrize("event,attempt_status", [
+    ("payment.captured", "captured"),
+    ("order.paid", "captured"),
+    ("payment.failed", "failed"),
+])
+def test_compat_webhook_processes_supported_events(client, event, attempt_status):
+    reg, order, attempt, ref = _paid_setup(client)
+    pid, evt = _pid(), _evt()
+    raw, sig = _signed(_event_body(event, order_ref=ref, payment_id=pid, with_order_entity=(event == "order.paid")))
+    r = _post_compat(client, raw, signature=sig, event_id=evt)   # no Authorization header at all
+    assert r.status_code == 200 and r.json()["processing_status"] == "processed"
+    assert _row_status(evt) == "processed"
+    if attempt_status == "captured":
+        _assert_captured_paid_registered(reg, order, attempt, pid)
+    else:
+        assert _snapshot(reg, order, attempt)["attempt"]["status"] == "failed"
+        assert _reg_status(reg) == "payment_failed"
+
+
+@pytest.mark.parametrize("signature", [None, "", "deadbeef"])
+def test_compat_webhook_missing_or_invalid_signature_is_400_without_claim(client, signature):
+    reg, order, attempt, ref = _paid_setup(client)
+    before = _snapshot(reg, order, attempt)
+    raw, _ = _signed(_event_body("payment.captured", order_ref=ref, payment_id=_pid()))
+    evt = _evt()
+    r = _post_compat(client, raw, signature=signature, event_id=evt)
+    assert r.status_code == 400 and r.json() == {"detail": "invalid_signature"}
+    assert _event_rows(evt) == 0
+    assert _snapshot(reg, order, attempt) == before
+
+
+def test_compat_webhook_duplicate_event_id_is_200_duplicate(client):
+    reg, order, attempt, ref = _paid_setup(client)
+    pid, evt = _pid(), _evt()
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=pid))
+    assert _post_compat(client, raw, signature=sig, event_id=evt).json()["processing_status"] == "processed"
+    s = _snapshot(reg, order, attempt)
+    r = _post_compat(client, raw, signature=sig, event_id=evt)
+    assert r.status_code == 200 and r.json()["processing_status"] == "duplicate"
+    assert _snapshot(reg, order, attempt) == s
+    assert _event_rows(evt) == 1 and _captures(s) == 1 and _confirmations(reg) == 1
+
+
+@pytest.mark.parametrize("first", ["compat", "test_route"])
+def test_compat_and_test_route_share_event_id_dedupe(client, first):
+    reg, order, attempt, ref = _paid_setup(client)
+    pid, evt = _pid(), _evt()
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=pid))
+    via_compat = lambda: _post_compat(client, raw, signature=sig, event_id=evt)          # noqa: E731
+    via_test_route = lambda: _post(client, raw, signature=sig, event_id=evt, route="test")  # noqa: E731
+    a, b = (via_compat, via_test_route) if first == "compat" else (via_test_route, via_compat)
+    assert a().json()["processing_status"] == "processed"
+    r = b()
+    assert r.status_code == 200 and r.json()["processing_status"] == "duplicate"
+    s = _assert_captured_paid_registered(reg, order, attempt, pid)
+    assert _event_rows(evt) == 1 and _captures(s) == 1
+
+
+def test_compat_webhook_processing_failure_rolls_back_and_same_id_retry_succeeds(monkeypatch, client):
+    from app.repositories.payment_repository import PaymentRepository
+
+    reg, order, attempt, ref = _paid_setup(client)
+    before = _snapshot(reg, order, attempt)
+    pid, evt = _pid(), _evt()
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=pid))
+    real_mark_paid = PaymentRepository.mark_order_paid
+    failures = {"left": 1}
+
+    async def _failing_once(self, order_id, amount_paid):
+        if failures["left"]:
+            failures["left"] -= 1
+            raise RuntimeError("simulated database failure")
+        return await real_mark_paid(self, order_id, amount_paid)
+
+    monkeypatch.setattr(PaymentRepository, "mark_order_paid", _failing_once)
+    monkeypatch.setattr(client._transport, "raise_server_exceptions", False)
+    assert _post_compat(client, raw, signature=sig, event_id=evt).status_code == 500
+    assert _event_rows(evt) == 0
+    assert _snapshot(reg, order, attempt) == before
+    r = _post_compat(client, raw, signature=sig, event_id=evt)
+    assert r.status_code == 200 and r.json()["processing_status"] == "processed"
+    _assert_captured_paid_registered(reg, order, attempt, pid)
+
+
+def test_compat_webhook_ignores_a_junk_authorization_header(client):
+    reg, order, attempt, ref = _paid_setup(client)
+    pid = _pid()
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=pid))
+    r = _post_compat(client, raw, signature=sig, event_id=_evt(),
+                     extra_headers={"Authorization": "Bearer not.a.real.token"})
+    assert r.status_code == 200 and r.json()["processing_status"] == "processed"
+    _assert_captured_paid_registered(reg, order, attempt, pid)
+
+
+def test_compat_webhook_on_test_deployment_rejects_live_signature(client):
+    reg, order, attempt, ref = _paid_setup(client)
+    before = _snapshot(reg, order, attempt)
+    evt = _evt()
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=_pid()), secret="live_whsec_fake")
+    r = _post_compat(client, raw, signature=sig, event_id=evt)
+    assert r.status_code == 400 and r.json() == {"detail": "invalid_signature"}
+    assert _event_rows(evt) == 0
+    assert _snapshot(reg, order, attempt) == before
+
+
+@pytest.mark.parametrize("bad_mode", ["production", "TEST", ""])
+def test_compat_webhook_invalid_razorpay_mode_fails_closed(monkeypatch, client, bad_mode):
+    from app.config import get_settings
+    reg, order, attempt, ref = _paid_setup(client)
+    before = _snapshot(reg, order, attempt)
+    monkeypatch.setenv("RAZORPAY_MODE", bad_mode)
+    get_settings.cache_clear()
+    evt = _evt()
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=_pid()))
+    r = _post_compat(client, raw, signature=sig, event_id=evt)
+    assert r.status_code == 404 and r.json() == {"detail": "unknown_gateway"}
+    assert "whsec" not in r.text and "rzp_" not in r.text
+    assert _event_rows(evt) == 0
+    assert _snapshot(reg, order, attempt) == before
+
+
+def test_compat_webhook_on_live_deployment_rejects_test_signature(monkeypatch, client):
+    reg, order, attempt, ref = _paid_setup(client)
+    before = _snapshot(reg, order, attempt)
+    fakes.set_razorpay_live_env(monkeypatch)
+    evt = _evt()
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=_pid()))   # TEST secret
+    r = _post_compat(client, raw, signature=sig, event_id=evt)
+    assert r.status_code == 400 and r.json() == {"detail": "invalid_signature"}
+    assert _event_rows(evt) == 0
+    assert _snapshot(reg, order, attempt) == before
+
+
+def test_compat_webhook_live_delivery_for_test_order_is_mode_mismatch(monkeypatch, client):
+    reg, order, attempt, ref = _paid_setup(client)          # TEST-mode order
+    before = _snapshot(reg, order, attempt)
+    fakes.set_razorpay_live_env(monkeypatch)                # deployment now RAZORPAY_MODE=live
+    evt = _evt()
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=_pid()), secret="live_whsec_fake")
+    r = _post_compat(client, raw, signature=sig, event_id=evt)
+    assert r.status_code == 200 and r.json()["processing_status"] == "rejected"
+    assert _db_fetchval("SELECT error_code FROM payment_webhook_events WHERE gateway_event_id = $1", evt) == "webhook_mode_mismatch"
+    assert _snapshot(reg, order, attempt) == before

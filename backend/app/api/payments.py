@@ -9,7 +9,7 @@ from typing import Any, Dict
 
 from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
 
-from app.config import get_settings
+from app.config import RAZORPAY_MODES, get_settings
 from app.gateways import registry as gateway_registry
 from app.gateways.registry import GatewayDisabledError, UnknownGatewayError
 from app.middleware.auth import get_current_user
@@ -196,6 +196,32 @@ async def receive_razorpay_live_webhook(
     TEST webhook's URL or secret."""
     return await _receive_razorpay_webhook(
         payment_mode="live",
+        request=request,
+        x_razorpay_signature=x_razorpay_signature,
+        x_razorpay_event_id=x_razorpay_event_id,
+    )
+
+
+@router.post(
+    "/api/v1/payments/webhook",
+    response_model=WebhookAckResponse,
+)
+async def receive_razorpay_webhook_for_deployment_mode(
+    request: Request,
+    x_razorpay_signature: str = Header(default=""),
+    x_razorpay_event_id: str = Header(default=""),
+) -> WebhookAckResponse:
+    """Product-owner webhook URL (no login — Razorpay calls it directly).
+    Exactly the mode-specific route for this deployment's RAZORPAY_MODE:
+    beta (RAZORPAY_MODE=test) behaves as .../razorpay/test/webhook, a live
+    deployment as .../razorpay/live/webhook — same handler, same signature,
+    claim, transaction and freshness rules. An invalid RAZORPAY_MODE fails
+    closed like a disabled gateway (404, so Razorpay keeps retrying)."""
+    payment_mode = get_settings().razorpay_mode
+    if payment_mode not in RAZORPAY_MODES:
+        raise HTTPException(status_code=404, detail="unknown_gateway")
+    return await _receive_razorpay_webhook(
+        payment_mode=payment_mode,
         request=request,
         x_razorpay_signature=x_razorpay_signature,
         x_razorpay_event_id=x_razorpay_event_id,
