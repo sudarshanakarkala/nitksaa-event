@@ -46,6 +46,8 @@ async def firebase_login(body: FirebaseLoginRequest):
         raise HTTPException(status_code=400, detail="firebase_uid_missing")
     if not email:
         raise HTTPException(status_code=400, detail="email_missing")
+    if claims.get("email_verified") is not True:
+        raise HTTPException(status_code=403, detail="email_not_verified")
 
     fullname = claims.get("name") or claims.get("display_name") or email
     try:
