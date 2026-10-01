@@ -15,6 +15,12 @@ REAL-MONEY VERIFIED: not attempted — no real payment, refund, or config
 publish has been performed. Pending explicit human approval + Razorpay
 Dashboard confirmation (§14).**
 
+> **Update 2026-10-01 — one Razorpay webhook address.** Razorpay webhooks
+> are now received only at `POST /api/v1/payments/webhook`. The
+> mode-specific routes `/api/v1/payment-gateways/razorpay/test/webhook` and
+> `/api/v1/payment-gateways/razorpay/live/webhook` were removed and return
+> 404. The address does not change at go-live — see §6.
+
 ---
 
 ## 1. Baseline before this work
@@ -81,27 +87,45 @@ fallback even when the other mode's creds are valid).
 
 ## 6. Webhook separation
 
-Two explicit routes (`app/api/payments.py`):
-```
-POST /api/v1/payment-gateways/razorpay/test/webhook   (RAZORPAY_TEST_WEBHOOK_SECRET only)
-POST /api/v1/payment-gateways/razorpay/live/webhook   (RAZORPAY_LIVE_WEBHOOK_SECRET only)
-```
-The generic `/api/v1/payment-gateways/{gateway}/webhook` route now 404s
-for `gateway=razorpay` (deterministic_sandbox unaffected). `process_webhook`
-additionally rejects (`webhook_mode_mismatch`) if a delivery's route-mode
-disagrees with the matched order's own snapshotted `payment_mode`, even
-when the signature validates — cross-mode webhook application is rejected
-independent of signature validity. **Status: PASS** — covered by
-`tests/test_razorpay_checkout_and_webhook.py`
-(`test_generic_webhook_route_rejects_razorpay`,
-`test_live_webhook_route_rejects_test_signed_delivery`,
-`test_live_signed_webhook_for_test_order_is_mode_mismatch_rejected`).
+*(Updated 2026-10-01: the two mode-specific routes originally described
+here were replaced by one address.)*
 
-Dashboard setup (once Live credentials exist): create a **separate** Live
-webhook at the `.../razorpay/live/webhook` URL with its own secret, same 7
-events as TEST (`payment.authorized`, `payment.captured`, `payment.failed`,
-`order.paid`, `refund.created`, `refund.processed`, `refund.failed`) — do
-not reuse the TEST webhook's URL or secret.
+One Razorpay webhook address (`app/api/payments.py`):
+
+```text
+POST /api/v1/payments/webhook   (verified with this deployment's RAZORPAY_WEBHOOK_SECRET)
+```
+
+The mode comes from the deployment, not the URL:
+
+- **TEST deployment (beta):** this URL + `RAZORPAY_MODE=test` + the TEST
+  keys and TEST webhook secret; registered in the Razorpay **Test** dashboard.
+- **LIVE deployment (later):** the **same URL** + `RAZORPAY_MODE=live` + the
+  LIVE keys and LIVE webhook secret; registered again in the Razorpay
+  **Live** dashboard.
+
+At go-live the URL does not change — only the deployment's `RAZORPAY_MODE`,
+Razorpay keys and webhook secret change. A TEST deployment rejects
+LIVE-signed deliveries (and vice versa) because the signature is checked
+only against the active secret. The former routes
+`/api/v1/payment-gateways/razorpay/test/webhook` and
+`/api/v1/payment-gateways/razorpay/live/webhook` were removed and return 404.
+
+The generic `/api/v1/payment-gateways/{gateway}/webhook` route (sandbox
+gateway, local development only) 404s for `gateway=razorpay`.
+`process_webhook` additionally rejects (`webhook_mode_mismatch`) a delivery
+whose deployment mode disagrees with the matched order's own snapshotted
+`payment_mode`, even when the signature validates — cross-mode webhook
+application is rejected independent of signature validity. **Status:
+PASS** — covered by `tests/test_razorpay_checkout_and_webhook.py`
+(`test_generic_webhook_route_rejects_razorpay`,
+`test_test_deployment_rejects_live_signed_delivery`,
+`test_live_signed_webhook_for_test_order_is_mode_mismatch_rejected`,
+`test_removed_razorpay_webhook_paths_return_404_and_claim_nothing`).
+
+Dashboard setup at go-live: register `/api/v1/payments/webhook` again in
+the Razorpay **Live** dashboard with the Live webhook secret, selecting the
+same events as the Test webhook — never reuse the Test webhook secret.
 
 ## 7. Refund separation
 
@@ -260,7 +284,7 @@ the live webhook probe below.
 `/api/v1/health` returns `{"status":"ok",...,"db":"ok"}` both locally and
 through the public URL.
 
-**LIVE webhook route (`POST /api/v1/payment-gateways/razorpay/live/webhook`), verified over the public URL:**
+**LIVE webhook route (`POST /api/v1/payment-gateways/razorpay/live/webhook` — since removed; the single address is now `POST /api/v1/payments/webhook`, see §6), verified over the public URL on 2026-09-17:**
 - Unsigned/malformed request → safely rejected, no 500, no state mutation.
 - Bad-signature request → `signature_valid=false`, `processing_status=rejected`, `error_code=invalid_signature`.
 - Delivery signed with the real `RAZORPAY_LIVE_WEBHOOK_SECRET` →
@@ -326,9 +350,9 @@ LIVE real-money E2E:          BLOCKED PENDING HUMAN APPROVAL — Dashboard not c
 ## What is needed from you before LIVE can go further
 
 1. Confirm in the Razorpay Dashboard: Live mode active, a Live webhook
-   Active at exactly `https://82qv31ibkxli.shares.zrok.io/api/v1/payment-gateways/razorpay/live/webhook`
-   (or whatever the current tunnel URL is if it has since changed), with
-   the 7 events from §6 selected.
+   Active at `<deployment URL>/api/v1/payments/webhook` (the single
+   webhook address — see §6), with the same events as the Test webhook
+   selected.
 2. Decide which identity should hold `platform_admin` to publish config
    `7772` (currently only the bootstrap UID does).
 3. Explicit approval to publish config `7772` and perform the ₹1

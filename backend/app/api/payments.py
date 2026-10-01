@@ -124,11 +124,10 @@ async def receive_payment_webhook(
     request: Request,
     x_sandbox_signature: str = Header(default=""),
 ) -> WebhookAckResponse:
-    """Generic webhook route — deterministic_sandbox only. Razorpay TEST/LIVE
-    separation (spec §5) requires knowing which credential profile to verify
-    against *before* touching the body, so razorpay deliveries use the two
-    explicit mode-specific routes below instead; hitting this route with
-    gateway=razorpay 404s the same way any other unregistered gateway does."""
+    """Generic webhook route — deterministic_sandbox only (local development).
+    Razorpay deliveries use the single /api/v1/payments/webhook route below;
+    hitting this route with gateway=razorpay 404s the same way any other
+    unregistered gateway does."""
     if gateway == "razorpay":
         raise HTTPException(status_code=404, detail="unknown_gateway")
     # Registry-backed, not a hardcoded name check: an unregistered or
@@ -162,47 +161,6 @@ async def _receive_razorpay_webhook(
 
 
 @router.post(
-    "/api/v1/payment-gateways/razorpay/test/webhook",
-    response_model=WebhookAckResponse,
-)
-async def receive_razorpay_test_webhook(
-    request: Request,
-    x_razorpay_signature: str = Header(default=""),
-    x_razorpay_event_id: str = Header(default=""),
-) -> WebhookAckResponse:
-    """Verified with RAZORPAY_WEBHOOK_SECRET, and only on a RAZORPAY_MODE=test
-    deployment (fails closed elsewhere). Configure this exact URL as the
-    webhook in the Razorpay Dashboard while in TEST mode."""
-    return await _receive_razorpay_webhook(
-        payment_mode="test",
-        request=request,
-        x_razorpay_signature=x_razorpay_signature,
-        x_razorpay_event_id=x_razorpay_event_id,
-    )
-
-
-@router.post(
-    "/api/v1/payment-gateways/razorpay/live/webhook",
-    response_model=WebhookAckResponse,
-)
-async def receive_razorpay_live_webhook(
-    request: Request,
-    x_razorpay_signature: str = Header(default=""),
-    x_razorpay_event_id: str = Header(default=""),
-) -> WebhookAckResponse:
-    """Verified with RAZORPAY_WEBHOOK_SECRET, and only on a RAZORPAY_MODE=live
-    deployment (fails closed elsewhere). Configure this exact URL as the
-    webhook in the Razorpay Dashboard while in LIVE mode — never reuse the
-    TEST webhook's URL or secret."""
-    return await _receive_razorpay_webhook(
-        payment_mode="live",
-        request=request,
-        x_razorpay_signature=x_razorpay_signature,
-        x_razorpay_event_id=x_razorpay_event_id,
-    )
-
-
-@router.post(
     "/api/v1/payments/webhook",
     response_model=WebhookAckResponse,
 )
@@ -211,12 +169,13 @@ async def receive_razorpay_webhook_for_deployment_mode(
     x_razorpay_signature: str = Header(default=""),
     x_razorpay_event_id: str = Header(default=""),
 ) -> WebhookAckResponse:
-    """Product-owner webhook URL (no login — Razorpay calls it directly).
-    Exactly the mode-specific route for this deployment's RAZORPAY_MODE:
-    beta (RAZORPAY_MODE=test) behaves as .../razorpay/test/webhook, a live
-    deployment as .../razorpay/live/webhook — same handler, same signature,
-    claim, transaction and freshness rules. An invalid RAZORPAY_MODE fails
-    closed like a disabled gateway (404, so Razorpay keeps retrying)."""
+    """The single Razorpay webhook address (no login — Razorpay calls it
+    directly). Verified for this deployment's RAZORPAY_MODE with its
+    RAZORPAY_WEBHOOK_SECRET: a test deployment rejects live-signed deliveries
+    and vice versa. At go-live this URL stays the same; only RAZORPAY_MODE,
+    the keys and the webhook secret change, and it is registered again in
+    Razorpay Live mode. An invalid RAZORPAY_MODE fails closed like a disabled
+    gateway (404, so Razorpay keeps retrying)."""
     payment_mode = get_settings().razorpay_mode
     if payment_mode not in RAZORPAY_MODES:
         raise HTTPException(status_code=404, detail="unknown_gateway")

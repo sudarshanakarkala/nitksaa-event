@@ -340,7 +340,7 @@ def _webhook(client, event, *, order_ref, event_id, amount_paise=100, created_at
     if bad_sig:
         sig = "00" + sig[2:]
     return client.post(
-        "/api/v1/payment-gateways/razorpay/test/webhook",
+        "/api/v1/payments/webhook",
         content=raw,
         headers={"X-Razorpay-Signature": sig, "X-Razorpay-Event-Id": event_id,
                  "Content-Type": "application/json"},
@@ -472,17 +472,19 @@ def test_generic_webhook_route_rejects_razorpay(client):
     assert r.status_code == 404
 
 
-def test_live_webhook_route_rejects_test_signed_delivery(client):
-    """This fixture is a RAZORPAY_MODE=test deployment — a delivery to the
-    LIVE route must fail closed (invalid signature), never be checked
-    against the active TEST webhook secret."""
+def test_test_deployment_rejects_live_signed_delivery(client):
+    """This fixture is a RAZORPAY_MODE=test deployment — a LIVE-signed
+    delivery to /api/v1/payments/webhook must fail closed (invalid
+    signature): it is only ever checked against the active TEST secret."""
     event_id = _mk_razorpay_event(client, uuid.uuid4().hex[:8])
     _, order, attempt = _register_and_initiate(client, event_id)
     ref = attempt["checkout"]["provider_order_id"]
-    raw, sig = fakes.webhook_body_and_sig("payment.captured", order_id=ref, amount_paise=100)
+    raw, sig = fakes.webhook_body_and_sig(
+        "payment.captured", order_id=ref, amount_paise=100, webhook_secret="live_whsec_fake"
+    )
     evt = f"evt_{uuid.uuid4().hex}"
     r = client.post(
-        "/api/v1/payment-gateways/razorpay/live/webhook",
+        "/api/v1/payments/webhook",
         content=raw,
         headers={"X-Razorpay-Signature": sig, "X-Razorpay-Event-Id": evt,
                  "Content-Type": "application/json"},
@@ -507,7 +509,7 @@ def test_live_signed_webhook_for_test_order_is_mode_mismatch_rejected(monkeypatc
         "payment.captured", order_id=ref, amount_paise=100, webhook_secret="live_whsec_fake"
     )
     r = client.post(
-        "/api/v1/payment-gateways/razorpay/live/webhook",
+        "/api/v1/payments/webhook",
         content=raw,
         headers={"X-Razorpay-Signature": sig, "X-Razorpay-Event-Id": f"evt_{uuid.uuid4().hex}",
                  "Content-Type": "application/json"},
@@ -855,7 +857,7 @@ def _verify(client, order, provider_order_id, payment_id, *, identity=_TEST_ALUM
 def _payment_webhook(client, event, *, order_ref, payment_id):
     raw, sig = fakes.webhook_body_and_sig(event, order_id=order_ref, payment_id=payment_id, amount_paise=100)
     return client.post(
-        "/api/v1/payment-gateways/razorpay/test/webhook",
+        "/api/v1/payments/webhook",
         content=raw,
         headers={"X-Razorpay-Signature": sig, "X-Razorpay-Event-Id": f"evt_{uuid.uuid4().hex}",
                  "Content-Type": "application/json"},
@@ -1104,11 +1106,11 @@ def _event_body(event, *, order_ref, payment_id, created_at=None, with_order_ent
             "created_at": int(created_at if created_at is not None else time.time())}
 
 
-def _post(client, raw, *, signature, event_id, route="test"):
+def _post(client, raw, *, signature, event_id):
     headers = {"X-Razorpay-Event-Id": event_id, "Content-Type": "application/json"}
     if signature is not None:
         headers["X-Razorpay-Signature"] = signature
-    return client.post(f"/api/v1/payment-gateways/razorpay/{route}/webhook", content=raw, headers=headers)
+    return client.post("/api/v1/payments/webhook", content=raw, headers=headers)
 
 
 def _evt():
@@ -1332,12 +1334,12 @@ def test_step6_unknown_razorpay_order_is_rejected_safely(client):           # 17
     assert _snapshot(reg, order, attempt) == before
 
 
-def test_step6_test_signed_delivery_on_live_route_fails_closed_without_claim(client):   # 19
+def test_step6_live_signed_delivery_on_test_deployment_fails_closed_without_claim(client):   # 19
     reg, order, attempt, ref = _paid_setup(client)
     before = _snapshot(reg, order, attempt)
     evt = _evt()
-    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=_pid()))
-    r = _post(client, raw, signature=sig, event_id=evt, route="live")
+    raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=_pid()), secret="live_whsec_fake")
+    r = _post(client, raw, signature=sig, event_id=evt)
     assert r.status_code == 400 and r.json() == {"detail": "invalid_signature"}
     assert _event_rows(evt) == 0
     assert _snapshot(reg, order, attempt) == before
@@ -1399,19 +1401,37 @@ def test_compat_webhook_duplicate_event_id_is_200_duplicate(client):
     assert _event_rows(evt) == 1 and _captures(s) == 1 and _confirmations(reg) == 1
 
 
-@pytest.mark.parametrize("first", ["compat", "test_route"])
-def test_compat_and_test_route_share_event_id_dedupe(client, first):
+_REMOVED_RAZORPAY_PATHS = (
+    "/api/v1/payment-gateways/razorpay/test/webhook",
+    "/api/v1/payment-gateways/razorpay/live/webhook",
+)
+
+
+@pytest.mark.parametrize("removed_path", _REMOVED_RAZORPAY_PATHS)
+def test_removed_razorpay_webhook_paths_return_404_and_claim_nothing(client, removed_path):
     reg, order, attempt, ref = _paid_setup(client)
+    before = _snapshot(reg, order, attempt)
     pid, evt = _pid(), _evt()
     raw, sig = _signed(_event_body("payment.captured", order_ref=ref, payment_id=pid))
-    via_compat = lambda: _post_compat(client, raw, signature=sig, event_id=evt)          # noqa: E731
-    via_test_route = lambda: _post(client, raw, signature=sig, event_id=evt, route="test")  # noqa: E731
-    a, b = (via_compat, via_test_route) if first == "compat" else (via_test_route, via_compat)
-    assert a().json()["processing_status"] == "processed"
-    r = b()
-    assert r.status_code == 200 and r.json()["processing_status"] == "duplicate"
-    s = _assert_captured_paid_registered(reg, order, attempt, pid)
-    assert _event_rows(evt) == 1 and _captures(s) == 1
+    r = client.post(removed_path, content=raw,
+                    headers={"X-Razorpay-Signature": sig, "X-Razorpay-Event-Id": evt,
+                             "Content-Type": "application/json"})
+    assert r.status_code == 404 and r.json() == {"detail": "Not Found"}   # no route at all
+    assert _event_rows(evt) == 0
+    assert _snapshot(reg, order, attempt) == before
+    # the same event is then processed normally by the single webhook address
+    assert _post_compat(client, raw, signature=sig, event_id=evt).json()["processing_status"] == "processed"
+    _assert_captured_paid_registered(reg, order, attempt, pid)
+
+
+def test_razorpay_webhook_route_inventory():
+    from app.main import app
+    webhook_routes = {(r.path, m) for r in app.routes if "webhook" in getattr(r, "path", "")
+                      for m in getattr(r, "methods", ())}
+    assert ("/api/v1/payments/webhook", "POST") in webhook_routes
+    assert ("/api/v1/payment-gateways/{gateway}/webhook", "POST") in webhook_routes
+    for removed in _REMOVED_RAZORPAY_PATHS:
+        assert all(path != removed for path, _ in webhook_routes)
 
 
 def test_compat_webhook_processing_failure_rolls_back_and_same_id_retry_succeeds(monkeypatch, client):

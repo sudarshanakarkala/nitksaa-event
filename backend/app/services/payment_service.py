@@ -530,14 +530,15 @@ async def process_webhook(
     provider_event_id: Optional[str] = None,
     payment_mode: Optional[str] = None,
 ) -> WebhookAckResponse:
-    """`payment_mode` is set only when the delivery arrived on a
-    mode-specific route (.../razorpay/test/webhook or .../razorpay/live/
-    webhook — see app/api/payments.py). It selects which credential profile
-    `verify_webhook` checks the signature against, AND is cross-checked
-    against the matched order's own snapshotted payment_mode below — a
-    delivery on the wrong mode's route is rejected even if its signature
-    happens to verify. None for gateways without a mode concept (the
-    sandbox) and for internal calls (immediate/delayed sandbox delivery)."""
+    """`payment_mode` is set only for Razorpay deliveries to the single
+    webhook route POST /api/v1/payments/webhook (see app/api/payments.py),
+    which passes this deployment's RAZORPAY_MODE. It selects which credential
+    profile `verify_webhook` checks the signature against, AND is
+    cross-checked against the matched order's own snapshotted payment_mode
+    below — a delivery for an order of the other mode is rejected even if
+    its signature happens to verify. None for gateways without a mode
+    concept (the sandbox) and for internal calls (immediate/delayed sandbox
+    delivery)."""
     settings = get_settings()
 
     try:
@@ -690,13 +691,14 @@ async def process_webhook(
                 return WebhookAckResponse(status="rejected", processing_status="rejected")
 
             if payment_mode is not None and _payment_mode_of(order) != payment_mode:
-                # Delivered on the wrong mode's route (e.g. a TEST-signed
-                # delivery hitting .../razorpay/live/webhook, or vice versa) —
+                # Delivered to a deployment of the other mode (e.g. an order
+                # created under RAZORPAY_MODE=test, delivered to
+                # /api/v1/payments/webhook after the deployment moved to live) —
                 # fail closed even though signature/timestamp already passed.
                 # Never happens for a real Razorpay delivery (its webhook secret
-                # only ever verifies against the matching route), but a
-                # misconfigured Dashboard webhook or a replayed delivery against
-                # the wrong endpoint must not be allowed to apply.
+                # only ever verifies on a deployment of the matching mode), but a
+                # misconfigured Dashboard webhook or a replayed delivery must
+                # not be allowed to apply.
                 await pay_repo.mark_webhook_processed(webhook_row["id"], "rejected", "webhook_mode_mismatch")
                 await audit_service.emit(
                     actor_uid="system",
