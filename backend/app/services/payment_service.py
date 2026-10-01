@@ -33,6 +33,7 @@ from app.gateways.base import (
 )
 from app.gateways.registry import GatewayDisabledError, UnknownGatewayError
 from app.repositories.payment_repository import PaymentRepository
+from app.repositories.refund_repository import RefundRepository
 from app.repositories.registration_repository import RegistrationRepository
 from app.schemas.payments import (
     CreatePaymentAttemptRequest,
@@ -69,6 +70,10 @@ _CAPTURE_RECOVERABLE_STATUSES = ("requires_verification", "failed", "cancelled")
 # event_audit_log.event_type -> attendee-facing label + whether the entry is
 # shown to the attendee at all. Entries not listed here (webhook security
 # events, internal rejection reasons) are developer/technical-only.
+# Cancellation / refund audit rows are deliberately NOT listed: the attendee
+# timeline builds those from the state rows instead (see
+# _cancellation_and_refund_entries), and listing them here would show each
+# event twice.
 _ATTENDEE_TIMELINE_LABELS: Dict[str, str] = {
     "registration_seat_held": "Seat reserved",
     "payment_order_created": "Payment order created",
@@ -145,12 +150,22 @@ def _order_view(order: asyncpg.Record, registration_status: str) -> PaymentOrder
     outstanding = Decimal(order["final_amount"]) - Decimal(order["amount_paid"])
     can_pay = order["status"] in ("created", "payment_pending") and outstanding > 0
     payment_mode = _payment_mode_of(order)
-    if order["status"] == "paid":
-        safe_message = "Payment complete. Your registration is confirmed."
-    elif order["status"] == "expired":
+    # An expired / cancelled order keeps its own, more specific message even
+    # when the registration is cancelled too (a seat-hold expiry cancels the
+    # registration and expires the order together). Past that, the
+    # registration's current state wins over the order's: a refunded paid
+    # order keeps status='paid' (migration 022), so a cancelled or
+    # under-review registration must never be described as confirmed.
+    if order["status"] == "expired":
         safe_message = "This payment session expired. Please register again."
     elif order["status"] == "cancelled":
         safe_message = "This order was cancelled."
+    elif registration_status == "cancelled":
+        safe_message = "Your registration is cancelled."
+    elif order["status"] == "paid" and registration_status == "registered":
+        safe_message = "Payment complete. Your registration is confirmed."
+    elif order["status"] == "paid":
+        safe_message = "Payment received. Your registration is under review."
     elif registration_status == "payment_verification":
         safe_message = "Your payment confirmation is being verified. Please do not pay again."
     elif registration_status == "payment_failed":
@@ -176,6 +191,7 @@ def _order_view(order: asyncpg.Record, registration_status: str) -> PaymentOrder
         safe_message=safe_message,
         payment_mode=payment_mode,
         real_money=payment_mode == "live",
+        gateway=order["gateway"] if "gateway" in order else None,
     )
 
 
@@ -1007,6 +1023,9 @@ async def _fetch_audit_rows(conn: asyncpg.Connection, order_id: int) -> List[asy
            OR (entity_type = 'registration' AND entity_id = (
                 SELECT registration_id FROM payment_orders WHERE id = $1
            ))
+           OR (entity_type = 'payment_refund' AND entity_id IN (
+                SELECT id FROM payment_refunds WHERE payment_order_id = $1
+           ))
         ORDER BY created_at ASC
         """,
         order_id,
@@ -1014,14 +1033,61 @@ async def _fetch_audit_rows(conn: asyncpg.Connection, order_id: int) -> List[asy
     )
 
 
+def _cancellation_and_refund_entries(
+    registration: Optional[asyncpg.Record], refunds: List[asyncpg.Record]
+) -> List[TimelineEntry]:
+    """Attendee timeline entries for what happened AFTER the payment:
+    registration cancellation and the refund lifecycle.
+
+    Built from the authoritative state rows (registrations.cancelled_at,
+    payment_refunds.requested_at / updated_at / finalized_at), not from
+    event_audit_log: audit emission is best-effort, the paid cancellation
+    path never emitted a cancellation row, and a refund settled by a later
+    status refresh emits none. An event whose timestamp column is NULL is
+    omitted — no time is ever invented for it."""
+    entries: List[TimelineEntry] = []
+
+    def add(event_type: str, entity_type: str, label: str, at: Optional[datetime]) -> None:
+        if at is not None:
+            entries.append(TimelineEntry(event_type=event_type, entity_type=entity_type, at=at, label=label))
+
+    if registration and registration["status"] == "cancelled":
+        add("registration_cancelled", "registration", "Registration cancelled", registration["cancelled_at"])
+
+    for refund in refunds:
+        add("refund_requested", "payment_refund", "Refund requested", refund["requested_at"])
+        status = refund["status"]
+        if status == "processing":
+            # updated_at is only ever written by RefundRepository.mark, so on
+            # a 'processing' row it is the moment the provider accepted the
+            # refund. Once the refund settles that moment is overwritten, so
+            # a processed/failed refund shows no "processing" step.
+            add("refund_processing", "payment_refund", "Refund processing", refund["updated_at"])
+        elif status == "processed":
+            add(
+                "refund_processed", "payment_refund", "Refund processed",
+                refund["finalized_at"] or refund["updated_at"],
+            )
+        elif status == "failed":
+            add(
+                "refund_failed", "payment_refund", "Refund failed",
+                refund["finalized_at"] or refund["updated_at"],
+            )
+    return entries
+
+
 async def get_timeline(public_order_number: str, user: Dict[str, Any]) -> PaymentTimelineResponse:
     """Attendee-safe view: friendly labels only, internal technical events
     (webhook signature/replay/mismatch rejections, stale-attempt no-ops)
-    excluded, and no raw internal integer order/attempt IDs in `detail`."""
+    excluded, and no raw internal integer order/attempt IDs in `detail`.
+    History is append-only: a later cancellation / refund is added after
+    "Registration confirmed", never rewrites it."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         order = await _load_order_for_user(conn, public_order_number, user["firebase_uid"])
         audit_rows = await _fetch_audit_rows(conn, order["id"])
+        registration = await RegistrationRepository(conn).get_by_id(order["registration_id"])
+        refunds = await RefundRepository(conn).list_for_order(order["id"])
 
     entries = []
     for row in audit_rows:
@@ -1041,6 +1107,10 @@ async def get_timeline(public_order_number: str, user: Dict[str, Any]) -> Paymen
                 label=label,
             )
         )
+    entries.extend(_cancellation_and_refund_entries(registration, refunds))
+    # Stable sort: entries sharing a timestamp (cancellation and refund
+    # request are written in one transaction) keep the order built above.
+    entries.sort(key=lambda entry: entry.at)
     return PaymentTimelineResponse(order_id=order["public_order_number"], entries=entries)
 
 

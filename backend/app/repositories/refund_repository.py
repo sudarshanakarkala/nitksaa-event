@@ -80,6 +80,16 @@ class RefundRepository:
             registration_id,
         )
 
+    async def list_for_order(self, payment_order_id: int) -> List[asyncpg.Record]:
+        """Every refund ever requested for an order, oldest first."""
+        return await self.conn.fetch(
+            """
+            SELECT * FROM payment_refunds
+            WHERE payment_order_id = $1 ORDER BY requested_at ASC, id ASC
+            """,
+            payment_order_id,
+        )
+
     async def get_by_id(self, refund_id: int) -> Optional[asyncpg.Record]:
         return await self.conn.fetchrow("SELECT * FROM payment_refunds WHERE id = $1", refund_id)
 

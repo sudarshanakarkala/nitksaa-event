@@ -54,6 +54,10 @@ class PaymentOrderResponse(BaseModel):
     # (payment_mode == "live") so a client never has to reimplement the rule.
     payment_mode: str = "test"
     real_money: bool = False
+    # payment_orders.gateway snapshot (deterministic_sandbox | razorpay) —
+    # never a secret. Lets a client tell the internal no-money sandbox apart
+    # from a Razorpay TEST payment; both report payment_mode == "test".
+    gateway: Optional[str] = None
 
 
 class CreatePaymentAttemptRequest(BaseModel):

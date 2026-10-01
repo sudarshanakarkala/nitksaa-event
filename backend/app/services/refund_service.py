@@ -57,7 +57,7 @@ _NORMALIZED_TO_INTERNAL = {
 
 def _safe_message(status: str) -> str:
     return {
-        "refund_pending": "Your cancellation is confirmed. The refund has been initiated and is being processed by the payment provider.",
+        "refund_pending": "Your registration is cancelled. Your refund is being processed.",
         "refund_processed": "Your cancellation is confirmed and the refund has been processed by the payment provider.",
         "refund_failed": "Your registration is cancelled, but the refund could not be completed automatically. Our team will follow up.",
         "none": "Your registration is cancelled. No payment was collected, so there is nothing to refund.",
