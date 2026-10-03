@@ -79,27 +79,36 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
   }).toJS;
   optionsObj['modal'] = modal;
 
-  final instance = razorpayCtor.callAsFunction(optionsObj) as JSObject?;
-  if (instance == null) {
-    throw const RazorpayCheckoutFailureException(
-      'Unable to open Razorpay checkout.',
+  // Razorpay must be constructed with `new Razorpay(options)`.
+  // NOTE: JSFunction.callAsFunction's first argument is `this`, not a
+  // parameter - calling it that way passed NO options and Razorpay replied
+  // "Invalid options".
+  final JSObject instance;
+  try {
+    instance = razorpayCtor.callAsConstructor<JSObject>(optionsObj);
+  } catch (e) {
+    throw RazorpayCheckoutFailureException(
+      'Unable to open Razorpay checkout: $e',
     );
   }
 
-  // Failure: called by Razorpay with {code, description, reason, ...}.
+  // Failure: Razorpay emits `payment.failed` with
+  // {error: {code, description, source, step, reason, metadata}}.
   instance.callMethodVarArgs<JSAny?>(
     'on'.toJS,
     <JSAny?>[
-      'payment.error'.toJS,
-      ((JSObject error) {
+      'payment.failed'.toJS,
+      ((JSObject response) {
         if (completer.isCompleted) return;
-        final code = _numProp(error, 'code');
+        final errorValue = response['error'];
+        final error =
+            errorValue.isA<JSObject>() ? errorValue as JSObject : response;
         final description = _strProp(error, 'description');
         final reason = _strProp(error, 'reason');
         final message = description.isEmpty
             ? reason
             : (reason.isEmpty ? description : '$description ($reason)');
-        final cancelled = code == 0 || message.toLowerCase().contains('cancel');
+        final cancelled = message.toLowerCase().contains('cancel');
         if (cancelled) {
           completer.completeError(
             const RazorpayCheckoutCancelledException('Payment was cancelled.'),
@@ -127,9 +136,4 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
 String _strProp(JSObject obj, String key) {
   final value = obj[key];
   return value.isA<JSString>() ? (value as JSString).toDart : '';
-}
-
-num _numProp(JSObject obj, String key) {
-  final value = obj[key];
-  return value.isA<JSNumber>() ? (value as JSNumber).toDartDouble : -1;
 }

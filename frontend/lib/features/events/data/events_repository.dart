@@ -259,6 +259,61 @@ class EventsRepository {
     );
     return response.data ?? <String, dynamic>{};
   }
+
+  // ==========================================
+  // PAYMENTS (Razorpay hosted checkout)
+  // ==========================================
+
+  /// Creates (or reuses) the payment order for a registration.
+  /// Returns `{order_id: "ORD-...", final_amount, currency, ...}`.
+  Future<Map<String, dynamic>> createPaymentOrder(
+    int registrationId,
+    String accessToken, {
+    required String idempotencyKey,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/registrations/$registrationId/payment-order',
+      data: {'idempotency_key': idempotencyKey},
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  /// Starts a payment attempt on our order. For Razorpay the response carries
+  /// a `checkout` object: {provider_order_id, key_id, amount_minor, currency}.
+  Future<Map<String, dynamic>> createPaymentAttempt(
+    String orderId,
+    String accessToken,
+  ) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/payment-orders/$orderId/attempts',
+      data: const <String, dynamic>{},
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
+  /// Sends Razorpay's success payload to the backend, which re-verifies the
+  /// signature and the provider status before confirming the registration.
+  /// [orderId] is OUR order id (ORD-...), not Razorpay's order_... id.
+  Future<Map<String, dynamic>> verifyCheckout(
+    String orderId,
+    String accessToken, {
+    required String razorpayPaymentId,
+    required String razorpayOrderId,
+    required String razorpaySignature,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/payment-orders/$orderId/verify-checkout',
+      data: {
+        'razorpay_payment_id': razorpayPaymentId,
+        'razorpay_order_id': razorpayOrderId,
+        'razorpay_signature': razorpaySignature,
+      },
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return response.data ?? <String, dynamic>{};
+  }
 }
 
 final eventsRepositoryProvider = Provider<EventsRepository>((ref) {

@@ -1,9 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../auth/services/auth_controller.dart';
+import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 import '../providers/event_detail_provider.dart';
+import '../services/razorpay_payment.dart';
 
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({
@@ -262,30 +266,138 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     );
   }
 
+  /// Registration statuses where the seat is held and payment is still due.
+  static const _payableStatuses = {
+    'seat_held',
+    'payment_pending',
+    'payment_failed',
+  };
+
   Future<void> _confirmRegistration() async {
+    final detail = ref.read(eventDetailProvider(widget.eventId));
+    final event = detail.event;
+    if (event == null) return;
+
     setState(() => _isSubmitting = true);
-    final success = await ref
-        .read(eventDetailProvider(widget.eventId).notifier)
-        .register(widget.eventId, widget.notes, quantity: widget.quantity);
+    try {
+      final notifier = ref.read(eventDetailProvider(widget.eventId).notifier);
 
-    if (!mounted) return;
-    setState(() => _isSubmitting = false);
-
-    if (success) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Registration confirmed successfully!')),
-      );
-      context.pop();
-    } else {
-      final state = ref.read(eventDetailProvider(widget.eventId));
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(
+      // 1. Register - or reuse an existing registration that still owes payment.
+      var registration = detail.myRegistration;
+      final existingStatus = registration?['status'] as String?;
+      final reuse = registration?['registration_id'] != null &&
+          _payableStatuses.contains(existingStatus);
+      if (!reuse) {
+        final ok = await notifier.register(
+          widget.eventId,
+          widget.notes,
+          quantity: widget.quantity,
+        );
+        if (!ok) {
+          final state = ref.read(eventDetailProvider(widget.eventId));
+          _showMessage(
             'Registration failed: ${state.errorMessage ?? 'Unknown error'}',
-          ),
+          );
+          return;
+        }
+        registration = ref.read(eventDetailProvider(widget.eventId)).myRegistration;
+      }
+
+      // Free event, or registration already confirmed: done.
+      final status = registration?['status'] as String?;
+      if (!_isPaidEvent(event) || !_payableStatuses.contains(status)) {
+        _showMessage('Registration confirmed successfully!');
+        if (mounted) context.pop();
+        return;
+      }
+
+      // 2. Paid event: order -> attempt -> Razorpay -> verify.
+      final token = ref.read(authControllerProvider).session?.accessToken;
+      if (token == null) {
+        _showMessage('Your session has expired. Please sign in again.');
+        return;
+      }
+      final repo = ref.read(eventsRepositoryProvider);
+      final registrationId = (registration!['registration_id'] as num).toInt();
+
+      final order = await repo.createPaymentOrder(
+        registrationId,
+        token,
+        idempotencyKey:
+            'reg-$registrationId-${DateTime.now().millisecondsSinceEpoch}',
+      );
+      final orderId = order['order_id'] as String; // our ORD-...
+
+      final attempt = await repo.createPaymentAttempt(orderId, token);
+      final checkout = attempt['checkout'] as Map<String, dynamic>?;
+      if (checkout == null) {
+        _showMessage('Online payment is not available for this event.');
+        return;
+      }
+
+      final result = await openRazorpayCheckout(
+        RazorpayCheckoutOptions(
+          keyId: checkout['key_id'] as String,
+          // Razorpay's order id (order_...), NOT our ORD-... id.
+          orderId: checkout['provider_order_id'] as String,
+          amountMinor: (checkout['amount_minor'] as num).toInt(),
+          currency: (checkout['currency'] as String?) ?? 'INR',
+          name: 'NITKSAA',
+          description: event.title,
         ),
       );
+
+      final verify = await repo.verifyCheckout(
+        orderId,
+        token,
+        razorpayPaymentId: result.paymentId,
+        razorpayOrderId: result.orderId,
+        razorpaySignature: result.signature,
+      );
+
+      // Refresh so the event page shows the new registration status.
+      await notifier.fetchEventDetails(widget.eventId);
+
+      if (verify['payment_confirmed'] == true) {
+        _showMessage('Payment successful - your registration is confirmed!');
+        if (mounted) context.pop();
+      } else {
+        // e.g. verification still pending; the webhook will finish it.
+        _showMessage(
+          (verify['safe_message'] as String?) ??
+              'Payment received - confirmation is in progress.',
+        );
+      }
+    } on RazorpayCheckoutCancelledException {
+      _showMessage('Payment cancelled. Your seat is held for a short time.');
+    } on RazorpayCheckoutFailureException catch (e) {
+      _showMessage('Payment could not be completed: ${e.message}');
+    } on DioException catch (e) {
+      _showMessage('Payment could not be completed: ${_apiError(e)}');
+    } catch (e) {
+      _showMessage('Payment could not be completed: $e');
+    } finally {
+      if (mounted) setState(() => _isSubmitting = false);
     }
+  }
+
+  void _showMessage(String message) {
+    if (!mounted) return;
+    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+  }
+
+  String _apiError(DioException e) {
+    final data = e.response?.data;
+    if (data is Map && data['detail'] != null) {
+      final detail = data['detail'];
+      if (detail is String) return detail;
+      if (detail is List && detail.isNotEmpty) {
+        final first = detail.first;
+        if (first is Map && first['msg'] != null) return first['msg'].toString();
+      }
+      return detail.toString();
+    }
+    return e.message ?? 'Network error';
   }
 
   Widget _buildInfoBox(bool isDark) {
