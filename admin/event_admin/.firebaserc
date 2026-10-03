@@ -5,6 +5,9 @@
       "hosting": {
         "admin-beta": [
           "nitksaa-events-admin-beta"
+        ],
+        "admin": [
+          "nitksaa-events-admin"
         ]
       }
     }
