@@ -19,6 +19,17 @@ class AuthController extends ChangeNotifier {
   }) : _backendAuthService = backendAuthService ?? BackendAuthService(),
        _sessionStore = sessionStore ?? AuthSessionStore();
 
+  /// A controller that is separate from [instance], for tests that supply
+  /// their own backend or session store.
+  @visibleForTesting
+  AuthController.forTesting({
+    BackendAuthService? backendAuthService,
+    AuthSessionStore? sessionStore,
+  }) : this._(
+         backendAuthService: backendAuthService,
+         sessionStore: sessionStore,
+       );
+
   static final AuthController instance = AuthController._();
 
   final BackendAuthService _backendAuthService;

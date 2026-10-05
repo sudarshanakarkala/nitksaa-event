@@ -1,5 +1,5 @@
 import 'package:firebase_auth/firebase_auth.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, visibleForTesting;
 import 'package:google_sign_in/google_sign_in.dart';
 import '../../../core/logger/app_logger.dart';
 import 'google_sign_in_initializer.dart';
@@ -28,10 +28,7 @@ abstract class FirebaseAuthService {
 
     if (kIsWeb) {
       // Web: use Firebase's own OAuth popup — no GoogleSignIn SDK required.
-      final provider = GoogleAuthProvider();
-      final userCredential =
-          await FirebaseAuth.instance.signInWithPopup(provider);
-      return userCredential.user;
+      return signInWithGooglePopup();
     }
 
     // Mobile (Android / iOS) — v7 API: authenticate() is the correct method.
@@ -47,6 +44,20 @@ abstract class FirebaseAuthService {
     );
     final userCredential =
         await FirebaseAuth.instance.signInWithCredential(credential);
+    return userCredential.user;
+  }
+
+  /// Web Google sign-in through Firebase's OAuth popup.
+  ///
+  /// Logging out on web ends the Firebase session but leaves the browser
+  /// signed in to Google, so without `prompt=select_account` Google hands the
+  /// previous account straight back and the user cannot switch accounts.
+  @visibleForTesting
+  static Future<User?> signInWithGooglePopup() async {
+    final provider = GoogleAuthProvider();
+    provider.setCustomParameters({'prompt': 'select_account'});
+    final userCredential =
+        await FirebaseAuth.instance.signInWithPopup(provider);
     return userCredential.user;
   }
 
