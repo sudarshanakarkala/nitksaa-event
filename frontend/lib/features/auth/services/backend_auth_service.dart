@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 
 import '../domain/auth_session.dart';
+import 'backend_auth_exception.dart';
 
 class BackendAuthService {
   BackendAuthService({Dio? dio}) : _dio = dio ?? _createDio();
@@ -35,10 +36,14 @@ class BackendAuthService {
     return 'http://127.0.0.1:8000';
   }
 
+  /// Throws a [BackendAuthException] if the backend refuses the token or
+  /// cannot be reached.
   Future<AuthSession> loginWithFirebaseToken(String firebaseIdToken) async {
-    final response = await _dio.post<Map<String, dynamic>>(
-      '/api/v1/auth/firebase',
-      data: {'token': firebaseIdToken},
+    final response = await _send(
+      () => _dio.post<Map<String, dynamic>>(
+        '/api/v1/auth/firebase',
+        data: {'token': firebaseIdToken},
+      ),
     );
     final session = AuthSession.fromBackendLogin(
       response.data ?? <String, dynamic>{},
@@ -49,10 +54,14 @@ class BackendAuthService {
     return session;
   }
 
+  /// Throws a [BackendAuthException] if the backend refuses the token or
+  /// cannot be reached.
   Future<AuthSession> validateAccessToken(String accessToken) async {
-    final response = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/auth/me',
-      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    final response = await _send(
+      () => _dio.get<Map<String, dynamic>>(
+        '/api/v1/auth/me',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      ),
     );
     final session = AuthSession.fromMeResponse(
       accessToken: accessToken,
@@ -62,5 +71,20 @@ class BackendAuthService {
       throw StateError('/auth/me did not return a valid user.');
     }
     return session;
+  }
+
+  /// Runs [request], turning a Dio failure into a [BackendAuthException] so
+  /// the backend's `detail` code reaches the caller.
+  Future<Response<Map<String, dynamic>>> _send(
+    Future<Response<Map<String, dynamic>>> Function() request,
+  ) async {
+    try {
+      return await request();
+    } on DioException catch (error, stackTrace) {
+      Error.throwWithStackTrace(
+        BackendAuthException.fromDio(error),
+        stackTrace,
+      );
+    }
   }
 }

@@ -3,13 +3,16 @@
 // ignore_for_file: depend_on_referenced_packages
 
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:firebase_auth_platform_interface/firebase_auth_platform_interface.dart';
 import 'package:firebase_core/firebase_core.dart';
 import 'package:firebase_core_platform_interface/test.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter_test/flutter_test.dart';
+import 'package:hive/hive.dart';
 
 /// A person with a Google account, as Firebase and the backend know them.
 class TestAccount {
@@ -25,6 +28,7 @@ class TestAccount {
   final String fullname;
   final String userType;
 
+  String get password => 'password-$uid';
   String get firebaseIdToken => 'firebase-id-token-$uid';
   String get backendToken => 'backend-token-$uid';
 }
@@ -60,6 +64,12 @@ class FakeFirebaseAuthPlatform extends FirebaseAuthPlatform {
   /// The Google account the browser is signed in to.
   TestAccount? browserGoogleAccount;
 
+  /// The accounts that can sign in with their email and password.
+  final emailAccounts = <TestAccount>[];
+
+  /// When set, signing out fails with this and the user stays signed in.
+  Object? signOutError;
+
   int choosersShown = 0;
   int signOutCalls = 0;
   UserPlatform? _currentUser;
@@ -67,7 +77,9 @@ class FakeFirebaseAuthPlatform extends FirebaseAuthPlatform {
   void reset() {
     popupProviders.clear();
     chooserPicks.clear();
+    emailAccounts.clear();
     browserGoogleAccount = null;
+    signOutError = null;
     choosersShown = 0;
     signOutCalls = 0;
     _currentUser = null;
@@ -109,8 +121,24 @@ class FakeFirebaseAuthPlatform extends FirebaseAuthPlatform {
   }
 
   @override
+  Future<UserCredentialPlatform> signInWithEmailAndPassword(
+    String email,
+    String password,
+  ) async {
+    for (final account in emailAccounts) {
+      if (account.email == email && account.password == password) {
+        _currentUser = _FakeFirebaseUser(this, account);
+        return _FakeUserCredential(this, _currentUser);
+      }
+    }
+    throw FirebaseAuthException(code: 'invalid-credential');
+  }
+
+  @override
   Future<void> signOut() async {
     signOutCalls++;
+    final error = signOutError;
+    if (error != null) throw error;
     _currentUser = null;
   }
 }
@@ -162,6 +190,45 @@ Future<void> installFakeFirebase(FakeFirebaseAuthPlatform firebase) async {
   FirebaseAuthPlatform.instance = firebase;
 }
 
+/// Gives Hive somewhere to keep the session box for the current test file.
+///
+/// A browser stores it in IndexedDB with no setup. The VM has no such
+/// default, so it gets a temporary directory. Call from `setUpAll`.
+void installTestSessionStorage() {
+  if (kIsWeb) return;
+  final directory = Directory.systemTemp.createTempSync('nitksaa_auth_test_');
+  Hive.init(directory.path);
+  addTearDown(() async {
+    await Hive.close();
+    directory.deleteSync(recursive: true);
+  });
+}
+
+/// A way for one of [FakeBackend]'s endpoints to fail.
+class BackendFault {
+  /// The backend answers with [statusCode] and `{"detail": detail}`.
+  const BackendFault.http(int this.statusCode, [this.detail])
+    : transport = null,
+      rawBody = null;
+
+  /// Something in front of the backend answers with [statusCode] and a body
+  /// that is not the backend's JSON, as a proxy or load balancer would.
+  const BackendFault.rawHttp(int this.statusCode, String this.rawBody)
+    : transport = null,
+      detail = null;
+
+  /// No answer arrives: the request fails in transit as [transport].
+  const BackendFault.transport(DioExceptionType this.transport)
+    : statusCode = null,
+      detail = null,
+      rawBody = null;
+
+  final int? statusCode;
+  final Object? detail;
+  final String? rawBody;
+  final DioExceptionType? transport;
+}
+
 /// Stands in for the backend's two auth endpoints. Plug it into a [Dio] as
 /// its `httpClientAdapter`.
 class FakeBackend implements HttpClientAdapter {
@@ -175,6 +242,15 @@ class FakeBackend implements HttpClientAdapter {
   /// The Firebase ID token of each login exchange received.
   final firebaseTokensReceived = <String?>[];
 
+  /// When set, `POST /api/v1/auth/firebase` fails this way.
+  BackendFault? loginFault;
+
+  /// How `POST /api/v1/auth/firebase` fails for one account, by its uid.
+  final loginFaultByUid = <String, BackendFault>{};
+
+  /// When set, `GET /api/v1/auth/me` fails this way.
+  BackendFault? meFault;
+
   @override
   Future<ResponseBody> fetch(
     RequestOptions options,
@@ -187,7 +263,11 @@ class FakeBackend implements HttpClientAdapter {
       final idToken = (options.data as Map)['token']?.toString();
       firebaseTokensReceived.add(idToken);
       final account = _find((a) => a.firebaseIdToken == idToken);
-      if (account == null) return _json(401, {'detail': 'invalid_token'});
+      final fault = loginFault ?? loginFaultByUid[account?.uid];
+      if (fault != null) return _fail(fault, options);
+      if (account == null) {
+        return _json(401, {'detail': 'invalid_firebase_token'});
+      }
       return _json(200, {
         'access_token': account.backendToken,
         'firebase_uid': account.uid,
@@ -197,9 +277,13 @@ class FakeBackend implements HttpClientAdapter {
     }
 
     if (options.method == 'GET' && options.path == '/api/v1/auth/me') {
+      final fault = meFault;
+      if (fault != null) return _fail(fault, options);
       final bearer = options.headers['Authorization'];
       final account = _find((a) => 'Bearer ${a.backendToken}' == bearer);
-      if (account == null) return _json(401, {'detail': 'invalid_token'});
+      if (account == null) {
+        return _json(401, {'detail': 'invalid_or_expired_token'});
+      }
       return _json(200, {
         'firebase_uid': account.uid,
         'email': account.email,
@@ -219,6 +303,24 @@ class FakeBackend implements HttpClientAdapter {
       if (matches(account)) return account;
     }
     return null;
+  }
+
+  ResponseBody _fail(BackendFault fault, RequestOptions options) {
+    final transport = fault.transport;
+    if (transport != null) {
+      throw DioException(requestOptions: options, type: transport);
+    }
+    final rawBody = fault.rawBody;
+    if (rawBody != null) {
+      return ResponseBody.fromString(
+        rawBody,
+        fault.statusCode!,
+        headers: {
+          Headers.contentTypeHeader: ['text/html'],
+        },
+      );
+    }
+    return _json(fault.statusCode!, {'detail': fault.detail});
   }
 
   ResponseBody _json(int statusCode, Map<String, dynamic> body) {

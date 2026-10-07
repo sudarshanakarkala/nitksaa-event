@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/logger/app_logger.dart';
 import '../domain/auth_session.dart';
+import 'auth_error_messages.dart';
 import 'auth_session_store.dart';
 import 'backend_auth_service.dart';
 import 'firebase_auth_service.dart';
@@ -80,7 +81,7 @@ class AuthController extends ChangeNotifier {
     } catch (error, stackTrace) {
       AppLogger.warning('Stored backend session validation failed: $error');
       await _clearStoredSession();
-      _errorMessage = _friendlyAuthError(error);
+      _errorMessage = friendlyAuthError(error);
       _setStatus(AuthStatus.unauthenticated);
       AppLogger.error(
         'Stored backend session could not be restored',
@@ -111,7 +112,7 @@ class AuthController extends ChangeNotifier {
       await FirebaseAuthService.signOut();
     } catch (error, stackTrace) {
       AppLogger.error('Sign out failed', error, stackTrace);
-      _errorMessage = _friendlyAuthError(error);
+      _errorMessage = friendlyAuthError(error);
     }
     _setStatus(AuthStatus.unauthenticated);
   }
@@ -137,10 +138,40 @@ class AuthController extends ChangeNotifier {
       AppLogger.info('Backend-authenticated login completed.');
     } catch (error, stackTrace) {
       AppLogger.error('Login failed', error, stackTrace);
-      await _clearStoredSession();
-      _errorMessage = _friendlyAuthError(error);
+      // Set before the rollback: signing out of Firebase can notify
+      // listeners, and they must already find the reason for the failure.
+      _errorMessage = friendlyAuthError(error);
+      await _rollBackLogin();
       _setStatus(AuthStatus.unauthenticated);
       rethrow;
+    }
+  }
+
+  /// Undoes a login that did not complete.
+  ///
+  /// Firebase is usually signed in by the time the backend refuses the
+  /// exchange, so it is signed out as well: a login is either fully
+  /// established or fully rolled back. A cleanup step that fails is logged
+  /// and skipped, so it cannot replace the error that caused the rollback.
+  Future<void> _rollBackLogin() async {
+    _session = null;
+    try {
+      await _sessionStore.clear();
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Could not clear the stored session after a failed login',
+        error,
+        stackTrace,
+      );
+    }
+    try {
+      await FirebaseAuthService.signOut();
+    } catch (error, stackTrace) {
+      AppLogger.error(
+        'Could not sign out of Firebase after a failed login',
+        error,
+        stackTrace,
+      );
     }
   }
 
@@ -183,23 +214,6 @@ class AuthController extends ChangeNotifier {
     if (_status == status) return;
     _status = status;
     notifyListeners();
-  }
-
-  String _friendlyAuthError(Object error) {
-    if (error is FirebaseAuthException) {
-      return switch (error.code) {
-        'invalid-email' => 'Enter a valid email address.',
-        'user-disabled' => 'This account has been disabled.',
-        'user-not-found' => 'No account was found for that email.',
-        'wrong-password' => 'The password is incorrect.',
-        'invalid-credential' => 'The email or password is incorrect.',
-        'too-many-requests' => 'Too many attempts. Please wait a moment and try again.',
-        'network-request-failed' => 'A network error occurred. Check your connection and try again.',
-        'popup-blocked' => 'Sign-in popup was blocked. Please allow popups and try again.',
-        _ => 'Sign in failed. Please try again or use Google Sign-In.',
-      };
-    }
-    return 'Sign in failed. Please try again.';
   }
 
   @override

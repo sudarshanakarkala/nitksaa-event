@@ -7,6 +7,7 @@ import '../../../../core/logger/app_logger.dart';
 import 'package:go_router/go_router.dart';
 import 'package:event_app/routes/app_routes.dart';
 import '../../services/auth_controller.dart';
+import '../../services/auth_error_messages.dart';
 import 'package:event_app/widgets/material/app_scaffold.dart';
 import 'package:event_app/widgets/material/app_primary_button.dart';
 
@@ -74,23 +75,15 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (!mounted) return;
       setState(() => _statusMessage = 'Backend session validated. Opening home...');
       context.go(AppRoutes.home);
-    } catch (error) {
+    } catch (_) {
       if (!mounted) return;
       setState(() {
-        _errorMessage = _authController.errorMessage ?? _friendlyError(error);
+        _errorMessage = _authController.errorMessage ?? genericSignInError;
         _statusMessage = null;
       });
     } finally {
       if (mounted) setState(() => loadingSetter(false));
     }
-  }
-
-  String _friendlyError(Object error) {
-    final message = error.toString();
-    if (message.startsWith('Exception: ')) {
-      return message.substring('Exception: '.length);
-    }
-    return message;
   }
 
   @override
