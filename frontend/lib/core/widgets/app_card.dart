@@ -22,9 +22,9 @@ class AppCard extends StatelessWidget {
       width: width,
       margin: margin,
       decoration: BoxDecoration(
-        color: colorScheme.surface,
+        color: colorScheme.surfaceContainerLow,
         border: Border.all(color: colorScheme.outlineVariant),
-        borderRadius: BorderRadius.circular(8),
+        borderRadius: BorderRadius.circular(12),
       ),
       child: Padding(padding: padding, child: child),
     );
