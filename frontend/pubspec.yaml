@@ -73,6 +73,9 @@ flutter:
   # the material Icons class.
   uses-material-design: true
 
+  assets:
+    - assets/images/
+
   # NITKSAA website fonts (OFL licence, see assets/fonts/OFL-*.txt).
   # Static weights, Latin subset. Bundled so the app needs no font CDN.
   fonts:
