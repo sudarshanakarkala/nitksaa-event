@@ -379,6 +379,16 @@ Legend:
 
 ## 9. Decisions for Padmanand
 
+**Decided 8 Oct:**
+- **D1:** default **dark**.
+- **Light mode:** adopt the website's cream palette.
+- **D6:** the feedback form matches the website exactly and goes to the same contact (`nitksaa.infra@gmail.com`).
+  - The UI calls a stubbed `POST /api/v1/feedback` on the events API.
+  - Until Sudarshana adds the endpoint, a failed send shows the website's "please email us" fallback.
+- **NITiKa:** out of scope.
+- **D5 (refund) and D7 (app icon):** pending with Padmanand.
+- **Remaining decisions:** Claude decides and notes them as it goes.
+
 | # | Decision | Recommendation |
 |---|---|---|
 | D1 | Default theme | **Dark**, persisted, like the website |
