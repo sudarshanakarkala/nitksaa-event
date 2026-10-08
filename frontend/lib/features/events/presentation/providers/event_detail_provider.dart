@@ -121,7 +121,7 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
     }
   }
 
-  Future<bool> register(int eventId, String attendeeNote, {int? quantity}) async {
+  Future<bool> register(int eventId, String attendeeNote) async {
     final token = _accessToken;
     if (token == null || !mounted) {
       return false;
@@ -129,7 +129,7 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
 
     state = state.copyWith(isRegistering: true);
     try {
-      final regResponse = await _repository.registerForEvent(eventId, token, attendeeNote, quantity: quantity);
+      final regResponse = await _repository.registerForEvent(eventId, token, attendeeNote);
       if (!mounted) return false;
       state = state.copyWith(
         isRegistering: false,

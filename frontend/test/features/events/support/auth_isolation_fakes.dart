@@ -203,9 +203,8 @@ class FakeEventsRepository extends EventsRepository {
   Future<Map<String, dynamic>> registerForEvent(
     int eventId,
     String accessToken,
-    String attendeeNote, {
-    int? quantity,
-  }) async {
+    String attendeeNote,
+  ) async {
     calls.add((endpoint: 'register', token: accessToken));
     final account = _account(accessToken);
     final id = ++_lastRegistrationId;

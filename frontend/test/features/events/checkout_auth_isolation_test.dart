@@ -46,7 +46,7 @@ void main() {
     await auth.signOut();
     auth.logIn(sessionB);
     await tester.pumpAndSettle();
-    await tester.tap(find.textContaining('Confirm & Pay'));
+    await tester.tap(find.text('Proceed to Payment'));
     await tester.pumpAndSettle();
 
     expect(backend.paymentOrders, hasLength(1));

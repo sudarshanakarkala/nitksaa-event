@@ -66,14 +66,8 @@ abstract class AppRouter {
         builder: (context, state) {
           final idStr = state.pathParameters['id'] ?? '';
           final eventId = int.tryParse(idStr) ?? 0;
-          final quantity =
-              int.tryParse(state.uri.queryParameters['quantity'] ?? '') ?? 1;
           final notes = state.uri.queryParameters['notes'] ?? '';
-          return CheckoutScreen(
-            eventId: eventId,
-            quantity: quantity,
-            notes: notes,
-          );
+          return CheckoutScreen(eventId: eventId, notes: notes);
         },
       ),
       if (kDebugMode)

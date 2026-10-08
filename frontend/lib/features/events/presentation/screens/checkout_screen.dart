@@ -9,16 +9,15 @@ import '../../domain/event.dart';
 import '../providers/event_detail_provider.dart';
 import '../services/razorpay_payment.dart';
 
+/// Checkout for one registration: the signed-in attendee's own.
 class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({
     super.key,
     required this.eventId,
-    this.quantity = 1,
     this.notes = '',
   });
 
   final int eventId;
-  final int quantity;
   final String notes;
 
   @override
@@ -148,8 +147,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildFeeSummarySection(AppEvent event) {
-    final unitPrice = _isPaidEvent(event) ? event.ticketPrice! : 0.0;
-    final grandTotal = unitPrice * widget.quantity;
+    // The public event fee. The amount charged is the backend's own, taken
+    // from the payment attempt in _confirmRegistration.
+    final fee = _isPaidEvent(event) ? event.ticketPrice! : 0.0;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -199,35 +199,15 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                     TableRow(
                       children: [
                         _feeTableCell(
-                          _isPaidEvent(event) ? 'Ticket Price' : 'Free Event',
+                          _isPaidEvent(event) ? 'Registration Fee' : 'Free Event',
                           bold: true,
                         ),
                         _feeTableCell(
                           _isPaidEvent(event)
-                              ? 'Event Fee (per pass)'
+                              ? 'Event fee'
                               : 'Complimentary registration',
                         ),
-                        _feeTableCell(_formatAmount(unitPrice)),
-                      ],
-                    ),
-                    TableRow(
-                      children: [
-                        _feeTableCell('No of passes'),
-                        _feeTableCell('${widget.quantity}'),
-                        const Padding(
-                          padding:
-                              EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                        ),
-                      ],
-                    ),
-                    TableRow(
-                      decoration: BoxDecoration(
-                        color: const Color(0xFFC9952A).withValues(alpha: 0.12),
-                      ),
-                      children: [
-                        _feeTableCell('Grand Total', bold: true),
-                        _feeTableCell(''),
-                        _feeTableCell(_formatAmount(grandTotal), bold: true),
+                        _feeTableCell(_formatAmount(fee)),
                       ],
                     ),
                   ],
@@ -245,9 +225,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Widget _buildSubmitButton(AppEvent event) {
     final label = _isSubmitting
         ? 'Processing...'
-        : (_isPaidEvent(event)
-            ? 'Confirm & Pay ${_formatAmount((event.ticketPrice ?? 0) * widget.quantity)}'
-            : 'Confirm Registration');
+        : (_isPaidEvent(event) ? 'Proceed to Payment' : 'Confirm Registration');
 
     return SizedBox(
       width: double.infinity,
@@ -288,11 +266,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final reuse = registration?['registration_id'] != null &&
           _payableStatuses.contains(existingStatus);
       if (!reuse) {
-        final ok = await notifier.register(
-          widget.eventId,
-          widget.notes,
-          quantity: widget.quantity,
-        );
+        final ok = await notifier.register(widget.eventId, widget.notes);
         if (!ok) {
           final state = ref.read(eventDetailProvider(widget.eventId));
           _showMessage(

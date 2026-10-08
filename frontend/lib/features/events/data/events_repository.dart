@@ -202,18 +202,16 @@ class EventsRepository {
     return MyEventRegistration.fromJson(response.data ?? <String, dynamic>{});
   }
 
+  /// Registers the signed-in attendee for the event: one registration, one
+  /// seat. `attendee_note` is the only field the backend accepts.
   Future<Map<String, dynamic>> registerForEvent(
     int eventId,
     String accessToken,
-    String attendeeNote, {
-    int? quantity,
-  }) async {
+    String attendeeNote,
+  ) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/events/$eventId/register',
-      data: {
-        'attendee_note': attendeeNote,
-        'quantity': ?quantity,
-      },
+      data: {'attendee_note': attendeeNote},
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
     return response.data ?? <String, dynamic>{};

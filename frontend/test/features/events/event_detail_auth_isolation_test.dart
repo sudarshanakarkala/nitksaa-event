@@ -229,14 +229,14 @@ void main() {
 
       // The reads CheckoutScreen._confirmRegistration makes before paying.
       expect(h.state.myRegistration, isNull);
-      expect(await h.notifier.register(eventX, '', quantity: 1), isTrue);
+      expect(await h.notifier.register(eventX, ''), isTrue);
       final registrationIdB = h.state.myRegistration?['registration_id'];
       expect(registrationIdB, isNotNull);
       expect(registrationIdB, isNot(registrationIdA));
       expect(h.backend.calls.last, (endpoint: 'register', token: tokenB));
 
       // A notifier captured while A was signed in can no longer act.
-      expect(await notifierA.register(eventX, '', quantity: 1), isFalse);
+      expect(await notifierA.register(eventX, ''), isFalse);
       expect(h.backend.count('register'), 1);
     });
   });
