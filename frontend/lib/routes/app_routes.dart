@@ -9,4 +9,19 @@ abstract class AppRoutes {
   static const String developer = '/developer';
   static const String eventDetail = '/events/:id';
   static const String checkout = '/events/:id/checkout';
+
+  // Website-style public pages (UI alignment).
+  static const String privacy = '/privacy';
+  static const String terms = '/terms';
+  static const String refund = '/refund';
+  static const String disclaimer = '/disclaimer';
+  static const String feedback = '/feedback';
+
+  static const Set<String> publicPages = {
+    privacy,
+    terms,
+    refund,
+    disclaimer,
+    feedback,
+  };
 }

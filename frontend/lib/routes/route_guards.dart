@@ -18,6 +18,10 @@ abstract class RouteGuards {
 
     if (isDeveloper && !kDebugMode) return AppRoutes.login;
 
+    // Policy and feedback pages open directly, even while sign-in is still
+    // being checked, so links and page refreshes land on the right page.
+    if (AppRoutes.publicPages.contains(location)) return null;
+
     if (auth.isChecking) {
       return isSplash ? null : AppRoutes.splash;
     }
