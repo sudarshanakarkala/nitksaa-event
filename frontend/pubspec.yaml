@@ -75,6 +75,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/policies/
 
   # NITKSAA website fonts (OFL licence, see assets/fonts/OFL-*.txt).
   # Static weights, Latin subset. Bundled so the app needs no font CDN.
