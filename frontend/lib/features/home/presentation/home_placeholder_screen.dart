@@ -3,6 +3,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../core/widgets/app_widgets.dart';
 import '../../../routes/app_routes.dart';
+import '../../../theme/app_palette.dart';
 import '../../auth/services/auth_controller.dart';
 import '../../../widgets/shared/shared_screen.dart';
 
@@ -44,7 +45,7 @@ class _HomePlaceholderScreenState extends State<HomePlaceholderScreen> {
             Icon(
               Icons.check_circle_outline,
               size: 64,
-              color: Colors.green.shade600,
+              color: context.palette.success,
             ),
             const SizedBox(height: 20),
             Text('NITKSAA Event Home', style: textTheme.headlineMedium),
