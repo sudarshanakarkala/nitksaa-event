@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../theme/app_palette.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
 import '../../domain/event.dart';
@@ -134,7 +135,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                       icon: const Icon(Icons.clear_all, size: 18),
                       label: const Text('Clear All'),
                       style: TextButton.styleFrom(
-                        foregroundColor: Colors.orange,
+                        foregroundColor: context.palette.warning,
                       ),
                     ),
                   IconButton(
@@ -311,10 +312,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFC9952A) : Colors.transparent,
+          color: isActive ? context.palette.primary : Colors.transparent,
           border: Border.all(
             color: isActive
-                ? const Color(0xFFC9952A)
+                ? context.palette.primary
                 : Theme.of(context).colorScheme.outlineVariant,
             width: 2,
           ),
@@ -325,7 +326,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: isActive ? Colors.white : null,
+            color: isActive ? context.palette.onPrimary : null,
             fontSize: 13,
           ),
         ),
@@ -355,13 +356,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     final auth = ref.watch(authControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final bg = isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
-    final textPrimary = isDark ? Colors.white : Colors.black;
-    final textSecondary = isDark
-        ? const Color(0xFFEBEBF5)
-        : const Color(0xFF3C3C43);
-    final accentGold = const Color(0xFFC9952A);
+    final bg = context.palette.background;
+    final cardBg = context.palette.card;
+    final textPrimary = context.palette.textPrimary;
+    final textSecondary = context.palette.textSecondary;
+    final accentGold = context.palette.primary;
 
     return CupertinoPageScaffold(
       backgroundColor: bg,
@@ -404,11 +403,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     width: double.infinity,
                     child: CupertinoSegmentedControl<String>(
                       groupValue: state.period,
-                      selectedColor: isDark ? accentGold : const Color(0xFF007AFF),
+                      selectedColor: accentGold,
                       unselectedColor: cardBg,
-                      borderColor: isDark
-                          ? accentGold.withValues(alpha: 0.5)
-                          : const Color(0x3C3C430C),
+                      borderColor: context.palette.border,
                       children: const {
                         'upcoming': Padding(
                           padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -509,12 +506,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     {required bool isAdmin}
   ) {
     final regStatusColor = event.registrationStatus == 'open'
-        ? (isDark ? const Color(0xFF30D158) : const Color(0xFF34C759))
-        : (isDark ? const Color(0xFFFF453A) : const Color(0xFFFF3B30));
+        ? context.palette.success
+        : context.palette.error;
 
     final typeColor = event.isVirtual
-        ? (isDark ? const Color(0xFFBF5AF2) : const Color(0xFF5856D6))
-        : (isDark ? const Color(0xFF90B5FF) : const Color(0xFF007AFF));
+        ? context.palette.info
+        : context.palette.primary;
 
     final capacityText = event.capacity != null
         ? '${event.registeredCount} / ${event.capacity}'
@@ -529,14 +526,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: textSecondary.withValues(alpha: 0.1)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: context.palette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -654,11 +644,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 height: 5,
                 child: LinearProgressIndicator(
                   value: progress,
-                  backgroundColor: isDark
-                      ? const Color(0xFF2C2C2E)
-                      : const Color(0xFFE5E5EA),
+                  backgroundColor: context.palette.surfaceHover,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    progress > 0.8 ? Colors.orange : Colors.green,
+                    progress > 0.8 ? context.palette.warning : context.palette.success,
                   ),
                 ),
               ),
@@ -690,7 +678,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   horizontal: 16,
                   vertical: 8,
                 ),
-                color: isDark ? accentGold : const Color(0xFF007AFF),
+                color: accentGold,
                 borderRadius: BorderRadius.circular(8),
                 minimumSize: Size.zero,
                 child: Text(
@@ -698,7 +686,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.black : Colors.white,
+                    color: context.palette.onPrimary,
                   ),
                 ),
                 onPressed: () {
@@ -717,7 +705,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       padding: const EdgeInsets.only(bottom: 6.0),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: const Color(0xFFC9952A)),
+          Icon(icon, size: 14, color: context.palette.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -733,15 +721,15 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
   Widget _buildCupertinoBottomNav(Color accentGold, bool isDark) {
-    final navBg = isDark ? const Color(0xFF161617) : const Color(0xFFF9F9F9);
-    final inactiveColor = const Color(0xFF8E8E93);
+    final navBg = context.palette.background;
+    final inactiveColor = context.palette.textMuted;
 
     return Container(
       decoration: BoxDecoration(
         color: navBg,
         border: Border(
           top: BorderSide(
-            color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+            color: context.palette.border,
             width: 0.5,
           ),
         ),
@@ -835,28 +823,26 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               CupertinoIcons.exclamationmark_triangle,
               size: 42,
-              color: CupertinoColors.systemRed,
+              color: context.palette.error,
             ),
             const SizedBox(height: 12),
             Text(
               'Error Loading Events',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.black,
+                color: context.palette.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: CupertinoColors.systemGrey,
+                color: context.palette.textMuted,
               ),
             ),
           ],
@@ -866,14 +852,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
   Widget _buildCupertinoEmptyState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             CupertinoIcons.calendar_badge_minus,
             size: 48,
-            color: CupertinoColors.systemGrey,
+            color: context.palette.textMuted,
           ),
           const SizedBox(height: 12),
           Text(
@@ -883,7 +869,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 4),
           Text(
             'Try searching for something else.',
-            style: TextStyle(fontSize: 13, color: CupertinoColors.systemGrey),
+            style: TextStyle(fontSize: 13, color: context.palette.textMuted),
           ),
         ],
       ),
@@ -905,7 +891,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     return CupertinoActionSheetAction(
       onPressed: () {},
       child: Container(
-        color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+        color: context.palette.surface,
         child: SafeArea(
           child: SingleChildScrollView(
             child: Padding(
@@ -989,7 +975,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFD0D0D0)),
+                              border: Border.all(color: context.palette.border),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             padding: const EdgeInsets.all(8),
@@ -1020,7 +1006,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFD0D0D0)),
+                              border: Border.all(color: context.palette.border),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             padding: const EdgeInsets.all(8),
@@ -1163,11 +1149,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFC9952A) : Colors.transparent,
+          color: isActive ? context.palette.primary : Colors.transparent,
           border: Border.all(
             color: isActive
-                ? const Color(0xFFC9952A)
-                : const Color(0xFFD0D0D0),
+                ? context.palette.primary
+                : context.palette.border,
             width: 1.5,
           ),
           borderRadius: BorderRadius.circular(6),
@@ -1177,7 +1163,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontWeight: FontWeight.w500,
-            color: isActive ? Colors.white : Colors.black,
+            color: isActive ? context.palette.onPrimary : context.palette.textPrimary,
             fontSize: 12,
           ),
         ),
@@ -1245,9 +1231,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                             ),
                           ),
                           filled: true,
-                          fillColor: isDark
-                              ? const Color(0xFF1A2A3A).withOpacity(0.5)
-                              : Colors.grey.withOpacity(0.1),
+                          fillColor: context.palette.surfaceSubtle,
                         ),
                       ),
                     ),
@@ -1295,9 +1279,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 24.0),
             child: TabBar(
               isScrollable: false,
-              labelColor: isDark ? const Color(0xFFC9952A) : colorScheme.primary,
+              labelColor: context.palette.primary,
               unselectedLabelColor: colorScheme.onSurfaceVariant,
-              indicatorColor: const Color(0xFFC9952A),
+              indicatorColor: context.palette.primary,
               indicatorWeight: 3,
               tabs: const [
                 Tab(text: 'Upcoming'),
@@ -1338,11 +1322,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
 
                 final filterTabs = TabBar(
                   isScrollable: true,
-                  labelColor: isDark
-                      ? const Color(0xFFC9952A)
-                      : colorScheme.primary,
+                  labelColor: context.palette.primary,
                   unselectedLabelColor: colorScheme.onSurfaceVariant,
-                  indicatorColor: const Color(0xFFC9952A),
+                  indicatorColor: context.palette.primary,
                   tabs: const [
                     Tab(text: 'Upcoming'),
                     Tab(text: 'Past'),
@@ -1421,23 +1403,27 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 child: ListView(
                   children: [
                     UserAccountsDrawerHeader(
-                      decoration: const BoxDecoration(color: Color(0xFF0D1B3E)),
+                      decoration: BoxDecoration(color: context.palette.surface),
                       currentAccountPicture: CircleAvatar(
-                        backgroundColor: const Color(0xFFC9952A),
+                        backgroundColor: context.palette.primary,
                         child: Text(
                           (auth.session?.fullname ?? 'U')
                               .substring(0, 1)
                               .toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: context.palette.onPrimary,
                             fontSize: 24,
                           ),
                         ),
                       ),
                       accountName: Text(
                         auth.session?.fullname ?? 'Alumni User',
+                        style: TextStyle(color: context.palette.textPrimary),
                       ),
-                      accountEmail: Text(auth.session?.email ?? ''),
+                      accountEmail: Text(
+                        auth.session?.email ?? '',
+                        style: TextStyle(color: context.palette.textSecondary),
+                      ),
                     ),
                     ListTile(
                       leading: const Icon(Icons.calendar_month),
@@ -1496,18 +1482,18 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   Widget _buildMaterialEventCard(AppEvent event, bool isDark, ThemeData theme, {required bool isAdmin}) {
     final isPhysical = !event.isVirtual;
     final tagBg = isPhysical
-        ? (isDark ? const Color(0xFF1E2E50) : const Color(0xFFDDE8FF))
-        : (isDark ? const Color(0xFF1E1540) : const Color(0xFFEDE6FF));
+        ? context.palette.primary.withValues(alpha: 0.14)
+        : context.palette.info.withValues(alpha: 0.14);
     final tagText = isPhysical
-        ? (isDark ? const Color(0xFF90B5FF) : const Color(0xFF1B3C8A))
-        : (isDark ? const Color(0xFFB89AFF) : const Color(0xFF4A2DB0));
+        ? context.palette.primary
+        : context.palette.info;
 
     final regBg = event.registrationStatus == 'open'
-        ? (isDark ? const Color(0xFF0F2920) : const Color(0xFFD9F4E8))
-        : (isDark ? const Color(0xFF2E1010) : const Color(0xFFFFE9E9));
+        ? context.palette.success.withValues(alpha: 0.14)
+        : context.palette.error.withValues(alpha: 0.14);
     final regText = event.registrationStatus == 'open'
-        ? (isDark ? const Color(0xFF6FDBA8) : const Color(0xFF1B5C3A))
-        : (isDark ? const Color(0xFFFF9090) : const Color(0xFF8A1B1B));
+        ? context.palette.success
+        : context.palette.error;
 
     final capacityText = event.capacity != null
         ? '${event.registeredCount} / ${event.capacity}'
@@ -1521,10 +1507,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+          color: context.palette.border,
         ),
       ),
-      color: isDark ? const Color(0xFF131E30) : Colors.white,
+      color: context.palette.card,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -1646,11 +1632,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 6,
-                  backgroundColor: isDark
-                      ? const Color(0xFF1C2A40)
-                      : const Color(0xFFEEF3FA),
+                  backgroundColor: context.palette.surfaceHover,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    progress > 0.85 ? Colors.orange : Colors.green,
+                    progress > 0.85 ? context.palette.warning : context.palette.success,
                   ),
                 ),
               ),
@@ -1681,10 +1665,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ),
                 TextButton(
                   style: TextButton.styleFrom(
-                    backgroundColor: isDark
-                        ? const Color(0xFFC9952A)
-                        : const Color(0xFF0D1B3E),
-                    foregroundColor: isDark ? Colors.black : Colors.white,
+                    backgroundColor: context.palette.primary,
+                    foregroundColor: context.palette.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -1710,7 +1692,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       padding: const EdgeInsets.only(bottom: 6.0),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: const Color(0xFFC9952A)),
+          Icon(icon, size: 16, color: context.palette.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -1735,7 +1717,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            Icon(Icons.error_outline, size: 48, color: context.palette.error),
             const SizedBox(height: 12),
             const Text(
               'Something went wrong',
@@ -1754,11 +1736,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
   Widget _buildMaterialEmptyState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.calendar_today_outlined, size: 64, color: Colors.grey),
+          Icon(Icons.calendar_today_outlined, size: 64, color: context.palette.textMuted),
           const SizedBox(height: 16),
           Text(
             'No Events Found',
@@ -1767,7 +1749,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 6),
           Text(
             'Please check back later or try adjusting filters.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: context.palette.textMuted),
           ),
         ],
       ),
@@ -1834,18 +1816,18 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFD0D0D0)),
+        border: Border.all(color: context.palette.border),
         borderRadius: BorderRadius.circular(6),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
           value: state.timeline,
           isExpanded: true,
-          dropdownColor: isDark ? const Color(0xFF1C1C1E) : null,
+          dropdownColor: context.palette.surface,
           hint: Text(
             'Select timeline',
             style: TextStyle(
-              color: isDark ? const Color(0xFFEBEBF5) : const Color(0xFF3C3C43),
+              color: context.palette.textSecondary,
             ),
           ),
           items: [
@@ -1854,7 +1836,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               child: Text(
                 'None',
                 style: TextStyle(
-                  color: isDark ? const Color(0xFFEBEBF5) : const Color(0xFF3C3C43),
+                  color: context.palette.textSecondary,
                 ),
               ),
             ),
