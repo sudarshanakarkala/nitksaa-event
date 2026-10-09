@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../routes/app_routes.dart';
 import '../../features/auth/services/auth_controller.dart';
+import '../../theme/app_palette.dart';
 
 /// A shared bottom navigation bar used across all main screens.
 /// Shows different items based on user authentication status and permissions.
@@ -119,7 +120,7 @@ class AppBottomNav extends ConsumerWidget {
   }) {
     final theme = Theme.of(context);
     final color = isActive
-        ? const Color(0xFFC9952A)
+        ? context.palette.primary
         : theme.colorScheme.onSurfaceVariant;
     return InkWell(
       onTap: onTap,
