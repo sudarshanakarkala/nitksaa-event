@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
 import '../providers/my_events_provider.dart';
@@ -69,7 +70,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                     const SizedBox(height: 16),
                     const Text(
                       'Log in to view My Events',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -110,9 +111,9 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                         const Text(
                           'My Events',
                           style: TextStyle(
-                            fontFamily: 'CrimsonPro',
+                            fontFamily: AppTextStyles.serif,
                             fontSize: 26,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         IconButton.filledTonal(
@@ -502,7 +503,7 @@ class _SearchEmptyState extends StatelessWidget {
           const SizedBox(height: 16),
           const Text(
             'No events match your search',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           Text(
@@ -528,7 +529,7 @@ class _EmptyState extends StatelessWidget {
           const SizedBox(height: 16),
           const Text(
             'No registered events yet',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextButton(
