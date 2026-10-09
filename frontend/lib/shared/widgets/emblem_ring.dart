@@ -21,16 +21,12 @@ class EmblemRing extends StatelessWidget {
           color: p.primary.withValues(alpha: 0.08),
           border: Border.all(color: p.primary.withValues(alpha: 0.6), width: 1.5),
         ),
-        // Drawn white in dark mode, like the header logo.
-        child: Theme.of(context).brightness == Brightness.dark
-            ? ColorFiltered(
-                colorFilter: ColorFilter.mode(
-                  Colors.white.withValues(alpha: 0.9),
-                  BlendMode.srcIn,
-                ),
-                child: Image.asset('assets/images/nitksaa-emblem.png'),
-              )
-            : Image.asset('assets/images/nitksaa-emblem.png'),
+        // Gold emblem on dark, navy on light.
+        child: Image.asset(
+          Theme.of(context).brightness == Brightness.dark
+              ? 'assets/images/nitksaa-emblem-gold.png'
+              : 'assets/images/nitksaa-emblem-navy.png',
+        ),
       ),
     );
   }

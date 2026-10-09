@@ -79,20 +79,9 @@ class _Brand extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
 
-    // Website: logo is drawn white in dark mode, as-is in light mode.
-    Widget tint(Widget child) => isDark
-        ? ColorFiltered(
-            colorFilter: ColorFilter.mode(
-              Colors.white.withValues(alpha: 0.9),
-              BlendMode.srcIn,
-            ),
-            child: child,
-          )
-        : child;
-
-    final logo = compact
-        ? tint(Image.asset('assets/images/nitksaa-emblem.png', height: 32))
-        : tint(Image.asset('assets/images/nitksaa-logo.png', height: 34));
+    // Gold artwork on dark, navy on light (NITKSAA Events logo set).
+    final tone = isDark ? 'dark' : 'light';
+    final emblem = isDark ? 'gold' : 'navy';
 
     return Semantics(
       button: true,
@@ -102,21 +91,24 @@ class _Brand extends StatelessWidget {
         onTap: () => context.go(AppRoutes.home),
         child: Padding(
           padding: const EdgeInsets.symmetric(vertical: 4),
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              logo,
-              const SizedBox(width: 12),
-              Text(
-                compact ? 'NITKSAA Events' : 'Events',
-                style: AppTextStyles.titleLarge.copyWith(
-                  fontSize: 17,
-                  color: p.textPrimary,
-                  letterSpacing: 0.3,
-                ),
-              ),
-            ],
-          ),
+          // Wide: the logo carries the "NITKSAA Events" wordmark itself.
+          child: compact
+              ? Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Image.asset('assets/images/nitksaa-emblem-$emblem.png', height: 32),
+                    const SizedBox(width: 10),
+                    Text(
+                      'NITKSAA Events',
+                      style: AppTextStyles.titleLarge.copyWith(
+                        fontSize: 17,
+                        color: p.textPrimary,
+                        letterSpacing: 0.3,
+                      ),
+                    ),
+                  ],
+                )
+              : Image.asset('assets/images/nitksaa-events-logo-on-$tone.png', height: 48),
         ),
       ),
     );
