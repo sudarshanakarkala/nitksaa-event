@@ -20,7 +20,10 @@ class SiteFooter extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final compact = MediaQuery.sizeOf(context).width < 700;
+    final width = MediaQuery.sizeOf(context).width;
+    // The © line and all links fit side by side from about 1100px; below
+    // that, one scrolling row (links first) so no link starts hidden.
+    final compact = width < 1100;
     final year = DateTime.now().year;
 
     final copy = Text(
@@ -64,7 +67,7 @@ class SiteFooter extends StatelessWidget {
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: maxContentWidth),
           child: Padding(
-            padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 40),
+            padding: EdgeInsets.symmetric(horizontal: width < 600 ? 16 : 40),
             child: compact
                 // Fade at the right edge shows the row scrolls sideways;
                 // the end padding lets the last item clear the fade.
