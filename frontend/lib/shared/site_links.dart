@@ -7,9 +7,8 @@ abstract class SiteLinks {
   static const String disclaimer = '/disclaimer';
   static const String feedback = '/feedback';
 
-  // Association website (no custom domain yet).
-  static const String website =
-      'https://nitksaa-website-246773894709.asia-south1.run.app';
+  // Association website (production).
+  static const String website = 'https://www.nitkalumni.in';
   static const String websiteAbout = '$website/about';
 
   static const String contactEmail = 'nitksaa.infra@gmail.com';
