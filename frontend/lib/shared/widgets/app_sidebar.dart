@@ -184,7 +184,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                       Text(
                         'NITKSAA',
                         style: TextStyle(
-                          fontFamily: 'Fraunces',
+                          fontFamily: 'CrimsonPro',
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
                           color: p.primary,
