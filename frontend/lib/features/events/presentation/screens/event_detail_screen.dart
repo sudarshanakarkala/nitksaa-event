@@ -1160,6 +1160,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             decoration: BoxDecoration(
               color: context.palette.info.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: context.palette.info.withValues(alpha: 0.3)),
             ),
             child: Center(
               child: Text(
@@ -1179,6 +1180,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         decoration: BoxDecoration(
           color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
         child: Center(
           child: Text(
@@ -1194,6 +1196,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         decoration: BoxDecoration(
           color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
         child: Center(
           child: Text(
@@ -1209,6 +1212,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         decoration: BoxDecoration(
           color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
         child: Center(
           child: Text(
@@ -1224,6 +1228,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         decoration: BoxDecoration(
           color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
         child: Center(
           child: Text(
@@ -1239,6 +1244,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         decoration: BoxDecoration(
           color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
         child: Center(
           child: Text(
