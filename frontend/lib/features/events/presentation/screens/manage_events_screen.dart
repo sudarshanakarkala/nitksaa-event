@@ -360,7 +360,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                         const Text(
                           'Manage Events',
                           style: TextStyle(
-                            fontFamily: 'Fraunces',
+                            fontFamily: 'CrimsonPro',
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
                           ),
@@ -2965,6 +2965,7 @@ class _ManageEventCard extends StatelessWidget {
                     color: (isPublished ? context.palette.success : context.palette.warning)
                         .withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(999),
+                    border: Border.all(color: (isPublished ? context.palette.success : context.palette.warning).withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     isPublished ? 'Published' : 'Draft',
@@ -3073,6 +3074,7 @@ class _StatusPill extends StatelessWidget {
       decoration: BoxDecoration(
         color: context.palette.success.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: context.palette.success.withValues(alpha: 0.3)),
       ),
       child: Text(
         label.replaceAll('_', ' '),
@@ -3134,7 +3136,7 @@ class _Sidebar extends StatelessWidget {
               Text(
                 'NITKSAA',
                 style: TextStyle(
-                  fontFamily: 'Fraunces',
+                  fontFamily: 'CrimsonPro',
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
                   color: context.palette.primary,
