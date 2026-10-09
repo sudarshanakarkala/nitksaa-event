@@ -110,7 +110,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                         const Text(
                           'My Events',
                           style: TextStyle(
-                            fontFamily: 'Fraunces',
+                            fontFamily: 'CrimsonPro',
                             fontSize: 26,
                             fontWeight: FontWeight.bold,
                           ),
@@ -451,7 +451,11 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: fg.withValues(alpha: 0.3)),
+      ),
       child: Text(
         label,
         style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold),
