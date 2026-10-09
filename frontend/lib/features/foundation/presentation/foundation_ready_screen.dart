@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/app_state.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../routes/app_routes.dart';
+import '../../../theme/app_palette.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../widgets/shared/shared_screen.dart';
 import '../../../widgets/shared/status_row.dart';
@@ -86,7 +87,7 @@ class _StatusRow extends StatelessWidget {
       children: [
         Icon(
           ok ? Icons.check_circle_outline : Icons.error_outline,
-          color: ok ? Colors.green : colorScheme.error,
+          color: ok ? context.palette.success : colorScheme.error,
           size: 18,
         ),
         const SizedBox(width: 8),
