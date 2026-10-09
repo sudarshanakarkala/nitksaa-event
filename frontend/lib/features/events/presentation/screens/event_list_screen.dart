@@ -1241,21 +1241,35 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   final usable = constraints.maxWidth - side * 2;
                   final columns =
                       ((usable + spacing) / (320 + spacing)).floor().clamp(1, 4);
-                  return GridView.builder(
+                  // Rows of cards, each row as tall as its tallest card, so
+                  // cards size to their content (website grid) instead of a
+                  // fixed 420px cell.
+                  final rows = (filteredEvents.length / columns).ceil();
+                  final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
+                  return ListView.separated(
                     padding: EdgeInsets.fromLTRB(side, 24, side, 24),
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: columns,
-                      crossAxisSpacing: spacing,
-                      mainAxisSpacing: spacing,
-                      mainAxisExtent: 420,
-                    ),
-                    itemCount: filteredEvents.length,
-                    itemBuilder: (context, index) {
-                      return _buildMaterialEventCard(
-                        filteredEvents[index],
-                        isDark,
-                        theme,
-                        isAdmin: auth.session?.userType.toLowerCase() == 'admin',
+                    itemCount: rows,
+                    separatorBuilder: (_, __) => const SizedBox(height: spacing),
+                    itemBuilder: (context, row) {
+                      return IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var col = 0; col < columns; col++) ...[
+                              if (col > 0) const SizedBox(width: spacing),
+                              Expanded(
+                                child: row * columns + col < filteredEvents.length
+                                    ? _buildMaterialEventCard(
+                                        filteredEvents[row * columns + col],
+                                        isDark,
+                                        theme,
+                                        isAdmin: isAdmin,
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            ],
+                          ],
+                        ),
                       );
                     },
                   );
@@ -1362,39 +1376,35 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ),
             ],
             const SizedBox(height: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMaterialMetaRow(
-                          Icons.calendar_today,
-                          _formatDate(event.startDatetime),
-                          theme,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildMaterialMetaRow(
-                          Icons.access_time,
-                          _formatTime(event.startDatetime, event.endDatetime),
-                          theme,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  _buildMaterialMetaRow(
-                    event.isVirtual ? Icons.videocam : Icons.location_pin,
-                    event.locationText ??
-                        (event.isVirtual ? 'Zoom Link' : 'TBD'),
+            // Details at their natural height; the Spacer below keeps the
+            // footer aligned across a row of cards (rows size to the tallest).
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMaterialMetaRow(
+                    Icons.calendar_today,
+                    _formatDate(event.startDatetime),
                     theme,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMaterialMetaRow(
+                    Icons.access_time,
+                    _formatTime(event.startDatetime, event.endDatetime),
+                    theme,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 4),
+            _buildMaterialMetaRow(
+              event.isVirtual ? Icons.videocam : Icons.location_pin,
+              event.locationText ??
+                  (event.isVirtual ? 'Zoom Link' : 'TBD'),
+              theme,
+            ),
+            const Spacer(),
             if (isAdmin) ...[
               const SizedBox(height: 8),
               Row(
