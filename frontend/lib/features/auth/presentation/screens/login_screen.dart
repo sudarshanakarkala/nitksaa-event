@@ -90,7 +90,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+    // Web (including Safari on iPhone) always uses the Material layout.
+    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     return isIOS ? _buildCupertinoLogin() : _buildMaterialLogin();
   }
 
