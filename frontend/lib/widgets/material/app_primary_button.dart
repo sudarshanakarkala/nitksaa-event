@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:event_app/theme/app_colors.dart';
+import 'package:event_app/theme/app_palette.dart';
 import 'package:event_app/theme/app_text_styles.dart';
 
 class AppPrimaryButton extends StatelessWidget {
@@ -19,9 +19,9 @@ class AppPrimaryButton extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final bool effectiveDisabled = isDisabled || isLoading || onPressed == null;
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color backgroundColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
-    final Color onBackgroundColor = isDark ? AppColors.darkOnPrimary : AppColors.lightOnPrimary;
+    final p = context.palette;
+    final Color backgroundColor = p.primary;
+    final Color onBackgroundColor = p.onPrimary;
 
     return SizedBox(
       width: double.infinity,
@@ -36,10 +36,10 @@ class AppPrimaryButton extends StatelessWidget {
           ),
         ),
         child: isLoading
-            ? const SizedBox(
+            ? SizedBox(
                 width: 20,
                 height: 20,
-                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(Colors.white)),
+                child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(onBackgroundColor)),
               )
             : DefaultTextStyle(
                 style: AppTextStyles.labelLarge,
