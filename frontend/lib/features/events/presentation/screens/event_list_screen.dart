@@ -754,22 +754,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             inactiveColor,
           ),
           _buildCupertinoNavItem(
-            CupertinoIcons.shield,
-            'Volunteer',
-            false,
-            accentGold,
-            inactiveColor,
-          ),
-          _buildCupertinoNavItem(
             CupertinoIcons.person_circle,
             'Manage',
-            false,
-            accentGold,
-            inactiveColor,
-          ),
-          _buildCupertinoNavItem(
-            CupertinoIcons.ellipsis,
-            'More',
             false,
             accentGold,
             inactiveColor,
@@ -1441,18 +1427,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         ScaffoldMessenger.of(context).showSnackBar(
                           const SnackBar(
                             content: Text('My Events coming soon.'),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.verified_user_outlined),
-                      title: const Text('Volunteer'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Volunteer options coming soon.'),
                           ),
                         );
                       },

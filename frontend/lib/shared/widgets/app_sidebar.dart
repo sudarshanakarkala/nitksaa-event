@@ -54,22 +54,10 @@ class AppSidebar extends ConsumerStatefulWidget {
       showWhenCollapsed: true,
     ),
     SidebarMenuItem(
-      icon: Icons.verified_user_outlined,
-      label: 'Volunteer',
-      route: '/volunteer', // Placeholder route
-      permission: SidebarItemPermission.authenticated,
-    ),
-    SidebarMenuItem(
       icon: Icons.admin_panel_settings_outlined,
       label: 'Manage Events',
       route: AppRoutes.manageEvents,
       permission: SidebarItemPermission.admin,
-    ),
-    SidebarMenuItem(
-      icon: Icons.more_horiz,
-      label: 'More',
-      route: '/more', // Placeholder route
-      permission: SidebarItemPermission.authenticated,
     ),
   ];
 
