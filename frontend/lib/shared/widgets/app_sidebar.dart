@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../routes/app_routes.dart';
 import '../../features/auth/services/auth_controller.dart';
+import '../../theme/app_palette.dart';
 
 enum SidebarItemPermission {
   all, // Visible to everyone
@@ -135,23 +136,23 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final p = context.palette;
     final menuItems = _getVisibleMenuItems();
     final sidebarWidth = _isCollapsed ? 72.0 : 240.0;
 
-    final activeBg = isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA);
-    final activeText = isDark ? Colors.white : const Color(0xFF0D1B3E);
-    final inactiveText = const Color(0xFF5A6A8A);
+    final activeBg = p.surfaceHover;
+    final activeText = p.primary;
+    final inactiveText = p.textSecondary;
 
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       curve: Curves.easeInOut,
       width: sidebarWidth,
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0E1726) : const Color(0xFFF8F9FD),
+        color: p.background,
         border: Border(
           right: BorderSide(
-            color: Theme.of(context).colorScheme.outlineVariant.withValues(alpha: 0.5),
+            color: p.border,
           ),
         ),
       ),
@@ -175,7 +176,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                   children: [
                     Icon(
                       Icons.calendar_today_outlined,
-                      color: const Color(0xFFC9952A),
+                      color: p.primary,
                       size: _isCollapsed ? 20 : 24,
                     ),
                     if (!_isCollapsed) ...[
@@ -186,9 +187,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                           fontFamily: 'Fraunces',
                           fontSize: 20,
                           fontWeight: FontWeight.bold,
-                          color: isDark
-                              ? const Color(0xFFC9952A)
-                              : Theme.of(context).colorScheme.primary,
+                          color: p.primary,
                         ),
                       ),
                     ],
@@ -288,12 +287,12 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                   ? Tooltip(
                       message: auth.session?.fullname ?? 'User',
                       child: CircleAvatar(
-                        backgroundColor: const Color(0xFFC9952A),
+                        backgroundColor: p.primary,
                         radius: 18,
                         child: Text(
                           (auth.session?.fullname ?? 'U').substring(0, 1).toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: p.onPrimary,
                             fontWeight: FontWeight.bold,
                             fontSize: 13,
                           ),
@@ -303,12 +302,12 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                   : Row(
                       children: [
                         CircleAvatar(
-                          backgroundColor: const Color(0xFFC9952A),
+                          backgroundColor: p.primary,
                           radius: 18,
                           child: Text(
                             (auth.session?.fullname ?? 'U').substring(0, 1).toUpperCase(),
-                            style: const TextStyle(
-                              color: Colors.white,
+                            style: TextStyle(
+                              color: p.onPrimary,
                               fontWeight: FontWeight.bold,
                               fontSize: 13,
                             ),
@@ -391,15 +390,15 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                         horizontal: _isCollapsed ? 8 : 12,
                         vertical: 4,
                       ),
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.logout,
                         size: 20,
-                        color: Colors.red,
+                        color: p.error,
                       ),
                       title: Text(
                         'Logout',
                         style: TextStyle(
-                          color: Colors.red,
+                          color: p.error,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
@@ -452,7 +451,7 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                       message: 'Login',
                       child: IconButton(
                         icon: const Icon(Icons.login, size: 20),
-                        color: const Color(0xFFC9952A),
+                        color: p.primary,
                         onPressed: () {
                           context.go(AppRoutes.login);
                         },
@@ -464,15 +463,15 @@ class _AppSidebarState extends ConsumerState<AppSidebar> {
                         horizontal: _isCollapsed ? 8 : 12,
                         vertical: 4,
                       ),
-                      leading: const Icon(
+                      leading: Icon(
                         Icons.login,
                         size: 20,
-                        color: Color(0xFFC9952A),
+                        color: p.primary,
                       ),
                       title: Text(
                         'Login',
                         style: TextStyle(
-                          color: const Color(0xFFC9952A),
+                          color: p.primary,
                           fontSize: 13,
                           fontWeight: FontWeight.w500,
                         ),
