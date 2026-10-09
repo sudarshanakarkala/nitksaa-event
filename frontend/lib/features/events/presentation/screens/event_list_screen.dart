@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
 import '../../domain/event.dart';
@@ -117,7 +118,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             children: [
               const Text(
                 'Filters',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 20, fontWeight: FontWeight.w600),
               ),
               Row(
                 children: [
@@ -894,7 +895,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     children: [
                       const Text(
                         'Filters',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
                       ),
                       CupertinoButton(
                         padding: EdgeInsets.zero,
@@ -1186,9 +1187,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               const Text(
                 'NITKSAA Events',
                 style: TextStyle(
-                  fontFamily: 'CrimsonPro',
+                  fontFamily: AppTextStyles.serif,
                   fontSize: 24,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                 ),
               ),
               if (isWebScreen)
@@ -1699,7 +1700,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             const SizedBox(height: 12),
             const Text(
               'Something went wrong',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(fontFamily: AppTextStyles.serif, fontWeight: FontWeight.w600, fontSize: 18),
             ),
             const SizedBox(height: 6),
             Text(
@@ -1722,7 +1723,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 16),
           Text(
             'No Events Found',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            style: TextStyle(fontFamily: AppTextStyles.serif, fontWeight: FontWeight.w600, fontSize: 18),
           ),
           const SizedBox(height: 6),
           Text(
