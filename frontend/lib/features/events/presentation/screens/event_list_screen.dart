@@ -98,11 +98,53 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  /// Filter section label, website rail style: small gold uppercase.
+  /// Filter section label, website `.filter-label`: small uppercase, 70% gold.
   Widget _filterLabel(String text) => Text(
         text.toUpperCase(),
-        style: AppTextStyles.eyebrow.copyWith(color: context.palette.primary),
+        style: AppTextStyles.eyebrow.copyWith(
+          fontSize: 11.5,
+          letterSpacing: 0.9,
+          color: context.palette.primary.withValues(alpha: 0.7),
+        ),
       );
+
+  /// Website `.chip` toggle: faint pill, gold-tinted when on. Calls
+  /// [onChanged] with the new value, like the checkbox it replaces.
+  Widget _filterChip(String label, bool value, ValueChanged<bool?> onChanged) {
+    final p = context.palette;
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+        decoration: BoxDecoration(
+          color: value ? p.primary.withValues(alpha: 0.14) : p.surfaceSubtle,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: p.primary.withValues(alpha: value ? 0.5 : 0.14),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            fontSize: 12.8,
+            height: 1.2,
+            color: value ? p.primary : p.textSecondary,
+            fontWeight: value ? FontWeight.w500 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Active filters, for the rail badge (search is not counted).
+  int _activeFilterCount(EventsState s) => [
+        s.dateRangeStart != null || s.dateRangeEnd != null,
+        s.timeline != null,
+        !((s.filterModes['physical'] ?? true) && (s.filterModes['virtual'] ?? true)),
+        !((s.filterRegistrationStatus['open'] ?? true) &&
+            (s.filterRegistrationStatus['closed'] ?? true)),
+      ].where((active) => active).length;
 
   Widget _buildFilterPanel([WidgetRef? panelRef, bool inRail = false]) {
     final rf = panelRef ?? ref;
@@ -120,23 +162,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (with clear & close actions). The rail has its own title.
-          if (inRail && hasActiveFilters)
-            Align(
-              alignment: Alignment.centerLeft,
-              child: TextButton.icon(
-                onPressed: () {
-                  rf.read(eventsProvider.notifier).clearFilters();
-                  _searchController.clear();
-                },
-                icon: const Icon(Icons.clear_all, size: 18),
-                label: const Text('Clear All'),
-                style: TextButton.styleFrom(
-                  foregroundColor: context.palette.warning,
-                  padding: EdgeInsets.zero,
-                ),
-              ),
-            ),
+          // Header (with clear & close actions). In the rail, the rail
+          // header has the title and "Clear all".
           if (!inRail)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -148,7 +175,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               Row(
                 children: [
                   if (hasActiveFilters)
-                    TextButton.icon(
+                    TextButton(
                       onPressed: () {
                         rf.read(eventsProvider.notifier).clearFilters();
                         _searchController.clear();
@@ -158,11 +185,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           Navigator.pop(context);
                         }
                       },
-                      icon: const Icon(Icons.clear_all, size: 18),
-                      label: const Text('Clear All'),
                       style: TextButton.styleFrom(
-                        foregroundColor: context.palette.warning,
+                        foregroundColor: context.palette.textSecondary,
                       ),
+                      child: const Text('Clear all'),
                     ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -244,16 +270,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           _buildTimelineDropdown(rf, state, isInDrawer),
           const SizedBox(height: 20),
 
-          // Event Mode Section (checkbox style)
+          // Event Mode Section (website chips)
           _filterLabel('Event Mode'),
           const SizedBox(height: 8),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Physical'),
-            value: state.filterModes?['physical'] ?? true,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (val) {
+          Wrap(spacing: 6, runSpacing: 6, children: [
+          _filterChip(
+            'Physical',
+            state.filterModes?['physical'] ?? true,
+            (val) {
               if (val == null) return;
               final current = state.filterModes?['physical'] ?? true;
               if (val != current) {
@@ -261,13 +285,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Virtual'),
-            value: state.filterModes?['virtual'] ?? true,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (val) {
+          _filterChip(
+            'Virtual',
+            state.filterModes?['virtual'] ?? true,
+            (val) {
               if (val == null) return;
               final current = state.filterModes?['virtual'] ?? true;
               if (val != current) {
@@ -275,18 +296,17 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
+          ]),
           const SizedBox(height: 20),
 
-          // Registration Status Section (checkbox style)
+          // Registration Status Section (website chips)
           _filterLabel('Registration Status'),
           const SizedBox(height: 8),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Open'),
-            value: state.filterRegistrationStatus?['open'] ?? true,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (val) {
+          Wrap(spacing: 6, runSpacing: 6, children: [
+          _filterChip(
+            'Open',
+            state.filterRegistrationStatus?['open'] ?? true,
+            (val) {
               if (val == null) return;
               final current = state.filterRegistrationStatus?['open'] ?? true;
               if (val != current) {
@@ -294,13 +314,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Closed'),
-            value: state.filterRegistrationStatus?['closed'] ?? true,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (val) {
+          _filterChip(
+            'Closed',
+            state.filterRegistrationStatus?['closed'] ?? true,
+            (val) {
               if (val == null) return;
               final current = state.filterRegistrationStatus?['closed'] ?? true;
               if (val != current) {
@@ -308,6 +325,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
+          ]),
           const SizedBox(height: 24),
 
           // Drawer-only clear button removed — top 'Clear All' handles clearing.
@@ -1228,6 +1246,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ),
         filters: (context) => _buildFilterPanel(ref, true),
         onOpenFilters: _showFilterBottomSheet,
+        activeFilterCount: _activeFilterCount(state),
+        onClearFilters: () {
+          ref.read(eventsProvider.notifier).clearFilters();
+          _searchController.clear();
+        },
+        resultNote: state.isLoading
+            ? null
+            : '${filteredEvents.length} ${filteredEvents.length == 1 ? 'event' : 'events'}',
         body: state.isLoading
             ? const Center(child: CircularProgressIndicator())
             : state.errorMessage != null
