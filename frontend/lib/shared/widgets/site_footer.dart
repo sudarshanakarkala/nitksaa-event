@@ -66,9 +66,19 @@ class SiteFooter extends StatelessWidget {
           child: Padding(
             padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 40),
             child: compact
-                ? SingleChildScrollView(
-                    scrollDirection: Axis.horizontal,
-                    child: row([...linkItems, copy]),
+                // Fade at the right edge shows the row scrolls sideways;
+                // the end padding lets the last item clear the fade.
+                ? ShaderMask(
+                    blendMode: BlendMode.dstIn,
+                    shaderCallback: (bounds) => const LinearGradient(
+                      colors: [Colors.white, Colors.white, Colors.transparent],
+                      stops: [0, 0.85, 1],
+                    ).createShader(bounds),
+                    child: SingleChildScrollView(
+                      scrollDirection: Axis.horizontal,
+                      padding: const EdgeInsets.only(right: 48),
+                      child: row([...linkItems, copy]),
+                    ),
                   )
                 : Row(
                     children: [
