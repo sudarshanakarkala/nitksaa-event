@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/scheduler.dart';
 
+import '../../features/policies/policy_screen.dart';
 import '../../routes/app_routes.dart';
+import '../../theme/app_palette.dart';
 import 'app_bottom_nav.dart';
 import 'app_sidebar.dart';
 import 'site_footer.dart';
@@ -42,8 +44,9 @@ class _AppShellState extends State<AppShell> {
       return false;
     }
     final after = m.extentAfter;
-    final visible =
-        _footerVisible ? after <= _hideBeyond : after <= _showWithin;
+    final visible = _footerVisible
+        ? after <= _hideBeyond
+        : after <= _showWithin;
     if (visible != _footerVisible) {
       void apply() {
         if (mounted) setState(() => _footerVisible = visible);
@@ -64,6 +67,21 @@ class _AppShellState extends State<AppShell> {
     super.didUpdateWidget(oldWidget);
     // New page: show the footer until its scroll view reports otherwise.
     if (oldWidget.location != widget.location) _footerVisible = true;
+  }
+
+  // Browser tab title per page. The shell sets it on every navigation, so
+  // leaving a page with its own title puts the app title back.
+  static const _appTitle = 'NITKSAA Events';
+  static final _pageTitles = {
+    AppRoutes.privacy: Policy.privacy.title,
+    AppRoutes.terms: Policy.terms.title,
+    AppRoutes.refund: Policy.refund.title,
+    AppRoutes.disclaimer: Policy.disclaimer.title,
+  };
+
+  String get _title {
+    final page = _pageTitles[widget.location];
+    return page == null ? _appTitle : '$_appTitle · $page';
   }
 
   int get _navIndex {
@@ -92,28 +110,34 @@ class _AppShellState extends State<AppShell> {
       ),
     );
 
-    return Scaffold(
-      body: Column(
-        children: [
-          const SafeArea(bottom: false, child: SiteHeader()),
-          Expanded(
-            child: Row(
-              children: [
-                if (wide) const AppSidebar(),
-                Expanded(
-                  child: Column(
-                    children: [
-                      Expanded(child: content),
-                      if (_footerVisible) const SiteFooter(),
-                    ],
+    return Title(
+      title: _title,
+      color: context.palette.primary,
+      child: Scaffold(
+        body: Column(
+          children: [
+            const SafeArea(bottom: false, child: SiteHeader()),
+            Expanded(
+              child: Row(
+                children: [
+                  if (wide) const AppSidebar(),
+                  Expanded(
+                    child: Column(
+                      children: [
+                        Expanded(child: content),
+                        if (_footerVisible) const SiteFooter(),
+                      ],
+                    ),
                   ),
-                ),
-              ],
+                ],
+              ),
             ),
-          ),
-        ],
+          ],
+        ),
+        bottomNavigationBar: wide
+            ? null
+            : AppBottomNav(currentIndex: _navIndex),
       ),
-      bottomNavigationBar: wide ? null : AppBottomNav(currentIndex: _navIndex),
     );
   }
 }

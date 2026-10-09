@@ -65,30 +65,27 @@ class _PolicyScreenState extends State<PolicyScreen> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Title(
-      title: 'NITKSAA Events · ${widget.policy.title}',
-      color: p.primary,
-      child: SitePage(
-        title: widget.policy.title,
-        subtitle: widget.policy.subtitle,
-        child: FutureBuilder<String>(
-          future: _text,
-          builder: (context, snapshot) {
-            if (snapshot.hasError) {
-              return Text(
-                'This page could not be loaded. Please try again later.',
-                style: TextStyle(color: p.error),
-              );
-            }
-            if (!snapshot.hasData) {
-              return const Padding(
-                padding: EdgeInsets.symmetric(vertical: 40),
-                child: Center(child: CircularProgressIndicator()),
-              );
-            }
-            return SimpleMarkdown(snapshot.data!);
-          },
-        ),
+    // The browser tab title is set by the app shell.
+    return SitePage(
+      title: widget.policy.title,
+      subtitle: widget.policy.subtitle,
+      child: FutureBuilder<String>(
+        future: _text,
+        builder: (context, snapshot) {
+          if (snapshot.hasError) {
+            return Text(
+              'This page could not be loaded. Please try again later.',
+              style: TextStyle(color: p.error),
+            );
+          }
+          if (!snapshot.hasData) {
+            return const Padding(
+              padding: EdgeInsets.symmetric(vertical: 40),
+              child: Center(child: CircularProgressIndicator()),
+            );
+          }
+          return SimpleMarkdown(snapshot.data!);
+        },
       ),
     );
   }
