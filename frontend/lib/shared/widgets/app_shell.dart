@@ -35,8 +35,12 @@ class _AppShellState extends State<AppShell> {
   static const double _showWithin = 1;
   static const double _hideBeyond = 200;
 
-  bool _onMetrics(ScrollMetrics m) {
+  bool _onMetrics(ScrollMetrics m, BuildContext? source) {
     if (m.axis != Axis.vertical) return false;
+    // Ignore the outgoing page while a route transition runs.
+    if (source != null && !(ModalRoute.of(source)?.isCurrent ?? true)) {
+      return false;
+    }
     final after = m.extentAfter;
     final visible =
         _footerVisible ? after <= _hideBeyond : after <= _showWithin;
@@ -76,9 +80,9 @@ class _AppShellState extends State<AppShell> {
     final wide = MediaQuery.sizeOf(context).width >= AppShell.menuBreakpoint;
 
     final content = NotificationListener<ScrollMetricsNotification>(
-      onNotification: (n) => _onMetrics(n.metrics),
+      onNotification: (n) => _onMetrics(n.metrics, n.context),
       child: NotificationListener<ScrollNotification>(
-        onNotification: (n) => _onMetrics(n.metrics),
+        onNotification: (n) => _onMetrics(n.metrics, n.context),
         // The header already handles the top inset.
         child: MediaQuery.removePadding(
           context: context,
