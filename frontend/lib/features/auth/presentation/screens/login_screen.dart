@@ -13,6 +13,8 @@ import 'package:event_app/widgets/material/app_primary_button.dart';
 
 
 import 'package:event_app/theme/app_palette.dart';
+import 'package:event_app/theme/app_text_styles.dart';
+import 'package:event_app/shared/widgets/emblem_ring.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -107,8 +109,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: _LoginCard(
                 children: _buildFormChildren(colorScheme, textTheme, false),
               ),
             ),
@@ -132,8 +133,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: _LoginCard(
                 children: _buildFormChildren(null, null, true),
               ),
             ),
@@ -145,14 +145,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   // Shared form widgets for both platforms
   List<Widget> _buildFormChildren(ColorScheme? colorScheme, TextTheme? textTheme, bool isCupertino) {
-    final logo = Text(
-      'NITKSAA',
-      style: TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-        color: isCupertino ? context.palette.textPrimary : colorScheme?.primary,
-      ),
-      textAlign: TextAlign.center,
+    final logo = Column(
+      children: [
+        const EmblemRing(size: 72),
+        const SizedBox(height: 16),
+        Text(
+          'Sign in',
+          style: AppTextStyles.headlineMedium.copyWith(color: context.palette.textPrimary),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'NITKSAA Events',
+          style: AppTextStyles.bodyMedium.copyWith(color: context.palette.textSecondary),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
     final emailField = isCupertino
         ? CupertinoTextField(
@@ -231,9 +239,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             label: Text(_googleLoading ? 'Validating...' : 'Continue with Google'),
           );
     return [
-      const SizedBox(height: 20),
       logo,
-      const SizedBox(height: 20),
+      const SizedBox(height: 28),
       googleButton,
       const SizedBox(height: 16),
       divider,
@@ -247,7 +254,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: 16),
       ],
       loginButton,
-      const SizedBox(height: 40),
+      const SizedBox(height: 24),
       Center(
         child: Text(
           'NITKSAA Event v1.0.0',
@@ -287,3 +294,27 @@ class _LoginStatusBanner extends StatelessWidget {
   }
 }
 
+
+/// Website login card: navy panel with a gold-tinted border.
+class _LoginCard extends StatelessWidget {
+  const _LoginCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: p.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+}
