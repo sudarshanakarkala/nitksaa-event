@@ -12,6 +12,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
@@ -317,7 +318,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                     const SizedBox(height: 16),
                     const Text(
                       'Admin access required',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -360,9 +361,9 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                         const Text(
                           'Manage Events',
                           style: TextStyle(
-                            fontFamily: 'CrimsonPro',
+                            fontFamily: AppTextStyles.serif,
                             fontSize: 26,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         Wrap(
@@ -3136,9 +3137,9 @@ class _Sidebar extends StatelessWidget {
               Text(
                 'NITKSAA',
                 style: TextStyle(
-                  fontFamily: 'CrimsonPro',
+                  fontFamily: AppTextStyles.serif,
                   fontSize: 20,
-                  fontWeight: FontWeight.bold,
+                  fontWeight: FontWeight.w600,
                   color: context.palette.primary,
                 ),
               ),
