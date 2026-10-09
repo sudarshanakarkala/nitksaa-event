@@ -1275,7 +1275,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   return ListView.separated(
                     padding: EdgeInsets.fromLTRB(side, 24, side, 24),
                     itemCount: rows,
-                    separatorBuilder: (_, __) => const SizedBox(height: spacing),
+                    separatorBuilder: (_, _) => const SizedBox(height: spacing),
                     itemBuilder: (context, row) {
                       return IntrinsicHeight(
                         child: Row(
