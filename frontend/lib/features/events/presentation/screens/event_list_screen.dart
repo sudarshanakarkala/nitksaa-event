@@ -7,6 +7,8 @@ import 'package:go_router/go_router.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
+import '../../../../shared/widgets/list_page.dart';
+import '../../../../shared/widgets/segment_toggle.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
 import '../../domain/event.dart';
@@ -96,7 +98,13 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  Widget _buildFilterPanel([WidgetRef? panelRef]) {
+  /// Filter section label, website rail style: small gold uppercase.
+  Widget _filterLabel(String text) => Text(
+        text.toUpperCase(),
+        style: AppTextStyles.eyebrow.copyWith(color: context.palette.primary),
+      );
+
+  Widget _buildFilterPanel([WidgetRef? panelRef, bool inRail = false]) {
     final rf = panelRef ?? ref;
     final state = rf.watch(eventsProvider);
     final hasActiveFilters = state.dateRangeStart != null ||
@@ -112,7 +120,24 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (with clear & close actions)
+          // Header (with clear & close actions). The rail has its own title.
+          if (inRail && hasActiveFilters)
+            Align(
+              alignment: Alignment.centerLeft,
+              child: TextButton.icon(
+                onPressed: () {
+                  rf.read(eventsProvider.notifier).clearFilters();
+                  _searchController.clear();
+                },
+                icon: const Icon(Icons.clear_all, size: 18),
+                label: const Text('Clear All'),
+                style: TextButton.styleFrom(
+                  foregroundColor: context.palette.warning,
+                  padding: EdgeInsets.zero,
+                ),
+              ),
+            ),
+          if (!inRail)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
@@ -154,13 +179,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ),
             ],
           ),
-          const SizedBox(height: 20),
+          SizedBox(height: inRail ? 8 : 20),
 
           // Date Range Section
-          const Text(
-            'Date Range',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          _filterLabel('Date Range'),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -217,19 +239,13 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 20),
 
           // Timeline Section (single-select dropdown)
-          const Text(
-            'Timeline',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          _filterLabel('Timeline'),
           const SizedBox(height: 8),
           _buildTimelineDropdown(rf, state, isInDrawer),
           const SizedBox(height: 20),
 
           // Event Mode Section (checkbox style)
-          const Text(
-            'Event Mode',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          _filterLabel('Event Mode'),
           const SizedBox(height: 8),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
@@ -262,10 +278,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 20),
 
           // Registration Status Section (checkbox style)
-          const Text(
-            'Registration Status',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          _filterLabel('Registration Status'),
           const SizedBox(height: 8),
           CheckboxListTile(
             contentPadding: EdgeInsets.zero,
@@ -1168,191 +1181,72 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     final filteredEvents = ref.watch(filteredEventsProvider);
     final auth = ref.watch(authControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
+    final p = context.palette;
+    final side = ListPage.sidePadding(context);
 
-    // Web / Desktop styling rules
-    final isWebScreen = MediaQuery.of(context).size.width >= 900;
-
-    final bodyContent = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Web / Mobile Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'NITKSAA Events',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.serif,
-                  fontSize: 24,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-              if (isWebScreen)
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 250,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.search),
-                          hintText: 'Search events…',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: colorScheme.outlineVariant,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: colorScheme.outlineVariant.withOpacity(0.5),
-                            ),
-                          ),
-                          filled: true,
-                          fillColor: context.palette.surfaceSubtle,
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.tune, size: 18),
-                      label: const Text('Filters'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: colorScheme.outlineVariant,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: _showFilterBottomSheet,
-                    ),
-                  ],
-                )
-              else if (!isWebScreen)
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.tune),
-                      tooltip: 'Filters',
-                      onPressed: _showFilterBottomSheet,
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        auth.isAuthenticated
-                            ? Icons.logout_outlined
-                            : Icons.login_outlined,
-                      ),
-                      onPressed: _handleAuthAction,
-                    ),
-                  ],
-                ),
-            ],
+    // Website page frame: filter rail, toolbar, then the card grid.
+    return Scaffold(
+      key: _scaffoldKey,
+      body: ListPage(
+        title: 'Events',
+        subtitle: 'Reunions, talks and meetups of the NITK Surathkal Alumni Association.',
+        search: SizedBox(
+          height: 44,
+          child: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search, size: 20),
+              hintText: 'Search events…',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
           ),
         ),
-
-        // Tabs Row (for web only below header)
-        if (isWebScreen)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: TabBar(
-              isScrollable: false,
-              labelColor: context.palette.primary,
-              unselectedLabelColor: colorScheme.onSurfaceVariant,
-              indicatorColor: context.palette.primary,
-              indicatorWeight: 3,
-              tabs: const [
-                Tab(text: 'Upcoming'),
-                Tab(text: 'Past'),
-              ],
-              onTap: (index) {
-                ref
-                    .read(eventsProvider.notifier)
-                    .setPeriod(index == 0 ? 'upcoming' : 'past');
-              },
-            ),
-          ),
-
-        // Mobile Search + Tab Row
-        if (!isWebScreen)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final searchWidget = SizedBox(
-                  width: double.infinity,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: 'Search events…',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                );
-
-                final filterTabs = TabBar(
-                  isScrollable: true,
-                  labelColor: context.palette.primary,
-                  unselectedLabelColor: colorScheme.onSurfaceVariant,
-                  indicatorColor: context.palette.primary,
-                  tabs: const [
-                    Tab(text: 'Upcoming'),
-                    Tab(text: 'Past'),
-                  ],
-                  onTap: (index) {
-                    ref
-                        .read(eventsProvider.notifier)
-                        .setPeriod(index == 0 ? 'upcoming' : 'past');
-                  },
-                );
-
-                return Column(
+        toggle: SegmentToggle<String>(
+          options: const [
+            SegmentOption('upcoming', 'Upcoming'),
+            SegmentOption('past', 'Past'),
+          ],
+          selected: state.period,
+          onChanged: (period) =>
+              ref.read(eventsProvider.notifier).setPeriod(period),
+        ),
+        count: state.isLoading
+            ? null
+            : Text.rich(
+                TextSpan(
                   children: [
-                    searchWidget,
-                    const SizedBox(height: 8),
-                    filterTabs,
+                    TextSpan(
+                      text: '${filteredEvents.length}',
+                      style: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
+                    ),
+                    TextSpan(text: filteredEvents.length == 1 ? ' event' : ' events'),
                   ],
-                );
-              },
-            ),
-          ),
-
-        const SizedBox(height: 16),
-
-        // List Grid area
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: state.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : state.errorMessage != null
-                ? _buildMaterialErrorState(state.errorMessage!)
-                : filteredEvents.isEmpty
-                ? _buildMaterialEmptyState()
-                : GridView.builder(
+                ),
+                style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+              ),
+        filters: (context) => _buildFilterPanel(ref, true),
+        onOpenFilters: _showFilterBottomSheet,
+        body: state.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : state.errorMessage != null
+            ? _buildMaterialErrorState(state.errorMessage!)
+            : filteredEvents.isEmpty
+            ? _buildMaterialEmptyState()
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  // As many ~320px columns as fit, up to four (website grid).
+                  const spacing = 20.0;
+                  final usable = constraints.maxWidth - side * 2;
+                  final columns =
+                      ((usable + spacing) / (320 + spacing)).floor().clamp(1, 4);
+                  return GridView.builder(
+                    padding: EdgeInsets.fromLTRB(side, 24, side, 24),
                     gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: isWebScreen ? 2 : 1,
-                      crossAxisSpacing: 20,
-                      mainAxisSpacing: 20,
+                      crossAxisCount: columns,
+                      crossAxisSpacing: spacing,
+                      mainAxisSpacing: spacing,
                       mainAxisExtent: 420,
                     ),
                     itemCount: filteredEvents.length,
@@ -1364,97 +1258,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         isAdmin: auth.session?.userType.toLowerCase() == 'admin',
                       );
                     },
-                  ),
-          ),
-        ),
-      ],
-    );
-
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        key: _scaffoldKey,
-        endDrawer: isWebScreen
-            ? Drawer(
-                child: Consumer(
-                  builder: (context, drawerRef, _) => SafeArea(
-                    child: Container(
-                      width: 420,
-                      padding: const EdgeInsets.all(20.0),
-                      child: _buildFilterPanel(drawerRef),
-                    ),
-                  ),
-                ),
-              )
-            : null,
-        drawer: (!isWebScreen && auth.isAuthenticated)
-            ? Drawer(
-                child: ListView(
-                  children: [
-                    UserAccountsDrawerHeader(
-                      decoration: BoxDecoration(color: context.palette.surface),
-                      currentAccountPicture: CircleAvatar(
-                        backgroundColor: context.palette.primary,
-                        child: Text(
-                          (auth.session?.fullname ?? 'U')
-                              .substring(0, 1)
-                              .toUpperCase(),
-                          style: TextStyle(
-                            color: context.palette.onPrimary,
-                            fontSize: 24,
-                          ),
-                        ),
-                      ),
-                      accountName: Text(
-                        auth.session?.fullname ?? 'Alumni User',
-                        style: TextStyle(color: context.palette.textPrimary),
-                      ),
-                      accountEmail: Text(
-                        auth.session?.email ?? '',
-                        style: TextStyle(color: context.palette.textSecondary),
-                      ),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.calendar_month),
-                      title: const Text('Events'),
-                      selected: true,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.bookmark_border),
-                      title: const Text('My Events'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('My Events coming soon.'),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.admin_panel_settings_outlined),
-                      title: const Text('Manage Events'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.go(AppRoutes.manageEvents);
-                      },
-                    ),
-                  ],
-                ),
-              )
-            : null,
-        body: SafeArea(
-          child: Row(
-            children: [
-              Expanded(child: bodyContent),
-            ],
-          ),
-        ),
+                  );
+                },
+              ),
       ),
     );
   }
-
 
   Widget _buildMaterialEventCard(AppEvent event, bool isDark, ThemeData theme, {required bool isAdmin}) {
     final isPhysical = !event.isVirtual;
