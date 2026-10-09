@@ -24,6 +24,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Cards / Table view (website ViewToggle) and table sort.
+  String _view = 'cards';
+  int _sortColumn = 1; // Date
+  bool _sortAsc = true;
+
   @override
   void initState() {
     super.initState();
@@ -139,6 +144,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
 
   /// Active filters, for the rail badge (search is not counted).
   int _activeFilterCount(EventsState s) => [
+        s.period == 'past',
         s.dateRangeStart != null || s.dateRangeEnd != null,
         s.timeline != null,
         !((s.filterModes['physical'] ?? true) && (s.filterModes['virtual'] ?? true)),
@@ -178,6 +184,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     TextButton(
                       onPressed: () {
                         rf.read(eventsProvider.notifier).clearFilters();
+                        rf.read(eventsProvider.notifier).setPeriod('upcoming');
                         _searchController.clear();
                         if (isInDrawer) {
                           // keep drawer open so user can see cleared state
@@ -206,6 +213,19 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ],
           ),
           SizedBox(height: inRail ? 8 : 20),
+
+          // When: upcoming or past (single choice; was the page tabs).
+          _filterLabel('When'),
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final period in const ['upcoming', 'past'])
+              _filterChip(
+                period == 'upcoming' ? 'Upcoming' : 'Past',
+                state.period == period,
+                (_) => rf.read(eventsProvider.notifier).setPeriod(period),
+              ),
+          ]),
+          const SizedBox(height: 20),
 
           // Date Range Section
           _filterLabel('Date Range'),
@@ -1221,15 +1241,17 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ),
           ),
         ),
-        toggle: SegmentToggle<String>(
-          options: const [
-            SegmentOption('upcoming', 'Upcoming'),
-            SegmentOption('past', 'Past'),
-          ],
-          selected: state.period,
-          onChanged: (period) =>
-              ref.read(eventsProvider.notifier).setPeriod(period),
-        ),
+        // Cards / Table, like the website; phones get cards only.
+        toggle: MediaQuery.sizeOf(context).width < 600
+            ? null
+            : SegmentToggle<String>(
+                options: const [
+                  SegmentOption('cards', 'Cards', icon: Icons.grid_view),
+                  SegmentOption('table', 'Table', icon: Icons.table_rows_outlined),
+                ],
+                selected: _view,
+                onChanged: (view) => setState(() => _view = view),
+              ),
         count: state.isLoading
             ? null
             : Text.rich(
@@ -1249,6 +1271,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         activeFilterCount: _activeFilterCount(state),
         onClearFilters: () {
           ref.read(eventsProvider.notifier).clearFilters();
+          ref.read(eventsProvider.notifier).setPeriod('upcoming');
           _searchController.clear();
         },
         resultNote: state.isLoading
@@ -1260,6 +1283,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ? _buildMaterialErrorState(state.errorMessage!)
             : filteredEvents.isEmpty
             ? _buildMaterialEmptyState()
+            : _view == 'table' && MediaQuery.sizeOf(context).width >= 600
+            ? _buildEventTable(filteredEvents, side)
             : LayoutBuilder(
                 builder: (context, constraints) {
                   // As many ~320px columns as fit, up to four (website grid).
@@ -1301,6 +1326,103 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   );
                 },
               ),
+      ),
+    );
+  }
+
+  /// Table view (website ViewToggle "Table"): sortable columns, a row
+  /// opens the event.
+  Widget _buildEventTable(List<AppEvent> events, double side) {
+    final p = context.palette;
+    int compare(AppEvent a, AppEvent b) {
+      switch (_sortColumn) {
+        case 0:
+          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        case 3:
+          return a.isVirtual.toString().compareTo(b.isVirtual.toString());
+        case 5:
+          return a.registrationStatus.compareTo(b.registrationStatus);
+        default:
+          return a.startDatetime.compareTo(b.startDatetime);
+      }
+    }
+
+    final rows = [...events]
+      ..sort((a, b) => _sortAsc ? compare(a, b) : compare(b, a));
+    void onSort(int column, bool ascending) => setState(() {
+          _sortColumn = column;
+          _sortAsc = ascending;
+        });
+    final cellStyle = AppTextStyles.bodySmall.copyWith(color: p.textSecondary);
+
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(side, 24, side, 24),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth - side * 2),
+            child: Container(
+              decoration: BoxDecoration(
+                color: p.card,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: p.border),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: DataTable(
+                sortColumnIndex: _sortColumn,
+                sortAscending: _sortAsc,
+                showCheckboxColumn: false,
+                headingRowColor: WidgetStateProperty.all(p.surfaceSubtle),
+                headingTextStyle: AppTextStyles.labelMedium.copyWith(
+                  color: p.primary.withValues(alpha: 0.8),
+                ),
+                dividerThickness: 1,
+                columns: [
+                  DataColumn(label: const Text('TITLE'), onSort: onSort),
+                  DataColumn(label: const Text('DATE'), onSort: onSort),
+                  const DataColumn(label: Text('TIME')),
+                  DataColumn(label: const Text('MODE'), onSort: onSort),
+                  const DataColumn(label: Text('LOCATION')),
+                  DataColumn(label: const Text('REGISTRATION'), onSort: onSort),
+                ],
+                rows: [
+                  for (final event in rows)
+                    DataRow(
+                      onSelectChanged: (_) => context.push('/events/${event.eventId}'),
+                      cells: [
+                        DataCell(Text(
+                          event.title,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: p.textPrimary,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )),
+                        DataCell(Text(_formatDate(event.startDatetime), style: cellStyle)),
+                        DataCell(Text(
+                          _formatTime(event.startDatetime, event.endDatetime),
+                          style: cellStyle,
+                        )),
+                        DataCell(Text(event.isVirtual ? 'Virtual' : 'Physical', style: cellStyle)),
+                        DataCell(Text(
+                          event.locationText ?? (event.isVirtual ? 'Online' : 'TBD'),
+                          style: cellStyle,
+                          overflow: TextOverflow.ellipsis,
+                        )),
+                        DataCell(Text(
+                          event.registrationStatus == 'open' ? 'Open' : 'Closed',
+                          style: cellStyle.copyWith(
+                            color: event.registrationStatus == 'open' ? p.success : p.error,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        )),
+                      ],
+                    ),
+                ],
+              ),
+            ),
+          ),
+        ),
       ),
     );
   }
