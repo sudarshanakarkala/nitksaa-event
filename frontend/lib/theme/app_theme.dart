@@ -1,3 +1,4 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 
 import 'app_palette.dart';
@@ -139,6 +140,41 @@ abstract class AppTheme {
       colorScheme: scheme,
       fontFamily: AppTextStyles.sans,
       textTheme: textTheme,
+      // iOS layouts (also used by Safari on iPhone) default to Apple's system
+      // font, which web builds don't have; use the website fonts there too.
+      cupertinoOverrideTheme: CupertinoThemeData(
+        primaryColor: p.primary,
+        textTheme: CupertinoTextThemeData(
+          primaryColor: p.primary,
+          textStyle: TextStyle(
+            fontFamily: AppTextStyles.sans,
+            fontSize: 17,
+            color: p.textPrimary,
+          ),
+          actionTextStyle: TextStyle(
+            fontFamily: AppTextStyles.sans,
+            fontSize: 17,
+            color: p.primary,
+          ),
+          navTitleTextStyle: TextStyle(
+            fontFamily: AppTextStyles.sans,
+            fontSize: 17,
+            fontWeight: FontWeight.w600,
+            color: p.textPrimary,
+          ),
+          navLargeTitleTextStyle: TextStyle(
+            fontFamily: AppTextStyles.serif,
+            fontSize: 34,
+            fontWeight: FontWeight.w600,
+            color: p.textPrimary,
+          ),
+          tabLabelTextStyle: TextStyle(
+            fontFamily: AppTextStyles.sans,
+            fontSize: 10,
+            color: p.textMuted,
+          ),
+        ),
+      ),
       scaffoldBackgroundColor: p.background,
       canvasColor: p.background,
       dividerColor: p.border,
