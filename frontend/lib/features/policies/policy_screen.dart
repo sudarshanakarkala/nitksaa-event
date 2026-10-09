@@ -10,7 +10,7 @@ import '../../theme/app_palette.dart';
 enum Policy {
   privacy(
     title: 'Privacy & Cookie Policy',
-    subtitle: 'How we collect, use, and protect your information.',
+    subtitle: null,
     asset: 'assets/policies/Privacy_and_Cookie_Policy.md',
   ),
   terms(
