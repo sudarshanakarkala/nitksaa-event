@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart' show PointerDeviceKind;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -77,10 +78,17 @@ class SiteFooter extends StatelessWidget {
                       colors: [Colors.white, Colors.white, Colors.transparent],
                       stops: [0, 0.85, 1],
                     ).createShader(bounds),
-                    child: SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      padding: const EdgeInsets.only(right: 48),
-                      child: row([...linkItems, copy]),
+                    // Flutter web scrolls sideways only by touch/trackpad;
+                    // allow mouse dragging too (laptops, Surface).
+                    child: ScrollConfiguration(
+                      behavior: ScrollConfiguration.of(context).copyWith(
+                        dragDevices: PointerDeviceKind.values.toSet(),
+                      ),
+                      child: SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        padding: const EdgeInsets.only(right: 48),
+                        child: row([...linkItems, copy]),
+                      ),
                     ),
                   )
                 : Row(
