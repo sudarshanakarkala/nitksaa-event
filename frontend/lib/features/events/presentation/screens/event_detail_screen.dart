@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
@@ -169,7 +170,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     const SizedBox(height: 16),
                     Text(
                       event.title,
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
+                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600, color: textPrimary),
                     ),
                     if (event.tagline != null) ...[
                       const SizedBox(height: 4),
@@ -519,7 +520,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 const SizedBox(height: 16),
                 Text(
                   event.title,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600),
                 ),
                 if (event.tagline != null) ...[
                   const SizedBox(height: 4),
@@ -1416,7 +1417,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       children: [
                         const Text(
                           'Register for Event',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 20, fontWeight: FontWeight.w600),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -1586,8 +1587,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         Text(
           event.title,
           style: TextStyle(
+            fontFamily: AppTextStyles.serif,
             fontSize: 18,
-            fontWeight: FontWeight.bold,
+            fontWeight: FontWeight.w600,
             color: context.palette.textPrimary,
           ),
         ),
@@ -1926,7 +1928,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   children: [
                     const Text(
                       'Your Event Badge',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
