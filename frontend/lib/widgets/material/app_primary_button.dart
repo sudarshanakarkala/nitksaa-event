@@ -42,7 +42,7 @@ class AppPrimaryButton extends StatelessWidget {
                 child: CircularProgressIndicator(strokeWidth: 2, valueColor: AlwaysStoppedAnimation<Color>(onBackgroundColor)),
               )
             : DefaultTextStyle(
-                style: AppTextStyles.labelLarge,
+                style: AppTextStyles.labelLarge.copyWith(color: onBackgroundColor),
                 child: child,
               ),
       ),
