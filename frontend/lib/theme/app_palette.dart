@@ -68,6 +68,11 @@ class AppPalette extends ThemeExtension<AppPalette> {
   final Color error;
   final Color info;
 
+  /// [tone] (e.g. [success], [error]) blended over [surface]. For snackbars
+  /// and banners, so [textPrimary] stays readable on top in both themes.
+  Color tinted(Color tone, [double alpha = 0.22]) =>
+      Color.alphaBlend(tone.withValues(alpha: alpha), surface);
+
   static const dark = AppPalette(
     canvas: AppColors.darkCanvas,
     background: AppColors.darkBackground,
