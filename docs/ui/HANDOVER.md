@@ -111,18 +111,24 @@ The rules were: visual and structural changes only, checkout colours only, and n
 ## 4. Pending
 
 ### Blocked on Sudarshana (do together)
-1. **Signed-in deep test:**
+1. **Decide on Unregister (ISSUE-004/005) before merging:**
+   - Unregister on event cards (and on the existing My Events page) calls `myEventsProvider.cancelRegistration`, which uses `DELETE /api/v1/events/{id}/my-registration`.
+   - ISSUE-004 (remediation plan) says that endpoint doesn't exist: production returns HTTP 405. The correct call is `POST /api/v1/registrations/{registration_id}/cancel`, which also starts the refund (ISSUE-005).
+   - So Unregister most likely fails on every event. If it ever succeeded on a paid event, it would cancel without a refund.
+   - This existed on My Events already; this PR adds a second, more visible place to hit it.
+   - **Options:** hide Unregister on all cards, or only on paid events, until his ISSUE-004/005 fix lands.
+2. **Signed-in deep test:**
    - event detail (banners, Register, QR badge);
    - "Registered by me", own-card tint and **Unregister**;
    - account menu → My Events;
    - checkout with a **₹1 test payment**.
-2. **Admin flows:**
+3. **Admin flows:**
    - Manage Events and Create Event (the form should open straight away);
    - Registrations page;
    - the phone "⋯" menu.
-3. **Event card bug:** the known `RenderBox was not laid out` error on event cards in release builds. It's his to fix; check whether the new row layout changed it.
-4. **Cupertino code:** decide whether to delete the iOS layouts now that web never uses them.
-5. **"Registered by me" data:** it combines the public list with your registrations, so a registration whose event isn't in the public list (cancelled or unpublished) won't show. Confirm whether that can happen. `/my-events` is kept until then.
+4. **Event card bug:** the known `RenderBox was not laid out` error on event cards in release builds. It's his to fix; check whether the new row layout changed it.
+5. **Cupertino code:** decide whether to delete the iOS layouts now that web never uses them.
+6. **"Registered by me" data:** it combines the public list with your registrations, so a registration whose event isn't in the public list (cancelled or unpublished) won't show. Confirm whether that can happen. `/my-events` is kept until then.
 
 ### Next UI round (after Sudarshana's review and fixes)
 1. **Event card redesign:**
@@ -131,7 +137,11 @@ The rules were: visual and structural changes only, checkout colours only, and n
    - capacity bar for admins.
 2. **The same `ListPage` frame and card on My Events and Manage Events.**
 3. **NITiKa** in the right-rail slot.
-4. Remove the `/my-events` fallback once item 5 above is confirmed.
+4. Remove the `/my-events` fallback once item 6 above is confirmed.
+
+### Review notes (minor, from the PR review)
+- **`/manage-events?new=1`** opens the Create form on arrival. A refresh, or Back then Forward, reopens it. Optional fix: drop `?new=1` from the URL once the form opens.
+- **Extra API call:** when signed in, the Events page now also loads `myEventsProvider` (your registrations), so there's one extra API call per visit. It reuses the provider fixed in ISSUE-001, but that data now shows on a second page.
 
 ### Smoke-test items already passed (re-run after the merge)
 - **Header and nav:** pills, menu drawer below 900px, theme toggle that survives a refresh, account menu.
