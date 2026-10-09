@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../theme/app_palette.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
@@ -46,7 +47,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                Icon(Icons.error_outline, size: 48, color: context.palette.error),
                 const SizedBox(height: 16),
                 Text(
                   'Failed to load event details:\n${state.errorMessage}',
@@ -79,8 +80,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Checkout'),
-        backgroundColor: isDark ? const Color(0xFF0D1B3E) : Colors.white,
-        foregroundColor: isDark ? Colors.white : const Color(0xFF0D1B3E),
+        backgroundColor: context.palette.background,
+        foregroundColor: context.palette.textPrimary,
         elevation: 0,
         leading: IconButton(
           icon: const Icon(Icons.arrow_back),
@@ -154,18 +155,18 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Fee Summary',
           style: TextStyle(
             fontSize: 16,
             fontWeight: FontWeight.bold,
-            color: Color(0xFFC9952A),
+            color: context.palette.primary,
           ),
         ),
         const SizedBox(height: 12),
         Container(
           decoration: BoxDecoration(
-            border: Border.all(color: Colors.grey.shade300),
+            border: Border.all(color: context.palette.border),
             borderRadius: BorderRadius.circular(8),
           ),
           child: ClipRRect(
@@ -182,13 +183,13 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
                   },
                   border: TableBorder(
                     horizontalInside:
-                        BorderSide(color: Colors.grey.shade200, width: 1),
+                        BorderSide(color: context.palette.border, width: 1),
                   ),
                   defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   children: [
                     TableRow(
                       decoration: BoxDecoration(
-                        color: const Color(0xFFC9952A).withValues(alpha: 0.08),
+                        color: context.palette.primary.withValues(alpha: 0.08),
                       ),
                       children: [
                         _feeTableHeaderCell('Item'),
@@ -231,12 +232,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       width: double.infinity,
       child: ElevatedButton(
         style: ElevatedButton.styleFrom(
-          backgroundColor: const Color(0xFF0D1B3E),
-          foregroundColor: Colors.white,
+          backgroundColor: context.palette.primary,
+          foregroundColor: context.palette.onPrimary,
           padding: const EdgeInsets.symmetric(vertical: 16),
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           disabledBackgroundColor:
-              const Color(0xFF0D1B3E).withValues(alpha: 0.6),
+              context.palette.primary.withValues(alpha: 0.6),
         ),
         onPressed: _isSubmitting ? null : _confirmRegistration,
         child: Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
@@ -375,8 +376,8 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildInfoBox(bool isDark) {
-    final infoBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF3FA);
-    final infoText = isDark ? const Color(0xFF8B9AB8) : const Color(0xFF5A6A8A);
+    final infoBg = context.palette.info.withValues(alpha: 0.08);
+    final infoText = context.palette.textSecondary;
 
     return Container(
       padding: const EdgeInsets.all(12),
@@ -430,7 +431,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           style: TextStyle(
             fontSize: 20,
             fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : const Color(0xFF0D1B3E),
+            color: context.palette.textPrimary,
           ),
         ),
         const SizedBox(height: 6),
@@ -438,7 +439,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           '${_formatDate(event.startDatetime)} · ${_formatTime(event.startDatetime, event.endDatetime)}',
           style: TextStyle(
             fontSize: 12,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+            color: context.palette.textSecondary,
           ),
         ),
         if (event.locationText != null || event.isVirtual) ...[
@@ -447,7 +448,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
             event.locationText ?? (event.isVirtual ? 'Virtual Event' : ''),
             style: TextStyle(
               fontSize: 12,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+              color: context.palette.textSecondary,
             ),
           ),
         ],
