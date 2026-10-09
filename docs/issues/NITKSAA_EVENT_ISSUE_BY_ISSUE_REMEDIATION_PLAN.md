@@ -159,7 +159,7 @@ Later, plan and verify all backend capabilities, including:
 | 3 | Auth | ISSUE-003 Backend auth errors masked | P2 | OPEN | `ISSUE-003_AUTH_ERROR_HANDLING_TEST_REPORT.md` | TBD |
 | 4 | View Events / My Events | ISSUE-011 Duplicate cards / wrong status labels | P2 | OPEN | `ISSUE-011_MY_EVENTS_STATE_TEST_REPORT.md` | TBD |
 | 5 | View Event | ISSUE-013 Alumni eligibility lifecycle/messaging | P1 | OPEN | `ISSUE-013_ALUMNI_ELIGIBILITY_TEST_REPORT.md` | TBD |
-| 6 | Register | ISSUE-006 Unsupported multi-pass quantity | **P0** | OPEN | `ISSUE-006_REGISTRATION_QUANTITY_TEST_REPORT.md` | TBD |
+| 6 | Register | ISSUE-006 Unsupported multi-pass quantity | **P0** | DONE | `ISSUE-006_REGISTRATION_QUANTITY_TEST_REPORT.md` | `8e83a1e` |
 | 7 | Register | ISSUE-019 Form fields discarded / notes in URL | P2 | OPEN | `ISSUE-019_REGISTRATION_FORM_TEST_REPORT.md` | TBD |
 | 8 | Payment | ISSUE-007 Server pricing not used | P1 | OPEN | `ISSUE-007_SERVER_PRICING_TEST_REPORT.md` | TBD |
 | 9 | Payment | ISSUE-008 Cannot resume/retry payment | P1 | OPEN | `ISSUE-008_PAYMENT_RECOVERY_TEST_REPORT.md` | TBD |
@@ -534,7 +534,7 @@ ISSUE-013
 ## ISSUE-006 — Unsupported Multi-Pass Quantity
 
 **Severity:** P0  
-**Status:** OPEN  
+**Status:** DONE  
 **Root area:** frontend/backend contract mismatch
 
 ### Gap
@@ -582,7 +582,7 @@ fix(registration): remove unsupported pass quantity
 ISSUE-006
 ```
 
-**Commit hash:** `TBD`
+**Commit hash:** `8e83a1e`
 
 ---
 

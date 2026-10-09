@@ -6,9 +6,9 @@ P0 — financial expectation / registration contract integrity
 
 ## Status
 
-IN PROGRESS
+DONE
 
-The code fix and the automated verification are complete. The manual browser verification has not been run, the build is not deployed, and the change is not committed. See "Final Status".
+The change is committed as `8e83a1e` and has been live on `https://nitksaa-events.web.app` since 2026-10-08. Automated verification passes. The manual browser verification was run on the deployed build on 2026-10-08 and reported PASS on 2026-10-09. See "Final Status".
 
 ## Product Decision
 
@@ -191,6 +191,30 @@ Manual, on the deployed site, in TEST payment mode only:
 
 ## Final Status
 
-**CODE PASS — MANUAL E2E PENDING. Not committed. Not deployed.**
+**PASS. Committed as `8e83a1e`. Deployed on 2026-10-08.**
 
-Automated tests, the analyzer comparison and the web build pass. The live backend's contract was checked without signing in. The live site still serves the earlier build, which still has the "No of passes" selector. Manual verification needs a deploy and an upcoming paid event with a free seat; on 2026-10-08 there was none. Details are in `ISSUE-006_REGISTRATION_QUANTITY_TEST_REPORT.md`.
+Automated tests, the analyzer comparison and the web build pass, and were run again on 2026-10-09 against `8e83a1e` with the same results. The live backend's contract was checked without signing in. The live site serves a bundle that is byte-for-byte the build of `8e83a1e`, so the "No of passes" selector is no longer live.
+
+Manual verification, on the deployed build:
+
+| Field | Value |
+|---|---|
+| Run | 2026-10-08, 06:01 to 06:05 IST. Results reported on 2026-10-09 |
+| Event | #11, "TestOct8": paid, ₹1 |
+| Payment mode | `test` |
+| Registration ID | 14 |
+| Order ID | `ORD-hH78c5dB7fAY` |
+
+| Check | Result |
+|---|---|
+| "No of passes" absent from the registration form | PASS |
+| Checkout URL has no `quantity` | PASS |
+| `/register` body contains `attendee_note` only, with no `quantity` | PASS |
+| Exactly one registration request | PASS |
+| Exactly one payment order request | PASS |
+| `payment_mode` is `test` | PASS |
+| Razorpay amount equals `checkout.amount_minor / 100` | PASS |
+
+The results were reported as PASS or FAIL, without amounts or screenshots. The IDs and the request counts are confirmed by the server logs, which show one register request, one payment order, one attempt, one verification, and a confirmed registration.
+
+Two limits on this record. The fee shown at checkout was not compared with the Razorpay amount, so ISSUE-007 remains not observed. The manual regression checks for ISSUE-001 and ISSUE-002 were reported PASS, but the server logs show one sign-in on this build, not two accounts. Details are in `ISSUE-006_REGISTRATION_QUANTITY_TEST_REPORT.md`, sections 7 and 14.

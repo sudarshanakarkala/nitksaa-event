@@ -1,10 +1,11 @@
 # ISSUE-006 Registration Quantity Test Report
 
-**Date:** 2026-10-08
+**Date:** 2026-10-08. Updated 2026-10-09 with the closure audit (section 14) and the manual verification results (section 7).
 **Application:** `nitksaa-event/frontend` (NEW Flutter app)
-**Base commit:** `1684f3d` (branch `main`), which contains the ISSUE-001, ISSUE-002 and ISSUE-003 fixes. The ISSUE-006 fix is in the working tree and is not committed.
+**Base commit:** `1684f3d` (branch `main`), which contains the ISSUE-001, ISSUE-002 and ISSUE-003 fixes.
+**Fix commit:** `8e83a1e` (branch `main`)
 **Toolchain:** Flutter 3.44.2, Dart 3.12.2, `dio` 5.9.2, `go_router` 17.2.3, `flutter_riverpod` 2.6.1, Chrome 154 for the browser tests
-**Final result:** CODE PASS — MANUAL E2E PENDING
+**Final result:** PASS
 
 ---
 
@@ -15,7 +16,7 @@
 | ID | ISSUE-006 |
 | Severity | P0 |
 | Area | Registration / Pricing / Payment |
-| Status | Code fix and automated verification complete. Manual browser verification not run. Not deployed. Not committed. |
+| Status | DONE. Committed as `8e83a1e`. Deployed on 2026-10-08. Manual browser verification run on 2026-10-08 and reported PASS on 2026-10-09. |
 
 The app let an attendee choose 1 to 4 passes and showed "Confirm & Pay ₹(price × N)". The backend made one registration, held one seat and charged for one registration.
 
@@ -207,13 +208,48 @@ Other behaviour confirmed and relied on: a second registration by the same atten
 
 ## 7. Manual Verification
 
-**No browser test was run.** Three things are needed first, and none was done in this session:
+**Result: PASS.** One manual run was made on the deployed build, on 2026-10-08 between 06:01 and 06:05 IST. The tester reported its results on 2026-10-09, as PASS or FAIL for each check. No values, screenshots or saved network log were supplied, so the IDs, times and request counts below come from the server logs.
 
-- **A deploy.** The live site, `https://nitksaa-events.web.app`, serves the ISSUE-003 build (`main.dart.js` SHA-256 `0ccf41e1…dcb3`, last modified 2026-10-06). That build contains "No of passes", "Grand Total", "Confirm & Pay" and `quantity=`, so the defect is live. The ISSUE-006 build exists locally (`cc569eb8…c298`). A local run cannot stand in for a deploy, because the production backend's CORS refuses `localhost` origins.
-- **An event to register for.** On 2026-10-08 the live API listed nine events, all paid and none usable: the only upcoming one (#9, "Oct5-Event1", ₹1) has one seat and is full, and the one event still open for registration (#5) ended on 2026-10-04, so the app refuses it. A paid event that is upcoming, open, in TEST payment mode and has a free seat is needed. There is no free event either, for the free-event check.
-- **A signed-in eligible alumni account**, and someone at the Razorpay test modal.
+| Field | Value |
+|---|---|
+| Build tested | `8e83a1e`, live on `https://nitksaa-events.web.app` since 2026-10-08 05:59 IST |
+| Run | 2026-10-08, 06:01 to 06:05 IST |
+| Results reported | 2026-10-09 |
+| Event | #11, "TestOct8": paid, ₹1, capacity 4 |
+| Payment mode | `test`, as reported by the tester |
+| Registration ID | 14 (server log) |
+| Order ID | `ORD-hH78c5dB7fAY` (server log) |
+| Outcome | Paid. One `verify-checkout`, and the registration is confirmed (server log, public API) |
+| Screenshots, network log | None supplied |
 
-After a deploy, hard-reload the tab (Cmd+Shift+R) or use a new Incognito window: every file is served with a one-hour cache.
+### Prerequisites
+
+- **A deploy.** The live site serves `main.dart.js` with SHA-256 `cc569eb8…c298`, last modified 2026-10-08 00:29:12 GMT (05:59 IST). It is byte-for-byte the build of `8e83a1e`, and contains none of "No of passes", "Grand Total", "Confirm & Pay" or `quantity=`. Before that deploy the site served the ISSUE-003 build (`0ccf41e1…dcb3`), which had the selector. A local run cannot stand in for the deployed site, because the production backend's CORS refuses `localhost` origins.
+- **An event to register for.** #11, "TestOct8", was published on 2026-10-08 at 06:03 IST. It is paid (₹1), has a capacity of 4, and is open for registration. There is no free event, so the free-event check was not run by hand.
+- **A signed-in eligible alumni account.** One account was used. Which one is not on record.
+
+### Server-side record of the run
+
+Read on 2026-10-09 from the Cloud Run request logs of `nitksaa-events-api` (a read-only query) and from the public event API. Times are IST on 2026-10-08.
+
+| Time | Request | Status |
+|---|---|---|
+| 06:01:38 | `POST /api/v1/auth/firebase` (sign-in) | 200 |
+| 06:04:03 | `GET /api/v1/events/11/my-registration` (event page opened) | 404, no registration yet |
+| 06:04:42 | `POST /api/v1/events/11/register` | 201 |
+| 06:04:42 | `POST /api/v1/registrations/14/payment-order` | 201 |
+| 06:04:42 | `POST /api/v1/payment-orders/ORD-hH78c5dB7fAY/attempts` | 201 |
+| 06:04:54 to 06:04:55 | `POST /api/v1/payments/webhook`, three times | 200 |
+| 06:05:07 | `POST /api/v1/payment-orders/ORD-hH78c5dB7fAY/verify-checkout` | 200 |
+| 06:05:08 | `GET /api/v1/events/11/my-registration` | 200 |
+
+What this shows:
+
+- One register request, one payment order, one attempt and one verification, in that order.
+- The registration is confirmed. The public API reports `registered_count` 1 for #11, and that figure counts rows in status `registered` only (`backend/app/repositories/events_repository.py:11`).
+- This is the only browser session on the deployed build. Between the deploy and 06:10 IST on 2026-10-09 the attendee site made 47 API requests, preflights excluded. All of them fall between 06:01:19 and 06:05:08 IST on 2026-10-08, and they include one sign-in. The tester's results therefore refer to this run.
+
+What it does not show: the request body, the payment mode, `final_amount`, `checkout.amount_minor`, the amount in the Razorpay modal, anything on screen, or which account was used. The request logs hold none of these. Those points rest on the tester's report.
 
 ### Live checks that were run, without signing in
 
@@ -225,39 +261,57 @@ These are read-only and change no data.
 | Live OpenAPI, "quantity" | 0 occurrences |
 | Live OpenAPI, `PaymentCheckout` | `provider`, `provider_order_id`, `key_id`, `amount_minor`, `currency` |
 | `GET /api/v1/events/public/7` | No quantity fields; `ticket_price` "1.00" |
-| Live `main.dart.js` | Still the ISSUE-003 build, with the pass selector |
+| Live `main.dart.js` | On 2026-10-08, before the deploy: the ISSUE-003 build, with the pass selector. On 2026-10-09: the ISSUE-006 build, `cc569eb8…c298` |
 
 ### Registration UI
 
+In the tables below, "Tester" is the result the tester reported on 2026-10-09.
+
 | Step | Expected | Actual | Result |
 |---|---|---|---|
-| 1. Sign in as an eligible alumni and open an open, upcoming paid event | Event page with "Register" | Not run | NOT RUN — build not deployed; no usable event |
-| 2. Press Register | Form with Badge name, Email, Phone, Notes. No "No of passes" | Not run | NOT RUN |
-| 3. Enter a note and press "Proceed to Checkout" | URL is `/events/{id}/checkout?notes=…`, with no `quantity` | Not run | NOT RUN |
-| 4. Read the checkout page | One row, "Registration Fee". No quantity, passes or "Grand Total". Button reads "Proceed to Payment" | Not run | NOT RUN |
+| 1. Sign in as an eligible alumni and open an open, upcoming paid event (#11) | Event page with "Register" | Server log: sign-in 200 at 06:01:38; event #11 opened at 06:04:03 with no registration | PASS |
+| 2. Press Register | Form with Badge name, Email, Phone, Notes. No "No of passes" and no dropdown | Tester: "No of passes" absent. The dropdown was that control; it was not reported separately | PASS |
+| 3. Enter a note and press "Proceed to Checkout" | URL is `/events/{id}/checkout?notes=…`, with no `quantity` | Tester: the URL has no `quantity` | PASS |
+| 4. Read the checkout page | One row, "Registration Fee". No quantity, passes or "Grand Total". Button reads "Proceed to Payment" | Not reported. The deployed bundle has "Proceed to Payment" once and none of "No of passes", "Grand Total" or "Confirm & Pay"; tests E cover the page | NOT REPORTED |
 
 ### Registration API
 
-Open DevTools → Network before pressing the button.
-
 | Step | Expected | Actual | Result |
 |---|---|---|---|
-| 5. Press "Proceed to Payment" | One `POST /api/v1/events/{id}/register` | Not run | NOT RUN |
-| 6. Read its request body | `{"attendee_note": "…"}` and no `quantity` | Not run | NOT RUN |
-| 7. Read its response | One `registration_id`; `status` is `seat_held` | Not run | NOT RUN |
-| 8. Open My Events | One registration for the event | Not run | NOT RUN |
+| 5. Press "Proceed to Payment" | One `POST /api/v1/events/{id}/register` | Tester: exactly one. Server log: one request, 201 | PASS |
+| 6. Read its request body | `{"attendee_note": "…"}` and no `quantity` | Tester: `attendee_note` only, and no `quantity` key | PASS |
+| 7. Read its response | One `registration_id`; `status` is `seat_held` | Not reported. Server log: registration 14, and a payment order followed | NOT REPORTED |
+| 8. Open My Events | One registration for the event | Not reported. Public API: `registered_count` 1 for #11 | NOT REPORTED |
 
 ### Payment Integrity
 
-TEST payment mode only. Do not use a LIVE payment for this check.
+TEST payment mode only.
 
 | Step | Expected | Actual | Result |
 |---|---|---|---|
-| 9. Read the `/payment-order` response | One request; note `final_amount`; `payment_mode` is `test` | Not run | NOT RUN |
-| 10. Read the `/attempts` response | `checkout.amount_minor` equals `final_amount × 100` | Not run | NOT RUN |
-| 11. Read the amount in the Razorpay modal | Equals `checkout.amount_minor / 100`; the modal shows its Test Mode ribbon | Not run | NOT RUN |
-| 12. Pay with a Razorpay test method, or close the modal | Paid: "Payment successful" and the registration is confirmed. Closed: "Payment cancelled", with one registration and one order | Not run | NOT RUN |
-| 13. Compare the fee on the checkout page with the Razorpay amount | Equal unless the event has GST or a convenience fee. If they differ, record "Observed remaining ISSUE-007 server-pricing display gap"; it is not an ISSUE-006 failure | Not run | NOT RUN |
+| 9. Read the `/payment-order` response | One request, for the `registration_id` from step 7; note `final_amount`; `payment_mode` is `test` | Tester: exactly one request; `payment_mode` is `test`. `final_amount` not reported. Server log: one request, for registration 14, 201 | PASS |
+| 10. Read the `/attempts` response | One request. Note `checkout.amount_minor`, `checkout.currency` and `checkout.provider_order_id`. `amount_minor` equals `final_amount × 100` | Values not reported. Server log: one request, 201 | NOT REPORTED |
+| 11. Read the amount in the Razorpay modal | Equals `checkout.amount_minor / 100`; the modal shows its Test Mode ribbon | Tester: the amount equals `checkout.amount_minor / 100`. The figure and the ribbon were not reported | PASS |
+| 12. Pay with a Razorpay test method, or close the modal | Paid: one `verify-checkout`, "Payment successful", and the registration is confirmed. Closed: "Payment cancelled", with one registration and one order | Not reported by the tester. Server log: paid. Three webhook calls, one `verify-checkout` (200), registration confirmed | PASS |
+| 13. Compare the fee on the checkout page with the Razorpay amount | Equal unless the event has GST or a convenience fee. If they differ, record "ISSUE-006 PASS; ISSUE-007 server pricing gap observed". It is not an ISSUE-006 failure | Not reported | NOT REPORTED |
+
+### Regression (manual)
+
+| Step | Expected | Actual | Result |
+|---|---|---|---|
+| 14. ISSUE-001: as user A open event X, sign out, sign in as user B, open event X | Nothing of A's appears: no registration, badge name, email or phone | Tester: PASS. Not on the server record: the logs show one attendee sign-in since the deploy, so no second account signed in on this build. The sign-ins before it are from 2026-10-06, on the earlier build | REPORTED PASS |
+| 15. ISSUE-002: as user A sign out, then press Google sign-in | The Google account chooser appears and user B can be selected | Tester: PASS. The chooser is drawn by the browser and reaches the server only when the second sign-in completes; none is on record since the deploy | REPORTED PASS |
+| 16. ISSUE-003: sign in with a valid account | Sign-in succeeds, with no error message | Tester: PASS. Server log: one sign-in, 200 | PASS |
+
+### Basis for the result
+
+Every ISSUE-006 check the tester reported is PASS, and each agrees with the server logs where the logs can see it: one registration, one payment order, one attempt, one verification.
+
+Steps 4, 7, 8, 10 and 13 were not reported. Steps 4, 7, 8 and 10 are covered by the automated tests on the same bundle, by the bundle's contents or by the server log. Step 13 is the ISSUE-007 observation, and it was not made: the fee shown at checkout was not compared with the Razorpay amount.
+
+Steps 14 and 15 rest on the tester's report and on the automated ISSUE-001 and ISSUE-002 tests (section 8). The server logs do not show a second account on this build.
+
+No access token, `Authorization` header, Firebase token or Razorpay key is recorded in this report.
 
 ---
 
@@ -352,7 +406,7 @@ Result: succeeded (`✓ Built build/web`, 23.2 s compile).
 | `select_account` | Present once |
 | Production backend URL | Present |
 | SHA-256 | `cc569eb8024bbd808cc816d74f293e11840a5b350487396332332684cbabc298` |
-| Deployed | No |
+| Deployed | Yes, on 2026-10-08 at 05:59 IST. The live file has this SHA-256 |
 
 ---
 
@@ -383,33 +437,73 @@ There is no remaining attendee multi-pass flow. The admin fields were not touche
 
 ## 11. Remaining Risks
 
-1. **The defect is still live.** The deployed site still offers "No of passes" until this build is deployed.
-2. **No browser test has been run.** The real Razorpay modal amount and the on-screen layout of the shorter fee table are covered only by widget tests and a fake Razorpay until the build is deployed and tested.
+1. **The defect is no longer live.** This build was deployed on 2026-10-08, and the deployed site no longer offers "No of passes".
+2. **The manual result is recorded as PASS or FAIL only.** No amounts, screenshots or network log were kept. The wording of the checkout page (step 4) was not reported; it rests on the automated tests and on the contents of the deployed bundle.
 3. **ISSUE-007 server pricing remains pending.** Checkout shows the public `ticket_price` as the fee. With GST or a convenience fee configured, Razorpay will charge more than the fee shown. The paid button no longer states an amount, so the app does not promise a wrong total, but it does not show the right one either.
 4. **ISSUE-008 recovery remains pending.** Closing Razorpay leaves a held seat that the event page shows as registered, with no way back to payment.
 5. **ISSUE-019 form contract remains pending.** Email and phone are still editable and discarded. Notes are still in the URL and not limited to 500 characters; a longer note is refused by the backend with a raw error.
 6. **The admin event form still has quantity limits** that do nothing (ISSUE-015).
 7. **Old links.** A bookmarked or cached `/checkout?quantity=4` link still opens checkout. The parameter is ignored and checkout is for one registration.
 8. **A registration made under the old build** with more than one pass chosen is one registration in the backend. An attendee who did this before the deploy may still expect several passes. Whether any exist can be read from the registration and payment records; the app cannot tell.
-9. **Manual testing needs a usable event.** None exists on the live backend today. Creating one is an admin action and was not done here.
+9. **Manual testing needs a usable event.** #11, "TestOct8", is usable until it ends at 23:59 IST on 2026-10-10. After that a new TEST event is needed. Creating one is an admin action.
 10. **Deploys are invisible to returning browsers for up to an hour** (ISSUE-022). Hard-reload before any manual test.
+11. **The ISSUE-001 and ISSUE-002 manual checks are not on the server record for this build.** They were reported PASS, but the logs show one attendee sign-in since the deploy. Their own reports still read CODE PASS — MANUAL E2E PENDING.
 
 ---
 
 ## 12. Final Result
 
-**CODE PASS — MANUAL E2E PENDING**
+**PASS**
+
+Automated verification passes (sections 5, 9 and 14). The manual verification on the deployed build passes (section 7): run on 2026-10-08 on event #11 in TEST payment mode, registration 14, order `ORD-hH78c5dB7fAY`, reported on 2026-10-09.
 
 ---
 
 ## 13. Commit
 
-Commit hash: none. **Not committed — manual verification pending.**
+Commit hash: `8e83a1e`, on `main`, 2026-10-08 06:07 IST. The manual results were recorded afterwards, in a documentation-only follow-up commit.
 
-Commit message, when it is committed:
+Commit message, as committed:
 
 ```text
-fix(registration): remove unsupported pass quantity
-
-ISSUE-006
+fix(payment) ISSUE-006 — Unsupported Multi-Pass Quantity
 ```
+
+---
+
+## 14. Closure Audit, 2026-10-09
+
+A re-check of the committed fix, run from a clean checkout of `main` at `8e83a1e`. No source file was changed.
+
+### Commit scope
+
+`8e83a1e` changes 16 files: 5 under `frontend/lib/`, 8 under `frontend/test/` and 3 under `docs/issues/`. They are the files listed in section 4, plus a one-line change to the title of `NITKSAA_EVENT_FLUTTER_VERIFICATION_REPORT.md`. Nothing under `backend/` is changed; `git diff 1684f3d 8e83a1e -- backend` is empty.
+
+### Automated results
+
+| Run | Result |
+|---|---|
+| `flutter test` (VM, all) | 110 of 110 |
+| ISSUE-006 tests, VM | 15 of 15 |
+| ISSUE-006 tests, Chrome | 21 of 21 |
+| Auth tests and checkout isolation, Chrome | 85 of 85 |
+| Chrome, total | 106 of 106 |
+| ISSUE-001, VM / Chrome | 18 of 18 / 1 of 1 |
+| ISSUE-002, VM / Chrome | 1 of 1 / 8 of 8 |
+| ISSUE-003, VM / Chrome | 75 of 75 / 76 of 76 |
+| `flutter analyze` | 98 findings: 6 errors, 36 warnings, 56 info |
+| `flutter build web --release` | Succeeded |
+
+No test was skipped. The analyzer was also run on clean exports of `1684f3d` and of `8e83a1e`: 98 findings each, and the two lists are identical when line numbers are ignored. No finding is in an ISSUE-006 test file. The 6 errors are the missing `razorpay_flutter` package (ISSUE-016).
+
+### Build and deploy
+
+The release build of `8e83a1e` has SHA-256 `cc569eb8024bbd808cc816d74f293e11840a5b350487396332332684cbabc298`, the same as the build recorded in section 9. The file served by `https://nitksaa-events.web.app/main.dart.js` is byte-for-byte the same file. The deployed attendee site is therefore the committed fix.
+
+### Source search
+
+The searches of section 10 give the same results. The remaining `quantity` matches under `frontend/lib` are the 6 in `domain/event.dart` and the 18 in `manage_events_screen.dart`, all admin-only.
+
+### Closure
+
+The audit left one thing open: the browser-side checks of section 7. The tester supplied them later on 2026-10-09, and they are recorded there. The final result is PASS, and the remediation plan's ISSUE-006 entry is DONE with commit `8e83a1e`.
