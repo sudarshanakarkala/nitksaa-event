@@ -12,7 +12,7 @@ import 'package:event_app/widgets/material/app_scaffold.dart';
 import 'package:event_app/widgets/material/app_primary_button.dart';
 
 
-import 'package:event_app/theme/app_colors.dart';
+import 'package:event_app/theme/app_palette.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -120,8 +120,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   // ---------------- Cupertino UI (iOS) ----------------
   Widget _buildCupertinoLogin() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppColors.darkBackground : AppColors.lightBackground;
+    final bg = context.palette.background;
     return CupertinoPageScaffold(
       backgroundColor: bg,
       navigationBar: const CupertinoNavigationBar(
@@ -151,7 +150,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       style: TextStyle(
         fontSize: 22,
         fontWeight: FontWeight.bold,
-        color: isCupertino ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black) : colorScheme?.primary,
+        color: isCupertino ? context.palette.textPrimary : colorScheme?.primary,
       ),
       textAlign: TextAlign.center,
     );
@@ -214,10 +213,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
     final googleButton = isCupertino
         ? CupertinoButton(
-            color: Colors.white,
+            color: context.palette.surface,
             onPressed: (_emailLoading || _googleLoading) ? null : _handleGoogleSignIn,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(CupertinoIcons.cloud, color: Colors.black),
+              Icon(CupertinoIcons.cloud, color: context.palette.textPrimary),
               const SizedBox(width: 8),
               Text(_googleLoading ? 'Validating…' : 'Continue with Google')
             ]
