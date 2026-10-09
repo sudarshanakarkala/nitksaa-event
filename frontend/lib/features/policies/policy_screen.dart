@@ -15,7 +15,7 @@ enum Policy {
   ),
   terms(
     title: 'Terms of Use',
-    subtitle: 'The rules and conditions governing use of this platform.',
+    subtitle: null,
     asset: 'assets/policies/Terms_of_Use.md',
   ),
   refund(
