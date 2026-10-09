@@ -8,8 +8,6 @@ import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
 import '../providers/my_events_provider.dart';
-import '../../../../shared/widgets/app_sidebar.dart';
-import '../../../../shared/widgets/app_bottom_nav.dart';
 
 class MyEventsScreen extends ConsumerStatefulWidget {
   const MyEventsScreen({super.key});
@@ -96,7 +94,6 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       body: SafeArea(
         child: Row(
           children: [
-            if (isWebScreen) const AppSidebar(),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -213,7 +210,6 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: const AppBottomNav(currentIndex: 1),
     );
   }
 

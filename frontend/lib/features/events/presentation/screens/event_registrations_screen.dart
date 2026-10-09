@@ -9,7 +9,6 @@ import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
-import '../../../../shared/widgets/app_sidebar.dart';
 
 class EventRegistrationsScreen extends ConsumerStatefulWidget {
   const EventRegistrationsScreen({super.key, required this.eventId});
@@ -344,7 +343,6 @@ class _EventRegistrationsScreenState
       body: SafeArea(
         child: Row(
           children: [
-            if (isWebScreen) const AppSidebar(),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -477,32 +475,6 @@ class _EventRegistrationsScreenState
             ),
           ],
         ),
-      ),
-      bottomNavigationBar: isWebScreen
-          ? null
-          : SafeArea(
-              top: false,
-              child: NavigationBar(
-                selectedIndex: 2,
-                onDestinationSelected: (index) {
-                if (index == 0) context.go(AppRoutes.home);
-                if (index == 1) context.go(AppRoutes.myEvents);
-              },
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.calendar_month),
-                  label: 'Events',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.bookmark),
-                  label: 'My Events',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.admin_panel_settings),
-                  label: 'Manage',
-                ),
-              ],
-            ),
       ),
     );
   }

@@ -15,8 +15,6 @@ import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 import '../../presentation/providers/events_provider.dart';
-import '../../../../shared/widgets/app_sidebar.dart';
-import '../../../../shared/widgets/app_bottom_nav.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
   const ManageEventsScreen({super.key});
@@ -341,7 +339,6 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       body: SafeArea(
         child: Row(
           children: [
-            if (isWebScreen) const AppSidebar(),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -435,7 +432,6 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
           ],
         ),
       ),
-      bottomNavigationBar: const AppBottomNav(currentIndex: 2),
     );
   }
 

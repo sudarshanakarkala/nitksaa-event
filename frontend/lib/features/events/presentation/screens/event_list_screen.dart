@@ -8,8 +8,6 @@ import '../../../../routes/app_routes.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
 import '../../domain/event.dart';
-import '../../../../shared/widgets/app_sidebar.dart';
-import '../../../../shared/widgets/app_bottom_nav.dart';
 
 class EventListScreen extends ConsumerStatefulWidget {
   const EventListScreen({super.key});
@@ -1202,8 +1200,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     // Web / Desktop styling rules
     final isWebScreen = MediaQuery.of(context).size.width >= 900;
 
-    final sidebar = isWebScreen ? const AppSidebar() : null;
-
     final bodyContent = Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1488,14 +1484,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         body: SafeArea(
           child: Row(
             children: [
-              if (sidebar != null) sidebar,
               Expanded(child: bodyContent),
             ],
           ),
-        ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: const AppBottomNav(currentIndex: 0),
         ),
       ),
     );

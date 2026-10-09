@@ -97,7 +97,7 @@ class AppBottomNav extends ConsumerWidget {
     return SafeArea(
       top: false,
       child: NavigationBar(
-        selectedIndex: currentIndex,
+        selectedIndex: currentIndex.clamp(0, destinations.length - 1),
         onDestinationSelected: (index) {
           final route = destinationRoutes[index];
           if (route != GoRouterState.of(context).uri.toString()) {
