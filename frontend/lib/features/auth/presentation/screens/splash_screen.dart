@@ -4,7 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
+import '../../../../shared/widgets/emblem_ring.dart';
 import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../services/auth_controller.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -76,6 +78,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   Text(
                     'NITKSAA',
                     style: TextStyle(
+                      fontFamily: AppTextStyles.serif,
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
                       color: p.primary,
@@ -93,19 +96,7 @@ class _SplashScreenState extends State<SplashScreen> {
                     ),
                   ),
                   const SizedBox(height: 32),
-                  Container(
-                    width: 72,
-                    height: 72,
-                    decoration: BoxDecoration(
-                      color: p.primary.withValues(alpha: 0.15),
-                      borderRadius: BorderRadius.circular(18),
-                    ),
-                    child: Icon(
-                      Icons.calendar_today_outlined,
-                      size: 36,
-                      color: p.primary,
-                    ),
-                  ),
+                  const EmblemRing(size: 80),
                   const SizedBox(height: 32),
                   SizedBox(
                     width: 32,
@@ -146,6 +137,7 @@ class _SplashScreenState extends State<SplashScreen> {
               Text(
                 'NITKSAA',
                 style: TextStyle(
+                  fontFamily: AppTextStyles.serif,
                   fontSize: 30,
                   fontWeight: FontWeight.bold,
                   color: p.primary,
@@ -163,19 +155,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              Container(
-                width: 60,
-                height: 60,
-                decoration: BoxDecoration(
-                  color: p.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(16),
-                ),
-                child: Icon(
-                  Icons.calendar_today_outlined,
-                  size: 32,
-                  color: p.primary,
-                ),
-              ),
+              const EmblemRing(size: 68),
               const SizedBox(height: 28),
               CupertinoActivityIndicator(
                 radius: 13,
@@ -210,6 +190,7 @@ class _SplashScreenState extends State<SplashScreen> {
               Text(
                 'NITKSAA',
                 style: TextStyle(
+                  fontFamily: AppTextStyles.serif,
                   fontSize: 28,
                   fontWeight: FontWeight.w600,
                   color: p.primary,
@@ -225,19 +206,7 @@ class _SplashScreenState extends State<SplashScreen> {
                 ),
               ),
               const SizedBox(height: 28),
-              Container(
-                width: 56,
-                height: 56,
-                decoration: BoxDecoration(
-                  color: p.primary.withValues(alpha: 0.15),
-                  borderRadius: BorderRadius.circular(14),
-                ),
-                child: Icon(
-                  Icons.calendar_today_outlined,
-                  size: 28,
-                  color: p.primary,
-                ),
-              ),
+              const EmblemRing(size: 64),
               const SizedBox(height: 28),
               SizedBox(
                 width: 24,
