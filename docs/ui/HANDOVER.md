@@ -22,8 +22,9 @@ Background and analysis: `docs/ui/website-alignment.md` (on `ui/analysis`).
 | `ui/policies` | `assets/policies/*.md` (Privacy, Terms, Disclaimer copied unchanged from the website; interim generic Refund policy); `PolicyScreen`; built-in `SimpleMarkdown` (no package) |
 | `ui/feedback` | `FeedbackScreen` (website form, same contact), stubbed `POST /api/v1/feedback`; **routes commit** adding `/privacy /terms /refund /disclaimer /feedback`, public in `route_guards.dart` |
 | `ui/beta-preview` | All of the above + `ui/web-shell` + `beta` hosting target in `firebase.json`. **Deployed to beta 9 Oct; works.** |
+| `ui/full-ui` | `ui/beta-preview` + section 3 done: shared app shell, header-only theme toggle, palette colours on every screen, badges/cards restyled, login card and splash, `tool/check_colors.sh`. **Not yet on beta.** |
 
-The branches stack in this order: `theme-tokens` → `header-footer` → `policies` → `feedback` → `beta-preview` (+ `web-shell`).
+The branches stack in this order: `theme-tokens` → `header-footer` → `policies` → `feedback` → `beta-preview` (+ `web-shell`) → `full-ui`.
 
 **Beta:** https://nitksaa-events-beta.web.app. The app uses hash URLs, e.g. `/#/privacy`, `/#/feedback`.
 
@@ -39,7 +40,9 @@ The branches stack in this order: `theme-tokens` → `header-footer` → `polici
 - **NITiKa:** out of scope.
 - **Sudarshana is not coding today.** UI work proceeds on branches and beta. We merge before he continues (see section 5).
 
-## 3. Next session scope (branch `ui/full-ui`, from `ui/beta-preview`)
+## 3. Full UI scope (branch `ui/full-ui`, from `ui/beta-preview`) — done 9 Oct
+
+What was done is summarised in **3a** below. The original brief follows unchanged.
 
 Visual and structural changes only. **No changes to business logic, API calls, providers, repositories, payment services, auth flow, or nav item lists.**
 
@@ -59,7 +62,7 @@ Visual and structural changes only. **No changes to business logic, API calls, p
 3. **Replace hard-coded colours** with `context.palette.*` or `Theme.of(context).colorScheme/textTheme`, one commit per file.
    - Map by meaning: background, card, text primary/secondary/muted, border, primary (gold), success, warning, error, info.
    - Remove local `isDark ? X : Y` colour pairs where the palette already covers them.
-   - Counts as of 9 Oct (`Color(0x…)` or `Colors.*`):
+   - Counts before the work (`Color(0x…)` or `Colors.*`); see 3a for after:
      - `event_detail_screen.dart` 125
      - `event_list_screen.dart` 71
      - `manage_events_screen.dart` 70
@@ -80,6 +83,18 @@ Visual and structural changes only. **No changes to business logic, API calls, p
 5. **Login and splash:** restyle to the website login card look: serif title, gold ring emblem, navy card. Visual only.
 6. **Guardrail:** add `tool/check_colors.sh`, which fails if `Color(0x` appears outside `lib/theme/` (with an allowlist for the developer screen). Document it in this file.
 7. Update the counts above and section 1 of this doc when done.
+
+### 3a. Done on `ui/full-ui`
+
+- **Shell:** `shared/widgets/app_shell.dart`, a `ShellRoute` in `app_router.dart` around home, my-events, manage-events, registrations, event detail, checkout, policies and feedback. Splash, login, foundation and developer stay outside. The footer appears when the page's own scroll reaches its end, or straight away if the page doesn't scroll. Screens keep their bodies; only their sidebar/bottom-nav wiring was removed (event registrations had its own inline `NavigationBar` with the same three items; it now uses `AppBottomNav`). `AppBottomNav` clamps its selected index because a non-admin on `/manage-events` now sees the nav.
+- **Theme switch:** floating toggle removed from `main.dart`; header toggle only. `MaterialApp.title` is now "NITKSAA Events", so the web tab title no longer reverts to "NITKSAA Event".
+- **Colours:** one commit per file. Mapping used: gold → `primary`; navy/white text → `textPrimary`; slate/grey text → `textSecondary`/`textMuted`; borders/dividers → `border`; card fills → `card`; green/red/orange/blue → `success`/`error`/`warning`/`info`. Old navy CTA buttons are now gold `primary` (website primary button). Status snackbars use the new `AppPalette.tinted(tone)`.
+- **Restyle:** badges are tinted fill + 30% border in the same tone; cards are flat (no shadow) with the palette border; headings that asked for the unbundled `Fraunces` now use `CrimsonPro`. `AppPrimaryButton` labels use the button's foreground colour.
+- **Login/splash:** login form sits in a navy card with the emblem in a gold ring (`shared/widgets/emblem_ring.dart`) and a serif "Sign in" title. Splash uses the same emblem and a serif "NITKSAA".
+- **Checkout:** colour lines only (plus `const` removals the colour change forces).
+- **Counts after** (`Color(0x…)` outside `lib/theme/`): **0**, except `developer_diagnostics_screen.dart` (39 `Color(0x…)`/`Colors.*`, allowlisted). Remaining `Colors.*` are allowed ones: `Colors.transparent`, the QR code's black on white in `event_detail_screen.dart`, the white logo tint in `site_header.dart` and `emblem_ring.dart`, and the avatar.
+- **Guardrail:** `bash frontend/tool/check_colors.sh` (Git Bash on Windows). It exits 1 and lists the lines when `Color(0x` appears outside `lib/theme/`; the developer screen is allowlisted inside the script. Run it before every UI commit.
+- **Checked here:** `flutter analyze` adds no new issues (the 6 errors in `razorpay_payment_io.dart` are pre-existing: mobile-only import, not compiled for web); `flutter build web --release` succeeds with Flutter 3.38.10; screenshots of list, login, splash, policy pages in dark and light at 1280px and 390px with a mocked API. Event detail, My Events, Manage and checkout were not seen signed in.
 
 **Known bug, don't fix:** release build `Bad state: RenderBox was not laid out` on event list cards. It's Sudarshana's to fix. If a colour edit touches the offending widget, leave the layout alone.
 
@@ -125,7 +140,7 @@ The UI branches change most screen files, and Sudarshana's open issues (004, 005
 5. **If he already has local commits on a screen file:** rebase onto the new `main`. Conflicts will be colour lines vs. his logic lines.
    - Keep his logic.
    - Re-apply the palette colour on the lines he touched.
-6. Going forward: new code uses `context.palette` and theme colours, never `Color(0x…)`. `tool/check_colors.sh` catches mistakes.
+6. Going forward: new code uses `context.palette` and theme colours, never `Color(0x…)`. `bash frontend/tool/check_colors.sh` catches mistakes.
 7. **If the UI PR can't merge before he resumes**, he tells Padmanand which screen he's on, and that screen's colour commit is reverted from the PR and redone after his fix.
 
 **WhatsApp to Sudarshana before he resumes:** "UI branch `ui/full-ui` restyles all screens (colours and shared shell only, no logic). Please review and merge it to main before your next fix, then pull main. Details: docs/ui/HANDOVER.md section 5."
