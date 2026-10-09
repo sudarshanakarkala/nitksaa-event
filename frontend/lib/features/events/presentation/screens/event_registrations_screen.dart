@@ -7,6 +7,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
@@ -317,7 +318,7 @@ class _EventRegistrationsScreenState
                     const Text(
                       'Admin access required',
                       style: TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.bold),
+                          fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -384,9 +385,9 @@ class _EventRegistrationsScreenState
                               Text(
                                 _event?.title ?? 'Event Registrations',
                                 style: const TextStyle(
-                                  fontFamily: 'CrimsonPro',
+                                  fontFamily: AppTextStyles.serif,
                                   fontSize: 26,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               if (_event != null)
