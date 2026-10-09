@@ -576,6 +576,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 decoration: BoxDecoration(
                   color: typeColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: typeColor.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   event.isVirtual ? 'Virtual' : 'Physical',
@@ -661,6 +662,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 decoration: BoxDecoration(
                   color: regStatusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: regStatusColor.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   event.registrationStatus == 'open'
@@ -1198,7 +1200,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               const Text(
                 'NITKSAA Events',
                 style: TextStyle(
-                  fontFamily: 'Fraunces',
+                  fontFamily: 'CrimsonPro',
                   fontSize: 24,
                   fontWeight: FontWeight.bold,
                 ),
@@ -1550,6 +1552,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   decoration: BoxDecoration(
                     color: tagBg,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: tagText.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     isPhysical ? 'Physical' : 'Virtual',
@@ -1651,6 +1654,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   decoration: BoxDecoration(
                     color: regBg,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: regText.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     event.registrationStatus == 'open'
