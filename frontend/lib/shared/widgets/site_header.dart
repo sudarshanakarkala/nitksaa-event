@@ -38,7 +38,8 @@ class SiteHeader extends ConsumerWidget {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return Material(
-      color: p.background.withValues(alpha: 0.96),
+      // Website --bg-nav: background at 92% (dark) / 95% (light).
+      color: p.background.withValues(alpha: isDark ? 0.92 : 0.95),
       child: Container(
         height: compact ? compactHeight : height,
         decoration: BoxDecoration(
@@ -53,12 +54,14 @@ class SiteHeader extends ConsumerWidget {
                 children: [
                   _Brand(compact: compact, isDark: isDark),
                   if (wide) ...[
-                    const SizedBox(width: 40),
-                    for (final item in items)
+                    const SizedBox(width: 32),
+                    for (final item in items) ...[
                       _NavLink(
                         item: item,
                         active: isNavItemActive(item, location),
                       ),
+                      const SizedBox(width: 4),
+                    ],
                   ],
                   const Spacer(),
                   if (showThemeToggle) ...[
@@ -262,8 +265,9 @@ class _AccountButton extends ConsumerWidget {
   }
 }
 
-/// Header nav link: muted text, gold when hovered or active, with a gold
-/// underline on the active page (website navbar).
+/// Header nav link, website `.nav-link`: secondary text in a small pill;
+/// hover lifts the text and fills the pill; the active page is gold on a
+/// faint gold pill.
 class _NavLink extends StatefulWidget {
   const _NavLink({required this.item, required this.active});
 
@@ -280,31 +284,31 @@ class _NavLinkState extends State<_NavLink> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final color = widget.active || _hover ? p.primary : p.textSecondary;
+    final color = widget.active
+        ? p.primary
+        : (_hover ? p.textPrimary : p.textSecondary);
+    final fill = widget.active
+        ? p.primary.withValues(alpha: 0.08)
+        : (_hover ? p.surfaceSubtle : Colors.transparent);
     return MouseRegion(
       cursor: SystemMouseCursors.click,
       onEnter: (_) => setState(() => _hover = true),
       onExit: (_) => setState(() => _hover = false),
       child: GestureDetector(
         onTap: widget.active ? null : () => context.go(widget.item.route),
-        child: Container(
-          // Full header height, so the underline sits on its bottom edge.
-          height: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14),
-          alignment: Alignment.center,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
           decoration: BoxDecoration(
-            border: Border(
-              bottom: BorderSide(
-                color: widget.active ? p.primary : Colors.transparent,
-                width: 2,
-              ),
-            ),
+            color: fill,
+            borderRadius: BorderRadius.circular(6),
           ),
           child: Text(
             widget.item.label,
             style: AppTextStyles.labelLarge.copyWith(
               color: color,
-              fontWeight: widget.active ? FontWeight.w600 : FontWeight.w500,
+              fontWeight: FontWeight.w500,
+              letterSpacing: 0,
             ),
           ),
         ),

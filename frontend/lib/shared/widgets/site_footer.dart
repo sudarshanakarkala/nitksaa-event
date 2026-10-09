@@ -9,11 +9,13 @@ import '../site_links.dart';
 /// Footer strip matching the association website
 /// (website: components/core/Footer.jsx, styles/footer.css).
 ///
-/// © line on the left, policy links on the right; wraps on phones.
+/// One 52px row, like the website: © line on the left, links on the right.
+/// On narrow screens the links scroll sideways, with the © line last.
 class SiteFooter extends StatelessWidget {
   const SiteFooter({super.key});
 
   static const double maxContentWidth = 1520;
+  static const double height = 52;
 
   @override
   Widget build(BuildContext context) {
@@ -29,12 +31,7 @@ class SiteFooter extends StatelessWidget {
       ),
     );
 
-    final links = Wrap(
-      spacing: 10,
-      runSpacing: 6,
-      crossAxisAlignment: WrapCrossAlignment.center,
-      alignment: compact ? WrapAlignment.start : WrapAlignment.end,
-      children: _withSeparators(context, [
+    final linkItems = _withSeparators(context, [
         _FooterLink('Privacy & Cookies', route: SiteLinks.privacy),
         _FooterLink('Terms of Use', route: SiteLinks.terms),
         _FooterLink('Refund Policy', route: SiteLinks.refund),
@@ -42,33 +39,51 @@ class SiteFooter extends StatelessWidget {
         _FooterLink('Feedback', route: SiteLinks.feedback),
         _FooterLink('About Us', url: SiteLinks.websiteAbout),
         _FooterLink('NITKSAA website', url: SiteLinks.website),
-      ]),
-    );
+      ]);
 
+    Widget row(List<Widget> children) => Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            for (var i = 0; i < children.length; i++) ...[
+              if (i > 0) const SizedBox(width: 10),
+              children[i],
+            ],
+          ],
+        );
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: double.infinity,
+      height: height,
       decoration: BoxDecoration(
-        color: p.background.withValues(alpha: 0.96),
+        // Website --bg-nav: background at 92% (dark) / 95% (light).
+        color: p.background.withValues(alpha: isDark ? 0.92 : 0.95),
         border: Border(top: BorderSide(color: p.border)),
       ),
       child: Center(
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: maxContentWidth),
           child: Padding(
-            padding: EdgeInsets.symmetric(
-              horizontal: compact ? 16 : 40,
-              vertical: compact ? 14 : 16,
-            ),
+            padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 40),
             child: compact
-                ? Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [links, const SizedBox(height: 10), copy],
+                ? SingleChildScrollView(
+                    scrollDirection: Axis.horizontal,
+                    child: row([...linkItems, copy]),
                   )
                 : Row(
                     children: [
                       copy,
                       const SizedBox(width: 16),
-                      Expanded(child: links),
+                      Expanded(
+                        child: Align(
+                          alignment: Alignment.centerRight,
+                          child: SingleChildScrollView(
+                            scrollDirection: Axis.horizontal,
+                            reverse: true,
+                            child: row(linkItems),
+                          ),
+                        ),
+                      ),
                     ],
                   ),
           ),
