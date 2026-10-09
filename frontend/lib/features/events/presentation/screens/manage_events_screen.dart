@@ -11,6 +11,7 @@ import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../theme/app_palette.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
@@ -149,7 +150,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${event.title} published successfully'),
-            backgroundColor: Colors.green,
+            backgroundColor: context.palette.tinted(context.palette.success),
           ),
         );
       }
@@ -159,7 +160,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error publishing event: $error'),
-            backgroundColor: Colors.red,
+            backgroundColor: context.palette.tinted(context.palette.error),
           ),
         );
       }
@@ -201,7 +202,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${event.title} unpublished successfully'),
-            backgroundColor: Colors.orange,
+            backgroundColor: context.palette.tinted(context.palette.warning),
           ),
         );
       }
@@ -211,7 +212,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error unpublishing event: $error'),
-            backgroundColor: Colors.red,
+            backgroundColor: context.palette.tinted(context.palette.error),
           ),
         );
       }
@@ -230,7 +231,10 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
             child: const Text('Cancel'),
           ),
           FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            style: FilledButton.styleFrom(
+              backgroundColor: context.palette.error,
+              foregroundColor: Theme.of(context).colorScheme.onError,
+            ),
             onPressed: () => Navigator.pop(context, true),
             child: const Text('Delete'),
           ),
@@ -273,7 +277,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('${event.title} deleted successfully'),
-            backgroundColor: Colors.green,
+            backgroundColor: context.palette.tinted(context.palette.success),
           ),
         );
       }
@@ -283,7 +287,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
             content: Text('Error deleting event: $error'),
-            backgroundColor: Colors.red,
+            backgroundColor: context.palette.tinted(context.palette.error),
           ),
         );
       }
@@ -400,9 +404,9 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                     // Tab Bar
                     TabBar(
                       controller: _tabController,
-                      labelColor: isDark ? const Color(0xFFC9952A) : const Color(0xFF0D1B3E),
+                      labelColor: context.palette.primary,
                       unselectedLabelColor: theme.colorScheme.onSurfaceVariant,
-                      indicatorColor: const Color(0xFFC9952A),
+                      indicatorColor: context.palette.primary,
                       indicatorWeight: 3,
                       tabs: [
                         Tab(
@@ -472,7 +476,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
             Icon(
               isSearchEmpty ? Icons.search_off : (isPublished ? Icons.check_circle_outline : Icons.drafts_outlined),
               size: 48,
-              color: Colors.grey,
+              color: context.palette.textMuted,
             ),
             const SizedBox(height: 16),
             Text(
@@ -488,7 +492,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                   : (isPublished
                       ? 'Publish draft events to see them here.'
                       : 'Create new events or move from published to draft.'),
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(color: context.palette.textMuted),
             ),
           ],
         ),
@@ -830,7 +834,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Divider(
-                          color: _currentStep > 0 ? const Color(0xFFC9952A) : Colors.grey.shade300,
+                          color: _currentStep > 0 ? context.palette.primary : context.palette.border,
                           thickness: 2,
                         ),
                       ),
@@ -842,7 +846,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       const SizedBox(width: 8),
                       Expanded(
                         child: Divider(
-                          color: _currentStep > 1 ? const Color(0xFFC9952A) : Colors.grey.shade300,
+                          color: _currentStep > 1 ? context.palette.primary : context.palette.border,
                           thickness: 2,
                         ),
                       ),
@@ -871,7 +875,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
                     color: theme.scaffoldBackgroundColor,
-                    border: Border(top: BorderSide(color: Colors.grey.shade200)),
+                    border: Border(top: BorderSide(color: context.palette.border)),
                   ),
                   child: Wrap(
                     spacing: 8,
@@ -926,7 +930,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   Widget _buildStepIndicator(int step, String title, String subtitle) {
     final isActive = _currentStep == step;
     final isCompleted = _currentStep > step;
-    final color = isCompleted || isActive ? const Color(0xFFC9952A) : Colors.grey;
+    final color = isCompleted || isActive ? context.palette.primary : context.palette.textMuted;
     final isNarrow = MediaQuery.of(context).size.width < 600;
     final canNavigate = step == 0 || _isStep1Complete;
     return GestureDetector(
@@ -939,13 +943,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             height: 32,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isCompleted ? const Color(0xFFC9952A) : (isActive ? const Color(0xFFC9952A).withOpacity(0.15) : Colors.transparent),
+              color: isCompleted ? context.palette.primary : (isActive ? context.palette.primary.withOpacity(0.15) : Colors.transparent),
               border: Border.all(color: color, width: 2),
             ),
             child: Center(
               child: isCompleted
-                  ? const Icon(Icons.check, size: 18, color: Colors.white)
-                  : Text('${step + 1}', style: TextStyle(fontWeight: FontWeight.bold, color: isActive ? const Color(0xFFC9952A) : Colors.grey, fontSize: 14)),
+                  ? Icon(Icons.check, size: 18, color: context.palette.onPrimary)
+                  : Text('${step + 1}', style: TextStyle(fontWeight: FontWeight.bold, color: isActive ? context.palette.primary : context.palette.textMuted, fontSize: 14)),
             ),
           ),
           const SizedBox(width: 6),
@@ -959,7 +963,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                   softWrap: false,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isActive || isCompleted ? const Color(0xFFC9952A) : Colors.grey),
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isActive || isCompleted ? context.palette.primary : context.palette.textMuted),
                 ),
                 if (!isNarrow)
                   Text(
@@ -967,7 +971,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
                     softWrap: false,
-                    style: const TextStyle(fontSize: 10, color: Colors.grey),
+                    style: TextStyle(fontSize: 10, color: context.palette.textMuted),
                   ),
               ],
             ),
@@ -1148,7 +1152,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         const SizedBox(height: 16),
         Text(
           'Quantity limits below apply to the event registration as a whole.',
-          style: TextStyle(fontSize: 12, color: Colors.grey.shade600),
+          style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
         ),
         const SizedBox(height: 12),
         Row(
@@ -1349,7 +1353,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               'No speakers added yet',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
             ),
           )
         else
@@ -1359,7 +1363,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               padding: const EdgeInsets.only(bottom: 12),
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: context.palette.border),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 padding: const EdgeInsets.all(12),
@@ -1377,7 +1381,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           const SizedBox(height: 4),
                           Text(
                             '${speaker['title'] ?? ''}, ${speaker['organisation'] ?? ''}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                           ),
                         ],
                       ),
@@ -1389,7 +1393,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           onPressed: () => _showSpeakerDialog(index),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                          icon: Icon(Icons.delete, size: 18, color: context.palette.error),
                           onPressed: () {
                             setState(() => _speakers.removeAt(index));
                           },
@@ -1485,13 +1489,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               'No fees added yet',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
             ),
           )
         else
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: context.palette.border),
               borderRadius: BorderRadius.circular(8),
             ),
             child: ClipRRect(
@@ -1508,13 +1512,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       3: IntrinsicColumnWidth(),
                     },
                     border: TableBorder(
-                      horizontalInside: BorderSide(color: Colors.grey.shade200, width: 1),
+                      horizontalInside: BorderSide(color: context.palette.border, width: 1),
                     ),
                     defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                     children: [
                       TableRow(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFC9952A).withValues(alpha: 0.08),
+                          color: context.palette.primary.withValues(alpha: 0.08),
                         ),
                         children: [
                           _buildFeeTableHeaderCell('Fee Name'),
@@ -1541,7 +1545,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                                     onPressed: () => _showFeeDialog(index),
                                   ),
                                   IconButton(
-                                    icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                                    icon: Icon(Icons.delete, size: 18, color: context.palette.error),
                                     visualDensity: VisualDensity.compact,
                                     onPressed: () {
                                       setState(() => _fees.removeAt(index));
@@ -1556,7 +1560,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       // ── Total row ──
                       TableRow(
                         decoration: BoxDecoration(
-                          color: const Color(0xFFC9952A).withValues(alpha: 0.12),
+                          color: context.palette.primary.withValues(alpha: 0.12),
                         ),
                         children: [
                           _buildFeeTableCell('Total', bold: true),
@@ -1594,7 +1598,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               'No sessions added yet',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
             ),
           )
         else
@@ -1604,7 +1608,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               padding: const EdgeInsets.only(bottom: 12),
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: context.palette.border),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 padding: const EdgeInsets.all(12),
@@ -1622,12 +1626,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           const SizedBox(height: 4),
                           Text(
                             'Speaker: ${session['speaker'] ?? 'Not assigned'}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                           ),
                           const SizedBox(height: 2),
                           Text(
                             '${session['start_time'] ?? ''} - ${session['end_time'] ?? ''}',
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                           ),
                         ],
                       ),
@@ -1639,7 +1643,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           onPressed: () => _showSessionDialog(index),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                          icon: Icon(Icons.delete, size: 18, color: context.palette.error),
                           onPressed: () {
                             setState(() => _sessions.removeAt(index));
                           },
@@ -1664,7 +1668,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             padding: const EdgeInsets.only(top: 8),
             child: Text(
               'Add speakers before creating sessions',
-              style: TextStyle(fontSize: 12, color: Colors.orange.shade600),
+              style: TextStyle(fontSize: 12, color: context.palette.warning),
             ),
           ),
       ],
@@ -1680,7 +1684,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
               'No sponsors added yet',
-              style: TextStyle(fontSize: 13, color: Colors.grey.shade600),
+              style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
             ),
           )
         else
@@ -1690,7 +1694,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               padding: const EdgeInsets.only(bottom: 12),
               child: Container(
                 decoration: BoxDecoration(
-                  border: Border.all(color: Colors.grey.shade300),
+                  border: Border.all(color: context.palette.border),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 padding: const EdgeInsets.all(12),
@@ -1738,14 +1742,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           const SizedBox(height: 2),
                           Text(
                             _sponsorTypeLabel(sponsor['sponsor_type'] ?? ''),
-                            style: const TextStyle(fontSize: 12, color: Colors.grey),
+                            style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                           ),
                           if ((sponsor['logo_url'] ?? '').isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Text(
                                 'Logo: ${sponsor['logo_url']}',
-                                style: const TextStyle(fontSize: 11, color: Colors.grey),
+                                style: TextStyle(fontSize: 11, color: context.palette.textMuted),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
                               ),
@@ -1761,7 +1765,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           onPressed: () => _showSponsorDialog(index),
                         ),
                         IconButton(
-                          icon: const Icon(Icons.delete, size: 18, color: Colors.red),
+                          icon: Icon(Icons.delete, size: 18, color: context.palette.error),
                           onPressed: () {
                             setState(() => _sponsors.removeAt(index));
                           },
@@ -2359,7 +2363,7 @@ void _showFeeDialog(int? editIndex) {
             prefixIcon: const Icon(Icons.search),
             suffixIcon: _locationSelected
                 ? IconButton(
-                    icon: const Icon(Icons.clear, color: Colors.green),
+                    icon: Icon(Icons.clear, color: context.palette.success),
                     tooltip: 'Clear selection',
                     onPressed: () {
                       setState(() {
@@ -2424,19 +2428,19 @@ void _showFeeDialog(int? editIndex) {
         else if (_locationSuggestions.isNotEmpty && !_locationSelected)
           Container(
             decoration: BoxDecoration(
-              border: Border.all(color: Colors.grey.shade300),
+              border: Border.all(color: context.palette.border),
               borderRadius: BorderRadius.circular(8),
             ),
             constraints: const BoxConstraints(maxHeight: 200),
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _locationSuggestions.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: Colors.grey.shade200),
+              separatorBuilder: (_, __) => Divider(height: 1, color: context.palette.border),
               itemBuilder: (context, index) {
                 final suggestion = _locationSuggestions[index];
                 return ListTile(
                   dense: true,
-                  leading: const Icon(Icons.place, size: 18, color: Color(0xFFC9952A)),
+                  leading: Icon(Icons.place, size: 18, color: context.palette.primary),
                   title: Text(
                     suggestion['name'] ?? '',
                     style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500),
@@ -2459,13 +2463,13 @@ void _showFeeDialog(int? editIndex) {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFC9952A).withValues(alpha: 0.08),
+              color: context.palette.primary.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFFC9952A).withValues(alpha: 0.3)),
+              border: Border.all(color: context.palette.primary.withValues(alpha: 0.3)),
             ),
             child: Row(
               children: [
-                const Icon(Icons.check_circle, color: Color(0xFFC9952A), size: 20),
+                Icon(Icons.check_circle, color: context.palette.primary, size: 20),
                 const SizedBox(width: 10),
                 Expanded(
                   child: Column(
@@ -2958,17 +2962,14 @@ class _ManageEventCard extends StatelessWidget {
                 Container(
                   padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
                   decoration: BoxDecoration(
-                    color: isPublished
-                        ? const Color(0xFFD9F4E8)
-                        : const Color(0xFFFFE9E9),
+                    color: (isPublished ? context.palette.success : context.palette.warning)
+                        .withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(999),
                   ),
                   child: Text(
                     isPublished ? 'Published' : 'Draft',
                     style: TextStyle(
-                      color: isPublished
-                          ? const Color(0xFF1B5C3A)
-                          : const Color(0xFF8A1B1B),
+                      color: isPublished ? context.palette.success : context.palette.warning,
                       fontSize: 11,
                       fontWeight: FontWeight.bold,
                     ),
@@ -3021,8 +3022,8 @@ class _ManageEventCard extends StatelessWidget {
                   if (onDelete != null)
                     OutlinedButton.icon(
                       onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                      label: const Text('Delete', style: TextStyle(fontSize: 12, color: Colors.red)),
+                      icon: Icon(Icons.delete_outline, size: 16, color: context.palette.error),
+                      label: Text('Delete', style: TextStyle(fontSize: 12, color: context.palette.error)),
                     ),
                 ] else ...[
                   if (onPublish != null)
@@ -3039,8 +3040,8 @@ class _ManageEventCard extends StatelessWidget {
                   if (onDelete != null)
                     OutlinedButton.icon(
                       onPressed: onDelete,
-                      icon: const Icon(Icons.delete_outline, size: 16, color: Colors.red),
-                      label: const Text('Delete', style: TextStyle(fontSize: 12, color: Colors.red)),
+                      icon: Icon(Icons.delete_outline, size: 16, color: context.palette.error),
+                      label: Text('Delete', style: TextStyle(fontSize: 12, color: context.palette.error)),
                     ),
                 ],
               ],
@@ -3070,13 +3071,13 @@ class _StatusPill extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
       decoration: BoxDecoration(
-        color: const Color(0xFFD9F4E8),
+        color: context.palette.success.withValues(alpha: 0.14),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
         label.replaceAll('_', ' '),
-        style: const TextStyle(
-          color: Color(0xFF1B5C3A),
+        style: TextStyle(
+          color: context.palette.success,
           fontSize: 12,
           fontWeight: FontWeight.bold,
         ),
@@ -3095,7 +3096,7 @@ class _MetaRow extends StatelessWidget {
   Widget build(BuildContext context) {
     return Row(
       children: [
-        Icon(icon, size: 16, color: const Color(0xFFC9952A)),
+        Icon(icon, size: 16, color: context.palette.primary),
         const SizedBox(width: 8),
         Expanded(
           child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
@@ -3118,7 +3119,7 @@ class _Sidebar extends StatelessWidget {
       width: 240,
       padding: const EdgeInsets.all(24),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0E1726) : const Color(0xFFF8F9FD),
+        color: context.palette.background,
         border: Border(
           right: BorderSide(color: theme.colorScheme.outlineVariant),
         ),
@@ -3126,9 +3127,9 @@ class _Sidebar extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.calendar_today_outlined, color: Color(0xFFC9952A)),
+              Icon(Icons.calendar_today_outlined, color: context.palette.primary),
               SizedBox(width: 8),
               Text(
                 'NITKSAA',
@@ -3136,7 +3137,7 @@ class _Sidebar extends StatelessWidget {
                   fontFamily: 'Fraunces',
                   fontSize: 20,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFC9952A),
+                  color: context.palette.primary,
                 ),
               ),
             ],
@@ -3164,11 +3165,11 @@ class _Sidebar extends StatelessWidget {
             children: [
               CircleAvatar(
                 radius: 18,
-                backgroundColor: const Color(0xFFC9952A),
+                backgroundColor: context.palette.primary,
                 child: Text(
                   (auth.session?.fullname ?? 'U').substring(0, 1).toUpperCase(),
-                  style: const TextStyle(
-                    color: Colors.white,
+                  style: TextStyle(
+                    color: context.palette.onPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                   ),
@@ -3206,9 +3207,8 @@ class _SidebarItem extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final activeBg = isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA);
-    final activeText = isDark ? Colors.white : const Color(0xFF0D1B3E);
+    final activeBg = context.palette.surfaceHover;
+    final activeText = context.palette.primary;
     return Container(
       margin: const EdgeInsets.only(bottom: 6),
       decoration: BoxDecoration(
@@ -3220,12 +3220,12 @@ class _SidebarItem extends StatelessWidget {
         leading: Icon(
           icon,
           size: 20,
-          color: active ? activeText : const Color(0xFF5A6A8A),
+          color: active ? activeText : context.palette.textSecondary,
         ),
         title: Text(
           label,
           style: TextStyle(
-            color: active ? activeText : const Color(0xFF5A6A8A),
+            color: active ? activeText : context.palette.textSecondary,
             fontSize: 13,
             fontWeight: active ? FontWeight.bold : FontWeight.w500,
           ),
