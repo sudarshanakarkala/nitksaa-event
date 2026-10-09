@@ -215,7 +215,8 @@ class _AccountButton extends ConsumerWidget {
       offset: const Offset(0, 44),
       onSelected: (value) async {
         if (value == 'my-events') {
-          context.go(AppRoutes.myEvents);
+          // Events with the "Registered by me" filter on.
+          context.go('${AppRoutes.home}?mine=1');
         } else if (value == 'sign-out') {
           await ref.read(authControllerProvider.notifier).signOut();
           if (context.mounted) context.go(AppRoutes.login);

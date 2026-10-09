@@ -11,7 +11,13 @@ import '../../../../shared/widgets/list_page.dart';
 import '../../../../shared/widgets/segment_toggle.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
+import '../providers/my_events_provider.dart';
 import '../../domain/event.dart';
+import '../../domain/my_event_registration.dart';
+
+/// "Registered by me" filter. UI state only; shared with the phone filter
+/// sheet, which is a separate route.
+final _registeredOnlyProvider = StateProvider.autoDispose<bool>((ref) => false);
 
 class EventListScreen extends ConsumerStatefulWidget {
   const EventListScreen({super.key});
@@ -28,6 +34,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   String _view = 'cards';
   int _sortColumn = 1; // Date
   bool _sortAsc = true;
+  String? _appliedUri;
 
   @override
   void initState() {
@@ -35,6 +42,63 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     _searchController.addListener(() {
       ref.read(eventsProvider.notifier).setSearchQuery(_searchController.text);
     });
+    // Your registrations, for the "Registered by me" filter and own cards.
+    Future.microtask(() {
+      if (ref.read(authControllerProvider).isAuthenticated) {
+        ref.read(myEventsProvider.notifier).fetchMyEvents();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Account menu "My Events" links to /home?mine=1. Applied once per URL,
+    // so resizing (which also lands here) doesn't re-apply it.
+    final uri = GoRouterState.of(context).uri;
+    if (uri.toString() == _appliedUri) return;
+    _appliedUri = uri.toString();
+    if (uri.queryParameters['mine'] == '1') {
+      Future.microtask(() {
+        if (mounted) ref.read(_registeredOnlyProvider.notifier).state = true;
+      });
+    }
+  }
+
+  /// Your registrations by event id (empty when signed out).
+  Map<int, MyEventRegistration> _registrationsByEvent() {
+    if (!ref.watch(authControllerProvider).isAuthenticated) return const {};
+    return {
+      for (final r in ref.watch(myEventsProvider).registrations) r.eventId: r,
+    };
+  }
+
+  /// Same confirm dialog and provider call as the My Events page.
+  Future<void> _confirmUnregister(AppEvent event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unregister?'),
+        content: Text('This will unregister you from ${event.title}.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Unregister'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(myEventsProvider.notifier).cancelRegistration(event.eventId);
+    if (!mounted) return;
+    final error = ref.read(myEventsProvider).errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error == null ? 'Unregistered' : 'Could not unregister.')),
+    );
   }
 
   @override
@@ -185,6 +249,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                       onPressed: () {
                         rf.read(eventsProvider.notifier).clearFilters();
                         rf.read(eventsProvider.notifier).setPeriod('upcoming');
+                        rf.read(_registeredOnlyProvider.notifier).state = false;
                         _searchController.clear();
                         if (isInDrawer) {
                           // keep drawer open so user can see cleared state
@@ -226,6 +291,18 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ),
           ]),
           const SizedBox(height: 20),
+
+          // Your registrations (website "Author: My Stories"), signed in only.
+          if (rf.watch(authControllerProvider).isAuthenticated) ...[
+            _filterLabel('My Registrations'),
+            const SizedBox(height: 8),
+            _filterChip(
+              'Registered by me',
+              rf.watch(_registeredOnlyProvider),
+              (on) => rf.read(_registeredOnlyProvider.notifier).state = on ?? false,
+            ),
+            const SizedBox(height: 20),
+          ],
 
           // Date Range Section
           _filterLabel('Date Range'),
@@ -1216,7 +1293,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   // ==========================================
   Widget _buildMaterialLayout() {
     final state = ref.watch(eventsProvider);
-    final filteredEvents = ref.watch(filteredEventsProvider);
+    final allEvents = ref.watch(filteredEventsProvider);
+    // "Registered by me" (website "My Stories" filter): the public list
+    // narrowed to events with an active registration of yours.
+    final registrations = _registrationsByEvent();
+    final registeredOnly = ref.watch(_registeredOnlyProvider);
+    final filteredEvents = registeredOnly
+        ? allEvents.where((e) => registrations[e.eventId]?.isActive ?? false).toList()
+        : allEvents;
     final auth = ref.watch(authControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final ThemeData theme = Theme.of(context);
@@ -1294,8 +1378,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ],
         filters: (context) => _buildFilterPanel(ref, true),
         onOpenFilters: _showFilterBottomSheet,
-        activeFilterCount: _activeFilterCount(state),
+        activeFilterCount: _activeFilterCount(state) + (registeredOnly ? 1 : 0),
         onClearFilters: () {
+          ref.read(_registeredOnlyProvider.notifier).state = false;
           ref.read(eventsProvider.notifier).clearFilters();
           ref.read(eventsProvider.notifier).setPeriod('upcoming');
           _searchController.clear();
@@ -1310,7 +1395,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             : filteredEvents.isEmpty
             ? _buildMaterialEmptyState()
             : _view == 'table' && MediaQuery.sizeOf(context).width >= 600
-            ? _buildEventTable(filteredEvents, side)
+            ? _buildEventTable(filteredEvents, side, registrations)
             : LayoutBuilder(
                 builder: (context, constraints) {
                   // As many ~320px columns as fit, up to four (website grid).
@@ -1341,6 +1426,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                                         isDark,
                                         theme,
                                         isAdmin: isAdmin,
+                                        registration: registrations[
+                                            filteredEvents[row * columns + col].eventId],
                                       )
                                     : const SizedBox.shrink(),
                               ),
@@ -1358,7 +1445,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
 
   /// Table view (website ViewToggle "Table"): sortable columns, a row
   /// opens the event.
-  Widget _buildEventTable(List<AppEvent> events, double side) {
+  Widget _buildEventTable(
+    List<AppEvent> events,
+    double side,
+    Map<int, MyEventRegistration> registrations,
+  ) {
     final p = context.palette;
     int compare(AppEvent a, AppEvent b) {
       switch (_sortColumn) {
@@ -1436,9 +1527,17 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           overflow: TextOverflow.ellipsis,
                         )),
                         DataCell(Text(
-                          event.registrationStatus == 'open' ? 'Open' : 'Closed',
+                          (registrations[event.eventId]?.isActive ?? false)
+                              ? 'Registered'
+                              : event.registrationStatus == 'open'
+                              ? 'Open'
+                              : 'Closed',
                           style: cellStyle.copyWith(
-                            color: event.registrationStatus == 'open' ? p.success : p.error,
+                            color: (registrations[event.eventId]?.isActive ?? false)
+                                ? p.primary
+                                : event.registrationStatus == 'open'
+                                ? p.success
+                                : p.error,
                             fontWeight: FontWeight.w600,
                           ),
                         )),
@@ -1453,7 +1552,15 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  Widget _buildMaterialEventCard(AppEvent event, bool isDark, ThemeData theme, {required bool isAdmin}) {
+  Widget _buildMaterialEventCard(
+    AppEvent event,
+    bool isDark,
+    ThemeData theme, {
+    required bool isAdmin,
+    MyEventRegistration? registration,
+  }) {
+    // Your own registration: website .card--own (gold tint) plus a badge.
+    final isOwn = registration?.isActive ?? false;
     final isPhysical = !event.isVirtual;
     final tagBg = isPhysical
         ? context.palette.primary.withValues(alpha: 0.14)
@@ -1481,10 +1588,17 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: context.palette.border,
+          color: isOwn
+              ? context.palette.primary.withValues(alpha: 0.45)
+              : context.palette.border,
         ),
       ),
-      color: context.palette.card,
+      color: isOwn
+          ? Color.alphaBlend(
+              context.palette.primary.withValues(alpha: 0.08),
+              context.palette.card,
+            )
+          : context.palette.card,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -1611,9 +1725,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ),
             ],
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
+            Builder(builder: (context) {
+              final statusBadge =
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1634,7 +1747,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
+                );
+              final viewButton =
                 TextButton(
                   style: TextButton.styleFrom(
                     backgroundColor: context.palette.primary,
@@ -1650,9 +1764,62 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     'View details',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
-                ),
-              ],
-            ),
+                );
+              if (!isOwn) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [statusBadge, viewButton],
+                );
+              }
+              // Own card: badges on one row, Unregister + View details below.
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      statusBadge,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: context.palette.info.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: context.palette.info.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          'Registered',
+                          style: TextStyle(
+                            color: context.palette.info,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (registration!.canCancel) ...[
+                        TextButton(
+                          onPressed: ref.watch(myEventsProvider).cancellingEventId == event.eventId
+                              ? null
+                              : () => _confirmUnregister(event),
+                          style: TextButton.styleFrom(
+                            foregroundColor: context.palette.textSecondary,
+                          ),
+                          child: const Text('Unregister', style: TextStyle(fontSize: 12)),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      viewButton,
+                    ],
+                  ),
+                ],
+              );
+            }),
           ],
         ),
       ),
