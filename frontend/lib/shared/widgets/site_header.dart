@@ -17,7 +17,7 @@ import '../../theme/theme_provider.dart';
 class SiteHeader extends ConsumerWidget {
   const SiteHeader({super.key, this.showThemeToggle = true});
 
-  /// Hide while the app-wide floating toggle in main.dart still exists.
+  /// The header toggle is the app's only theme switch.
   final bool showThemeToggle;
 
   static const double height = 68;
