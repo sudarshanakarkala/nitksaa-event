@@ -1,4 +1,4 @@
-# Events UI Alignment: Handover (9 Oct 2026)
+# Events UI Alignment: Handover (updated 9 Oct 2026, end of day)
 
 For the next Claude Code cloud session, and for Padmanand and Sudarshana.
 Background and analysis: `docs/ui/website-alignment.md` (on `ui/analysis`).
@@ -7,156 +7,207 @@ Background and analysis: `docs/ui/website-alignment.md` (on `ui/analysis`).
 
 **Repos**
 - Target: `sudarshanakarkala/nitksaa-event`. Claude pushes only to `ui/*` branches, never to `main`.
-- Reference: `pwarrier108/nitksaa-website`. Read-only. Its design tokens are in `frontend/src/styles/tokens.css` and `global.css`; the shell is in `components/core/{AppLayout,Navbar,Footer}.jsx`.
+- Reference: `pwarrier108/nitksaa-website`. Read-only.
+  - Design tokens: `frontend/src/styles/tokens.css` and `global.css`.
+  - Shell: `components/core/{AppLayout,Navbar,Footer,FilterSidebar}.jsx`.
+  - List-page pattern: `pages/StoriesPage.jsx`.
 
-**Baseline:** `main` @ `8e83a1e`. No new commits on `main` as of 9 Oct.
+**Baseline:** `main` @ `34c9f16`. The only commit since `8e83a1e` is docs-only and doesn't overlap the UI work.
 
 **Branches (all pushed)**
 
 | Branch | Contains |
 |---|---|
 | `ui/analysis` | Mapping doc `docs/ui/website-alignment.md` |
-| `ui/theme-tokens` | Bundled fonts (Crimson Pro, DM Sans); `lib/theme/*` rewritten: website palette, type scale, component themes, `AppPalette` extension (`context.palette`), dark default remembered in Hive |
-| `ui/web-shell` | Tab title "NITKSAA Events", meta, favicon, app icons from the emblem, manifest |
-| `ui/header-footer` | New `SiteHeader`, `SiteFooter`, `PageHeader`, `SitePage`, `site_links.dart`; logo assets (typo-fixed wordmark, emblem) |
-| `ui/policies` | `assets/policies/*.md` (Privacy, Terms, Disclaimer copied unchanged from the website; interim generic Refund policy); `PolicyScreen`; built-in `SimpleMarkdown` (no package) |
-| `ui/feedback` | `FeedbackScreen` (website form, same contact), stubbed `POST /api/v1/feedback`; **routes commit** adding `/privacy /terms /refund /disclaimer /feedback`, public in `route_guards.dart` |
-| `ui/beta-preview` | All of the above + `ui/web-shell` + `beta` hosting target in `firebase.json`. **Deployed to beta 9 Oct; works.** |
-| `ui/full-ui` | `ui/beta-preview` + section 3 done: shared app shell, header-only theme toggle, palette colours on every screen, badges/cards restyled, login card and splash, `tool/check_colors.sh`. **Not yet on beta.** |
+| `ui/theme-tokens` | Bundled fonts (Crimson Pro, DM Sans); `lib/theme/*`: website palette, type scale, component themes, `AppPalette` (`context.palette`), dark default remembered in Hive |
+| `ui/web-shell` | Tab title, meta, favicon, app icons, manifest |
+| `ui/header-footer` | `SiteHeader`, `SiteFooter`, `PageHeader`, `SitePage`, `site_links.dart`; logo assets |
+| `ui/policies` | `assets/policies/*.md`, `PolicyScreen`, built-in `SimpleMarkdown` |
+| `ui/feedback` | `FeedbackScreen`, stubbed `POST /api/v1/feedback`; **routes commit** for `/privacy /terms /refund /disclaimer /feedback` |
+| `ui/beta-preview` | All of the above + `beta` hosting target in `firebase.json` |
+| **`ui/full-ui`** | `ui/beta-preview` + everything in section 3. **This is the branch to merge.** Last deployed to beta and smoke-tested 9 Oct, signed out and as a regular user. Head: see `git log -1 origin/ui/full-ui`. |
 
 The branches stack in this order: `theme-tokens` → `header-footer` → `policies` → `feedback` → `beta-preview` (+ `web-shell`) → `full-ui`.
 
-**Beta:** https://nitksaa-events-beta.web.app. The app uses hash URLs, e.g. `/#/privacy`, `/#/feedback`.
+**Beta:** https://nitksaa-events-beta.web.app. The app uses hash URLs, e.g. `/#/privacy`. After each deploy, open beta in a private window: the Flutter service worker caches hard.
 
 ## 2. Decisions (Padmanand)
 
-- **Theme:** dark by default; light mode uses the website's cream palette.
-- **Look and structure:** follow the website pattern, including one app shell with a header theme switch.
-  - Remove the floating theme toggle in `main.dart`.
-  - Replace hard-coded colours with theme colours on all screens.
-- **Feedback form:** exactly like the website, same contact (`nitksaa.infra@gmail.com`). The UI is stubbed until the backend endpoint exists.
-- **Refund policy:** generic interim text (refunds are event dependent). To be replaced by the association's official policy.
-- **App icon:** use the website emblem.
-- **NITiKa:** out of scope.
-- **Sudarshana is not coding today.** UI work proceeds on branches and beta. We merge before he continues (see section 5).
+- **Theme:** dark by default; light uses the website's cream palette. One switch, in the header.
+- **Look and structure:** follow the website, but diverge where events need it or where the website has no mobile design.
+- **Web only.** No native iOS or Android app, to avoid store certification overhead. Web always uses the main (Material) layout, including Safari on iPhone. The Cupertino code stays unused until Sudarshana decides whether to delete it.
+- **Navigation, website Stories pattern:**
+  - The header nav is just **Events**.
+  - "My Events" is a **filter** ("Registered by me"), also reachable from the account menu.
+  - "Manage Events" and "Create Event" are **admin buttons** on the Events page.
+  - Upcoming/Past is a **filter**.
+  - Volunteer and More are removed: they were placeholders with no page.
+- **Rails:**
+  - Filters sit in a collapsible left rail at 900px and wider.
+  - Below 900px, a funnel icon opens a bottom sheet.
+  - A right-rail slot is ready for **NITiKa, which comes in the next pass** (no longer out of scope).
+- **Policies:**
+  - Terms and Privacy pages are one-line links to `https://www.nitkalumni.in/site/tos.dz` and `/site/privacy.dz`.
+  - Refund keeps the generic interim text until the official policy exists.
+  - Disclaimer is unchanged.
+- **Website link:** the footer points to production, `https://www.nitkalumni.in`.
+- **Feedback form:** like the website, same contact (`nitksaa.infra@gmail.com`). The UI is stubbed until the backend endpoint exists.
+- **Logos:** the NITKSAA Events logo set (gold on dark, navy on light; favicon; app icons).
 
-## 3. Full UI scope (branch `ui/full-ui`, from `ui/beta-preview`) — done 9 Oct
+## 3. What was done on `ui/full-ui`
 
-What was done is summarised in **3a** below. The original brief follows unchanged.
+The rules were: visual and structural changes only, checkout colours only, and no changes to providers, repositories, payment or the auth flow. Nav changes were made only where Padmanand asked.
 
-Visual and structural changes only. **No changes to business logic, API calls, providers, repositories, payment services, auth flow, or nav item lists.**
+### Shell and theme
+- **One app shell** (`shared/widgets/app_shell.dart`, a `ShellRoute` in `app_router.dart`) around every attendee page. Splash, login, foundation and developer stay outside it. `RouteGuards` is unchanged.
+  - **Sticky header and footer;** only the page scrolls between them.
+  - **Header:** NITKSAA Events logo, website-style pill nav (active page gold), theme toggle, account menu (My Events, Sign out). Below 900px, a menu button opens a side drawer.
+  - **Footer:** one 52px row. Below 1100px it scrolls sideways, with a fade at the right edge; touch and mouse dragging both work.
+  - **Tab title per page,** e.g. "NITKSAA Events · My Events".
+  - **Right-rail slot for NITiKa:** a 320px rail from 1200px; below that, a floating chat button opening a side panel or full-height sheet. Empty for now.
+  - The old sidebar and bottom bar are deleted.
+- **Theme toggle:** the floating toggle is removed from `main.dart`.
+- **Colours:** palette colours on every screen, one commit per file. Snackbars use `AppPalette.tinted`.
+- **Fonts:** headings use Crimson Pro 600, like the website's h1–h4; text uses DM Sans. The Cupertino text theme uses the same fonts.
+- **Login and splash:**
+  - Login: a navy card with the emblem in a gold ring and a serif title.
+  - Splash: the same emblem.
+  - On web, login always uses the Material layout.
 
-1. **Shared app shell (website `AppLayout` pattern).**
-   - Add a `ShellRoute` in `routes/app_router.dart` wrapping every attendee route except splash, login, foundation and developer.
-   - The shell provides:
-     - `SiteHeader`, with its theme toggle on
-     - the menu: the existing `AppSidebar` at ≥ 900px wide, `AppBottomNav` below 900px, with the same items as today
-     - `SiteFooter` at the end of the scrolling content
-     - a content area
-   - Remove each screen's own sidebar and bottom-nav wiring. Keep screen bodies unchanged.
-   - `SitePage` then stops adding its own header and footer.
-   - Keep `RouteGuards` behaviour identical.
-2. **Theme switch.**
-   - Delete the floating toggle in `main.dart` (the `builder:` Stack).
-   - Header toggle only. Keep `ThemeNotifier` as is.
-3. **Replace hard-coded colours** with `context.palette.*` or `Theme.of(context).colorScheme/textTheme`, one commit per file.
-   - Map by meaning: background, card, text primary/secondary/muted, border, primary (gold), success, warning, error, info.
-   - Remove local `isDark ? X : Y` colour pairs where the palette already covers them.
-   - Counts before the work (`Color(0x…)` or `Colors.*`); see 3a for after:
-     - `event_detail_screen.dart` 125
-     - `event_list_screen.dart` 71
-     - `manage_events_screen.dart` 70
-     - `splash_screen.dart` 21
-     - `event_registrations_screen.dart` 18
-     - `app_sidebar.dart` 16
-     - `my_events_screen.dart` 16
-     - `checkout_screen.dart` 15
-     - `main.dart` 6
-     - `login_screen.dart` 4
-     - `widgets/material/*` and `widgets/shared/*` (a few each)
-   - Skip `developer_diagnostics_screen.dart`. It's a dev tool and Sudarshana's.
-   - `Colors.transparent`, `Colors.white` on images or overlays, and the avatar gradient may stay.
-   - The native-iOS Cupertino layout in `event_list_screen.dart`: replace its colours too; keep its structure.
-4. **Restyle using theme components where the screen already has them** (cards → website card look, chips → website badges, status pills → success/warning/error tints).
-   - Don't restructure layouts.
-   - **Checkout: colours only.**
-5. **Login and splash:** restyle to the website login card look: serif title, gold ring emblem, navy card. Visual only.
-6. **Guardrail:** add `tool/check_colors.sh`, which fails if `Color(0x` appears outside `lib/theme/` (with an allowlist for the developer screen). Document it in this file.
-7. Update the counts above and section 1 of this doc when done.
+### Event list (website Stories / Directory pattern)
+- **`ListPage` frame** (`shared/widgets/list_page.dart`):
+  - Toolbar: eyebrow, serif title, subtitle, search.
+  - **Cards / Table** toggle from 600px; phones get cards only.
+  - Count row with actions.
+- **Filter rail** like the website's `FilterSidebar`:
+  - Header: "Filters" with an active-count badge, a plain "Clear all" link and a collapse chevron.
+  - Muted gold section labels and chip toggles.
+  - Result count at the bottom.
+  - Sections:
+    - **When** (Upcoming / Past);
+    - **My Registrations** ("Registered by me", signed in only);
+    - **Date range** and **Timeline**;
+    - **Event mode** and **Registration status**.
+  - It starts open from 900px.
+  - Below 900px, a funnel icon (with count badge) and a clear-filters icon open and reset the same panel as a bottom sheet.
+- **Cards:**
+  - Sized to their content in equal-height rows, up to 4 columns of about 320px.
+  - Website badges.
+  - **Your registered events** get the gold "own" tint, a "Registered" badge and an **Unregister** button while `canCancel` allows it. It's the same dialog and `cancelRegistration` call as the My Events page.
+- **Table:** sortable by title, date, mode and registration; clicking a row opens the event.
+- **Admins:** "Manage Events" and "Create Event" buttons ("⋯" menu on phones). Create Event opens `/manage-events?new=1`, which opens the existing form.
+- **`/my-events` still works** as a fallback; the account menu now opens `/home?mine=1`.
 
-### 3a. Done on `ui/full-ui`
+### Other
+- **Policies:** Terms and Privacy pages became website links.
+- **Logos:** the NITKSAA Events logo set (header logo, gold/navy emblem, favicon, app icons). `nitksaa-logo.png` is kept for the website item in section 6.
+- **Guardrail:** `bash frontend/tool/check_colors.sh` (Git Bash on Windows) fails if `Color(0x…)` appears outside `lib/theme/`. The developer screen is allowlisted. Run it before every UI commit.
 
-- **Shell:** `shared/widgets/app_shell.dart`, a `ShellRoute` in `app_router.dart` around home, my-events, manage-events, registrations, event detail, checkout, policies and feedback. Splash, login, foundation and developer stay outside. The footer appears when the page's own scroll reaches its end, or straight away if the page doesn't scroll. Screens keep their bodies; only their sidebar/bottom-nav wiring was removed (event registrations had its own inline `NavigationBar` with the same three items; it now uses `AppBottomNav`). `AppBottomNav` clamps its selected index because a non-admin on `/manage-events` now sees the nav.
-- **Theme switch:** floating toggle removed from `main.dart`; header toggle only. `MaterialApp.title` is now "NITKSAA Events", so the web tab title no longer reverts to "NITKSAA Event".
-- **Colours:** one commit per file. Mapping used: gold → `primary`; navy/white text → `textPrimary`; slate/grey text → `textSecondary`/`textMuted`; borders/dividers → `border`; card fills → `card`; green/red/orange/blue → `success`/`error`/`warning`/`info`. Old navy CTA buttons are now gold `primary` (website primary button). Status snackbars use the new `AppPalette.tinted(tone)`.
-- **Restyle:** badges are tinted fill + 30% border in the same tone; cards are flat (no shadow) with the palette border; headings that asked for the unbundled `Fraunces` now use `CrimsonPro`. `AppPrimaryButton` labels use the button's foreground colour.
-- **Login/splash:** login form sits in a navy card with the emblem in a gold ring (`shared/widgets/emblem_ring.dart`) and a serif "Sign in" title. Splash uses the same emblem and a serif "NITKSAA".
-- **Checkout:** colour lines only (plus `const` removals the colour change forces).
-- **Counts after** (`Color(0x…)` outside `lib/theme/`): **0**, except `developer_diagnostics_screen.dart` (39 `Color(0x…)`/`Colors.*`, allowlisted). Remaining `Colors.*` are allowed ones: `Colors.transparent`, the QR code's black on white in `event_detail_screen.dart`, the white logo tint in `site_header.dart` and `emblem_ring.dart`, and the avatar.
-- **Guardrail:** `bash frontend/tool/check_colors.sh` (Git Bash on Windows). It exits 1 and lists the lines when `Color(0x` appears outside `lib/theme/`; the developer screen is allowlisted inside the script. Run it before every UI commit.
-- **Checked here:** `flutter analyze` adds no new issues (the 6 errors in `razorpay_payment_io.dart` are pre-existing: mobile-only import, not compiled for web); `flutter build web --release` succeeds with Flutter 3.38.10; screenshots of list, login, splash, policy pages in dark and light at 1280px and 390px with a mocked API. Event detail, My Events, Manage and checkout were not seen signed in.
+### Checks
+- **Analyzer:** `flutter analyze` shows 75 issues, all pre-existing. The 6 errors are in `razorpay_payment_io.dart`, a mobile-only import that isn't compiled for web.
+- **Build:** `flutter build web --release` succeeds on Flutter 3.38.10.
+- **Smoke test on beta (Padmanand, 9 Oct):** passed, signed out and as a regular user, at desktop, Surface Pro, iPad and phone widths. Details in section 4.
 
-**Known bug, don't fix:** release build `Bad state: RenderBox was not laid out` on event list cards. It's Sudarshana's to fix. If a colour edit touches the offending widget, leave the layout alone.
+## 4. Pending
 
-**Build check:** the cloud environment may not be able to install Flutter (`storage.googleapis.com` is blocked by the proxy). If it can't:
-- Review the code against the Flutter 3.38 API.
-- Keep every edit small.
-- Padmanand builds and deploys to beta, and pastes any errors back.
+### Blocked on Sudarshana (do together)
+1. **Signed-in deep test:**
+   - event detail (banners, Register, QR badge);
+   - "Registered by me", own-card tint and **Unregister**;
+   - account menu → My Events;
+   - checkout with a **₹1 test payment**.
+2. **Admin flows:**
+   - Manage Events and Create Event (the form should open straight away);
+   - Registrations page;
+   - the phone "⋯" menu.
+3. **Event card bug:** the known `RenderBox was not laid out` error on event cards in release builds. It's his to fix; check whether the new row layout changed it.
+4. **Cupertino code:** decide whether to delete the iOS layouts now that web never uses them.
+5. **"Registered by me" data:** it combines the public list with your registrations, so a registration whose event isn't in the public list (cancelled or unpublished) won't show. Confirm whether that can happen. `/my-events` is kept until then.
 
-## 4. Deploy to beta (Padmanand, Windows)
+### Next UI round (after Sudarshana's review and fixes)
+1. **Event card redesign:**
+   - banner or gradient band with a date tile;
+   - badges: mode, price, registration;
+   - capacity bar for admins.
+2. **The same `ListPage` frame and card on My Events and Manage Events.**
+3. **NITiKa** in the right-rail slot.
+4. Remove the `/my-events` fallback once item 5 above is confirmed.
 
-One-time setup is already done: Developer Mode on, `npm i -g firebase-tools`, `firebase login`.
+### Smoke-test items already passed (re-run after the merge)
+- **Header and nav:** pills, menu drawer below 900px, theme toggle that survives a refresh, account menu.
+- **Event list:**
+  - search;
+  - When chips;
+  - rail filters, badge count and Clear all;
+  - collapsing and reopening the rail;
+  - phone funnel and clear icons;
+  - Cards/Table toggle;
+  - card rows at all widths.
+- **Shell:**
+  - sticky header and footer;
+  - footer fade and drag-scroll;
+  - tab titles;
+  - fonts;
+  - logos and favicon in both themes;
+  - login card.
+- **Pages:** policy pages and their links, Feedback page, footer links to the production website. **About Us** points to `https://www.nitkalumni.in/about`; check that the page exists.
+
+## 5. Deploy to beta (Padmanand, Windows)
+
+One-time setup is done: Developer Mode on, `npm i -g firebase-tools`, `firebase login`, and a local `.firebaserc` beta target (keep it uncommitted).
 
 ```powershell
 cd C:\Users\padma\Projects\nitksaa-event
 git fetch origin
-git checkout <branch>        # e.g. ui/full-ui
+git checkout ui/full-ui
 git pull
 cd frontend
 flutter pub get
 firebase use project-d22bed42-f302-4e23-8dc
 flutter build web --release --dart-define=BACKEND_BASE_URL=https://nitksaa-events-api-246773894709.asia-south1.run.app
 firebase deploy --only hosting:beta
-git checkout -- pubspec.lock analysis_options.yaml   # discard local pub-get edits
+git checkout -- pubspec.lock analysis_options.yaml linux macos windows   # discard local pub-get edits
 ```
 
-**Check on beta**, desktop and phone width, dark and light:
-- events list
-- event detail
-- My Events
-- checkout (do a **₹1 test payment**)
-- policy pages and feedback
-- sign-in and sign-out
-- a hard refresh on `/#/privacy`
+If beta still shows the old app, open it in a private window (Ctrl+Shift+N). To check that a build contains the latest code, search `build\web\main.dart.js` for a recent string, e.g.:
 
-## 5. Merge plan (avoid conflicts with Sudarshana)
+```powershell
+Select-String -Path build\web\main.dart.js -Pattern "Registered by me" -Quiet
+```
 
-The UI branches change most screen files, and Sudarshana's open issues (004, 005, 007–013, 016–023) touch the same files. The rule is **merge the UI work to `main` before he starts his next fix**, then he works on top of it.
+## 6. Merge plan (avoid conflicts with Sudarshana)
 
-1. Padmanand approves `ui/full-ui` on beta.
-2. Open **one PR** `ui/full-ui` → `main`. It contains all the earlier `ui/*` branches. `ui/beta-preview`'s `firebase.json` beta target can be kept; it's harmless.
-3. Sudarshana reviews the PR, mainly the routes commit, `pubspec.yaml`, the `web/` changes, and that checkout logic is unchanged. Then he merges it.
-4. Sudarshana runs `git checkout main && git pull` **before** any new work. Any of his local uncommitted fixes: `git stash`, pull, `git stash pop`, then resolve.
-5. **If he already has local commits on a screen file:** rebase onto the new `main`. Conflicts will be colour lines vs. his logic lines.
-   - Keep his logic.
-   - Re-apply the palette colour on the lines he touched.
-6. Going forward: new code uses `context.palette` and theme colours, never `Color(0x…)`. `bash frontend/tool/check_colors.sh` catches mistakes.
-7. **If the UI PR can't merge before he resumes**, he tells Padmanand which screen he's on, and that screen's colour commit is reverted from the PR and redone after his fix.
+`ui/full-ui` changes most screen files, and Sudarshana's open issues touch the same files. **Merge the UI work to `main` before he starts his next fix.**
 
-**WhatsApp to Sudarshana before he resumes:** "UI branch `ui/full-ui` restyles all screens (colours and shared shell only, no logic). Please review and merge it to main before your next fix, then pull main. Details: docs/ui/HANDOVER.md section 5."
+1. Deep test with Sudarshana on beta (section 4).
+2. Open **one PR** `ui/full-ui` → `main`. It contains all the earlier `ui/*` branches. The `beta` target in `firebase.json` is harmless and can stay.
+3. Sudarshana reviews the PR, mainly:
+   - the routes and shell (`app_router.dart`, `app_shell.dart`);
+   - the nav changes (section 2);
+   - `pubspec.yaml` and `web/`;
+   - that checkout logic is unchanged (its commit is colours only);
+   - the event list changes, which move UI but keep provider calls.
 
-## 6. Open items for others
+   Then he merges.
+4. Sudarshana runs `git checkout main && git pull` **before** any new work. Local uncommitted fixes: `git stash`, pull, `git stash pop`, then resolve.
+5. **If he already has local commits on a screen file:** rebase onto the new `main`. Keep his logic lines and re-apply the palette colours on the lines he touched.
+6. **Going forward:** new code uses `context.palette` and theme colours, never `Color(0x…)`. `tool/check_colors.sh` catches mistakes.
+7. **If the PR can't merge before he resumes,** he tells Padmanand which screen he's on. That screen's commits are reverted from the PR and redone after his fix.
+
+**WhatsApp to Sudarshana:** "UI branch `ui/full-ui` restyles the app to match the website: shared header/footer shell, filters and admin buttons on the Events page, colours and fonts. No provider or payment logic changes. Let's deep-test it together on beta (admin flows and ₹1 checkout), then please review and merge it to main before your next fix. Details: docs/ui/HANDOVER.md."
+
+## 7. Open items for others
 
 **Sudarshana (backend)**
-- `POST /api/v1/feedback` in `backend/app/` (not `backend/src/`, which is a copy of the website backend).
-  - Body: `{area, category, message, source}`; Bearer auth.
-  - Validation: message 10–2000 chars.
-  - Emails `nitksaa.infra@gmail.com` like the website's `src/api/feedback.py`. Return 204, or 502 on mail failure.
-  - Needs SMTP (go-live S10). Padmanand grants the secret to the events API service account (P6 lockdown).
-- Policy links on checkout (S11). His file; after his payment issues close.
+- `POST /api/v1/feedback` in `backend/app/` (not `backend/src/`, which is a copy of the website backend):
+  - Body `{area, category, message, source}`, with Bearer auth.
+  - Validation: message 10–2000 characters.
+  - Emails `nitksaa.infra@gmail.com` like the website's `src/api/feedback.py`. Returns 204, or 502 on mail failure.
+  - Needs SMTP (go-live S10).
+- Policy links on checkout (S11), after his payment issues close.
 
 **Padmanand (website repo)**
-- Load fonts: add a Google Fonts `<link>` for Crimson Pro and DM Sans in `frontend/index.html`. Today the live site falls back to Georgia and the system font.
-- Define `--surface-ch` in `tokens.css`. It's used by `footer.css` but undefined.
-- Replace `frontend/src/assets/nitksaa-logo.png` with the typo-fixed logo ("Assocation" → "Association"). The fixed file is in the events repo at `frontend/assets/images/nitksaa-logo.png`.
-- Official refund policy text, to replace `frontend/assets/policies/Refund_and_Cancellation_Policy.md`.
+- Load Crimson Pro and DM Sans with a Google Fonts `<link>` in `frontend/index.html`.
+- Define `--surface-ch` in `tokens.css`; `footer.css` uses it but it's undefined.
+- Replace `frontend/src/assets/nitksaa-logo.png`, which has the "Assocation" typo, with the fixed `frontend/assets/images/nitksaa-logo.png` from the events repo.
+- Provide the official refund policy text, to replace `frontend/assets/policies/Refund_and_Cancellation_Policy.md`.
