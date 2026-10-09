@@ -1266,6 +1266,32 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ),
                 style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
               ),
+        // Admins: Manage Events / Create Event, like the website's Manage
+        // Stories / Write a Story. Phones get them in a "more" menu.
+        actions: auth.session?.userType.toLowerCase() != 'admin'
+            ? const []
+            : MediaQuery.sizeOf(context).width < 600
+            ? [
+                PopupMenuButton<String>(
+                  tooltip: 'Admin',
+                  icon: Icon(Icons.more_horiz, color: p.textSecondary),
+                  onSelected: (route) => context.go(route),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: AppRoutes.manageEvents, child: Text('Manage Events')),
+                    PopupMenuItem(value: '${AppRoutes.manageEvents}?new=1', child: Text('Create Event')),
+                  ],
+                ),
+              ]
+            : [
+                OutlinedButton(
+                  onPressed: () => context.go(AppRoutes.manageEvents),
+                  child: const Text('Manage Events'),
+                ),
+                OutlinedButton(
+                  onPressed: () => context.go('${AppRoutes.manageEvents}?new=1'),
+                  child: const Text('Create Event'),
+                ),
+              ],
         filters: (context) => _buildFilterPanel(ref, true),
         onOpenFilters: _showFilterBottomSheet,
         activeFilterCount: _activeFilterCount(state),

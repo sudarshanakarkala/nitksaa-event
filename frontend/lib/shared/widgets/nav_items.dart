@@ -4,7 +4,6 @@ import '../../features/auth/services/auth_controller.dart';
 import '../../routes/app_routes.dart';
 
 /// App navigation: the header links on wide screens and the menu on phones.
-/// Same items and visibility rules as the old sidebar.
 class NavItem {
   const NavItem({
     required this.label,
@@ -21,20 +20,11 @@ class NavItem {
   final bool adminOnly;
 }
 
+// Website pattern: "My ..." is a filter on the list page and "Manage" is
+// an admin button there, not a nav link. My Events is also in the account
+// menu.
 const List<NavItem> navItems = [
   NavItem(label: 'Events', route: AppRoutes.home, icon: Icons.calendar_month_outlined),
-  NavItem(
-    label: 'My Events',
-    route: AppRoutes.myEvents,
-    icon: Icons.bookmark_border,
-    signedInOnly: true,
-  ),
-  NavItem(
-    label: 'Manage Events',
-    route: AppRoutes.manageEvents,
-    icon: Icons.admin_panel_settings_outlined,
-    adminOnly: true,
-  ),
 ];
 
 List<NavItem> visibleNavItems(AuthController auth) {
@@ -50,7 +40,12 @@ List<NavItem> visibleNavItems(AuthController auth) {
 bool isNavItemActive(NavItem item, String location) {
   switch (item.route) {
     case AppRoutes.home:
-      return location == AppRoutes.home || location.startsWith('/events/');
+      // The whole Events section: list, detail, checkout, my events, manage.
+      return location == AppRoutes.home ||
+          location.startsWith('/events/') ||
+          location.startsWith(AppRoutes.myEvents) ||
+          location.startsWith(AppRoutes.manageEvents) ||
+          location.startsWith('/admin/');
     case AppRoutes.manageEvents:
       return location.startsWith(AppRoutes.manageEvents) ||
           location.startsWith('/admin/');

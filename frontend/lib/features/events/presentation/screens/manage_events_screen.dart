@@ -45,6 +45,14 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       setState(() {}); // Trigger rebuild when search text changes
     });
     Future.microtask(_fetchEvents);
+    // "Create Event" on the Events page links here with ?new=1: open the
+    // new-event form once the page is up (admins only).
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final isNew = GoRouterState.of(context).uri.queryParameters['new'] == '1';
+      final isAdmin = ref.read(authControllerProvider).session?.userType.toLowerCase() == 'admin';
+      if (isNew && isAdmin) _showEventForm();
+    });
   }
 
   @override
