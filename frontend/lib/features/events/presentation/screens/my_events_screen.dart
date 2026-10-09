@@ -5,6 +5,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../theme/app_palette.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
 import '../providers/my_events_provider.dart';
@@ -269,7 +270,7 @@ class _RegistrationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final p = context.palette;
     final event = registration.event;
     final publicEvent = registration.publicEvent;
     final isVirtual = event?.isVirtual ?? publicEvent?.isVirtual ?? false;
@@ -283,10 +284,10 @@ class _RegistrationCard extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      color: isDark ? const Color(0xFF131E30) : Colors.white,
+      color: p.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
+        side: BorderSide(color: p.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -308,12 +309,9 @@ class _RegistrationCard extends StatelessWidget {
                 ),
                 _Tag(
                   label: registration.isActive ? 'Registered' : 'Unregistered',
-                  bg: registration.isActive
-                      ? const Color(0xFFDDEEFF)
-                      : const Color(0xFFFFE9E9),
-                  fg: registration.isActive
-                      ? const Color(0xFF1B5C9B)
-                      : const Color(0xFF8A1B1B),
+                  bg: (registration.isActive ? p.info : p.error)
+                      .withValues(alpha: 0.14),
+                  fg: registration.isActive ? p.info : p.error,
                 ),
               ],
             ),
@@ -337,17 +335,13 @@ class _RegistrationCard extends StatelessWidget {
               children: [
                 _Tag(
                   label: isVirtual ? 'Virtual' : 'Physical',
-                  bg: isVirtual
-                      ? const Color(0xFFEDE6FF)
-                      : const Color(0xFFDDE8FF),
-                  fg: isVirtual
-                      ? const Color(0xFF4A2DB0)
-                      : const Color(0xFF1B3C8A),
+                  bg: (isVirtual ? p.info : p.primary).withValues(alpha: 0.14),
+                  fg: isVirtual ? p.info : p.primary,
                 ),
                 _Tag(
                   label: open ? 'Registration open' : 'Registration closed',
-                  bg: open ? const Color(0xFFD9F4E8) : const Color(0xFFFFE9E9),
-                  fg: open ? const Color(0xFF1B5C3A) : const Color(0xFF8A1B1B),
+                  bg: (open ? p.success : p.error).withValues(alpha: 0.14),
+                  fg: open ? p.success : p.error,
                 ),
               ],
             ),
@@ -427,7 +421,7 @@ class _MetaRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: const Color(0xFFC9952A)),
+          Icon(icon, size: 16, color: context.palette.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -478,7 +472,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+          Icon(Icons.error_outline, size: 48, color: context.palette.error),
           const SizedBox(height: 12),
           const Text('Could not load registrations'),
           const SizedBox(height: 8),
@@ -500,16 +494,16 @@ class _SearchEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.search_off, size: 64, color: Colors.grey),
+          Icon(Icons.search_off, size: 64, color: context.palette.textMuted),
           const SizedBox(height: 16),
           const Text(
             'No events match your search',
             style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Try a different search term',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: context.palette.textMuted),
           ),
         ],
       ),
@@ -526,7 +520,7 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.event_available_outlined, size: 64, color: Colors.grey),
+          Icon(Icons.event_available_outlined, size: 64, color: context.palette.textMuted),
           const SizedBox(height: 16),
           const Text(
             'No registered events yet',
