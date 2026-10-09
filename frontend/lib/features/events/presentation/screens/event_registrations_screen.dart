@@ -384,7 +384,7 @@ class _EventRegistrationsScreenState
                               Text(
                                 _event?.title ?? 'Event Registrations',
                                 style: const TextStyle(
-                                  fontFamily: 'Fraunces',
+                                  fontFamily: 'CrimsonPro',
                                   fontSize: 26,
                                   fontWeight: FontWeight.bold,
                                 ),
@@ -827,6 +827,7 @@ class _AttendeeCard extends StatelessWidget {
                   decoration: BoxDecoration(
                     color: context.palette.info.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: context.palette.info.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     regNumber,
