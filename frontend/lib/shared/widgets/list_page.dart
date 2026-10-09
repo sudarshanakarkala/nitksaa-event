@@ -89,8 +89,9 @@ class _ListPageState extends State<ListPage> {
             subtitle: compact ? null : widget.subtitle,
           ),
           const SizedBox(height: 20),
-          // Phones: search on its own row, toggle and filter icons below.
-          if (compact) ...[
+          // Phones: search on its own row, toggle and filter icons below
+          // (filter icons stay beside search when there is no toggle).
+          if (compact && widget.toggle != null) ...[
             if (widget.search != null) widget.search!,
             const SizedBox(height: 10),
             Row(
