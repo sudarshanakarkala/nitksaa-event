@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
+import '../../../../theme/app_palette.dart';
 import '../../services/auth_controller.dart';
 
 class SplashScreen extends StatefulWidget {
@@ -57,10 +58,10 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Widget _buildWebSplash() {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color bgColor = isDark ? const Color(0xFF0B0D10) : const Color(0xFFF7F8FA);
-    final Color textColor = isDark ? const Color(0xFFF5F7FA) : const Color(0xFF0E1117);
-    final Color secondaryTextColor = isDark ? const Color(0xFF9AA3B2) : const Color(0xFF4A5260);
+    final p = context.palette;
+    final Color bgColor = p.background;
+    final Color textColor = p.textPrimary;
+    final Color secondaryTextColor = p.textSecondary;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -72,12 +73,12 @@ class _SplashScreenState extends State<SplashScreen> {
               child: Column(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
-                  const Text(
+                  Text(
                     'NITKSAA',
                     style: TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Color(0xFFC9952A),
+                      color: p.primary,
                       letterSpacing: 0.5,
                     ),
                   ),
@@ -96,22 +97,22 @@ class _SplashScreenState extends State<SplashScreen> {
                     width: 72,
                     height: 72,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFC9952A).withValues(alpha: 0.15),
+                      color: p.primary.withValues(alpha: 0.15),
                       borderRadius: BorderRadius.circular(18),
                     ),
-                    child: const Icon(
+                    child: Icon(
                       Icons.calendar_today_outlined,
                       size: 36,
-                      color: Color(0xFFC9952A),
+                      color: p.primary,
                     ),
                   ),
                   const SizedBox(height: 32),
-                  const SizedBox(
+                  SizedBox(
                     width: 32,
                     height: 32,
                     child: CircularProgressIndicator(
                       strokeWidth: 3,
-                      valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFC9952A)),
+                      valueColor: AlwaysStoppedAnimation<Color>(p.primary),
                     ),
                   ),
                   const SizedBox(height: 14),
@@ -132,8 +133,8 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Widget _buildIOSSplash() {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color bgColor = isDark ? const Color(0xFF0A0A0C) : const Color(0xFF000000);
+    final p = context.palette;
+    final Color bgColor = p.background;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -142,21 +143,21 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
+              Text(
                 'NITKSAA',
                 style: TextStyle(
                   fontSize: 30,
                   fontWeight: FontWeight.bold,
-                  color: Color(0xFFC9952A),
+                  color: p.primary,
                   letterSpacing: -0.5,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'EVENT PLATFORM · ALPHA',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Color(0x99FFFFFF), // 60% opacity
+                  color: p.textSecondary,
                   letterSpacing: 1.0,
                   fontWeight: FontWeight.w500,
                 ),
@@ -166,26 +167,26 @@ class _SplashScreenState extends State<SplashScreen> {
                 width: 60,
                 height: 60,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFC9952A).withValues(alpha: 0.15),
+                  color: p.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(16),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.calendar_today_outlined,
                   size: 32,
-                  color: Color(0xFFC9952A),
+                  color: p.primary,
                 ),
               ),
               const SizedBox(height: 28),
-              const CupertinoActivityIndicator(
+              CupertinoActivityIndicator(
                 radius: 13,
-                color: Color(0xFFC9952A),
+                color: p.primary,
               ),
               const SizedBox(height: 12),
-              const Text(
+              Text(
                 'Connecting…',
                 style: TextStyle(
                   fontSize: 10,
-                  color: Color(0x66FFFFFF), // 40% opacity
+                  color: p.textMuted,
                 ),
               ),
             ],
@@ -196,8 +197,8 @@ class _SplashScreenState extends State<SplashScreen> {
   }
 
   Widget _buildAndroidSplash() {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color bgColor = isDark ? const Color(0xFF060B14) : const Color(0xFF0D1B3E);
+    final p = context.palette;
+    final Color bgColor = p.background;
 
     return Scaffold(
       backgroundColor: bgColor,
@@ -206,20 +207,20 @@ class _SplashScreenState extends State<SplashScreen> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              const Text(
+              Text(
                 'NITKSAA',
                 style: TextStyle(
                   fontSize: 28,
                   fontWeight: FontWeight.w600,
-                  color: Color(0xFFC9952A),
+                  color: p.primary,
                 ),
               ),
               const SizedBox(height: 4),
-              const Text(
+              Text(
                 'EVENT PLATFORM · ALPHA',
                 style: TextStyle(
                   fontSize: 11,
-                  color: Color(0x80FFFFFF), // 50% opacity
+                  color: p.textSecondary,
                   letterSpacing: 1.1,
                 ),
               ),
@@ -228,30 +229,30 @@ class _SplashScreenState extends State<SplashScreen> {
                 width: 56,
                 height: 56,
                 decoration: BoxDecoration(
-                  color: const Color(0xFFC9952A).withValues(alpha: 0.15),
+                  color: p.primary.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(14),
                 ),
-                child: const Icon(
+                child: Icon(
                   Icons.calendar_today_outlined,
                   size: 28,
-                  color: Color(0xFFC9952A),
+                  color: p.primary,
                 ),
               ),
               const SizedBox(height: 28),
-              const SizedBox(
+              SizedBox(
                 width: 24,
                 height: 24,
                 child: CircularProgressIndicator(
                   strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(Color(0xFFC9952A)),
+                  valueColor: AlwaysStoppedAnimation<Color>(p.primary),
                 ),
               ),
               const SizedBox(height: 10),
-              const Text(
+              Text(
                 'Connecting…',
                 style: TextStyle(
                   fontSize: 10,
-                  color: Color(0x4DFFFFFF), // 30% opacity
+                  color: p.textMuted,
                 ),
               ),
             ],
