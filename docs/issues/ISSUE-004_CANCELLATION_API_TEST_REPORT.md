@@ -1,11 +1,12 @@
 # ISSUE-004 Cancellation API Test Report
 
-**Date:** 2026-10-10
+**Date:** 2026-10-10. Updated the same day with the beta verification results (section 6) and the merge (sections 12 and 13).
 **Application:** `nitksaa-event/frontend` (NEW Flutter app)
 **Base commit:** `e7267a2` (branch `main`), which contains the ISSUE-001, ISSUE-002, ISSUE-003 and ISSUE-006 fixes and the UI merge (PR #2).
-**Fix branch:** `fix/issue-004`, two commits: the cancel API, then registering again after a cancellation
+**Fix commits:** `bbd449c` (the cancel API) and `c072631` (registering again after a cancellation), on `fix/issue-004`
+**Merge commit:** `578ec9c` on `main`, pull request #4
 **Toolchain:** Flutter 3.44.2, Dart 3.12.2, `dio` 5.9.2, `go_router` 17.2.3, `flutter_riverpod` 2.6.1, Chrome 154 for the browser tests
-**Final result:** CODE PASS — MANUAL E2E PENDING
+**Final result:** PASS
 
 ---
 
@@ -16,7 +17,7 @@
 | ID | ISSUE-004 |
 | Severity | P1 — Gate A blocker |
 | Area | Cancellation / My Events / Event list |
-| Status | Fixed on `fix/issue-004`. Manual verification not run. Deploy status is in section 6. |
+| Status | DONE. Merged to `main` as `578ec9c` (pull request #4) on 2026-10-10. Checked on beta the same day (section 6). The live site has not been deployed from this merge. |
 
 "Unregister" sent `DELETE /api/v1/events/{event_id}/my-registration`. The backend has no such route and answered 405, so no registration could be cancelled from the app, and no refund could start.
 
@@ -288,11 +289,53 @@ The contract matches the task description. The HTTP 405 for the old DELETE was o
 
 ## 6. Manual Verification
 
-**Result: PENDING.** No step in this section has been run.
+**Result: PASS**, on the two checks that were run. Six of the eight planned steps were not run by hand; they are marked NOT RUN below.
 
-The beta deploy was approved on 2026-10-10 and is made from this branch after the second commit. Whether it was done, and when, is recorded in the pull request description, because it happens after this report is committed. The fix is not deployed to the live site.
+One manual run was made on beta on 2026-10-10, after the deploy. The maintainer reported its results the same day, as PASS for each check. No screenshots or saved network log were supplied.
 
-Manual testing is on beta only. The live site is never deployed from this branch.
+| Field | Value |
+|---|---|
+| Site | `https://nitksaa-events-beta.web.app` |
+| Build tested | `c072631`, deployed to beta on 2026-10-10 at 17:10 IST with `firebase deploy --only hosting:beta` |
+| Beta bundle | After the deploy, beta served `main.dart.js` with SHA-256 `dd76aba1…e377`, the same as the local build of `c072631` (section 8) |
+| Run | 2026-10-10, after the deploy. The time was not reported |
+| Event | #11, "TestOct8" (paid) |
+| Registration | 14 |
+| Payment mode | Not reported for this run. Registration 14 is the one paid for in the ISSUE-006 manual run on 2026-10-08, in TEST mode (ISSUE-006 test report, section 7) |
+| Live site | Not deployed from this branch. Its `main.dart.js` had the same SHA-256 before and after the beta deploy (`598b2600…614c`) |
+
+Beta and live share one backend, so the cancellation of registration 14 and its refund are real backend records.
+
+### Checks reported
+
+| Check | Reported | Result |
+|---|---|---|
+| Paid cancel of registration 14 on event #11 | `POST /registrations/14/cancel` answered 200. The app showed the "refund initiated" message. No `DELETE` was sent | PASS |
+| Event page after the cancel | "You cancelled your earlier registration." and the Register button | PASS |
+
+Not reported, and so not on record: the `status` value in the response (the app shows that message for `refund_pending` and `refund_processed` only), which of the two Unregister buttons was pressed, and whether the refund appeared in Razorpay.
+
+### Steps
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| 1 | Register for the free event, open My Events, Unregister, confirm | One `POST /registrations/{id}/cancel`, 200, status `none`; "Your registration has been cancelled."; card shows cancelled | NOT RUN |
+| 2 | Check the Network panel | No `DELETE …/my-registration` | PASS, for the paid cancel of step 5 |
+| 3a | Open the event page after a cancel | No "Registered Successfully", no badge. "You cancelled your earlier registration." and a Register button | PASS |
+| 3b | Register again from that page | One `POST /events/{id}/register`, a new registration id, and the page shows "Registered Successfully" | NOT RUN |
+| 4 | Repeat step 1 from the event list "Registered by me" card | Same result as step 1 | NOT RUN |
+| 5 | Unregister from a paid, TEST-mode registration | 200, status `refund_pending` or `refund_processed`; "…Your refund has been initiated." | PASS. 200 and the message, for registration 14. That registration already existed, so registering and paying were not part of this run |
+| 6 | Optional: Razorpay TEST dashboard | One refund for the captured payment, full amount | NOT RUN |
+| 7 | Hold a seat (close Razorpay without paying), then try to cancel | No Unregister button for that status. If one is shown: `409 registration_not_cancellable` and the "payment is in progress" message | NOT RUN |
+| 8 | With user B's token, `POST` user A's `registration_id` to `/cancel` | 404 `registration_not_found` | NOT RUN |
+
+Steps 1 and 3 were planned as one step each with a free event; step 3 is split here because only its first half was reported.
+
+### What the manual run does not cover
+
+The free-event cancel, the event list button, registering again, the refund as Razorpay shows it, a held seat and the wrong-user call were not checked by hand. They rest on the automated tests (section 4) and on the backend code (section 5).
+
+### How the beta build was made
 
 ```bash
 cd frontend
@@ -303,28 +346,7 @@ flutter build web --release \
 firebase deploy --only hosting:beta --project project-d22bed42-f302-4e23-8dc
 ```
 
-Then test on `https://nitksaa-events-beta.web.app` in a private window, with DevTools → Network open. Afterwards discard the local pub-get edits: `git checkout -- pubspec.lock analysis_options.yaml linux macos windows`.
-
-### Prerequisites
-
-- **A signed-in, eligible alumni account**, and a second account for step 8.
-- **An open free event and an open TEST-mode paid event.** Event #11 "TestOct8" closes at 23:59 IST on 2026-10-10. After that an admin has to create new ones.
-- **Beta and live share one backend.** Every cancellation and TEST refund made on beta is a real backend record. Paid tests in Razorpay TEST mode only: cancelling a paid registration sends a real refund request to Razorpay in the mode the payment was captured in.
-
-### Steps
-
-| # | Step | Expected | Result |
-|---|---|---|---|
-| 1 | Register for the free event, open My Events, Unregister, confirm | One `POST /registrations/{id}/cancel`, 200, status `none`; "Your registration has been cancelled."; card shows cancelled | PENDING |
-| 2 | Check the Network panel | No `DELETE …/my-registration` | PENDING |
-| 3 | Open the event page | No "Registered Successfully", no badge. "You cancelled your earlier registration." and a Register button. Register again: one `POST /events/{id}/register`, a new registration id, and the page shows "Registered Successfully" | PENDING |
-| 4 | With the registration from step 3, repeat step 1 from the event list "Registered by me" card | Same result as step 1, with the new `registration_id` in the path | PENDING |
-| 5 | Register and pay for the TEST paid event (Razorpay Test Mode ribbon visible), then Unregister | 200, status `refund_pending` or `refund_processed`; "…Your refund has been initiated." | PENDING |
-| 6 | Optional: Razorpay TEST dashboard | One refund for the captured payment, full amount | PENDING |
-| 7 | Hold a seat (close Razorpay without paying), then try to cancel | No Unregister button for that status. If one is shown: `409 registration_not_cancellable` and the "payment is in progress" message | PENDING |
-| 8 | With user B's token, `POST` user A's `registration_id` to `/cancel` | 404 `registration_not_found` | PENDING |
-
-After step 3 My Events shows two cards for the event, the cancelled registration and the new one. That is ISSUE-011 and is expected here.
+`flutter test` gave 168 of 168 before the build. The `beta` hosting target is mapped to `nitksaa-events-beta` in a local, uncommitted edit of `frontend/.firebaserc`.
 
 ---
 
@@ -426,7 +448,7 @@ Result: succeeded (`✓ Built build/web`).
 | `quantity=` | Absent |
 | Production backend URL | Present |
 | SHA-256 | `dd76aba1325ae8f2643deb46b8a775ab95d751d398075845987c9eaaca74e377` |
-| Deployed | Not to live. Beta: see section 6 |
+| Deployed | Beta, on 2026-10-10 at 17:10 IST; the file beta served has this SHA-256. Not to live |
 
 ---
 
@@ -448,7 +470,7 @@ Run from the repository root after the fix.
 ## 10. Remaining Risks
 
 1. **A cancelled attendee who cannot register again is not told why.** The event page says "Unregistered from this event" whether the event is full, closed, or the account is not eligible. If the eligibility call fails, the page says the same and offers no Register button until it is reloaded.
-2. **Manual verification has not been run.** Everything about real sign-in, the real backend and Razorpay rests on the automated tests and on reading the backend code.
+2. **The manual run covered two checks.** A paid cancel and the event page after it were checked on beta. The free-event cancel, the event list button, registering again, the refund in Razorpay, a held seat and the wrong-user call were not run by hand (section 6).
 3. **A paid cancel sends a real refund request to Razorpay.** In LIVE mode that is real money. The app does not warn about the mode before cancelling (ISSUE-017) and does not show the refund amount in the confirm dialog.
 4. **ISSUE-005 remains pending.** After the snackbar closes, the app shows nothing about the refund. A `refund_pending` or `refund_failed` refund cannot be followed or checked in the app.
 5. **ISSUE-011 remains pending.** An event that was cancelled and registered again has two cards on My Events, and registering again is now possible from the app, so this will be seen. Any status other than `registered` is labelled "Unregistered". On the event page `seat_held` and the `payment_*` statuses are as they were.
@@ -459,49 +481,46 @@ Run from the repository root after the fix.
 10. **The event list lookup changed for re-registered events.** Their card now shows the "Registered" badge and appears under "Registered by me", which it did not before. This is the intended effect of the change in section 3, but it is visible outside the cancel flow.
 11. **The widget tests use the test font**, which is much wider than the app's. Each screen is tested at a window size where its layout fits. They do not check the layout at other sizes.
 12. **Deploys are invisible to returning browsers for up to an hour** (ISSUE-022). Use a private window for the manual run.
+13. **The fix is on `main` but not on the live site.** Attendees on the live site still get the old Unregister until `hosting:events` is deployed from `main`.
 
 ---
 
 ## 11. Final Result
 
-**CODE PASS — MANUAL E2E PENDING**
+**PASS**
 
-Automated verification passes (sections 4, 7 and 8). The manual run on beta has not been made (section 6).
+Automated verification passes (sections 4, 7 and 8). On beta, a paid cancel and the event page after it pass (section 6). The pull request was approved and merged (section 12).
+
+Limits of this result: steps 1, 3b, 4, 6, 7 and 8 of the manual plan were not run, and the fix is not on the live site yet.
 
 ---
 
 ## 12. Commit
 
-Branch: `fix/issue-004`, from `main` at `e7267a2`. Nothing is committed to `main`.
+| | Hash | Message |
+|---|---|---|
+| Fix, first commit | `bbd449c` | `fix(cancellation): use canonical registration cancel API` |
+| Fix, second commit | `c072631` | `fix(cancellation): allow registering again after cancelling` |
+| Merge to `main` | `578ec9c` | `Merge pull request #4: ISSUE-004 use canonical registration cancel API` |
 
-Two commits, in this order:
+Both fix commits carry `ISSUE-004` in the body.
 
-```text
-fix(cancellation): use canonical registration cancel API
+Pull request #4, `fix/issue-004` → `main`. Approved by Padmanand (`pwarrier108`) on 2026-10-10 at 17:24 IST. Merged on 2026-10-10 at 17:38 IST with a merge commit, not a squash: `578ec9c` has the parents `e7267a2` and `c072631`.
 
-ISSUE-004
-```
-
-```text
-fix(cancellation): allow registering again after cancelling
-
-ISSUE-004
-```
-
-The hashes are not written here. The branch is rebased onto `main` before merge (section 13), which changes them. The pull request shows the current hashes, and the merged ones go into the remediation plan after merge.
-
-Pull request: `fix/issue-004` → `main`, titled "ISSUE-004: use canonical registration cancel API". It touches cancellation and refunds, so it needs Padmanand's approval. It is not to be merged before the manual run.
+The hashes are the ones tested on beta. The branch was not rebased, because `main` had not moved from `e7267a2`.
 
 ---
 
-## 13. Before Merge
+## 13. Merge
 
-To be done by the maintainer, after the manual run on beta passes and the pull request is approved:
+What was done at merge, against the steps planned before it:
 
-1. `git fetch origin && git rebase origin/main`
-2. `git push --force-with-lease`
-3. Redeploy to beta and check the cancel flow again.
-4. Merge with "Create a merge commit", not squash.
-5. Update `NITKSAA_EVENT_ISSUE_BY_ISSUE_REMEDIATION_PLAN.md`: ISSUE-004 status and commit hash. Record the manual results in section 6 of this report.
+| Planned | Done |
+|---|---|
+| Rebase onto `main` and push with `--force-with-lease` | Not needed. `origin/main` was still `e7267a2`, the commit the branch was made from |
+| Redeploy to beta and check the cancel flow again | Not needed for the same reason: the merged code is `c072631`, the build already checked on beta |
+| Merge with "Create a merge commit", not squash | Done, as `578ec9c` |
+| Delete the branch | `fix/issue-004` deleted on GitHub and locally |
+| Update the remediation plan and this report | Done in a docs-only pull request after the merge |
 
-ISSUE-005 is branched from the updated `main` after this pull request merges. It has not been started.
+The live site was not deployed. ISSUE-005 is branched from the updated `main`; it has not been started.

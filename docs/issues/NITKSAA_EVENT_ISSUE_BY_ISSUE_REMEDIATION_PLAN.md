@@ -166,7 +166,7 @@ Later, plan and verify all backend capabilities, including:
 | 10 | Payment | ISSUE-009 Razorpay in-modal retry loses success | P1 | OPEN | `ISSUE-009_RAZORPAY_RETRY_TEST_REPORT.md` | TBD |
 | 11 | Payment | ISSUE-010 No payment-status handling | P2 | OPEN | `ISSUE-010_PAYMENT_STATUS_TEST_REPORT.md` | TBD |
 | 12 | Payment | ISSUE-017 No TEST/LIVE handling | P2/P1 before LIVE | OPEN | `ISSUE-017_PAYMENT_MODE_TEST_REPORT.md` | TBD |
-| 13 | Cancellation | ISSUE-004 Wrong cancellation endpoint | P1 | OPEN | `ISSUE-004_CANCELLATION_API_TEST_REPORT.md` | TBD |
+| 13 | Cancellation | ISSUE-004 Wrong cancellation endpoint | P1 | DONE | `ISSUE-004_CANCELLATION_API_TEST_REPORT.md` | `578ec9c` |
 | 14 | Cancellation | ISSUE-012 Frontend-only cancellation rule | P2 | OPEN | `ISSUE-012_CANCELLATION_POLICY_TEST_REPORT.md` | TBD |
 | 15 | Refund | ISSUE-005 Refund flow not integrated | P1 | OPEN | `ISSUE-005_REFUND_E2E_TEST_REPORT.md` | TBD |
 | 16 | Timeline | Payment/cancel/refund timeline missing | Capability gap | OPEN | `FLOW-09_PAYMENT_TIMELINE_TEST_REPORT.md` | TBD |
@@ -884,7 +884,7 @@ ISSUE-017
 ## ISSUE-004 — Cancellation Calls a Nonexistent API
 
 **Severity:** P1  
-**Status:** OPEN  
+**Status:** DONE  
 **Confirmed against production:** current DELETE returns HTTP 405
 
 ### Gap
@@ -938,7 +938,7 @@ fix(cancellation): use canonical registration cancel API
 ISSUE-004
 ```
 
-**Commit hash:** `TBD`
+**Commit hash:** `578ec9c` (merge commit of pull request #4; fix commits `bbd449c` and `c072631`)
 
 ---
 

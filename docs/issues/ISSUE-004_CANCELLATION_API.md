@@ -6,9 +6,9 @@ P1 — Gate A blocker. ISSUE-005 (refund) depends on it.
 
 ## Status
 
-CODE PASS — MANUAL E2E PENDING
+DONE
 
-The fix is on branch `fix/issue-004`, in two commits. Automated verification passes. No manual run has been made. The beta deploy is approved and follows the second commit; the live site is not deployed from this branch. See "Status" at the end.
+Merged to `main` as `578ec9c` (pull request #4) on 2026-10-10, after a check on beta the same day. The fix is two commits, `bbd449c` and `c072631`. The live site has not been deployed from this merge. See "Status" at the end.
 
 ## Gap
 
@@ -251,10 +251,13 @@ Beta and live share one backend. A cancellation or a TEST refund made on beta is
 
 ## Status
 
-**CODE PASS — MANUAL E2E PENDING**
+**DONE**
 
-Done: the fix in two commits, 58 new tests on the VM and 57 in Chrome, the regression suites for ISSUE-001, -002, -003 and -006, the analyzer comparison, the release web build and the bundle check. Results are in `ISSUE-004_CANCELLATION_API_TEST_REPORT.md`.
+- **Fix:** two commits on `fix/issue-004`, `bbd449c` (the cancel API) and `c072631` (registering again after cancelling).
+- **Automated:** 58 new tests on the VM and 57 in Chrome, the regression suites for ISSUE-001, -002, -003 and -006, the analyzer comparison, the release web build and the bundle check all pass.
+- **Beta:** `c072631` was deployed to `https://nitksaa-events-beta.web.app` on 2026-10-10. Two checks were run there and passed: a paid cancel (event #11, registration 14: `POST /registrations/14/cancel` answered 200, the refund message was shown, no DELETE was sent), and the event page after it (the note and the Register button).
+- **Not run by hand:** manual steps 1, 4, 6, 7 and 8, and registering again in step 3. They rest on the automated tests.
+- **Merge:** pull request #4, approved by Padmanand, merged to `main` on 2026-10-10 as `578ec9c` with a merge commit.
+- **Live site:** not deployed from this merge.
 
-Not done: the eight manual steps above. They need the beta deploy (approved on 2026-10-10; the pull request description records whether it was made), a real sign-in, an open free event and an open TEST-mode paid event. Event #11 "TestOct8" closes at 23:59 IST on 2026-10-10.
-
-The pull request must not be merged before the manual run, and it needs Padmanand's approval because it touches cancellation and refunds. The steps before merge are in section 13 of the test report.
+Results and evidence are in `ISSUE-004_CANCELLATION_API_TEST_REPORT.md`.
