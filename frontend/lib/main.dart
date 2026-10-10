@@ -27,6 +27,7 @@ Future<void> main() async {
   }
 
   await Hive.initFlutter();
+  await ThemeNotifier.openStorage();
   AppLogger.info('Hive initialized');
 
   await AuthController.instance.initialize();
