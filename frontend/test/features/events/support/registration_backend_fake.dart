@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'dart:typed_data';
 
@@ -66,6 +67,16 @@ class RecordedRequest {
 /// - Somebody else's registration is `404 registration_not_found`.
 /// - Every row is kept. `GET /my/registrations` lists them newest first, and
 ///   `GET /events/{id}/my-registration` gives the newest.
+///
+/// And the ones ISSUE-005 depends on:
+///
+/// - `GET /registrations/{id}/refund` gives the registration's refund, or a
+///   status of `none` when it has none. Somebody else's registration is
+///   `404 registration_not_found`.
+/// - While a refund is pending, each such call asks the payment provider
+///   again and stores what it says ([razorpayNowSays]).
+/// - Every registration row carries `latest_order_id`: the order made for
+///   it, paid or not, or null when none was made.
 class FakeRegistrationBackend implements HttpClientAdapter {
   FakeRegistrationBackend({
     this.eventId = 7,
@@ -111,6 +122,21 @@ class FakeRegistrationBackend implements HttpClientAdapter {
   /// When set, every cancel is answered with this HTTP status and no usable
   /// `detail`, as a crashed or overloaded backend would.
   int? cancelServerError;
+
+  /// What the payment provider answers when asked about a pending refund:
+  /// `refund_processed` or `refund_failed`. Null while it is still working.
+  String? razorpayNowSays;
+
+  /// When set, every refund status call is answered with this HTTP status
+  /// and no usable `detail`.
+  int? refundStatusServerError;
+
+  /// This many of the next refund status requests never reach the backend.
+  int refundStatusRequestsToDrop = 0;
+
+  /// When set, refund status responses are withheld until it completes, to
+  /// keep a request in flight across a user switch.
+  Completer<void>? heldRefundStatus;
 
   /// When set, the eligibility call answers with this status and message
   /// whatever the attendee's registrations are (`full`, `closed`,
@@ -171,26 +197,40 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       .where((r) => r.path.endsWith('/cancel'))
       .toList();
 
+  List<RecordedRequest> get refundStatusRequests => requests
+      .where((r) => r.path.startsWith('/api/v1/registrations/'))
+      .where((r) => r.path.endsWith('/refund'))
+      .toList();
+
   /// Gives [token]'s attendee a registration made before the test started.
-  /// A second call makes a newer one and keeps the first as history. With
-  /// [paid], the registration has a paid order to refund.
+  /// A second call makes a newer one and keeps the first as history.
+  ///
+  /// With [paid], the registration has a paid order. With [unpaidOrder], it
+  /// has an order that was never paid, as after a seat hold ran out. With
+  /// [refund] (`refund_pending`, `refund_processed` or `refund_failed`), the
+  /// paid order has been refunded in that state.
   Map<String, dynamic> seedRegistration(
     String token, {
     required String status,
     bool paid = false,
+    bool unpaidOrder = false,
+    String? refund,
   }) {
     _shelveRegistration(token);
     final registration = _newRegistration(status: status, note: null);
     if (status == 'cancelled') {
       registration['cancelled_at'] = '2098-12-02T10:00:00Z';
     }
-    if (paid) {
-      final registrationId = registration['registration_id'] as int;
+    final registrationId = registration['registration_id'] as int;
+    if (paid || unpaidOrder || refund != null) {
       orders[registrationId] = _newOrder(
         registrationId,
-        status: 'paid',
+        status: unpaidOrder ? 'expired' : 'paid',
         registrationStatus: status,
       );
+    }
+    if (refund != null) {
+      refunds[registrationId] = _newRefund(registrationId, refund, 'seeded-key');
     }
     return registrations[token] = registration;
   }
@@ -258,7 +298,7 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       if (registration == null) {
         return _json(404, {'detail': 'registration_not_found'});
       }
-      return _json(200, registration);
+      return _json(200, _withLatestOrder(registration));
     }
     if (path == '/api/v1/events/$eventId/my-registration') {
       // Only GET is routed. This is what production answers to the DELETE
@@ -268,7 +308,7 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     if (request.line == 'GET /api/v1/my/registrations') {
       final rows = [
         for (final registration in _registrationsOf(token))
-          {...registration, 'event': _eventSummary()},
+          {..._withLatestOrder(registration), 'event': _eventSummary()},
       ];
       return _json(200, {'registrations': rows, 'total': rows.length});
     }
@@ -332,6 +372,19 @@ class FakeRegistrationBackend implements HttpClientAdapter {
         loseNextCancelResponse = false;
         throw _connectionError(options);
       }
+      return response;
+    }
+
+    final refundPath = RegExp(
+      r'^/api/v1/registrations/(\d+)/refund$',
+    ).firstMatch(path);
+    if (options.method == 'GET' && refundPath != null) {
+      if (refundStatusRequestsToDrop > 0) {
+        refundStatusRequestsToDrop--;
+        throw _connectionError(options);
+      }
+      final response = _refundStatus(int.parse(refundPath.group(1)!), token);
+      await heldRefundStatus?.future;
       return response;
     }
 
@@ -420,25 +473,62 @@ class FakeRegistrationBackend implements HttpClientAdapter {
         return _json(409, {'detail': paidCancelRefusal});
       }
       refundsCreated++;
-      refunds[registrationId] = {
-        'refund_id': 'RFND-$registrationId',
-        'registration_id': registrationId,
-        'status': refundStatusOnCancel,
-        'amount': finalAmount,
-        'currency': 'INR',
-        'requested_at': '2098-12-03T10:00:00Z',
-        'finalized_at': refundStatusOnCancel == 'refund_processed'
-            ? '2098-12-03T10:00:05Z'
-            : null,
-        'safe_message': _safeMessages[refundStatusOnCancel],
-        'payment_mode': 'test',
-        'real_money': false,
-        'idempotency_key': key,
-      };
+      refunds[registrationId] = _newRefund(
+        registrationId,
+        refundStatusOnCancel,
+        key,
+      );
     }
     registration['status'] = 'cancelled';
     registration['cancelled_at'] = '2098-12-03T10:00:00Z';
     return _json(200, _refundView(registrationId));
+  }
+
+  /// `refund_service.get_refund_status`: the caller's own registration only,
+  /// its latest refund or `none`, and a fresh answer from the payment
+  /// provider while the refund is pending.
+  ResponseBody _refundStatus(int registrationId, String token) {
+    if (refundStatusServerError != null) {
+      return _json(refundStatusServerError!, {
+        'detail': 'Internal Server Error',
+      });
+    }
+    final owned = _registrationsOf(token)
+        .any((r) => r['registration_id'] == registrationId);
+    if (!owned) return _json(404, {'detail': 'registration_not_found'});
+
+    final refund = refunds[registrationId];
+    final settled = razorpayNowSays;
+    if (refund != null && refund['status'] == 'refund_pending' && settled != null) {
+      refund['status'] = settled;
+      refund['finalized_at'] = '2098-12-03T10:05:00Z';
+      refund['safe_message'] = _safeMessages[settled];
+    }
+    return _json(200, _refundView(registrationId));
+  }
+
+  Map<String, dynamic> _newRefund(int registrationId, String status, String key) {
+    return {
+      'refund_id': 'RFND-$registrationId',
+      'registration_id': registrationId,
+      'status': status,
+      'amount': finalAmount,
+      'currency': 'INR',
+      'requested_at': '2098-12-03T10:00:00Z',
+      'finalized_at': status == 'refund_pending' ? null : '2098-12-03T10:00:05Z',
+      'safe_message': _safeMessages[status],
+      'payment_mode': 'test',
+      'real_money': false,
+      'idempotency_key': key,
+    };
+  }
+
+  /// A registration row as the API returns it, with `latest_order_id`.
+  Map<String, dynamic> _withLatestOrder(Map<String, dynamic> registration) {
+    return {
+      ...registration,
+      'latest_order_id': orders[registration['registration_id']]?['order_id'],
+    };
   }
 
   /// `RefundStatusResponse` for a registration.
