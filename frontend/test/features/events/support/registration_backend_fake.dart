@@ -112,6 +112,14 @@ class FakeRegistrationBackend implements HttpClientAdapter {
   /// `detail`, as a crashed or overloaded backend would.
   int? cancelServerError;
 
+  /// When set, the eligibility call answers with this status and message
+  /// whatever the attendee's registrations are (`full`, `closed`,
+  /// `not_open_yet`, `ineligible`).
+  ({String status, String message})? eligibilityOverride;
+
+  /// The eligibility call fails with a 500.
+  bool eligibilityFails = false;
+
   /// This many of the next cancel requests never reach the backend.
   int cancelRequestsToDrop = 0;
 
@@ -225,6 +233,17 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     if (token == null) return _json(401, {'detail': 'not_authenticated'});
 
     if (request.line == 'GET /api/v1/events/$eventId/registration-eligibility') {
+      if (eligibilityFails) {
+        return _json(500, {'detail': 'Internal Server Error'});
+      }
+      final override = eligibilityOverride;
+      if (override != null) {
+        return _json(200, {
+          'event_id': eventId,
+          'eligibility_status': override.status,
+          'message': override.message,
+        });
+      }
       final registered = _hasLiveRegistration(token);
       return _json(200, {
         'event_id': eventId,

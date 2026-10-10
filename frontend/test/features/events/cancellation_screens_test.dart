@@ -6,9 +6,13 @@
 // These tests press the real Unregister buttons on the real screens and read
 // what went on the wire. Only the HTTP transport is a fake. The notifier's own
 // rules (idempotency key, messages) are in cancellation_api_test.dart.
+//
+// They also cover what the event page shows once a registration is
+// cancelled: the attendee can register again when the backend allows it.
 
 import 'package:event_app/features/auth/services/auth_controller.dart';
 import 'package:event_app/features/events/data/events_repository.dart';
+import 'package:event_app/features/events/presentation/providers/event_detail_provider.dart';
 import 'package:event_app/features/events/presentation/screens/event_detail_screen.dart';
 import 'package:event_app/features/events/presentation/screens/event_list_screen.dart';
 import 'package:event_app/features/events/presentation/screens/my_events_screen.dart';
@@ -31,6 +35,11 @@ const _notFound =
 const _noConnection =
     'Unable to connect to the server. Check your internet connection and try '
     'again.';
+const _cancelledEarlier = 'You cancelled your earlier registration.';
+const _unregisteredBanner = 'Unregistered from this event';
+
+/// A window the event page fits in with the test font.
+const _eventPageWindow = Size(800, 3000);
 
 /// A screen with an Unregister button.
 ///
@@ -55,15 +64,61 @@ enum _Screen {
   final Size windowSize;
 }
 
+/// Stands in for CheckoutScreen, which cannot compile for the Dart VM
+/// (ISSUE-016). For a free event it does what that screen does: it registers
+/// through the event page's notifier and closes. The real screen is used in
+/// cancellation_reregister_checkout_test.dart, in a browser.
+class _CheckoutStandIn extends ConsumerWidget {
+  const _CheckoutStandIn();
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      body: Center(
+        child: TextButton(
+          onPressed: () async {
+            await ref
+                .read(eventDetailProvider(eventX).notifier)
+                .register(eventX, '');
+            if (context.mounted) context.pop();
+          },
+          child: const Text('Confirm Registration'),
+        ),
+      ),
+    );
+  }
+}
+
 /// Starts the app on [screen] with user A signed in.
 Future<GoRouter> _openApp(
   WidgetTester tester,
   FakeRegistrationBackend backend,
   _Screen screen, {
   Size? windowSize,
-}) async {
-  final location = screen.location;
-  tester.view.physicalSize = windowSize ?? screen.windowSize;
+}) {
+  return _pumpApp(
+    tester,
+    backend,
+    screen.location,
+    windowSize ?? screen.windowSize,
+  );
+}
+
+/// Starts the app on the event page with user A signed in.
+Future<GoRouter> _openEventPage(
+  WidgetTester tester,
+  FakeRegistrationBackend backend,
+) {
+  return _pumpApp(tester, backend, '/events/$eventX', _eventPageWindow);
+}
+
+Future<GoRouter> _pumpApp(
+  WidgetTester tester,
+  FakeRegistrationBackend backend,
+  String location,
+  Size windowSize,
+) async {
+  tester.view.physicalSize = windowSize;
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
 
@@ -82,6 +137,10 @@ Future<GoRouter> _openApp(
         path: AppRoutes.eventDetail,
         builder: (context, state) => const EventDetailScreen(eventId: eventX),
       ),
+      GoRoute(
+        path: AppRoutes.checkout,
+        builder: (context, state) => const _CheckoutStandIn(),
+      ),
     ],
   );
   addTearDown(router.dispose);
@@ -93,7 +152,12 @@ Future<GoRouter> _openApp(
         authControllerProvider.overrideWith((ref) => auth),
         eventsRepositoryProvider.overrideWithValue(backend.repository),
       ],
-      child: MaterialApp.router(routerConfig: router),
+      child: MaterialApp.router(
+        routerConfig: router,
+        // In the app every page sits inside AppShell's Scaffold. The iOS
+        // event page has no Material of its own to take a text style from.
+        builder: (context, child) => Material(child: child),
+      ),
     ),
   );
   await settleRequests(tester);
@@ -341,15 +405,20 @@ void main() {
   }
 
   group('ISSUE-004: the event page after a cancellation', () {
+    const bothForms = TargetPlatformVariant({
+      TargetPlatform.android, // the Material page and dialog
+      TargetPlatform.iOS, // the Cupertino button and sheet
+    });
+
     testWidgets('Test L: opening the event again shows the attendee as not '
-        'registered', (tester) async {
+        'registered, with Register available', (tester) async {
       final backend = FakeRegistrationBackend(isFree: true);
       backend.seedRegistration(tokenA, status: 'registered');
       final router = await _openApp(
         tester,
         backend,
         _Screen.myEvents,
-        windowSize: const Size(800, 3000),
+        windowSize: _eventPageWindow,
       );
       int myRegistrationFetches() => backend
           .requestsTo('GET', '/api/v1/events/$eventX/my-registration')
@@ -359,6 +428,7 @@ void main() {
       await settleRequests(tester);
       expect(find.text('Registered Successfully'), findsOneWidget);
       expect(find.textContaining('Badge #'), findsOneWidget);
+      expect(find.text('Register'), findsNothing);
       expect(myRegistrationFetches(), 1);
 
       router.pop();
@@ -374,7 +444,87 @@ void main() {
       expect(find.text('Registered Successfully'), findsNothing);
       expect(find.textContaining('Badge #'), findsNothing);
       expect(find.text('View QR badge'), findsNothing);
-      expect(find.text('Unregistered from this event'), findsOneWidget);
+      // The backend says the attendee may register again.
+      expect(find.text(_cancelledEarlier), findsOneWidget);
+      expect(find.text('Register'), findsOneWidget);
+      expect(find.text(_unregisteredBanner), findsNothing);
+    });
+
+    testWidgets('cancelled and eligible: Register is shown, and registering '
+        'again makes a new registration', (tester) async {
+      final backend = FakeRegistrationBackend(isFree: true);
+      final old = backend.seedRegistration(tokenA, status: 'cancelled');
+      await _openEventPage(tester, backend);
+
+      expect(find.text(_cancelledEarlier), findsOneWidget);
+      expect(find.text('Register'), findsOneWidget);
+      expect(find.text(_unregisteredBanner), findsNothing);
+      expect(find.text('Registered Successfully'), findsNothing);
+
+      await tester.tap(find.text('Register'));
+      await settleRequests(tester);
+      expect(find.text('Badge name'), findsOneWidget);
+      await tester.tap(find.text('Proceed to Checkout'));
+      await settleRequests(tester);
+      await tester.tap(find.text('Confirm Registration'));
+      await settleRequests(tester);
+
+      expect(backend.registerRequests, hasLength(1));
+      final current = backend.registrations[tokenA]!;
+      expect(current['status'], 'registered');
+      expect(current['registration_id'], isNot(old['registration_id']));
+      // The cancelled registration is history; it was not brought back.
+      expect(backend.earlierRegistrations[tokenA], [old]);
+      expect(old['status'], 'cancelled');
+      expect(backend.seatsTaken, 1);
+
+      expect(find.text('Registered Successfully'), findsOneWidget);
+      expect(
+        find.text('Badge #: ${current['registration_number']}'),
+        findsOneWidget,
+      );
+      expect(find.text(_cancelledEarlier), findsNothing);
+      expect(find.text('Register'), findsNothing);
+    }, variant: bothForms);
+
+    for (final refusal in const [
+      (status: 'ineligible', message: 'Alumni account is not active.'),
+      (status: 'full', message: 'Event is at full capacity.'),
+      (status: 'closed', message: 'Registration is closed.'),
+      (status: 'not_open_yet', message: 'Registration has not opened yet.'),
+    ]) {
+      testWidgets('cancelled and ${refusal.status}: no Register button, and '
+          'the page is as it was before', (tester) async {
+        final backend = FakeRegistrationBackend(isFree: true)
+          ..eligibilityOverride = refusal;
+        backend.seedRegistration(tokenA, status: 'cancelled');
+        await _openEventPage(tester, backend);
+
+        expect(find.text('Register'), findsNothing);
+        expect(find.text(_cancelledEarlier), findsNothing);
+        expect(find.text(_unregisteredBanner), findsOneWidget);
+      }, variant: bothForms);
+    }
+
+    testWidgets('cancelled and eligibility unknown: no Register button', (
+      tester,
+    ) async {
+      final backend = FakeRegistrationBackend(isFree: true)
+        ..eligibilityFails = true;
+      backend.seedRegistration(tokenA, status: 'cancelled');
+      await _openEventPage(tester, backend);
+
+      expect(find.text('Register'), findsNothing);
+      expect(find.text(_cancelledEarlier), findsNothing);
+      expect(find.text(_unregisteredBanner), findsOneWidget);
+    });
+
+    testWidgets('never registered: the Register button has no note about a '
+        'cancellation', (tester) async {
+      await _openEventPage(tester, FakeRegistrationBackend(isFree: true));
+
+      expect(find.text('Register'), findsOneWidget);
+      expect(find.text(_cancelledEarlier), findsNothing);
     });
   });
 }
