@@ -13,14 +13,27 @@ import 'nav_items.dart';
 /// Top bar matching the association website's navbar
 /// (website: components/core/Navbar.jsx, styles/navbar.css).
 ///
-/// Brand and nav links on the left; theme toggle and account on the right.
-/// Below [navBreakpoint] the links move into a menu ([SiteNavDrawer]),
-/// opened from the menu button, which needs a Scaffold with that endDrawer.
+/// Brand and nav links on the left; NITiKa, theme toggle and account on the
+/// right. Below [navBreakpoint] the links move into a menu
+/// ([SiteNavDrawer]), opened from the menu button, which needs a Scaffold
+/// with that endDrawer.
 class SiteHeader extends ConsumerWidget {
-  const SiteHeader({super.key, this.showThemeToggle = true});
+  const SiteHeader({
+    super.key,
+    this.showThemeToggle = true,
+    this.onAssistant,
+    this.assistantOpen = false,
+  });
 
   /// The header toggle is the app's only theme switch.
   final bool showThemeToggle;
+
+  /// Opens or collapses NITiKa (website: the navbar's chat button). No
+  /// button when null.
+  final VoidCallback? onAssistant;
+
+  /// Gold while the NITiKa rail is open, like the website's active button.
+  final bool assistantOpen;
 
   static const double height = 68;
   static const double compactHeight = 56;
@@ -36,6 +49,7 @@ class SiteHeader extends ConsumerWidget {
     final location = GoRouterState.of(context).uri.path;
     final items = visibleNavItems(ref.watch(authControllerProvider));
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    final gap = compact ? 6.0 : 8.0;
 
     return Material(
       // Website --bg-nav: background at 92% (dark) / 95% (light).
@@ -52,7 +66,16 @@ class SiteHeader extends ConsumerWidget {
               padding: EdgeInsets.symmetric(horizontal: compact ? 16 : 40),
               child: Row(
                 children: [
-                  _Brand(compact: compact, isDark: isDark),
+                  if (wide)
+                    _Brand(compact: compact, isDark: isDark)
+                  else
+                    // Narrow: the brand gives way to the actions.
+                    Expanded(
+                      child: Align(
+                        alignment: Alignment.centerLeft,
+                        child: _Brand(compact: compact, isDark: isDark),
+                      ),
+                    ),
                   if (wide) ...[
                     const SizedBox(width: 32),
                     for (final item in items) ...[
@@ -62,8 +85,17 @@ class SiteHeader extends ConsumerWidget {
                       ),
                       const SizedBox(width: 4),
                     ],
+                    const Spacer(),
                   ],
-                  const Spacer(),
+                  if (onAssistant != null) ...[
+                    _HeaderIconButton(
+                      tooltip: 'NITiKa',
+                      icon: Icons.chat_bubble_outline,
+                      active: assistantOpen,
+                      onPressed: onAssistant!,
+                    ),
+                    SizedBox(width: gap),
+                  ],
                   if (showThemeToggle) ...[
                     _HeaderIconButton(
                       tooltip: isDark ? 'Light mode' : 'Dark mode',
@@ -73,11 +105,11 @@ class SiteHeader extends ConsumerWidget {
                       onPressed: () =>
                           ref.read(themeProvider.notifier).toggleTheme(),
                     ),
-                    const SizedBox(width: 8),
+                    SizedBox(width: gap),
                   ],
                   const _AccountButton(),
                   if (!wide) ...[
-                    const SizedBox(width: 8),
+                    SizedBox(width: gap),
                     _HeaderIconButton(
                       tooltip: 'Menu',
                       icon: Icons.menu,
@@ -123,12 +155,16 @@ class _Brand extends StatelessWidget {
                   children: [
                     Image.asset('assets/images/nitksaa-emblem-$emblem.png', height: 32),
                     const SizedBox(width: 10),
-                    Text(
-                      'NITKSAA Events',
-                      style: AppTextStyles.titleLarge.copyWith(
-                        fontSize: 17,
-                        color: p.textPrimary,
-                        letterSpacing: 0.3,
+                    Flexible(
+                      child: Text(
+                        'NITKSAA Events',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: AppTextStyles.titleLarge.copyWith(
+                          fontSize: 17,
+                          color: p.textPrimary,
+                          letterSpacing: 0.3,
+                        ),
                       ),
                     ),
                   ],
@@ -141,16 +177,20 @@ class _Brand extends StatelessWidget {
 }
 
 /// 34×34 square icon button with border, like the website's nav icons.
+/// [active] is the website's `.nav-icon-btn--active`: gold on a faint gold
+/// fill.
 class _HeaderIconButton extends StatelessWidget {
   const _HeaderIconButton({
     required this.tooltip,
     required this.icon,
     required this.onPressed,
+    this.active = false,
   });
 
   final String tooltip;
   final IconData icon;
   final VoidCallback onPressed;
+  final bool active;
 
   @override
   Widget build(BuildContext context) {
@@ -164,15 +204,19 @@ class _HeaderIconButton extends StatelessWidget {
           onPressed: onPressed,
           style: OutlinedButton.styleFrom(
             padding: EdgeInsets.zero,
-            backgroundColor: p.surfaceSubtle,
+            backgroundColor: active
+                ? p.primary.withValues(alpha: 0.10)
+                : p.surfaceSubtle,
             foregroundColor: p.textSecondary,
-            side: BorderSide(color: p.border),
+            side: BorderSide(
+              color: active ? p.primary.withValues(alpha: 0.40) : p.border,
+            ),
             shape: RoundedRectangleBorder(
               borderRadius: BorderRadius.circular(6),
             ),
           ).copyWith(
             foregroundColor: WidgetStateProperty.resolveWith((states) =>
-                states.contains(WidgetState.hovered)
+                active || states.contains(WidgetState.hovered)
                     ? p.primary
                     : p.textSecondary),
           ),

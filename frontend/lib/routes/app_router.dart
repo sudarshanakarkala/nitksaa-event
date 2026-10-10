@@ -1,4 +1,5 @@
 import 'package:flutter/foundation.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
@@ -12,6 +13,8 @@ import '../features/events/presentation/screens/event_registrations_screen.dart'
 import '../features/events/presentation/screens/my_events_screen.dart';
 import '../features/auth/services/auth_controller.dart';
 import '../features/feedback/feedback_screen.dart';
+import '../features/nitika/nitika_config.dart';
+import '../features/nitika/presentation/nitika_panel.dart';
 import '../features/policies/policy_screen.dart';
 import '../shared/widgets/app_shell.dart';
 import 'app_routes.dart';
@@ -38,8 +41,18 @@ abstract class AppRouter {
       ),
       // Attendee pages share one shell: header, sidebar / bottom nav, footer.
       ShellRoute(
-        builder: (context, state, child) =>
-            AppShell(location: state.uri.path, child: child),
+        builder: (context, state, child) => Consumer(
+          builder: (context, ref, _) => AppShell(
+            location: state.uri.path,
+            assistant: nitikaAssistant(
+              enabled: nitikaEnabled,
+              signedIn: nitikaEnabled &&
+                  ref.watch(authControllerProvider).isAuthenticated,
+              location: state.uri.path,
+            ),
+            child: child,
+          ),
+        ),
         routes: [
           GoRoute(
             path: AppRoutes.home,
