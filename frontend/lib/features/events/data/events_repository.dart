@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/event.dart';
 import '../domain/my_event_registration.dart';
+import '../domain/refund_status.dart';
 
 class EventsRepository {
   EventsRepository({Dio? dio}) : _dio = dio ?? _createDio();
@@ -191,15 +192,22 @@ class EventsRepository {
     return hydrated;
   }
 
-  Future<MyEventRegistration> cancelMyRegistration(
-    int eventId,
-    String accessToken,
-  ) async {
-    final response = await _dio.delete<Map<String, dynamic>>(
-      '/api/v1/events/$eventId/my-registration',
+  /// Cancels one of the attendee's own registrations. If it was paid for, the
+  /// backend starts a full refund in the same call.
+  ///
+  /// [idempotencyKey] (8 to 128 characters) must be the same on every retry
+  /// of one user action, so a retry cannot start a second refund.
+  Future<RefundStatus> cancelRegistration(
+    int registrationId,
+    String accessToken, {
+    required String idempotencyKey,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/registrations/$registrationId/cancel',
+      data: {'idempotency_key': idempotencyKey},
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
-    return MyEventRegistration.fromJson(response.data ?? <String, dynamic>{});
+    return RefundStatus.fromJson(response.data ?? <String, dynamic>{});
   }
 
   /// Registers the signed-in attendee for the event: one registration, one

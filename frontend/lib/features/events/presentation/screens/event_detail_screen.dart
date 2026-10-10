@@ -1085,9 +1085,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final isPastEvent = event.endDatetime != null
         ? event.endDatetime!.isBefore(DateTime.now())
         : event.startDatetime.isBefore(DateTime.now());
+    // After a cancellation the backend lets the attendee register again. The
+    // Register button comes back only when the backend says so.
+    final canRegisterAgain = hasCancelledRegistration &&
+        state.eligibilityStatus == 'eligible' &&
+        !isPastEvent;
 
     Widget ctaWidget;
-    if (hasCancelledRegistration) {
+    if (hasCancelledRegistration && !canRegisterAgain) {
       ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -1278,6 +1283,20 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             onPressed: () => _showRegistrationForm(event, state, isIOS: false),
             child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
+        );
+      }
+      if (canRegisterAgain) {
+        ctaWidget = Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Text(
+              'You cancelled your earlier registration.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.palette.textSecondary, fontSize: 13),
+            ),
+            const SizedBox(height: 8),
+            ctaWidget,
+          ],
         );
       }
     }

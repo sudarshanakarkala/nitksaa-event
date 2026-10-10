@@ -68,13 +68,20 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   /// Your registrations by event id (empty when signed out).
   Map<int, MyEventRegistration> _registrationsByEvent() {
     if (!ref.watch(authControllerProvider).isAuthenticated) return const {};
-    return {
-      for (final r in ref.watch(myEventsProvider).registrations) r.eventId: r,
-    };
+    final byEvent = <int, MyEventRegistration>{};
+    for (final r in ref.watch(myEventsProvider).registrations) {
+      // An event can have several rows, such as one cancelled and then one
+      // registered again. The active row is the one Unregister acts on.
+      if (r.isActive || !byEvent.containsKey(r.eventId)) byEvent[r.eventId] = r;
+    }
+    return byEvent;
   }
 
   /// Same confirm dialog and provider call as the My Events page.
-  Future<void> _confirmUnregister(AppEvent event) async {
+  Future<void> _confirmUnregister(
+    AppEvent event,
+    MyEventRegistration registration,
+  ) async {
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
@@ -93,11 +100,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await ref.read(myEventsProvider.notifier).cancelRegistration(event.eventId);
+    final outcome = await ref
+        .read(myEventsProvider.notifier)
+        .cancelRegistration(registration.registrationId);
     if (!mounted) return;
-    final error = ref.read(myEventsProvider).errorMessage;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(error == null ? 'Unregistered' : 'Could not unregister.')),
+      SnackBar(content: Text(outcome.message)),
     );
   }
 
@@ -1804,9 +1812,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     children: [
                       if (registration!.canCancel) ...[
                         TextButton(
-                          onPressed: ref.watch(myEventsProvider).cancellingEventId == event.eventId
+                          onPressed: ref.watch(myEventsProvider).isCancelling(registration.registrationId)
                               ? null
-                              : () => _confirmUnregister(event),
+                              : () => _confirmUnregister(event, registration),
                           style: TextButton.styleFrom(
                             foregroundColor: context.palette.textSecondary,
                           ),

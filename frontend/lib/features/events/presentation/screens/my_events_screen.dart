@@ -188,8 +188,10 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                                                 registration: registration,
                                                 isDark: isDark,
                                                 isCancelling:
-                                                    state.cancellingEventId ==
-                                                        registration.eventId,
+                                                    state.isCancelling(
+                                                      registration
+                                                          .registrationId,
+                                                    ),
                                                 onView: () => context.push(
                                                   '/events/${registration.eventId}',
                                                 ),
@@ -236,19 +238,12 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       ),
     );
     if (confirmed != true || !mounted) return;
-    await ref
+    final outcome = await ref
         .read(myEventsProvider.notifier)
-        .cancelRegistration(registration.eventId);
+        .cancelRegistration(registration.registrationId);
     if (!mounted) return;
-    final error = ref.read(myEventsProvider).errorMessage;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(
-          error == null
-              ? 'Unregistered'
-              : 'Could not unregister.',
-        ),
-      ),
+      SnackBar(content: Text(outcome.message)),
     );
   }
 }
