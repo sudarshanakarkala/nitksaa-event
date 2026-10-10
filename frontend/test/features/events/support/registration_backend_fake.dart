@@ -52,6 +52,20 @@ class RecordedRequest {
 /// - The amount to pay is the backend's own [finalAmount]. No request can
 ///   change it, and [ticketPrice] (what the public event shows) need not
 ///   equal it.
+///
+/// And the ones ISSUE-004 depends on, from `refund_service.py`:
+///
+/// - `POST /registrations/{id}/cancel` is the only way to cancel. It needs
+///   an `idempotency_key` of 8 to 128 characters and answers with a refund
+///   status. `DELETE /events/{id}/my-registration` has no handler (405).
+/// - A `registered` registration is cancelled. If its order is paid, one
+///   full refund is made; the same key, or a second cancel, gets that refund
+///   back and never a second one.
+/// - A `cancelled` registration answers 200 with its current refund status.
+/// - Any other status is refused with `409 registration_not_cancellable`.
+/// - Somebody else's registration is `404 registration_not_found`.
+/// - Every row is kept. `GET /my/registrations` lists them newest first, and
+///   `GET /events/{id}/my-registration` gives the newest.
 class FakeRegistrationBackend implements HttpClientAdapter {
   FakeRegistrationBackend({
     this.eventId = 7,
@@ -71,11 +85,38 @@ class FakeRegistrationBackend implements HttpClientAdapter {
 
   final requests = <RecordedRequest>[];
 
-  /// Registrations by the bearer token of the attendee who owns them.
+  /// The newest registration of each attendee, by their bearer token.
   final registrations = <String, Map<String, dynamic>>{};
+
+  /// The older registrations of each attendee for this event, newest first.
+  final earlierRegistrations = <String, List<Map<String, dynamic>>>{};
 
   /// Payment orders by registration id.
   final orders = <int, Map<String, dynamic>>{};
+
+  /// Refunds by registration id, as the attendee is shown them.
+  final refunds = <int, Map<String, dynamic>>{};
+
+  /// How many refunds were made. A repeated cancel must not add to it.
+  int refundsCreated = 0;
+
+  /// What the payment provider says about a new refund: `refund_pending`,
+  /// `refund_processed` or `refund_failed`.
+  String refundStatusOnCancel = 'refund_pending';
+
+  /// When set, cancelling a paid registration is refused with this `detail`
+  /// (`no_captured_payment`, `refund_not_supported`, `refund_mode_mismatch`).
+  String? paidCancelRefusal;
+
+  /// When set, every cancel is answered with this HTTP status and no usable
+  /// `detail`, as a crashed or overloaded backend would.
+  int? cancelServerError;
+
+  /// This many of the next cancel requests never reach the backend.
+  int cancelRequestsToDrop = 0;
+
+  /// The next cancel is carried out, but its response is lost on the way.
+  bool loseNextCancelResponse = false;
 
   /// The `checkout` object of each payment attempt handed out.
   final checkouts = <Map<String, dynamic>>[];
@@ -92,8 +133,9 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     )..httpClientAdapter = this,
   );
 
-  /// One registration holds one seat.
-  int get seatsTaken => registrations.length;
+  /// One registration holds one seat, until it is cancelled.
+  int get seatsTaken =>
+      registrations.values.where((r) => r['status'] != 'cancelled').length;
 
   /// [finalAmount] in paise, as the backend's `rupees_to_paise` gives it.
   int get finalAmountMinor => (double.parse(finalAmount) * 100).round();
@@ -116,9 +158,33 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       .where((r) => r.method == 'POST' && r.path.endsWith('/verify-checkout'))
       .toList();
 
+  List<RecordedRequest> get cancelRequests => requests
+      .where((r) => r.path.startsWith('/api/v1/registrations/'))
+      .where((r) => r.path.endsWith('/cancel'))
+      .toList();
+
   /// Gives [token]'s attendee a registration made before the test started.
-  Map<String, dynamic> seedRegistration(String token, {required String status}) {
-    return registrations[token] = _newRegistration(status: status, note: null);
+  /// A second call makes a newer one and keeps the first as history. With
+  /// [paid], the registration has a paid order to refund.
+  Map<String, dynamic> seedRegistration(
+    String token, {
+    required String status,
+    bool paid = false,
+  }) {
+    _shelveRegistration(token);
+    final registration = _newRegistration(status: status, note: null);
+    if (status == 'cancelled') {
+      registration['cancelled_at'] = '2098-12-02T10:00:00Z';
+    }
+    if (paid) {
+      final registrationId = registration['registration_id'] as int;
+      orders[registrationId] = _newOrder(
+        registrationId,
+        status: 'paid',
+        registrationStatus: status,
+      );
+    }
+    return registrations[token] = registration;
   }
 
   @override
@@ -144,10 +210,22 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     if (request.line == 'GET /api/v1/events/public/$eventId') {
       return _json(200, {'event': _publicEvent()});
     }
+    if (request.line == 'GET /api/v1/events/public') {
+      // The event is in 2099, so it is never a past one.
+      final events = [
+        if (options.queryParameters['period'] != 'past') _publicEvent(),
+      ];
+      return _json(200, {
+        'events': events,
+        'total': events.length,
+        'page': 1,
+        'per_page': 100,
+      });
+    }
     if (token == null) return _json(401, {'detail': 'not_authenticated'});
 
     if (request.line == 'GET /api/v1/events/$eventId/registration-eligibility') {
-      final registered = registrations.containsKey(token);
+      final registered = _hasLiveRegistration(token);
       return _json(200, {
         'event_id': eventId,
         'eligibility_status': registered ? 'already_registered' : 'eligible',
@@ -163,6 +241,18 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       }
       return _json(200, registration);
     }
+    if (path == '/api/v1/events/$eventId/my-registration') {
+      // Only GET is routed. This is what production answers to the DELETE
+      // the app used to send.
+      return _json(405, {'detail': 'Method Not Allowed'});
+    }
+    if (request.line == 'GET /api/v1/my/registrations') {
+      final rows = [
+        for (final registration in _registrationsOf(token))
+          {...registration, 'event': _eventSummary()},
+      ];
+      return _json(200, {'registrations': rows, 'total': rows.length});
+    }
     if (request.line == 'GET /api/v1/alumni/me') {
       return _json(200, {
         'ref_id': 'REF-1',
@@ -173,9 +263,10 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       });
     }
     if (request.line == 'POST /api/v1/events/$eventId/register') {
-      if (registrations.containsKey(token)) {
+      if (_hasLiveRegistration(token)) {
         return _json(409, {'detail': 'already_registered'});
       }
+      _shelveRegistration(token);
       final registration = _newRegistration(
         status: isFree ? 'registered' : 'seat_held',
         note: request.json['attendee_note'] as String?,
@@ -196,19 +287,33 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       // The backend reuses the registration's active order.
       final order = orders.putIfAbsent(registrationId, () {
         registration!['status'] = 'payment_pending';
-        return {
-          'order_id': 'ORD-$registrationId',
-          'registration_id': registrationId,
-          'event_id': eventId,
-          'currency': 'INR',
-          'final_amount': finalAmount,
-          'status': 'created',
-          'registration_status': 'payment_pending',
-          'payment_mode': 'test',
-          'real_money': false,
-        };
+        return _newOrder(
+          registrationId,
+          status: 'created',
+          registrationStatus: 'payment_pending',
+        );
       });
       return _json(200, order);
+    }
+
+    final cancelPath = RegExp(
+      r'^/api/v1/registrations/(\d+)/cancel$',
+    ).firstMatch(path);
+    if (options.method == 'POST' && cancelPath != null) {
+      if (cancelRequestsToDrop > 0) {
+        cancelRequestsToDrop--;
+        throw _connectionError(options);
+      }
+      final response = _cancel(
+        int.parse(cancelPath.group(1)!),
+        token,
+        request.json['idempotency_key'],
+      );
+      if (loseNextCancelResponse) {
+        loseNextCancelResponse = false;
+        throw _connectionError(options);
+      }
+      return response;
     }
 
     final attemptPath = RegExp(
@@ -261,6 +366,122 @@ class FakeRegistrationBackend implements HttpClientAdapter {
   @override
   void close({bool force = false}) {}
 
+  /// `refund_service.cancel_registration`, in the same order of checks.
+  ResponseBody _cancel(int registrationId, String token, Object? key) {
+    if (key is! String || key.length < 8 || key.length > 128) {
+      return _json(422, {
+        'detail': [
+          {
+            'loc': ['body', 'idempotency_key'],
+            'msg': 'String should have between 8 and 128 characters',
+          },
+        ],
+      });
+    }
+    if (cancelServerError != null) {
+      return _json(cancelServerError!, {'detail': 'Internal Server Error'});
+    }
+    // Not found and not owned look the same from outside.
+    final registration = _registrationsOf(
+      token,
+    ).where((r) => r['registration_id'] == registrationId).firstOrNull;
+    if (registration == null) {
+      return _json(404, {'detail': 'registration_not_found'});
+    }
+    if (registration['status'] == 'cancelled') {
+      return _json(200, _refundView(registrationId));
+    }
+    if (registration['status'] != 'registered') {
+      return _json(409, {'detail': 'registration_not_cancellable'});
+    }
+
+    final order = orders[registrationId];
+    if (order?['status'] == 'paid') {
+      if (paidCancelRefusal != null) {
+        return _json(409, {'detail': paidCancelRefusal});
+      }
+      refundsCreated++;
+      refunds[registrationId] = {
+        'refund_id': 'RFND-$registrationId',
+        'registration_id': registrationId,
+        'status': refundStatusOnCancel,
+        'amount': finalAmount,
+        'currency': 'INR',
+        'requested_at': '2098-12-03T10:00:00Z',
+        'finalized_at': refundStatusOnCancel == 'refund_processed'
+            ? '2098-12-03T10:00:05Z'
+            : null,
+        'safe_message': _safeMessages[refundStatusOnCancel],
+        'payment_mode': 'test',
+        'real_money': false,
+        'idempotency_key': key,
+      };
+    }
+    registration['status'] = 'cancelled';
+    registration['cancelled_at'] = '2098-12-03T10:00:00Z';
+    return _json(200, _refundView(registrationId));
+  }
+
+  /// `RefundStatusResponse` for a registration.
+  Map<String, dynamic> _refundView(int registrationId) {
+    final refund = refunds[registrationId];
+    if (refund != null) return {...refund}..remove('idempotency_key');
+    return {
+      'refund_id': null,
+      'registration_id': registrationId,
+      'status': 'none',
+      'amount': null,
+      'currency': null,
+      'requested_at': null,
+      'finalized_at': null,
+      'safe_message': _safeMessages['none'],
+      'payment_mode': null,
+      'real_money': false,
+    };
+  }
+
+  /// The backend's `_safe_message`, word for word.
+  static const _safeMessages = {
+    'refund_pending':
+        'Your registration is cancelled. Your refund is being processed.',
+    'refund_processed':
+        'Your cancellation is confirmed and the refund has been processed by '
+        'the payment provider.',
+    'refund_failed':
+        'Your registration is cancelled, but the refund could not be '
+        'completed automatically. Our team will follow up.',
+    'none':
+        'Your registration is cancelled. No payment was collected, so there '
+        'is nothing to refund.',
+  };
+
+  /// What Dio reports when the backend cannot be reached.
+  DioException _connectionError(RequestOptions options) {
+    return DioException.connectionError(
+      requestOptions: options,
+      reason: 'The XMLHttpRequest onError callback was called.',
+    );
+  }
+
+  /// Every registration of an attendee, newest first.
+  List<Map<String, dynamic>> _registrationsOf(String token) => [
+    if (registrations[token] != null) registrations[token]!,
+    ...?earlierRegistrations[token],
+  ];
+
+  /// Whether the attendee holds a seat: a cancelled registration does not.
+  bool _hasLiveRegistration(String token) {
+    final registration = registrations[token];
+    return registration != null && registration['status'] != 'cancelled';
+  }
+
+  /// Moves the attendee's newest registration into their history.
+  void _shelveRegistration(String token) {
+    final registration = registrations.remove(token);
+    if (registration == null) return;
+    earlierRegistrations.putIfAbsent(token, () => []).insert(0, registration);
+  }
+
   Map<String, dynamic>? _orderOf(String orderId, String token) {
     final registrationId = registrations[token]?['registration_id'];
     final order = orders[registrationId];
@@ -278,6 +499,46 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       'event_id': eventId,
       'status': status,
       'attendee_note': note,
+      // A later registration has a later time.
+      'registered_at': DateTime.utc(
+        2098,
+        12,
+      ).add(Duration(minutes: id)).toIso8601String(),
+      'cancelled_at': null,
+    };
+  }
+
+  Map<String, dynamic> _newOrder(
+    int registrationId, {
+    required String status,
+    required String registrationStatus,
+  }) {
+    return {
+      'order_id': 'ORD-$registrationId',
+      'registration_id': registrationId,
+      'event_id': eventId,
+      'currency': 'INR',
+      'final_amount': finalAmount,
+      'status': status,
+      'registration_status': registrationStatus,
+      'payment_mode': 'test',
+      'real_money': false,
+    };
+  }
+
+  /// The `event` object of a row of `GET /my/registrations`.
+  Map<String, dynamic> _eventSummary() {
+    final event = _publicEvent();
+    return {
+      for (final key in const [
+        'event_id',
+        'title',
+        'start_datetime',
+        'end_datetime',
+        'timezone',
+        'is_virtual',
+      ])
+        key: event[key],
     };
   }
 
