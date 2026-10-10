@@ -10,6 +10,7 @@ class MyEventRegistration {
     required this.registeredAt,
     this.cancelledAt,
     this.joinUrl,
+    this.latestOrderId,
     this.event,
     this.publicEvent,
   });
@@ -22,12 +23,21 @@ class MyEventRegistration {
   final DateTime registeredAt;
   final DateTime? cancelledAt;
   final String? joinUrl;
+
+  /// The newest payment order made for this registration, whatever became of
+  /// it. Null when none was ever made, as for a free event.
+  final String? latestOrderId;
   final RegisteredEventSummary? event;
   final AppEvent? publicEvent;
 
   bool get isActive => status == 'registered';
   bool get canCancel =>
       isActive && publicEvent?.registrationStatus.toLowerCase() == 'open';
+
+  /// Cancelled, and a payment order was made for it. Only such a registration
+  /// can have a refund. Whether it has one is for the backend to say: a seat
+  /// hold that ran out without payment looks the same here.
+  bool get mayHaveRefund => status == 'cancelled' && latestOrderId != null;
 
   MyEventRegistration copyWith({AppEvent? publicEvent, String? status}) {
     return MyEventRegistration(
@@ -39,6 +49,7 @@ class MyEventRegistration {
       registeredAt: registeredAt,
       cancelledAt: cancelledAt,
       joinUrl: joinUrl,
+      latestOrderId: latestOrderId,
       event: event,
       publicEvent: publicEvent ?? this.publicEvent,
     );
@@ -56,6 +67,7 @@ class MyEventRegistration {
           ? DateTime.parse(json['cancelled_at'] as String).toLocal()
           : null,
       joinUrl: json['join_url'] as String?,
+      latestOrderId: json['latest_order_id']?.toString(),
       event: json['event'] != null
           ? RegisteredEventSummary.fromJson(json['event'] as Map<String, dynamic>)
           : null,
