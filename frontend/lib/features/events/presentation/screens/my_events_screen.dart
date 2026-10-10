@@ -5,11 +5,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
 import '../providers/my_events_provider.dart';
-import '../../../../shared/widgets/app_sidebar.dart';
-import '../../../../shared/widgets/app_bottom_nav.dart';
 
 class MyEventsScreen extends ConsumerStatefulWidget {
   const MyEventsScreen({super.key});
@@ -70,7 +70,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                     const SizedBox(height: 16),
                     const Text(
                       'Log in to view My Events',
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -96,7 +96,6 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       body: SafeArea(
         child: Row(
           children: [
-            if (isWebScreen) const AppSidebar(),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -112,9 +111,9 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                         const Text(
                           'My Events',
                           style: TextStyle(
-                            fontFamily: 'Fraunces',
+                            fontFamily: AppTextStyles.serif,
                             fontSize: 26,
-                            fontWeight: FontWeight.bold,
+                            fontWeight: FontWeight.w600,
                           ),
                         ),
                         IconButton.filledTonal(
@@ -213,7 +212,6 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
           ],
         ),
       ),
-      bottomNavigationBar: const AppBottomNav(currentIndex: 1),
     );
   }
 
@@ -273,7 +271,7 @@ class _RegistrationCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final p = context.palette;
     final event = registration.event;
     final publicEvent = registration.publicEvent;
     final isVirtual = event?.isVirtual ?? publicEvent?.isVirtual ?? false;
@@ -287,10 +285,10 @@ class _RegistrationCard extends StatelessWidget {
 
     return Card(
       elevation: 0,
-      color: isDark ? const Color(0xFF131E30) : Colors.white,
+      color: p.card,
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
+        side: BorderSide(color: p.border),
       ),
       child: Padding(
         padding: const EdgeInsets.all(20),
@@ -312,12 +310,9 @@ class _RegistrationCard extends StatelessWidget {
                 ),
                 _Tag(
                   label: registration.isActive ? 'Registered' : 'Unregistered',
-                  bg: registration.isActive
-                      ? const Color(0xFFDDEEFF)
-                      : const Color(0xFFFFE9E9),
-                  fg: registration.isActive
-                      ? const Color(0xFF1B5C9B)
-                      : const Color(0xFF8A1B1B),
+                  bg: (registration.isActive ? p.info : p.error)
+                      .withValues(alpha: 0.14),
+                  fg: registration.isActive ? p.info : p.error,
                 ),
               ],
             ),
@@ -341,17 +336,13 @@ class _RegistrationCard extends StatelessWidget {
               children: [
                 _Tag(
                   label: isVirtual ? 'Virtual' : 'Physical',
-                  bg: isVirtual
-                      ? const Color(0xFFEDE6FF)
-                      : const Color(0xFFDDE8FF),
-                  fg: isVirtual
-                      ? const Color(0xFF4A2DB0)
-                      : const Color(0xFF1B3C8A),
+                  bg: (isVirtual ? p.info : p.primary).withValues(alpha: 0.14),
+                  fg: isVirtual ? p.info : p.primary,
                 ),
                 _Tag(
                   label: open ? 'Registration open' : 'Registration closed',
-                  bg: open ? const Color(0xFFD9F4E8) : const Color(0xFFFFE9E9),
-                  fg: open ? const Color(0xFF1B5C3A) : const Color(0xFF8A1B1B),
+                  bg: (open ? p.success : p.error).withValues(alpha: 0.14),
+                  fg: open ? p.success : p.error,
                 ),
               ],
             ),
@@ -431,7 +422,7 @@ class _MetaRow extends StatelessWidget {
       padding: const EdgeInsets.only(bottom: 8),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: const Color(0xFFC9952A)),
+          Icon(icon, size: 16, color: context.palette.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -461,7 +452,11 @@ class _Tag extends StatelessWidget {
   Widget build(BuildContext context) {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: bg, borderRadius: BorderRadius.circular(20)),
+      decoration: BoxDecoration(
+        color: bg,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: fg.withValues(alpha: 0.3)),
+      ),
       child: Text(
         label,
         style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold),
@@ -482,7 +477,7 @@ class _ErrorState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.error_outline, size: 48, color: Colors.red),
+          Icon(Icons.error_outline, size: 48, color: context.palette.error),
           const SizedBox(height: 12),
           const Text('Could not load registrations'),
           const SizedBox(height: 8),
@@ -504,16 +499,16 @@ class _SearchEmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.search_off, size: 64, color: Colors.grey),
+          Icon(Icons.search_off, size: 64, color: context.palette.textMuted),
           const SizedBox(height: 16),
           const Text(
             'No events match your search',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
-          const Text(
+          Text(
             'Try a different search term',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: context.palette.textMuted),
           ),
         ],
       ),
@@ -530,11 +525,11 @@ class _EmptyState extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          const Icon(Icons.event_available_outlined, size: 64, color: Colors.grey),
+          Icon(Icons.event_available_outlined, size: 64, color: context.palette.textMuted),
           const SizedBox(height: 16),
           const Text(
             'No registered events yet',
-            style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
           ),
           const SizedBox(height: 8),
           TextButton(

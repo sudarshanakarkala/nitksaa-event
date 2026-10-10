@@ -12,7 +12,9 @@ import 'package:event_app/widgets/material/app_scaffold.dart';
 import 'package:event_app/widgets/material/app_primary_button.dart';
 
 
-import 'package:event_app/theme/app_colors.dart';
+import 'package:event_app/theme/app_palette.dart';
+import 'package:event_app/theme/app_text_styles.dart';
+import 'package:event_app/shared/widgets/emblem_ring.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -88,7 +90,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isIOS = defaultTargetPlatform == TargetPlatform.iOS;
+    // Web (including Safari on iPhone) always uses the Material layout.
+    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     return isIOS ? _buildCupertinoLogin() : _buildMaterialLogin();
   }
 
@@ -107,8 +110,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: _LoginCard(
                 children: _buildFormChildren(colorScheme, textTheme, false),
               ),
             ),
@@ -120,8 +122,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   // ---------------- Cupertino UI (iOS) ----------------
   Widget _buildCupertinoLogin() {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? AppColors.darkBackground : AppColors.lightBackground;
+    final bg = context.palette.background;
     return CupertinoPageScaffold(
       backgroundColor: bg,
       navigationBar: const CupertinoNavigationBar(
@@ -133,8 +134,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+              child: _LoginCard(
                 children: _buildFormChildren(null, null, true),
               ),
             ),
@@ -146,14 +146,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
   // Shared form widgets for both platforms
   List<Widget> _buildFormChildren(ColorScheme? colorScheme, TextTheme? textTheme, bool isCupertino) {
-    final logo = Text(
-      'NITKSAA',
-      style: TextStyle(
-        fontSize: 22,
-        fontWeight: FontWeight.bold,
-        color: isCupertino ? (Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black) : colorScheme?.primary,
-      ),
-      textAlign: TextAlign.center,
+    final logo = Column(
+      children: [
+        const EmblemRing(size: 72),
+        const SizedBox(height: 16),
+        Text(
+          'Sign in',
+          style: AppTextStyles.headlineMedium.copyWith(color: context.palette.textPrimary),
+          textAlign: TextAlign.center,
+        ),
+        const SizedBox(height: 4),
+        Text(
+          'NITKSAA Events',
+          style: AppTextStyles.bodyMedium.copyWith(color: context.palette.textSecondary),
+          textAlign: TextAlign.center,
+        ),
+      ],
     );
     final emailField = isCupertino
         ? CupertinoTextField(
@@ -214,10 +222,10 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
     final googleButton = isCupertino
         ? CupertinoButton(
-            color: Colors.white,
+            color: context.palette.surface,
             onPressed: (_emailLoading || _googleLoading) ? null : _handleGoogleSignIn,
             child: Row(mainAxisSize: MainAxisSize.min, children: [
-              const Icon(CupertinoIcons.cloud, color: Colors.black),
+              Icon(CupertinoIcons.cloud, color: context.palette.textPrimary),
               const SizedBox(width: 8),
               Text(_googleLoading ? 'Validating…' : 'Continue with Google')
             ]
@@ -232,9 +240,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             label: Text(_googleLoading ? 'Validating...' : 'Continue with Google'),
           );
     return [
-      const SizedBox(height: 20),
       logo,
-      const SizedBox(height: 20),
+      const SizedBox(height: 28),
       googleButton,
       const SizedBox(height: 16),
       divider,
@@ -248,7 +255,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         const SizedBox(height: 16),
       ],
       loginButton,
-      const SizedBox(height: 40),
+      const SizedBox(height: 24),
       Center(
         child: Text(
           'NITKSAA Event v1.0.0',
@@ -288,3 +295,27 @@ class _LoginStatusBanner extends StatelessWidget {
   }
 }
 
+
+/// Website login card: navy panel with a gold-tinted border.
+class _LoginCard extends StatelessWidget {
+  const _LoginCard({required this.children});
+
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Container(
+      padding: const EdgeInsets.fromLTRB(28, 32, 28, 24),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: p.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: children,
+      ),
+    );
+  }
+}

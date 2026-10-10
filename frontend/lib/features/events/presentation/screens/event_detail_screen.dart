@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
@@ -77,7 +79,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             child: Column(
               mainAxisAlignment: MainAxisAlignment.center,
               children: [
-                const Icon(Icons.error_outline, size: 48, color: Colors.red),
+                Icon(Icons.error_outline, size: 48, color: context.palette.error),
                 const SizedBox(height: 16),
                 Text(
                   'Failed to load event details:\n${state.errorMessage}',
@@ -116,22 +118,22 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   // ==========================================
   Widget _buildCupertinoLayout(AppEvent event, EventDetailState state, {required bool isAdmin}) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
-    final textPrimary = isDark ? Colors.white : Colors.black;
-    final textSecondary = isDark ? const Color(0xFFEBEBF5) : const Color(0xFF3C3C43);
-    final accentGold = const Color(0xFFC9952A);
+    final bg = context.palette.background;
+    final cardBg = context.palette.card;
+    final textPrimary = context.palette.textPrimary;
+    final textSecondary = context.palette.textSecondary;
+    final accentGold = context.palette.primary;
 
     return CupertinoPageScaffold(
       backgroundColor: bg,
       navigationBar: CupertinoNavigationBar(
         leading: CupertinoButton(
           padding: EdgeInsets.zero,
-          child: const Row(
+          child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(CupertinoIcons.left_chevron, size: 20, color: Color(0xFFC9952A)),
-              Text('Back', style: TextStyle(color: Color(0xFFC9952A))),
+              Icon(CupertinoIcons.left_chevron, size: 20, color: context.palette.primary),
+              Text('Back', style: TextStyle(color: context.palette.primary)),
             ],
           ),
           onPressed: () => context.pop(),
@@ -160,7 +162,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           fit: BoxFit.cover,
                           errorBuilder: (_, __, ___) => Container(
                             height: 180,
-                            color: Colors.grey.withOpacity(0.2),
+                            color: context.palette.textMuted.withOpacity(0.2),
                             child: const Icon(CupertinoIcons.photo, size: 48),
                           ),
                         ),
@@ -168,7 +170,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     const SizedBox(height: 16),
                     Text(
                       event.title,
-                      style: TextStyle(fontSize: 22, fontWeight: FontWeight.bold, color: textPrimary),
+                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600, color: textPrimary),
                     ),
                     if (event.tagline != null) ...[
                       const SizedBox(height: 4),
@@ -220,7 +222,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             value: event.capacity != null && event.capacity! > 0
                                 ? event.registeredCount / event.capacity!
                                 : 0,
-                            backgroundColor: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+                            backgroundColor: context.palette.surfaceHover,
                             valueColor: AlwaysStoppedAnimation<Color>(accentGold),
                           ),
                         ),
@@ -323,14 +325,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       text,
       style: TextStyle(
         fontSize: 13,
-        color: onTap != null ? const Color(0xFFC9952A) : color,
+        color: onTap != null ? context.palette.primary : color,
         decoration: onTap != null ? TextDecoration.underline : null,
       ),
     );
 
     final row = Row(
       children: [
-        Icon(icon, size: 16, color: const Color(0xFFC9952A)),
+        Icon(icon, size: 16, color: context.palette.primary),
         const SizedBox(width: 8),
         Expanded(
           child: textWidget,
@@ -353,7 +355,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   Widget _buildCupertinoDivider(bool isDark) {
     return Container(
       height: 0.5,
-      color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+      color: context.palette.border,
     );
   }
 
@@ -373,8 +375,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
     final appBar = AppBar(
       title: Text(event.title),
-      backgroundColor: isDark ? const Color(0xFF0D1B3E) : Colors.white,
-      foregroundColor: isDark ? Colors.white : const Color(0xFF0D1B3E),
+      backgroundColor: context.palette.background,
+      foregroundColor: context.palette.textPrimary,
       elevation: 0,
       leading: IconButton(
         icon: const Icon(Icons.arrow_back),
@@ -410,7 +412,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                 fit: BoxFit.cover,
                                 errorBuilder: (_, __, ___) => Container(
                                   height: 320,
-                                  color: Colors.grey.withOpacity(0.2),
+                                  color: context.palette.textMuted.withOpacity(0.2),
                                   child: const Icon(Icons.photo, size: 64),
                                 ),
                               ),
@@ -420,7 +422,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             event.title,
                             style: Theme.of(context).textTheme.headlineMedium?.copyWith(
                                   fontWeight: FontWeight.bold,
-                                  color: isDark ? Colors.white : const Color(0xFF0D1B3E),
+                                  color: context.palette.textPrimary,
                                 ),
                           ),
                           if (event.tagline != null) ...[
@@ -428,7 +430,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             Text(
                               event.tagline!,
                               style: Theme.of(context).textTheme.titleMedium?.copyWith(
-                                    color: Colors.grey,
+                                    color: context.palette.textMuted,
                                     fontStyle: FontStyle.italic,
                                   ),
                             ),
@@ -461,7 +463,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     child: Card(
                       elevation: 4,
                       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                      color: isDark ? const Color(0xFF131E30) : Colors.white,
+                      color: context.palette.card,
                       child: SingleChildScrollView(
                         child: Padding(
                           padding: const EdgeInsets.all(16.0),
@@ -469,9 +471,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             mainAxisSize: MainAxisSize.min,
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
-                              const Text(
+                              Text(
                                 'Registration',
-                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+                                style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
                               ),
                               const SizedBox(height: 12),
                               if (isAdmin) _buildCapacityBar(event, isDark),
@@ -510,7 +512,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       fit: BoxFit.cover,
                       errorBuilder: (_, __, ___) => Container(
                         height: 180,
-                        color: Colors.grey.withOpacity(0.2),
+                        color: context.palette.textMuted.withOpacity(0.2),
                         child: const Icon(Icons.photo, size: 48),
                       ),
                     ),
@@ -518,13 +520,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 const SizedBox(height: 16),
                 Text(
                   event.title,
-                  style: const TextStyle(fontSize: 22, fontWeight: FontWeight.bold),
+                  style: const TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600),
                 ),
                 if (event.tagline != null) ...[
                   const SizedBox(height: 4),
                   Text(
                     event.tagline!,
-                    style: const TextStyle(fontSize: 14, color: Colors.grey, fontStyle: FontStyle.italic),
+                    style: TextStyle(fontSize: 14, color: context.palette.textMuted, fontStyle: FontStyle.italic),
                   ),
                 ],
                 const SizedBox(height: 16),
@@ -575,14 +577,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       text,
       style: TextStyle(
         fontSize: 14,
-        color: onTap != null ? const Color(0xFFC9952A) : null,
+        color: onTap != null ? context.palette.primary : null,
         decoration: onTap != null ? TextDecoration.underline : null,
       ),
     );
 
     final row = Row(
       children: [
-        Icon(icon, size: 18, color: const Color(0xFFC9952A)),
+        Icon(icon, size: 18, color: context.palette.primary),
         const SizedBox(width: 10),
         Expanded(
           child: textWidget,
@@ -626,14 +628,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       text,
       style: TextStyle(
         fontSize: 14,
-        color: onTap != null ? const Color(0xFFC9952A) : null,
+        color: onTap != null ? context.palette.primary : null,
         decoration: onTap != null ? TextDecoration.underline : null,
       ),
     );
 
     final row = Row(
       children: [
-        Icon(icon, size: 18, color: const Color(0xFFC9952A)),
+        Icon(icon, size: 18, color: context.palette.primary),
         const SizedBox(width: 8),
         Expanded(child: textWidget),
       ],
@@ -655,9 +657,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'About the Event',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
         ),
         const SizedBox(height: 10),
         Text(
@@ -728,11 +730,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 width: 20,
                 height: 20,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Icon(Icons.business, size: 16, color: const Color(0xFFC9952A)),
+                errorBuilder: (_, __, ___) => Icon(Icons.business, size: 16, color: context.palette.primary),
               ),
             )
           else
-            Icon(Icons.business, size: 16, color: const Color(0xFFC9952A)),
+            Icon(Icons.business, size: 16, color: context.palette.primary),
           const SizedBox(width: 6),
           Column(
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -760,13 +762,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Text(
+          Text(
             'Sponsors',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
           ),
           const SizedBox(height: 12),
-          const Text('Sponsor details will be updated soon.',
-              style: TextStyle(fontSize: 14, color: Colors.grey)),
+          Text('Sponsor details will be updated soon.',
+              style: TextStyle(fontSize: 14, color: context.palette.textMuted)),
         ],
       );
     }
@@ -774,15 +776,15 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Sponsors',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
         ),
         const SizedBox(height: 12),
         if (event.sponsors.isNotEmpty) ...[
           Text('SPONSORS',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                  color: context.palette.textSecondary,
                   letterSpacing: 0.5)),
           const SizedBox(height: 8),
           _buildSponsorGrid(event.sponsors, isDark, isSponsor: true),
@@ -791,7 +793,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         if (event.partners.isNotEmpty) ...[
           Text('PARTNERS',
               style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+                  color: context.palette.textSecondary,
                   letterSpacing: 0.5)),
           const SizedBox(height: 8),
           _buildSponsorGrid(event.partners, isDark, isSponsor: false),
@@ -846,7 +848,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     String? websiteUrl,
     required bool isDark,
   }) {
-    final bg = isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA);
+    final bg = context.palette.surfaceHover;
     final card = Container(
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
@@ -864,11 +866,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 height: 36,
                 fit: BoxFit.contain,
                 errorBuilder: (_, __, ___) =>
-                    Icon(Icons.business, size: 22, color: const Color(0xFFC9952A)),
+                    Icon(Icons.business, size: 22, color: context.palette.primary),
               ),
             )
           else
-            Icon(Icons.business, size: 22, color: const Color(0xFFC9952A)),
+            Icon(Icons.business, size: 22, color: context.palette.primary),
           const SizedBox(width: 10),
           Expanded(
             child: Column(
@@ -881,7 +883,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     fontWeight: FontWeight.bold,
                     fontSize: 13,
                     color: (websiteUrl != null && websiteUrl.isNotEmpty)
-                        ? const Color(0xFFC9952A)
+                        ? context.palette.primary
                         : null,
                     decoration: (websiteUrl != null && websiteUrl.isNotEmpty)
                         ? TextDecoration.underline
@@ -893,7 +895,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 const SizedBox(height: 1),
                 Text(
                   typeLabel,
-                  style: TextStyle(fontSize: 11, color: isDark ? Colors.grey[400] : Colors.grey[600]),
+                  style: TextStyle(fontSize: 11, color: context.palette.textMuted),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -917,13 +919,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Agenda',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
         ),
         const SizedBox(height: 12),
         if (event.sessions.isEmpty)
-          const Text('Agenda will be updated soon.', style: TextStyle(fontSize: 14, color: Colors.grey))
+          Text('Agenda will be updated soon.', style: TextStyle(fontSize: 14, color: context.palette.textMuted))
         else
           ...event.sessions.map((item) {
           return Padding(
@@ -933,7 +935,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               children: [
                 Text(
                   _formatSessionTime(item),
-                  style: const TextStyle(color: Color(0xFFC9952A), fontWeight: FontWeight.bold, fontSize: 13),
+                  style: TextStyle(color: context.palette.primary, fontWeight: FontWeight.bold, fontSize: 13),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -951,13 +953,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        const Text(
+        Text(
           'Speakers',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Color(0xFFC9952A)),
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
         ),
         const SizedBox(height: 12),
         if (event.speakers.isEmpty)
-          const Text('Speaker details will be updated soon.', style: TextStyle(fontSize: 14, color: Colors.grey))
+          Text('Speaker details will be updated soon.', style: TextStyle(fontSize: 14, color: context.palette.textMuted))
         else
           ...event.speakers.map((sp) {
           return Padding(
@@ -967,8 +969,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 _buildSpeakerAvatar(
                   sp,
                   radius: 20,
-                  accentColor: const Color(0xFFC9952A),
-                  initialsStyle: const TextStyle(color: Color(0xFFC9952A), fontWeight: FontWeight.bold),
+                  accentColor: context.palette.primary,
+                  initialsStyle: TextStyle(color: context.palette.primary, fontWeight: FontWeight.bold),
                 ),
                 const SizedBox(width: 16),
                 Expanded(
@@ -977,7 +979,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     children: [
                       Text(sp.fullname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
                       const SizedBox(height: 2),
-                      Text(sp.subtitle, style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                      Text(sp.subtitle, style: TextStyle(fontSize: 12, color: context.palette.textMuted)),
                     ],
                   ),
                 ),
@@ -1042,8 +1044,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 ? event.registeredCount / event.capacity!
                 : 0,
             minHeight: 6,
-            backgroundColor: isDark ? const Color(0xFF1C2A40) : const Color(0xFFEEF3FA),
-            valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFFC9952A)),
+            backgroundColor: context.palette.surfaceHover,
+            valueColor: AlwaysStoppedAnimation<Color>(context.palette.primary),
           ),
         ),
       ],
@@ -1090,19 +1092,19 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFE9E9),
+          color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
-          border: Border.all(color: const Color(0xFF8A1B1B).withOpacity(0.2)),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
-        child: const Row(
+        child: Row(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            Icon(Icons.cancel, color: Color(0xFF8A1B1B), size: 20),
+            Icon(Icons.cancel, color: context.palette.error, size: 20),
             SizedBox(width: 8),
             Text(
               'Unregistered from this event',
               style: TextStyle(
-                color: Color(0xFF8A1B1B),
+                color: context.palette.error,
                 fontWeight: FontWeight.bold,
               ),
             ),
@@ -1118,20 +1120,20 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFD9F4E8),
+              color: context.palette.success.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: const Color(0xFF1B5C3A).withOpacity(0.2)),
+              border: Border.all(color: context.palette.success.withValues(alpha: 0.3)),
             ),
             child: Column(
               children: [
-                const Row(
+                Row(
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
-                    Icon(Icons.check_circle, color: Color(0xFF1B5C3A), size: 20),
+                    Icon(Icons.check_circle, color: context.palette.success, size: 20),
                     SizedBox(width: 8),
                     Text(
                       'Registered Successfully',
-                      style: TextStyle(color: Color(0xFF1B5C3A), fontWeight: FontWeight.bold),
+                      style: TextStyle(color: context.palette.success, fontWeight: FontWeight.bold),
                     ),
                   ],
                 ),
@@ -1139,7 +1141,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   const SizedBox(height: 4),
                   Text(
                     'Badge #: $regNo',
-                    style: const TextStyle(color: Color(0xFF1B5C3A), fontSize: 12),
+                    style: TextStyle(color: context.palette.success, fontSize: 12),
                   ),
                 ]
               ],
@@ -1157,13 +1159,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: const Color(0xFFDDEEFF),
+              color: context.palette.info.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: context.palette.info.withValues(alpha: 0.3)),
             ),
-            child: const Center(
+            child: Center(
               child: Text(
                 'You are registered for this event.',
-                style: TextStyle(color: Color(0xFF1B5C9B), fontWeight: FontWeight.bold),
+                style: TextStyle(color: context.palette.info, fontWeight: FontWeight.bold),
               ),
             ),
           ),
@@ -1176,13 +1179,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFE9E9),
+          color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'Event is at full capacity.',
-            style: TextStyle(color: Color(0xFF8A1B1B), fontWeight: FontWeight.bold),
+            style: TextStyle(color: context.palette.error, fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -1191,13 +1195,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFE9E9),
+          color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'Registration is closed.',
-            style: TextStyle(color: Color(0xFF8A1B1B), fontWeight: FontWeight.bold),
+            style: TextStyle(color: context.palette.error, fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -1206,13 +1211,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFE9E9),
+          color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'Registration is not open yet.',
-            style: TextStyle(color: Color(0xFF8A1B1B), fontWeight: FontWeight.bold),
+            style: TextStyle(color: context.palette.error, fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -1221,13 +1227,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFE9E9),
+          color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
         child: Center(
           child: Text(
             state.eligibilityMessage ?? 'Ineligible to register.',
-            style: const TextStyle(color: Color(0xFF8A1B1B), fontWeight: FontWeight.bold),
+            style: TextStyle(color: context.palette.error, fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -1236,13 +1243,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         width: double.infinity,
         padding: const EdgeInsets.all(12),
         decoration: BoxDecoration(
-          color: const Color(0xFFFFE9E9),
+          color: context.palette.error.withValues(alpha: 0.14),
           borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.error.withValues(alpha: 0.3)),
         ),
-        child: const Center(
+        child: Center(
           child: Text(
             'Registration is unavailable for past events.',
-            style: TextStyle(color: Color(0xFF8A1B1B), fontWeight: FontWeight.bold),
+            style: TextStyle(color: context.palette.error, fontWeight: FontWeight.bold),
           ),
         ),
       );
@@ -1252,9 +1260,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ctaWidget = SizedBox(
           width: double.infinity,
           child: CupertinoButton(
-            color: const Color(0xFFC9952A),
+            color: context.palette.primary,
             onPressed: () => _showRegistrationForm(event, state, isIOS: true),
-            child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+            child: Text('Register', style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.onPrimary)),
           ),
         );
       } else {
@@ -1262,8 +1270,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           width: double.infinity,
           child: ElevatedButton(
             style: ElevatedButton.styleFrom(
-              backgroundColor: const Color(0xFF0D1B3E),
-              foregroundColor: Colors.white,
+              backgroundColor: context.palette.primary,
+              foregroundColor: context.palette.onPrimary,
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
@@ -1298,9 +1306,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         context: context,
         builder: (context) {
           final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-          final bg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7);
-          final barBg = isDark ? const Color(0xFF2C2C2E) : Colors.white;
-          final textPrimary = isDark ? Colors.white : Colors.black;
+          final bg = context.palette.surface;
+          final barBg = context.palette.background;
+          final textPrimary = context.palette.textPrimary;
 
           return Material(
             color: Colors.transparent,
@@ -1319,7 +1327,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
                     decoration: BoxDecoration(
                       color: barBg,
-                      border: Border(bottom: BorderSide(color: isDark ? Colors.white10 : Colors.black12, width: 0.5)),
+                      border: Border(bottom: BorderSide(color: context.palette.border, width: 0.5)),
                       borderRadius: const BorderRadius.only(
                         topLeft: Radius.circular(16),
                         topRight: Radius.circular(16),
@@ -1330,12 +1338,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       children: [
                         CupertinoButton(
                           padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: const Row(
+                          child: Row(
                             mainAxisSize: MainAxisSize.min,
                             children: [
-                              Icon(CupertinoIcons.left_chevron, size: 18, color: Color(0xFFC9952A)),
+                              Icon(CupertinoIcons.left_chevron, size: 18, color: context.palette.primary),
                               SizedBox(width: 4),
-                              Text('Back', style: TextStyle(color: Color(0xFFC9952A), fontSize: 15)),
+                              Text('Back', style: TextStyle(color: context.palette.primary, fontSize: 15)),
                             ],
                           ),
                           onPressed: () => Navigator.pop(context),
@@ -1367,12 +1375,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           SizedBox(
                             width: double.infinity,
                             child: CupertinoButton(
-                              color: const Color(0xFFC9952A),
+                              color: context.palette.primary,
                               onPressed: () {
                                 Navigator.pop(context);
                                 _proceedToCheckout(event);
                               },
-                              child: const Text('Proceed to Checkout', style: TextStyle(fontWeight: FontWeight.bold, color: Colors.black)),
+                              child: Text('Proceed to Checkout', style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.onPrimary)),
                             ),
                           ),
                           const SizedBox(height: 16),
@@ -1394,7 +1402,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         builder: (context) {
           final isDark = Theme.of(context).brightness == Brightness.dark;
           return Dialog(
-            backgroundColor: isDark ? const Color(0xFF131E30) : Colors.white,
+            backgroundColor: context.palette.card,
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
             child: Container(
               constraints: const BoxConstraints(maxWidth: 500),
@@ -1409,7 +1417,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       children: [
                         const Text(
                           'Register for Event',
-                          style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                          style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 20, fontWeight: FontWeight.w600),
                         ),
                         IconButton(
                           icon: const Icon(Icons.close),
@@ -1428,8 +1436,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       width: double.infinity,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
-                          backgroundColor: const Color(0xFF0D1B3E),
-                          foregroundColor: Colors.white,
+                          backgroundColor: context.palette.primary,
+                          foregroundColor: context.palette.onPrimary,
                           padding: const EdgeInsets.symmetric(vertical: 16),
                           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
                         ),
@@ -1463,7 +1471,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+              color: context.palette.textSecondary,
             ),
           ),
           const SizedBox(height: 6),
@@ -1471,17 +1479,17 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             width: double.infinity,
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             decoration: BoxDecoration(
-              color: isDark ? const Color(0xFF1E293B) : const Color(0xFFF1F5F9),
+              color: context.palette.surfaceSubtle,
               borderRadius: BorderRadius.circular(8),
               border: Border.all(
-                color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                color: context.palette.border,
               ),
             ),
             child: Text(
               value.isNotEmpty ? value : '—',
               style: TextStyle(
                 fontSize: 14,
-                color: isDark ? Colors.white70 : Colors.black87,
+                color: context.palette.textSecondary,
               ),
             ),
           ),
@@ -1501,36 +1509,36 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             style: TextStyle(
               fontSize: 12,
               fontWeight: FontWeight.w500,
-              color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+              color: context.palette.textSecondary,
             ),
           ),
           const SizedBox(height: 6),
           TextField(
             controller: controller,
             maxLines: 3,
-            style: TextStyle(fontSize: 14, color: isDark ? Colors.white : Colors.black),
+            style: TextStyle(fontSize: 14, color: context.palette.textPrimary),
             decoration: InputDecoration(
               hintText: hint,
-              hintStyle: TextStyle(fontSize: 13, color: isDark ? Colors.white38 : Colors.black38),
+              hintStyle: TextStyle(fontSize: 13, color: context.palette.textMuted),
               contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
               filled: true,
-              fillColor: isDark ? const Color(0xFF0F172A) : Colors.white,
+              fillColor: context.palette.surfaceSubtle,
               border: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                  color: context.palette.border,
                 ),
               ),
               enabledBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
                 borderSide: BorderSide(
-                  color: isDark ? const Color(0xFF334155) : const Color(0xFFCBD5E1),
+                  color: context.palette.border,
                 ),
               ),
               focusedBorder: OutlineInputBorder(
                 borderRadius: BorderRadius.circular(8),
-                borderSide: const BorderSide(
-                  color: Color(0xFFC9952A),
+                borderSide: BorderSide(
+                  color: context.palette.primary,
                   width: 1.5,
                 ),
               ),
@@ -1542,8 +1550,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   }
 
   Widget _buildInfoBox(bool isDark) {
-    final infoBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF3FA);
-    final infoText = isDark ? const Color(0xFF8B9AB8) : const Color(0xFF5A6A8A);
+    final infoBg = context.palette.info.withValues(alpha: 0.08);
+    final infoText = context.palette.textSecondary;
     
     return Container(
       padding: const EdgeInsets.all(12),
@@ -1579,9 +1587,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         Text(
           event.title,
           style: TextStyle(
+            fontFamily: AppTextStyles.serif,
             fontSize: 18,
-            fontWeight: FontWeight.bold,
-            color: isDark ? Colors.white : const Color(0xFF0D1B3E),
+            fontWeight: FontWeight.w600,
+            color: context.palette.textPrimary,
           ),
         ),
         const SizedBox(height: 6),
@@ -1589,7 +1598,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           '${_formatDate(event.startDatetime)} · ${_formatTime(event.startDatetime, event.endDatetime)}',
           style: TextStyle(
             fontSize: 12,
-            color: isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569),
+            color: context.palette.textSecondary,
           ),
         ),
         const SizedBox(height: 16),
@@ -1700,11 +1709,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     required String dateValue,
     required bool isIOS,
   }) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final cardBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFF8FAFC);
-    final borderColor = const Color(0xFFC9952A).withOpacity(0.3);
-    final textColor = isDark ? Colors.white : const Color(0xFF0F172A);
-    final subTextColor = isDark ? const Color(0xFF94A3B8) : const Color(0xFF475569);
+    final cardBg = context.palette.surfaceSubtle;
+    final borderColor = context.palette.primary.withOpacity(0.3);
+    final textColor = context.palette.textPrimary;
+    final subTextColor = context.palette.textSecondary;
 
     return Container(
       width: double.infinity,
@@ -1713,23 +1721,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         color: cardBg,
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: borderColor, width: 1.5),
-        boxShadow: [
-          BoxShadow(
-            color: Colors.black.withOpacity(0.05),
-            blurRadius: 6,
-            offset: const Offset(0, 2),
-          ),
-        ],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.center,
         children: [
           Text(
             title,
-            style: const TextStyle(
+            style: TextStyle(
               fontSize: 14,
               fontWeight: FontWeight.w600,
-              color: Color(0xFFC9952A),
+              color: context.palette.primary,
               letterSpacing: 0.5,
             ),
           ),
@@ -1762,9 +1763,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 }
 
   Widget _buildQRBadgeSection(EventDetailState state, AppEvent event, bool isIOS) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final infoBg = isDark ? const Color(0xFF1E293B) : const Color(0xFFEEF3FA);
-    final infoTextColor = isDark ? const Color(0xFF8B9AB8) : const Color(0xFF5A6A8A);
+    final infoBg = context.palette.info.withValues(alpha: 0.08);
+    final infoTextColor = context.palette.textSecondary;
     final regNo = state.myRegistration?['registration_number'] ?? '';
 
     return LayoutBuilder(
@@ -1774,13 +1774,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         final viewButton = isIOS
             ? CupertinoButton(
                 padding: const EdgeInsets.symmetric(vertical: 14),
-                color: const Color(0xFF0D1B3E),
+                color: context.palette.primary,
                 borderRadius: BorderRadius.circular(10),
                 onPressed: () => _showQRBadgeDialog(event, regNo, state),
-                child: const Text(
+                child: Text(
                   'View QR badge',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: context.palette.onPrimary,
                     fontWeight: FontWeight.bold,
                     fontSize: 14,
                   ),
@@ -1788,8 +1788,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               )
             : ElevatedButton(
                 style: ElevatedButton.styleFrom(
-                  backgroundColor: const Color(0xFF0D1B3E),
-                  foregroundColor: Colors.white,
+                  backgroundColor: context.palette.primary,
+                  foregroundColor: context.palette.onPrimary,
                   padding: const EdgeInsets.symmetric(vertical: 16),
                   shape: RoundedRectangleBorder(
                     borderRadius: BorderRadius.circular(10),
@@ -1819,7 +1819,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   alignment: Alignment.center,
                   decoration: BoxDecoration(
                     border: Border.all(
-                      color: isDark ? Colors.white30 : Colors.black26,
+                      color: context.palette.textMuted,
                       width: 1,
                     ),
                     borderRadius: BorderRadius.circular(10),
@@ -1827,7 +1827,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   child: Text(
                     'Go to My Events',
                     style: TextStyle(
-                      color: isDark ? Colors.white : const Color(0xFF0D1B3E),
+                      color: context.palette.textPrimary,
                       fontWeight: FontWeight.w600,
                       fontSize: 14,
                     ),
@@ -1836,9 +1836,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               )
             : OutlinedButton(
                 style: OutlinedButton.styleFrom(
-                  foregroundColor: isDark ? Colors.white : const Color(0xFF0D1B3E),
+                  foregroundColor: context.palette.textPrimary,
                   side: BorderSide(
-                    color: isDark ? Colors.white30 : Colors.black26,
+                    color: context.palette.textMuted,
                     width: 1,
                   ),
                   padding: const EdgeInsets.symmetric(vertical: 16),
@@ -1908,7 +1908,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   }
 
   void _showQRBadgeDialog(AppEvent event, String regNo, EventDetailState state) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
     final auth = ref.read(authControllerProvider);
     final userName = state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? 'Attendee';
     final email = state.alumniProfile?['email'] ?? auth.session?.email ?? '';
@@ -1917,7 +1916,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       context: context,
       builder: (context) {
         return Dialog(
-          backgroundColor: isDark ? const Color(0xFF131E30) : Colors.white,
+          backgroundColor: context.palette.card,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.all(24.0),
@@ -1929,7 +1928,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   children: [
                     const Text(
                       'Your Event Badge',
-                      style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
                     ),
                     IconButton(
                       icon: const Icon(Icons.close),
@@ -1941,7 +1940,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 Container(
                   padding: const EdgeInsets.all(16),
                   decoration: BoxDecoration(
-                    color: isDark ? const Color(0xFF0D1B3E) : const Color(0xFFF4F6F9),
+                    color: context.palette.canvas,
                     borderRadius: BorderRadius.circular(12),
                   ),
                   child: Column(
@@ -1960,7 +1959,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         const SizedBox(height: 4),
                         Text(
                           email,
-                          style: TextStyle(fontSize: 12, color: isDark ? Colors.white60 : Colors.black54),
+                          style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
                         ),
                       ],
                       const SizedBox(height: 16),

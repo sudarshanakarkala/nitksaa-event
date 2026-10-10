@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:event_app/theme/app_colors.dart';
+import 'package:event_app/theme/app_palette.dart';
 import 'package:event_app/theme/app_text_styles.dart';
 
 class AppSecondaryButton extends StatelessWidget {
@@ -16,10 +16,10 @@ class AppSecondaryButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color background = isDark ? AppColors.darkSurface : AppColors.lightSurface;
-    final Color border = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
-    final Color textColor = isDark ? AppColors.darkPrimary : AppColors.lightPrimary;
+    final p = context.palette;
+    final Color background = p.surfaceSubtle;
+    final Color border = p.primary;
+    final Color textColor = p.primary;
 
     return OutlinedButton(
       onPressed: isLoading ? null : onPressed,

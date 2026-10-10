@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'; // for ScaffoldMessenger fallback
-import 'package:event_app/theme/app_colors.dart';
+import 'package:event_app/theme/app_palette.dart';
 
 class AppScaffoldCupertino extends StatelessWidget {
   final ObstructingPreferredSizeWidget? navigationBar;
@@ -15,8 +15,7 @@ class AppScaffoldCupertino extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final bool isDark = Theme.of(context).brightness == Brightness.dark;
-    final Color background = isDark ? AppColors.darkBackground : AppColors.lightBackground;
+    final Color background = context.palette.background;
     return CupertinoPageScaffold(
       navigationBar: navigationBar ?? const CupertinoNavigationBar(),
       backgroundColor: background,

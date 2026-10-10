@@ -6,10 +6,11 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
-import '../../../../shared/widgets/app_sidebar.dart';
 
 class EventRegistrationsScreen extends ConsumerStatefulWidget {
   const EventRegistrationsScreen({super.key, required this.eventId});
@@ -317,7 +318,7 @@ class _EventRegistrationsScreenState
                     const Text(
                       'Admin access required',
                       style: TextStyle(
-                          fontSize: 22, fontWeight: FontWeight.bold),
+                          fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600),
                     ),
                     const SizedBox(height: 8),
                     Text(
@@ -344,7 +345,6 @@ class _EventRegistrationsScreenState
       body: SafeArea(
         child: Row(
           children: [
-            if (isWebScreen) const AppSidebar(),
             Expanded(
               child: Padding(
                 padding: EdgeInsets.symmetric(
@@ -366,15 +366,15 @@ class _EventRegistrationsScreenState
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
-                                    const Icon(Icons.arrow_back,
+                                    Icon(Icons.arrow_back,
                                         size: 18,
-                                        color: Color(0xFFC9952A)),
+                                        color: context.palette.primary),
                                     const SizedBox(width: 4),
                                     Text(
                                       'Back to Manage Events',
                                       style: TextStyle(
                                         fontSize: 13,
-                                        color: const Color(0xFFC9952A),
+                                        color: context.palette.primary,
                                         fontWeight: FontWeight.w500,
                                       ),
                                     ),
@@ -385,9 +385,9 @@ class _EventRegistrationsScreenState
                               Text(
                                 _event?.title ?? 'Event Registrations',
                                 style: const TextStyle(
-                                  fontFamily: 'Fraunces',
+                                  fontFamily: AppTextStyles.serif,
                                   fontSize: 26,
-                                  fontWeight: FontWeight.bold,
+                                  fontWeight: FontWeight.w600,
                                 ),
                               ),
                               if (_event != null)
@@ -478,32 +478,6 @@ class _EventRegistrationsScreenState
           ],
         ),
       ),
-      bottomNavigationBar: isWebScreen
-          ? null
-          : SafeArea(
-              top: false,
-              child: NavigationBar(
-                selectedIndex: 2,
-                onDestinationSelected: (index) {
-                if (index == 0) context.go(AppRoutes.home);
-                if (index == 1) context.go(AppRoutes.myEvents);
-              },
-              destinations: const [
-                NavigationDestination(
-                  icon: Icon(Icons.calendar_month),
-                  label: 'Events',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.bookmark),
-                  label: 'My Events',
-                ),
-                NavigationDestination(
-                  icon: Icon(Icons.admin_panel_settings),
-                  label: 'Manage',
-                ),
-              ],
-            ),
-      ),
     );
   }
 
@@ -528,14 +502,14 @@ class _EventRegistrationsScreenState
             style: TextStyle(
               fontWeight: isActive ? FontWeight.w700 : FontWeight.w600,
               fontSize: 13,
-              color: isActive ? const Color(0xFFC9952A) : null,
+              color: isActive ? context.palette.primary : null,
             ),
           ),
           const SizedBox(width: 4),
           Icon(
             _sortIcon(column),
             size: 14,
-            color: isActive ? const Color(0xFFC9952A) : Colors.grey,
+            color: isActive ? context.palette.primary : context.palette.textMuted,
           ),
           if (trailing != null) ...[const SizedBox(width: 2), trailing],
         ],
@@ -562,7 +536,7 @@ class _EventRegistrationsScreenState
                 style: TextStyle(
                   fontSize: 13,
                   color: _filterBatchYear == year
-                      ? const Color(0xFFC9952A)
+                      ? context.palette.primary
                       : null,
                 ),
               ),
@@ -572,8 +546,8 @@ class _EventRegistrationsScreenState
         Icons.filter_list,
         size: 16,
         color: _filterBatchYear != null
-            ? const Color(0xFFC9952A)
-            : Colors.grey,
+            ? context.palette.primary
+            : context.palette.textMuted,
       ),
     );
   }
@@ -597,7 +571,7 @@ class _EventRegistrationsScreenState
                 style: TextStyle(
                   fontSize: 13,
                   color: _filterBranch == branch
-                      ? const Color(0xFFC9952A)
+                      ? context.palette.primary
                       : null,
                 ),
               ),
@@ -607,8 +581,8 @@ class _EventRegistrationsScreenState
         Icons.filter_list,
         size: 16,
         color: _filterBranch != null
-            ? const Color(0xFFC9952A)
-            : Colors.grey,
+            ? context.palette.primary
+            : context.palette.textMuted,
       ),
     );
   }
@@ -623,7 +597,7 @@ class _EventRegistrationsScreenState
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            Icon(Icons.error_outline, size: 48, color: context.palette.error),
             const SizedBox(height: 12),
             Text(_errorMessage!, textAlign: TextAlign.center),
             const SizedBox(height: 16),
@@ -646,7 +620,7 @@ class _EventRegistrationsScreenState
                   ? Icons.search_off
                   : Icons.people_outline,
               size: 48,
-              color: Colors.grey,
+              color: context.palette.textMuted,
             ),
             const SizedBox(height: 16),
             Text(
@@ -661,7 +635,7 @@ class _EventRegistrationsScreenState
               _searchController.text.isNotEmpty
                   ? 'Try a different search term'
                   : 'Attendees will appear here once they register.',
-              style: const TextStyle(color: Colors.grey),
+              style: TextStyle(color: context.palette.textMuted),
             ),
           ],
         ),
@@ -747,9 +721,7 @@ class _EventRegistrationsScreenState
               borderRadius: BorderRadius.circular(12),
               child: DataTable(
                 headingRowColor: WidgetStateProperty.all(
-                  isDark
-                      ? const Color(0xFF111827)
-                      : const Color(0xFFF8F9FD),
+                  context.palette.surfaceSubtle,
                 ),
                 columnSpacing: 24,
                 columns: [
@@ -854,15 +826,16 @@ class _AttendeeCard extends StatelessWidget {
                   padding:
                       const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                   decoration: BoxDecoration(
-                    color: const Color(0xFFDDEEFF),
+                    color: context.palette.info.withValues(alpha: 0.14),
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: context.palette.info.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     regNumber,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 11,
                       fontWeight: FontWeight.w600,
-                      color: Color(0xFF1B5C9B),
+                      color: context.palette.info,
                     ),
                   ),
                 ),
@@ -871,10 +844,10 @@ class _AttendeeCard extends StatelessWidget {
             const SizedBox(height: 10),
             Row(
               children: [
-                _buildInfoChip(
+                _buildInfoChip(context,
                     Icons.school_outlined, batchYear?.toString() ?? '-'),
                 const SizedBox(width: 16),
-                _buildInfoChip(Icons.account_tree_outlined, branch),
+                _buildInfoChip(context, Icons.account_tree_outlined, branch),
               ],
             ),
             const SizedBox(height: 8),
@@ -898,11 +871,11 @@ class _AttendeeCard extends StatelessWidget {
     );
   }
 
-  Widget _buildInfoChip(IconData icon, String label) {
+  Widget _buildInfoChip(BuildContext context, IconData icon, String label) {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Icon(icon, size: 14, color: const Color(0xFFC9952A)),
+        Icon(icon, size: 14, color: context.palette.primary),
         const SizedBox(width: 4),
         Text(
           label,

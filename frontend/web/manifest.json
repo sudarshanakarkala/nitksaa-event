@@ -1,11 +1,11 @@
 {
-    "name": "event_app",
-    "short_name": "event_app",
+    "name": "NITKSAA Events",
+    "short_name": "NITKSAA Events",
     "start_url": ".",
     "display": "standalone",
-    "background_color": "#0175C2",
-    "theme_color": "#0175C2",
-    "description": "A new Flutter project.",
+    "background_color": "#09192e",
+    "theme_color": "#09192e",
+    "description": "Events of the NITK Surathkal Alumni Association.",
     "orientation": "portrait-primary",
     "prefer_related_applications": false,
     "icons": [

@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../../theme/app_palette.dart';
+
 /// A reusable status row displaying a label, a value and an optional check / error icon.
 class StatusRow extends StatelessWidget {
   final String label;
@@ -26,7 +28,7 @@ class StatusRow extends StatelessWidget {
       children: [
         Icon(
           ok ? Icons.check_circle_outline : Icons.error_outline,
-          color: ok ? Colors.green : cs.error,
+          color: ok ? context.palette.success : cs.error,
           size: 18,
         ),
         const SizedBox(width: 8),

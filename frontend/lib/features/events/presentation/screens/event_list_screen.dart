@@ -5,11 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_text_styles.dart';
+import '../../../../shared/widgets/list_page.dart';
+import '../../../../shared/widgets/segment_toggle.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
+import '../providers/my_events_provider.dart';
 import '../../domain/event.dart';
-import '../../../../shared/widgets/app_sidebar.dart';
-import '../../../../shared/widgets/app_bottom_nav.dart';
+import '../../domain/my_event_registration.dart';
+
+/// "Registered by me" filter. UI state only; shared with the phone filter
+/// sheet, which is a separate route.
+final _registeredOnlyProvider = StateProvider.autoDispose<bool>((ref) => false);
 
 class EventListScreen extends ConsumerStatefulWidget {
   const EventListScreen({super.key});
@@ -22,12 +30,75 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
+  // Cards / Table view (website ViewToggle) and table sort.
+  String _view = 'cards';
+  int _sortColumn = 1; // Date
+  bool _sortAsc = true;
+  String? _appliedUri;
+
   @override
   void initState() {
     super.initState();
     _searchController.addListener(() {
       ref.read(eventsProvider.notifier).setSearchQuery(_searchController.text);
     });
+    // Your registrations, for the "Registered by me" filter and own cards.
+    Future.microtask(() {
+      if (ref.read(authControllerProvider).isAuthenticated) {
+        ref.read(myEventsProvider.notifier).fetchMyEvents();
+      }
+    });
+  }
+
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    // Account menu "My Events" links to /home?mine=1. Applied once per URL,
+    // so resizing (which also lands here) doesn't re-apply it.
+    final uri = GoRouterState.of(context).uri;
+    if (uri.toString() == _appliedUri) return;
+    _appliedUri = uri.toString();
+    if (uri.queryParameters['mine'] == '1') {
+      Future.microtask(() {
+        if (mounted) ref.read(_registeredOnlyProvider.notifier).state = true;
+      });
+    }
+  }
+
+  /// Your registrations by event id (empty when signed out).
+  Map<int, MyEventRegistration> _registrationsByEvent() {
+    if (!ref.watch(authControllerProvider).isAuthenticated) return const {};
+    return {
+      for (final r in ref.watch(myEventsProvider).registrations) r.eventId: r,
+    };
+  }
+
+  /// Same confirm dialog and provider call as the My Events page.
+  Future<void> _confirmUnregister(AppEvent event) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unregister?'),
+        content: Text('This will unregister you from ${event.title}.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('Keep'),
+          ),
+          FilledButton.tonal(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Unregister'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    await ref.read(myEventsProvider.notifier).cancelRegistration(event.eventId);
+    if (!mounted) return;
+    final error = ref.read(myEventsProvider).errorMessage;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(error == null ? 'Unregistered' : 'Could not unregister.')),
+    );
   }
 
   @override
@@ -96,7 +167,56 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  Widget _buildFilterPanel([WidgetRef? panelRef]) {
+  /// Filter section label, website `.filter-label`: small uppercase, 70% gold.
+  Widget _filterLabel(String text) => Text(
+        text.toUpperCase(),
+        style: AppTextStyles.eyebrow.copyWith(
+          fontSize: 11.5,
+          letterSpacing: 0.9,
+          color: context.palette.primary.withValues(alpha: 0.7),
+        ),
+      );
+
+  /// Website `.chip` toggle: faint pill, gold-tinted when on. Calls
+  /// [onChanged] with the new value, like the checkbox it replaces.
+  Widget _filterChip(String label, bool value, ValueChanged<bool?> onChanged) {
+    final p = context.palette;
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => onChanged(!value),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
+        decoration: BoxDecoration(
+          color: value ? p.primary.withValues(alpha: 0.14) : p.surfaceSubtle,
+          borderRadius: BorderRadius.circular(20),
+          border: Border.all(
+            color: p.primary.withValues(alpha: value ? 0.5 : 0.14),
+          ),
+        ),
+        child: Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            fontSize: 12.8,
+            height: 1.2,
+            color: value ? p.primary : p.textSecondary,
+            fontWeight: value ? FontWeight.w500 : FontWeight.w400,
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Active filters, for the rail badge (search is not counted).
+  int _activeFilterCount(EventsState s) => [
+        s.period == 'past',
+        s.dateRangeStart != null || s.dateRangeEnd != null,
+        s.timeline != null,
+        !((s.filterModes['physical'] ?? true) && (s.filterModes['virtual'] ?? true)),
+        !((s.filterRegistrationStatus['open'] ?? true) &&
+            (s.filterRegistrationStatus['closed'] ?? true)),
+      ].where((active) => active).length;
+
+  Widget _buildFilterPanel([WidgetRef? panelRef, bool inRail = false]) {
     final rf = panelRef ?? ref;
     final state = rf.watch(eventsProvider);
     final hasActiveFilters = state.dateRangeStart != null ||
@@ -112,20 +232,24 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (with clear & close actions)
+          // Header (with clear & close actions). In the rail, the rail
+          // header has the title and "Clear all".
+          if (!inRail)
           Row(
             mainAxisAlignment: MainAxisAlignment.spaceBetween,
             children: [
               const Text(
                 'Filters',
-                style: TextStyle(fontSize: 20, fontWeight: FontWeight.bold),
+                style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 20, fontWeight: FontWeight.w600),
               ),
               Row(
                 children: [
                   if (hasActiveFilters)
-                    TextButton.icon(
+                    TextButton(
                       onPressed: () {
                         rf.read(eventsProvider.notifier).clearFilters();
+                        rf.read(eventsProvider.notifier).setPeriod('upcoming');
+                        rf.read(_registeredOnlyProvider.notifier).state = false;
                         _searchController.clear();
                         if (isInDrawer) {
                           // keep drawer open so user can see cleared state
@@ -133,11 +257,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           Navigator.pop(context);
                         }
                       },
-                      icon: const Icon(Icons.clear_all, size: 18),
-                      label: const Text('Clear All'),
                       style: TextButton.styleFrom(
-                        foregroundColor: Colors.orange,
+                        foregroundColor: context.palette.textSecondary,
                       ),
+                      child: const Text('Clear all'),
                     ),
                   IconButton(
                     icon: const Icon(Icons.close),
@@ -154,13 +277,35 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ),
             ],
           ),
+          SizedBox(height: inRail ? 8 : 20),
+
+          // When: upcoming or past (single choice; was the page tabs).
+          _filterLabel('When'),
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final period in const ['upcoming', 'past'])
+              _filterChip(
+                period == 'upcoming' ? 'Upcoming' : 'Past',
+                state.period == period,
+                (_) => rf.read(eventsProvider.notifier).setPeriod(period),
+              ),
+          ]),
           const SizedBox(height: 20),
 
+          // Your registrations (website "Author: My Stories"), signed in only.
+          if (rf.watch(authControllerProvider).isAuthenticated) ...[
+            _filterLabel('My Registrations'),
+            const SizedBox(height: 8),
+            _filterChip(
+              'Registered by me',
+              rf.watch(_registeredOnlyProvider),
+              (on) => rf.read(_registeredOnlyProvider.notifier).state = on ?? false,
+            ),
+            const SizedBox(height: 20),
+          ],
+
           // Date Range Section
-          const Text(
-            'Date Range',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          _filterLabel('Date Range'),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -217,27 +362,19 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 20),
 
           // Timeline Section (single-select dropdown)
-          const Text(
-            'Timeline',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          _filterLabel('Timeline'),
           const SizedBox(height: 8),
           _buildTimelineDropdown(rf, state, isInDrawer),
           const SizedBox(height: 20),
 
-          // Event Mode Section (checkbox style)
-          const Text(
-            'Event Mode',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          // Event Mode Section (website chips)
+          _filterLabel('Event Mode'),
           const SizedBox(height: 8),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Physical'),
-            value: state.filterModes?['physical'] ?? true,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (val) {
+          Wrap(spacing: 6, runSpacing: 6, children: [
+          _filterChip(
+            'Physical',
+            state.filterModes?['physical'] ?? true,
+            (val) {
               if (val == null) return;
               final current = state.filterModes?['physical'] ?? true;
               if (val != current) {
@@ -245,13 +382,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Virtual'),
-            value: state.filterModes?['virtual'] ?? true,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (val) {
+          _filterChip(
+            'Virtual',
+            state.filterModes?['virtual'] ?? true,
+            (val) {
               if (val == null) return;
               final current = state.filterModes?['virtual'] ?? true;
               if (val != current) {
@@ -259,21 +393,17 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
+          ]),
           const SizedBox(height: 20),
 
-          // Registration Status Section (checkbox style)
-          const Text(
-            'Registration Status',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-          ),
+          // Registration Status Section (website chips)
+          _filterLabel('Registration Status'),
           const SizedBox(height: 8),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Open'),
-            value: state.filterRegistrationStatus?['open'] ?? true,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (val) {
+          Wrap(spacing: 6, runSpacing: 6, children: [
+          _filterChip(
+            'Open',
+            state.filterRegistrationStatus?['open'] ?? true,
+            (val) {
               if (val == null) return;
               final current = state.filterRegistrationStatus?['open'] ?? true;
               if (val != current) {
@@ -281,13 +411,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
-          CheckboxListTile(
-            contentPadding: EdgeInsets.zero,
-            dense: true,
-            title: const Text('Closed'),
-            value: state.filterRegistrationStatus?['closed'] ?? true,
-            controlAffinity: ListTileControlAffinity.leading,
-            onChanged: (val) {
+          _filterChip(
+            'Closed',
+            state.filterRegistrationStatus?['closed'] ?? true,
+            (val) {
               if (val == null) return;
               final current = state.filterRegistrationStatus?['closed'] ?? true;
               if (val != current) {
@@ -295,6 +422,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
+          ]),
           const SizedBox(height: 24),
 
           // Drawer-only clear button removed — top 'Clear All' handles clearing.
@@ -313,10 +441,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFC9952A) : Colors.transparent,
+          color: isActive ? context.palette.primary : Colors.transparent,
           border: Border.all(
             color: isActive
-                ? const Color(0xFFC9952A)
+                ? context.palette.primary
                 : Theme.of(context).colorScheme.outlineVariant,
             width: 2,
           ),
@@ -327,7 +455,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontWeight: FontWeight.w600,
-            color: isActive ? Colors.white : null,
+            color: isActive ? context.palette.onPrimary : null,
             fontSize: 13,
           ),
         ),
@@ -357,13 +485,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     final auth = ref.watch(authControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final bg = isDark ? const Color(0xFF000000) : const Color(0xFFF2F2F7);
-    final cardBg = isDark ? const Color(0xFF1C1C1E) : const Color(0xFFFFFFFF);
-    final textPrimary = isDark ? Colors.white : Colors.black;
-    final textSecondary = isDark
-        ? const Color(0xFFEBEBF5)
-        : const Color(0xFF3C3C43);
-    final accentGold = const Color(0xFFC9952A);
+    final bg = context.palette.background;
+    final cardBg = context.palette.card;
+    final textPrimary = context.palette.textPrimary;
+    final textSecondary = context.palette.textSecondary;
+    final accentGold = context.palette.primary;
 
     return CupertinoPageScaffold(
       backgroundColor: bg,
@@ -406,11 +532,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     width: double.infinity,
                     child: CupertinoSegmentedControl<String>(
                       groupValue: state.period,
-                      selectedColor: isDark ? accentGold : const Color(0xFF007AFF),
+                      selectedColor: accentGold,
                       unselectedColor: cardBg,
-                      borderColor: isDark
-                          ? accentGold.withValues(alpha: 0.5)
-                          : const Color(0x3C3C430C),
+                      borderColor: context.palette.border,
                       children: const {
                         'upcoming': Padding(
                           padding: EdgeInsets.symmetric(vertical: 8.0),
@@ -511,12 +635,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     {required bool isAdmin}
   ) {
     final regStatusColor = event.registrationStatus == 'open'
-        ? (isDark ? const Color(0xFF30D158) : const Color(0xFF34C759))
-        : (isDark ? const Color(0xFFFF453A) : const Color(0xFFFF3B30));
+        ? context.palette.success
+        : context.palette.error;
 
     final typeColor = event.isVirtual
-        ? (isDark ? const Color(0xFFBF5AF2) : const Color(0xFF5856D6))
-        : (isDark ? const Color(0xFF90B5FF) : const Color(0xFF007AFF));
+        ? context.palette.info
+        : context.palette.primary;
 
     final capacityText = event.capacity != null
         ? '${event.registeredCount} / ${event.capacity}'
@@ -531,14 +655,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       decoration: BoxDecoration(
         color: cardBg,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: textSecondary.withValues(alpha: 0.1)),
-        boxShadow: const [
-          BoxShadow(
-            color: Color(0x0A000000),
-            blurRadius: 4,
-            offset: Offset(0, 2),
-          ),
-        ],
+        border: Border.all(color: context.palette.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -588,6 +705,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 decoration: BoxDecoration(
                   color: typeColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: typeColor.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   event.isVirtual ? 'Virtual' : 'Physical',
@@ -656,11 +774,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 height: 5,
                 child: LinearProgressIndicator(
                   value: progress,
-                  backgroundColor: isDark
-                      ? const Color(0xFF2C2C2E)
-                      : const Color(0xFFE5E5EA),
+                  backgroundColor: context.palette.surfaceHover,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    progress > 0.8 ? Colors.orange : Colors.green,
+                    progress > 0.8 ? context.palette.warning : context.palette.success,
                   ),
                 ),
               ),
@@ -675,6 +791,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 decoration: BoxDecoration(
                   color: regStatusColor.withValues(alpha: 0.15),
                   borderRadius: BorderRadius.circular(6),
+                  border: Border.all(color: regStatusColor.withValues(alpha: 0.3)),
                 ),
                 child: Text(
                   event.registrationStatus == 'open'
@@ -692,7 +809,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   horizontal: 16,
                   vertical: 8,
                 ),
-                color: isDark ? accentGold : const Color(0xFF007AFF),
+                color: accentGold,
                 borderRadius: BorderRadius.circular(8),
                 minimumSize: Size.zero,
                 child: Text(
@@ -700,7 +817,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   style: TextStyle(
                     fontSize: 12,
                     fontWeight: FontWeight.w600,
-                    color: isDark ? Colors.black : Colors.white,
+                    color: context.palette.onPrimary,
                   ),
                 ),
                 onPressed: () {
@@ -719,7 +836,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       padding: const EdgeInsets.only(bottom: 6.0),
       child: Row(
         children: [
-          Icon(icon, size: 14, color: const Color(0xFFC9952A)),
+          Icon(icon, size: 14, color: context.palette.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -735,15 +852,15 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
   Widget _buildCupertinoBottomNav(Color accentGold, bool isDark) {
-    final navBg = isDark ? const Color(0xFF161617) : const Color(0xFFF9F9F9);
-    final inactiveColor = const Color(0xFF8E8E93);
+    final navBg = context.palette.background;
+    final inactiveColor = context.palette.textMuted;
 
     return Container(
       decoration: BoxDecoration(
         color: navBg,
         border: Border(
           top: BorderSide(
-            color: isDark ? const Color(0xFF2C2C2E) : const Color(0xFFE5E5EA),
+            color: context.palette.border,
             width: 0.5,
           ),
         ),
@@ -766,22 +883,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             inactiveColor,
           ),
           _buildCupertinoNavItem(
-            CupertinoIcons.shield,
-            'Volunteer',
-            false,
-            accentGold,
-            inactiveColor,
-          ),
-          _buildCupertinoNavItem(
             CupertinoIcons.person_circle,
             'Manage',
-            false,
-            accentGold,
-            inactiveColor,
-          ),
-          _buildCupertinoNavItem(
-            CupertinoIcons.ellipsis,
-            'More',
             false,
             accentGold,
             inactiveColor,
@@ -837,28 +940,26 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(
+            Icon(
               CupertinoIcons.exclamationmark_triangle,
               size: 42,
-              color: CupertinoColors.systemRed,
+              color: context.palette.error,
             ),
             const SizedBox(height: 12),
             Text(
               'Error Loading Events',
               style: TextStyle(
                 fontWeight: FontWeight.bold,
-                color: Theme.of(context).brightness == Brightness.dark
-                    ? Colors.white
-                    : Colors.black,
+                color: context.palette.textPrimary,
               ),
             ),
             const SizedBox(height: 6),
             Text(
               message,
               textAlign: TextAlign.center,
-              style: const TextStyle(
+              style: TextStyle(
                 fontSize: 13,
-                color: CupertinoColors.systemGrey,
+                color: context.palette.textMuted,
               ),
             ),
           ],
@@ -868,14 +969,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
   Widget _buildCupertinoEmptyState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
           Icon(
             CupertinoIcons.calendar_badge_minus,
             size: 48,
-            color: CupertinoColors.systemGrey,
+            color: context.palette.textMuted,
           ),
           const SizedBox(height: 12),
           Text(
@@ -885,7 +986,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 4),
           Text(
             'Try searching for something else.',
-            style: TextStyle(fontSize: 13, color: CupertinoColors.systemGrey),
+            style: TextStyle(fontSize: 13, color: context.palette.textMuted),
           ),
         ],
       ),
@@ -907,7 +1008,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     return CupertinoActionSheetAction(
       onPressed: () {},
       child: Container(
-        color: isDark ? const Color(0xFF1C1C1E) : const Color(0xFFF2F2F7),
+        color: context.palette.surface,
         child: SafeArea(
           child: SingleChildScrollView(
             child: Padding(
@@ -922,7 +1023,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     children: [
                       const Text(
                         'Filters',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                        style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
                       ),
                       CupertinoButton(
                         padding: EdgeInsets.zero,
@@ -991,7 +1092,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFD0D0D0)),
+                              border: Border.all(color: context.palette.border),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             padding: const EdgeInsets.all(8),
@@ -1022,7 +1123,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                           },
                           child: Container(
                             decoration: BoxDecoration(
-                              border: Border.all(color: const Color(0xFFD0D0D0)),
+                              border: Border.all(color: context.palette.border),
                               borderRadius: BorderRadius.circular(6),
                             ),
                             padding: const EdgeInsets.all(8),
@@ -1165,11 +1266,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       child: Container(
         padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
         decoration: BoxDecoration(
-          color: isActive ? const Color(0xFFC9952A) : Colors.transparent,
+          color: isActive ? context.palette.primary : Colors.transparent,
           border: Border.all(
             color: isActive
-                ? const Color(0xFFC9952A)
-                : const Color(0xFFD0D0D0),
+                ? context.palette.primary
+                : context.palette.border,
             width: 1.5,
           ),
           borderRadius: BorderRadius.circular(6),
@@ -1179,7 +1280,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           textAlign: TextAlign.center,
           style: TextStyle(
             fontWeight: FontWeight.w500,
-            color: isActive ? Colors.white : Colors.black,
+            color: isActive ? context.palette.onPrimary : context.palette.textPrimary,
             fontSize: 12,
           ),
         ),
@@ -1192,331 +1293,288 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   // ==========================================
   Widget _buildMaterialLayout() {
     final state = ref.watch(eventsProvider);
-    final filteredEvents = ref.watch(filteredEventsProvider);
+    final allEvents = ref.watch(filteredEventsProvider);
+    // "Registered by me" (website "My Stories" filter): the public list
+    // narrowed to events with an active registration of yours.
+    final registrations = _registrationsByEvent();
+    final registeredOnly = ref.watch(_registeredOnlyProvider);
+    final filteredEvents = registeredOnly
+        ? allEvents.where((e) => registrations[e.eventId]?.isActive ?? false).toList()
+        : allEvents;
     final auth = ref.watch(authControllerProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
-
     final ThemeData theme = Theme.of(context);
-    final ColorScheme colorScheme = theme.colorScheme;
+    final p = context.palette;
+    final side = ListPage.sidePadding(context);
 
-    // Web / Desktop styling rules
-    final isWebScreen = MediaQuery.of(context).size.width >= 900;
-
-    final sidebar = isWebScreen ? const AppSidebar() : null;
-
-    final bodyContent = Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Web / Mobile Header
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 24.0, vertical: 16.0),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'NITKSAA Events',
-                style: TextStyle(
-                  fontFamily: 'Fraunces',
-                  fontSize: 24,
-                  fontWeight: FontWeight.bold,
-                ),
-              ),
-              if (isWebScreen)
-                Row(
-                  children: [
-                    SizedBox(
-                      width: 250,
-                      child: TextField(
-                        controller: _searchController,
-                        decoration: InputDecoration(
-                          prefixIcon: const Icon(Icons.search),
-                          hintText: 'Search events…',
-                          isDense: true,
-                          contentPadding: const EdgeInsets.symmetric(
-                            horizontal: 12,
-                            vertical: 10,
-                          ),
-                          border: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: colorScheme.outlineVariant,
-                            ),
-                          ),
-                          enabledBorder: OutlineInputBorder(
-                            borderRadius: BorderRadius.circular(8),
-                            borderSide: BorderSide(
-                              color: colorScheme.outlineVariant.withOpacity(0.5),
-                            ),
-                          ),
-                          filled: true,
-                          fillColor: isDark
-                              ? const Color(0xFF1A2A3A).withOpacity(0.5)
-                              : Colors.grey.withOpacity(0.1),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(width: 12),
-                    OutlinedButton.icon(
-                      icon: const Icon(Icons.tune, size: 18),
-                      label: const Text('Filters'),
-                      style: OutlinedButton.styleFrom(
-                        side: BorderSide(
-                          color: colorScheme.outlineVariant,
-                        ),
-                        shape: RoundedRectangleBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                      onPressed: _showFilterBottomSheet,
-                    ),
-                  ],
-                )
-              else if (!isWebScreen)
-                Row(
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.tune),
-                      tooltip: 'Filters',
-                      onPressed: _showFilterBottomSheet,
-                    ),
-                    IconButton(
-                      icon: Icon(
-                        auth.isAuthenticated
-                            ? Icons.logout_outlined
-                            : Icons.login_outlined,
-                      ),
-                      onPressed: _handleAuthAction,
-                    ),
-                  ],
-                ),
-            ],
+    // Website page frame: filter rail, toolbar, then the card grid.
+    return Scaffold(
+      key: _scaffoldKey,
+      body: ListPage(
+        title: 'Events',
+        subtitle: 'Reunions, talks and meetups of the NITK Surathkal Alumni Association.',
+        search: SizedBox(
+          height: 44,
+          child: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search, size: 20),
+              hintText: 'Search events…',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+            ),
           ),
         ),
-
-        // Tabs Row (for web only below header)
-        if (isWebScreen)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: TabBar(
-              isScrollable: false,
-              labelColor: isDark ? const Color(0xFFC9952A) : colorScheme.primary,
-              unselectedLabelColor: colorScheme.onSurfaceVariant,
-              indicatorColor: const Color(0xFFC9952A),
-              indicatorWeight: 3,
-              tabs: const [
-                Tab(text: 'Upcoming'),
-                Tab(text: 'Past'),
-              ],
-              onTap: (index) {
-                ref
-                    .read(eventsProvider.notifier)
-                    .setPeriod(index == 0 ? 'upcoming' : 'past');
-              },
-            ),
-          ),
-
-        // Mobile Search + Tab Row
-        if (!isWebScreen)
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: LayoutBuilder(
-              builder: (context, constraints) {
-                final searchWidget = SizedBox(
-                  width: double.infinity,
-                  child: TextField(
-                    controller: _searchController,
-                    decoration: InputDecoration(
-                      prefixIcon: const Icon(Icons.search),
-                      hintText: 'Search events…',
-                      isDense: true,
-                      contentPadding: const EdgeInsets.symmetric(
-                        horizontal: 12,
-                        vertical: 8,
-                      ),
-                      border: OutlineInputBorder(
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                    ),
-                  ),
-                );
-
-                final filterTabs = TabBar(
-                  isScrollable: true,
-                  labelColor: isDark
-                      ? const Color(0xFFC9952A)
-                      : colorScheme.primary,
-                  unselectedLabelColor: colorScheme.onSurfaceVariant,
-                  indicatorColor: const Color(0xFFC9952A),
-                  tabs: const [
-                    Tab(text: 'Upcoming'),
-                    Tab(text: 'Past'),
-                  ],
-                  onTap: (index) {
-                    ref
-                        .read(eventsProvider.notifier)
-                        .setPeriod(index == 0 ? 'upcoming' : 'past');
-                  },
-                );
-
-                return Column(
+        // Cards / Table, like the website; phones get cards only.
+        toggle: MediaQuery.sizeOf(context).width < 600
+            ? null
+            : SegmentToggle<String>(
+                options: const [
+                  SegmentOption('cards', 'Cards', icon: Icons.grid_view),
+                  SegmentOption('table', 'Table', icon: Icons.table_rows_outlined),
+                ],
+                selected: _view,
+                onChanged: (view) => setState(() => _view = view),
+              ),
+        count: state.isLoading
+            ? null
+            : Text.rich(
+                TextSpan(
                   children: [
-                    searchWidget,
-                    const SizedBox(height: 8),
-                    filterTabs,
-                  ],
-                );
-              },
-            ),
-          ),
-
-        const SizedBox(height: 16),
-
-        // List Grid area
-        Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 24.0),
-            child: state.isLoading
-                ? const Center(child: CircularProgressIndicator())
-                : state.errorMessage != null
-                ? _buildMaterialErrorState(state.errorMessage!)
-                : filteredEvents.isEmpty
-                ? _buildMaterialEmptyState()
-                : GridView.builder(
-                    gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-                      crossAxisCount: isWebScreen ? 2 : 1,
-                      crossAxisSpacing: 20,
-                      mainAxisSpacing: 20,
-                      mainAxisExtent: 420,
+                    TextSpan(
+                      text: '${filteredEvents.length}',
+                      style: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
                     ),
-                    itemCount: filteredEvents.length,
-                    itemBuilder: (context, index) {
-                      return _buildMaterialEventCard(
-                        filteredEvents[index],
-                        isDark,
-                        theme,
-                        isAdmin: auth.session?.userType.toLowerCase() == 'admin',
+                    TextSpan(text: filteredEvents.length == 1 ? ' event' : ' events'),
+                  ],
+                ),
+                style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+              ),
+        // Admins: Manage Events / Create Event, like the website's Manage
+        // Stories / Write a Story. Phones get them in a "more" menu.
+        actions: auth.session?.userType.toLowerCase() != 'admin'
+            ? const []
+            : MediaQuery.sizeOf(context).width < 600
+            ? [
+                PopupMenuButton<String>(
+                  tooltip: 'Admin',
+                  icon: Icon(Icons.more_horiz, color: p.textSecondary),
+                  onSelected: (route) => context.go(route),
+                  itemBuilder: (_) => const [
+                    PopupMenuItem(value: AppRoutes.manageEvents, child: Text('Manage Events')),
+                    PopupMenuItem(value: '${AppRoutes.manageEvents}?new=1', child: Text('Create Event')),
+                  ],
+                ),
+              ]
+            : [
+                OutlinedButton(
+                  onPressed: () => context.go(AppRoutes.manageEvents),
+                  child: const Text('Manage Events'),
+                ),
+                OutlinedButton(
+                  onPressed: () => context.go('${AppRoutes.manageEvents}?new=1'),
+                  child: const Text('Create Event'),
+                ),
+              ],
+        filters: (context) => _buildFilterPanel(ref, true),
+        onOpenFilters: _showFilterBottomSheet,
+        activeFilterCount: _activeFilterCount(state) + (registeredOnly ? 1 : 0),
+        onClearFilters: () {
+          ref.read(_registeredOnlyProvider.notifier).state = false;
+          ref.read(eventsProvider.notifier).clearFilters();
+          ref.read(eventsProvider.notifier).setPeriod('upcoming');
+          _searchController.clear();
+        },
+        resultNote: state.isLoading
+            ? null
+            : '${filteredEvents.length} ${filteredEvents.length == 1 ? 'event' : 'events'}',
+        body: state.isLoading
+            ? const Center(child: CircularProgressIndicator())
+            : state.errorMessage != null
+            ? _buildMaterialErrorState(state.errorMessage!)
+            : filteredEvents.isEmpty
+            ? _buildMaterialEmptyState()
+            : _view == 'table' && MediaQuery.sizeOf(context).width >= 600
+            ? _buildEventTable(filteredEvents, side, registrations)
+            : LayoutBuilder(
+                builder: (context, constraints) {
+                  // As many ~320px columns as fit, up to four (website grid).
+                  const spacing = 20.0;
+                  final usable = constraints.maxWidth - side * 2;
+                  final columns =
+                      ((usable + spacing) / (320 + spacing)).floor().clamp(1, 4);
+                  // Rows of cards, each row as tall as its tallest card, so
+                  // cards size to their content (website grid) instead of a
+                  // fixed 420px cell.
+                  final rows = (filteredEvents.length / columns).ceil();
+                  final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
+                  return ListView.separated(
+                    padding: EdgeInsets.fromLTRB(side, 24, side, 24),
+                    itemCount: rows,
+                    separatorBuilder: (_, _) => const SizedBox(height: spacing),
+                    itemBuilder: (context, row) {
+                      return IntrinsicHeight(
+                        child: Row(
+                          crossAxisAlignment: CrossAxisAlignment.stretch,
+                          children: [
+                            for (var col = 0; col < columns; col++) ...[
+                              if (col > 0) const SizedBox(width: spacing),
+                              Expanded(
+                                child: row * columns + col < filteredEvents.length
+                                    ? _buildMaterialEventCard(
+                                        filteredEvents[row * columns + col],
+                                        isDark,
+                                        theme,
+                                        isAdmin: isAdmin,
+                                        registration: registrations[
+                                            filteredEvents[row * columns + col].eventId],
+                                      )
+                                    : const SizedBox.shrink(),
+                              ),
+                            ],
+                          ],
+                        ),
                       );
                     },
-                  ),
-          ),
-        ),
-      ],
+                  );
+                },
+              ),
+      ),
     );
+  }
 
-    return DefaultTabController(
-      length: 2,
-      child: Scaffold(
-        key: _scaffoldKey,
-        endDrawer: isWebScreen
-            ? Drawer(
-                child: Consumer(
-                  builder: (context, drawerRef, _) => SafeArea(
-                    child: Container(
-                      width: 420,
-                      padding: const EdgeInsets.all(20.0),
-                      child: _buildFilterPanel(drawerRef),
-                    ),
-                  ),
+  /// Table view (website ViewToggle "Table"): sortable columns, a row
+  /// opens the event.
+  Widget _buildEventTable(
+    List<AppEvent> events,
+    double side,
+    Map<int, MyEventRegistration> registrations,
+  ) {
+    final p = context.palette;
+    int compare(AppEvent a, AppEvent b) {
+      switch (_sortColumn) {
+        case 0:
+          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
+        case 3:
+          return a.isVirtual.toString().compareTo(b.isVirtual.toString());
+        case 5:
+          return a.registrationStatus.compareTo(b.registrationStatus);
+        default:
+          return a.startDatetime.compareTo(b.startDatetime);
+      }
+    }
+
+    final rows = [...events]
+      ..sort((a, b) => _sortAsc ? compare(a, b) : compare(b, a));
+    void onSort(int column, bool ascending) => setState(() {
+          _sortColumn = column;
+          _sortAsc = ascending;
+        });
+    final cellStyle = AppTextStyles.bodySmall.copyWith(color: p.textSecondary);
+
+    return LayoutBuilder(
+      builder: (context, constraints) => SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(side, 24, side, 24),
+        child: SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: constraints.maxWidth - side * 2),
+            child: Container(
+              decoration: BoxDecoration(
+                color: p.card,
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: p.border),
+              ),
+              clipBehavior: Clip.antiAlias,
+              child: DataTable(
+                sortColumnIndex: _sortColumn,
+                sortAscending: _sortAsc,
+                showCheckboxColumn: false,
+                headingRowColor: WidgetStateProperty.all(p.surfaceSubtle),
+                headingTextStyle: AppTextStyles.labelMedium.copyWith(
+                  color: p.primary.withValues(alpha: 0.8),
                 ),
-              )
-            : null,
-        drawer: (!isWebScreen && auth.isAuthenticated)
-            ? Drawer(
-                child: ListView(
-                  children: [
-                    UserAccountsDrawerHeader(
-                      decoration: const BoxDecoration(color: Color(0xFF0D1B3E)),
-                      currentAccountPicture: CircleAvatar(
-                        backgroundColor: const Color(0xFFC9952A),
-                        child: Text(
-                          (auth.session?.fullname ?? 'U')
-                              .substring(0, 1)
-                              .toUpperCase(),
-                          style: const TextStyle(
-                            color: Colors.white,
-                            fontSize: 24,
+                dividerThickness: 1,
+                columns: [
+                  DataColumn(label: const Text('TITLE'), onSort: onSort),
+                  DataColumn(label: const Text('DATE'), onSort: onSort),
+                  const DataColumn(label: Text('TIME')),
+                  DataColumn(label: const Text('MODE'), onSort: onSort),
+                  const DataColumn(label: Text('LOCATION')),
+                  DataColumn(label: const Text('REGISTRATION'), onSort: onSort),
+                ],
+                rows: [
+                  for (final event in rows)
+                    DataRow(
+                      onSelectChanged: (_) => context.push('/events/${event.eventId}'),
+                      cells: [
+                        DataCell(Text(
+                          event.title,
+                          style: AppTextStyles.bodySmall.copyWith(
+                            color: p.textPrimary,
+                            fontWeight: FontWeight.w600,
                           ),
-                        ),
-                      ),
-                      accountName: Text(
-                        auth.session?.fullname ?? 'Alumni User',
-                      ),
-                      accountEmail: Text(auth.session?.email ?? ''),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.calendar_month),
-                      title: const Text('Events'),
-                      selected: true,
-                      onTap: () => Navigator.pop(context),
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.bookmark_border),
-                      title: const Text('My Events'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('My Events coming soon.'),
+                        )),
+                        DataCell(Text(_formatDate(event.startDatetime), style: cellStyle)),
+                        DataCell(Text(
+                          _formatTime(event.startDatetime, event.endDatetime),
+                          style: cellStyle,
+                        )),
+                        DataCell(Text(event.isVirtual ? 'Virtual' : 'Physical', style: cellStyle)),
+                        DataCell(Text(
+                          event.locationText ?? (event.isVirtual ? 'Online' : 'TBD'),
+                          style: cellStyle,
+                          overflow: TextOverflow.ellipsis,
+                        )),
+                        DataCell(Text(
+                          (registrations[event.eventId]?.isActive ?? false)
+                              ? 'Registered'
+                              : event.registrationStatus == 'open'
+                              ? 'Open'
+                              : 'Closed',
+                          style: cellStyle.copyWith(
+                            color: (registrations[event.eventId]?.isActive ?? false)
+                                ? p.primary
+                                : event.registrationStatus == 'open'
+                                ? p.success
+                                : p.error,
+                            fontWeight: FontWeight.w600,
                           ),
-                        );
-                      },
+                        )),
+                      ],
                     ),
-                    ListTile(
-                      leading: const Icon(Icons.verified_user_outlined),
-                      title: const Text('Volunteer'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        ScaffoldMessenger.of(context).showSnackBar(
-                          const SnackBar(
-                            content: Text('Volunteer options coming soon.'),
-                          ),
-                        );
-                      },
-                    ),
-                    ListTile(
-                      leading: const Icon(Icons.admin_panel_settings_outlined),
-                      title: const Text('Manage Events'),
-                      onTap: () {
-                        Navigator.pop(context);
-                        context.go(AppRoutes.manageEvents);
-                      },
-                    ),
-                  ],
-                ),
-              )
-            : null,
-        body: SafeArea(
-          child: Row(
-            children: [
-              if (sidebar != null) sidebar,
-              Expanded(child: bodyContent),
-            ],
+                ],
+              ),
+            ),
           ),
-        ),
-        bottomNavigationBar: SafeArea(
-          top: false,
-          child: const AppBottomNav(currentIndex: 0),
         ),
       ),
     );
   }
 
-
-  Widget _buildMaterialEventCard(AppEvent event, bool isDark, ThemeData theme, {required bool isAdmin}) {
+  Widget _buildMaterialEventCard(
+    AppEvent event,
+    bool isDark,
+    ThemeData theme, {
+    required bool isAdmin,
+    MyEventRegistration? registration,
+  }) {
+    // Your own registration: website .card--own (gold tint) plus a badge.
+    final isOwn = registration?.isActive ?? false;
     final isPhysical = !event.isVirtual;
     final tagBg = isPhysical
-        ? (isDark ? const Color(0xFF1E2E50) : const Color(0xFFDDE8FF))
-        : (isDark ? const Color(0xFF1E1540) : const Color(0xFFEDE6FF));
+        ? context.palette.primary.withValues(alpha: 0.14)
+        : context.palette.info.withValues(alpha: 0.14);
     final tagText = isPhysical
-        ? (isDark ? const Color(0xFF90B5FF) : const Color(0xFF1B3C8A))
-        : (isDark ? const Color(0xFFB89AFF) : const Color(0xFF4A2DB0));
+        ? context.palette.primary
+        : context.palette.info;
 
     final regBg = event.registrationStatus == 'open'
-        ? (isDark ? const Color(0xFF0F2920) : const Color(0xFFD9F4E8))
-        : (isDark ? const Color(0xFF2E1010) : const Color(0xFFFFE9E9));
+        ? context.palette.success.withValues(alpha: 0.14)
+        : context.palette.error.withValues(alpha: 0.14);
     final regText = event.registrationStatus == 'open'
-        ? (isDark ? const Color(0xFF6FDBA8) : const Color(0xFF1B5C3A))
-        : (isDark ? const Color(0xFFFF9090) : const Color(0xFF8A1B1B));
+        ? context.palette.success
+        : context.palette.error;
 
     final capacityText = event.capacity != null
         ? '${event.registeredCount} / ${event.capacity}'
@@ -1530,10 +1588,17 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       shape: RoundedRectangleBorder(
         borderRadius: BorderRadius.circular(12),
         side: BorderSide(
-          color: theme.colorScheme.outlineVariant.withOpacity(0.5),
+          color: isOwn
+              ? context.palette.primary.withValues(alpha: 0.45)
+              : context.palette.border,
         ),
       ),
-      color: isDark ? const Color(0xFF131E30) : Colors.white,
+      color: isOwn
+          ? Color.alphaBlend(
+              context.palette.primary.withValues(alpha: 0.08),
+              context.palette.card,
+            )
+          : context.palette.card,
       child: Padding(
         padding: const EdgeInsets.all(16.0),
         child: Column(
@@ -1573,6 +1638,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   decoration: BoxDecoration(
                     color: tagBg,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: tagText.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     isPhysical ? 'Physical' : 'Virtual',
@@ -1598,39 +1664,35 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ),
             ],
             const SizedBox(height: 12),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Row(
-                    children: [
-                      Expanded(
-                        child: _buildMaterialMetaRow(
-                          Icons.calendar_today,
-                          _formatDate(event.startDatetime),
-                          theme,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: _buildMaterialMetaRow(
-                          Icons.access_time,
-                          _formatTime(event.startDatetime, event.endDatetime),
-                          theme,
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 4),
-                  _buildMaterialMetaRow(
-                    event.isVirtual ? Icons.videocam : Icons.location_pin,
-                    event.locationText ??
-                        (event.isVirtual ? 'Zoom Link' : 'TBD'),
+            // Details at their natural height; the Spacer below keeps the
+            // footer aligned across a row of cards (rows size to the tallest).
+            Row(
+              children: [
+                Expanded(
+                  child: _buildMaterialMetaRow(
+                    Icons.calendar_today,
+                    _formatDate(event.startDatetime),
                     theme,
                   ),
-                ],
-              ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: _buildMaterialMetaRow(
+                    Icons.access_time,
+                    _formatTime(event.startDatetime, event.endDatetime),
+                    theme,
+                  ),
+                ),
+              ],
             ),
+            const SizedBox(height: 4),
+            _buildMaterialMetaRow(
+              event.isVirtual ? Icons.videocam : Icons.location_pin,
+              event.locationText ??
+                  (event.isVirtual ? 'Zoom Link' : 'TBD'),
+              theme,
+            ),
+            const Spacer(),
             if (isAdmin) ...[
               const SizedBox(height: 8),
               Row(
@@ -1655,19 +1717,16 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 child: LinearProgressIndicator(
                   value: progress,
                   minHeight: 6,
-                  backgroundColor: isDark
-                      ? const Color(0xFF1C2A40)
-                      : const Color(0xFFEEF3FA),
+                  backgroundColor: context.palette.surfaceHover,
                   valueColor: AlwaysStoppedAnimation<Color>(
-                    progress > 0.85 ? Colors.orange : Colors.green,
+                    progress > 0.85 ? context.palette.warning : context.palette.success,
                   ),
                 ),
               ),
             ],
             const SizedBox(height: 12),
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
+            Builder(builder: (context) {
+              final statusBadge =
                 Container(
                   padding: const EdgeInsets.symmetric(
                     horizontal: 10,
@@ -1676,6 +1735,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   decoration: BoxDecoration(
                     color: regBg,
                     borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: regText.withValues(alpha: 0.3)),
                   ),
                   child: Text(
                     event.registrationStatus == 'open'
@@ -1687,13 +1747,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                       fontWeight: FontWeight.bold,
                     ),
                   ),
-                ),
+                );
+              final viewButton =
                 TextButton(
                   style: TextButton.styleFrom(
-                    backgroundColor: isDark
-                        ? const Color(0xFFC9952A)
-                        : const Color(0xFF0D1B3E),
-                    foregroundColor: isDark ? Colors.black : Colors.white,
+                    backgroundColor: context.palette.primary,
+                    foregroundColor: context.palette.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(8),
                     ),
@@ -1705,9 +1764,62 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     'View details',
                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
                   ),
-                ),
-              ],
-            ),
+                );
+              if (!isOwn) {
+                return Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [statusBadge, viewButton],
+                );
+              }
+              // Own card: badges on one row, Unregister + View details below.
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Wrap(
+                    spacing: 6,
+                    runSpacing: 6,
+                    children: [
+                      statusBadge,
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: context.palette.info.withValues(alpha: 0.14),
+                          borderRadius: BorderRadius.circular(20),
+                          border: Border.all(color: context.palette.info.withValues(alpha: 0.3)),
+                        ),
+                        child: Text(
+                          'Registered',
+                          style: TextStyle(
+                            color: context.palette.info,
+                            fontSize: 11,
+                            fontWeight: FontWeight.bold,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      if (registration!.canCancel) ...[
+                        TextButton(
+                          onPressed: ref.watch(myEventsProvider).cancellingEventId == event.eventId
+                              ? null
+                              : () => _confirmUnregister(event),
+                          style: TextButton.styleFrom(
+                            foregroundColor: context.palette.textSecondary,
+                          ),
+                          child: const Text('Unregister', style: TextStyle(fontSize: 12)),
+                        ),
+                        const SizedBox(width: 8),
+                      ],
+                      viewButton,
+                    ],
+                  ),
+                ],
+              );
+            }),
           ],
         ),
       ),
@@ -1719,7 +1831,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       padding: const EdgeInsets.only(bottom: 6.0),
       child: Row(
         children: [
-          Icon(icon, size: 16, color: const Color(0xFFC9952A)),
+          Icon(icon, size: 16, color: context.palette.primary),
           const SizedBox(width: 8),
           Expanded(
             child: Text(
@@ -1744,11 +1856,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         child: Column(
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            const Icon(Icons.error_outline, size: 48, color: Colors.red),
+            Icon(Icons.error_outline, size: 48, color: context.palette.error),
             const SizedBox(height: 12),
             const Text(
               'Something went wrong',
-              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(fontFamily: AppTextStyles.serif, fontWeight: FontWeight.w600, fontSize: 18),
             ),
             const SizedBox(height: 6),
             Text(
@@ -1763,20 +1875,20 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   }
 
   Widget _buildMaterialEmptyState() {
-    return const Center(
+    return Center(
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         children: [
-          Icon(Icons.calendar_today_outlined, size: 64, color: Colors.grey),
+          Icon(Icons.calendar_today_outlined, size: 64, color: context.palette.textMuted),
           const SizedBox(height: 16),
           Text(
             'No Events Found',
-            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            style: TextStyle(fontFamily: AppTextStyles.serif, fontWeight: FontWeight.w600, fontSize: 18),
           ),
           const SizedBox(height: 6),
           Text(
             'Please check back later or try adjusting filters.',
-            style: TextStyle(color: Colors.grey),
+            style: TextStyle(color: context.palette.textMuted),
           ),
         ],
       ),
@@ -1843,18 +1955,18 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       width: double.infinity,
       padding: const EdgeInsets.symmetric(horizontal: 12),
       decoration: BoxDecoration(
-        border: Border.all(color: const Color(0xFFD0D0D0)),
+        border: Border.all(color: context.palette.border),
         borderRadius: BorderRadius.circular(6),
       ),
       child: DropdownButtonHideUnderline(
         child: DropdownButton<String?>(
           value: state.timeline,
           isExpanded: true,
-          dropdownColor: isDark ? const Color(0xFF1C1C1E) : null,
+          dropdownColor: context.palette.surface,
           hint: Text(
             'Select timeline',
             style: TextStyle(
-              color: isDark ? const Color(0xFFEBEBF5) : const Color(0xFF3C3C43),
+              color: context.palette.textSecondary,
             ),
           ),
           items: [
@@ -1863,7 +1975,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               child: Text(
                 'None',
                 style: TextStyle(
-                  color: isDark ? const Color(0xFFEBEBF5) : const Color(0xFF3C3C43),
+                  color: context.palette.textSecondary,
                 ),
               ),
             ),

@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../widgets/material/app_scaffold.dart';
+import '../../theme/app_palette.dart';
 
 class InfoScreen extends StatelessWidget {
   final IconData icon;
@@ -30,10 +31,10 @@ class InfoScreen extends StatelessWidget {
             Text(subtitle, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
             if (showLoading) ...[
               const SizedBox(height: 48),
-              const SizedBox(
+              SizedBox(
                 width: 24,
                 height: 24,
-                child: CircularProgressIndicator(strokeWidth: 2.5, color: Colors.blue),
+                child: CircularProgressIndicator(strokeWidth: 2.5, color: context.palette.primary),
               ),
             ],
           ],

@@ -11,6 +11,9 @@ import '../features/events/presentation/screens/manage_events_screen.dart';
 import '../features/events/presentation/screens/event_registrations_screen.dart';
 import '../features/events/presentation/screens/my_events_screen.dart';
 import '../features/auth/services/auth_controller.dart';
+import '../features/feedback/feedback_screen.dart';
+import '../features/policies/policy_screen.dart';
+import '../shared/widgets/app_shell.dart';
 import 'app_routes.dart';
 import 'route_guards.dart';
 
@@ -33,42 +36,69 @@ abstract class AppRouter {
         path: AppRoutes.login,
         builder: (context, state) => const LoginScreen(),
       ),
-      GoRoute(
-        path: AppRoutes.home,
-        builder: (context, state) => const EventListScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.myEvents,
-        builder: (context, state) => const MyEventsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.manageEvents,
-        builder: (context, state) => const ManageEventsScreen(),
-      ),
-      GoRoute(
-        path: AppRoutes.eventRegistrations,
-        builder: (context, state) {
-          final idStr = state.pathParameters['id'] ?? '';
-          final eventId = int.tryParse(idStr) ?? 0;
-          return EventRegistrationsScreen(eventId: eventId);
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.eventDetail,
-        builder: (context, state) {
-          final idStr = state.pathParameters['id'] ?? '';
-          final eventId = int.tryParse(idStr) ?? 0;
-          return EventDetailScreen(eventId: eventId);
-        },
-      ),
-      GoRoute(
-        path: AppRoutes.checkout,
-        builder: (context, state) {
-          final idStr = state.pathParameters['id'] ?? '';
-          final eventId = int.tryParse(idStr) ?? 0;
-          final notes = state.uri.queryParameters['notes'] ?? '';
-          return CheckoutScreen(eventId: eventId, notes: notes);
-        },
+      // Attendee pages share one shell: header, sidebar / bottom nav, footer.
+      ShellRoute(
+        builder: (context, state, child) =>
+            AppShell(location: state.uri.path, child: child),
+        routes: [
+          GoRoute(
+            path: AppRoutes.home,
+            builder: (context, state) => const EventListScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.myEvents,
+            builder: (context, state) => const MyEventsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.manageEvents,
+            builder: (context, state) => const ManageEventsScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.eventRegistrations,
+            builder: (context, state) {
+              final idStr = state.pathParameters['id'] ?? '';
+              final eventId = int.tryParse(idStr) ?? 0;
+              return EventRegistrationsScreen(eventId: eventId);
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.eventDetail,
+            builder: (context, state) {
+              final idStr = state.pathParameters['id'] ?? '';
+              final eventId = int.tryParse(idStr) ?? 0;
+              return EventDetailScreen(eventId: eventId);
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.checkout,
+            builder: (context, state) {
+              final idStr = state.pathParameters['id'] ?? '';
+              final eventId = int.tryParse(idStr) ?? 0;
+              final notes = state.uri.queryParameters['notes'] ?? '';
+              return CheckoutScreen(eventId: eventId, notes: notes);
+            },
+          ),
+          GoRoute(
+            path: AppRoutes.privacy,
+            builder: (context, state) => const PolicyScreen(policy: Policy.privacy),
+          ),
+          GoRoute(
+            path: AppRoutes.terms,
+            builder: (context, state) => const PolicyScreen(policy: Policy.terms),
+          ),
+          GoRoute(
+            path: AppRoutes.refund,
+            builder: (context, state) => const PolicyScreen(policy: Policy.refund),
+          ),
+          GoRoute(
+            path: AppRoutes.disclaimer,
+            builder: (context, state) => const PolicyScreen(policy: Policy.disclaimer),
+          ),
+          GoRoute(
+            path: AppRoutes.feedback,
+            builder: (context, state) => const FeedbackScreen(),
+          ),
+        ],
       ),
       if (kDebugMode)
         GoRoute(

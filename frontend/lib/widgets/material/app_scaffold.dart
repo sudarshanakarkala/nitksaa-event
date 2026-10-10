@@ -1,5 +1,5 @@
 import 'package:flutter/material.dart';
-import 'package:event_app/theme/app_colors.dart';
+import 'package:event_app/theme/app_palette.dart';
 
 class AppScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
@@ -19,9 +19,7 @@ class AppScaffold extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final ThemeData theme = Theme.of(context);
-    final bool isDark = theme.brightness == Brightness.dark;
-    final Color backgroundColor = isDark ? AppColors.darkBackground : AppColors.lightBackground;
+    final Color backgroundColor = context.palette.background;
 
     return Scaffold(
       key: scaffoldMessengerKey,
