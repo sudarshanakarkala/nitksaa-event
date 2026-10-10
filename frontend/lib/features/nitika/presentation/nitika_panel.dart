@@ -164,13 +164,20 @@ class _Header extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                Text(
-                  'NITiKa',
-                  style: TextStyle(
-                    color: p.textPrimary,
-                    fontSize: 16,
-                    fontWeight: FontWeight.w700,
-                  ),
+                Row(
+                  children: [
+                    // Website: gold chat icon before the title.
+                    Icon(Icons.chat_bubble_outline, size: 16, color: p.primary),
+                    const SizedBox(width: 6),
+                    Text(
+                      'NITiKa',
+                      style: TextStyle(
+                        color: p.textPrimary,
+                        fontSize: 16,
+                        fontWeight: FontWeight.w700,
+                      ),
+                    ),
+                  ],
                 ),
                 Text(
                   "Conversations aren't saved.",
