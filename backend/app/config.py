@@ -136,6 +136,20 @@ class Settings(BaseSettings):
         "", alias="PLATFORM_ADMIN_FIREBASE_UIDS"
     )
 
+    # NITiKa — the events assistant, a separate Cloud Run service called
+    # only from app/api/nitika.py. NITIKA_URL is the service's base URL;
+    # NITIKA_CLIENT_KEY comes from the secret nitika-client-key-events.
+    # Either one empty → the chat route answers 404 (not configured).
+    # Server-only — never returned in an API response, never logged.
+    nitika_url: str = Field("", alias="NITIKA_URL")
+    nitika_client_key: str = Field("", alias="NITIKA_CLIENT_KEY")
+    # NITiKa's own deadline is 20 s; this leaves room for a cold start.
+    nitika_timeout_seconds: float = Field(25.0, alias="NITIKA_TIMEOUT_SECONDS")
+
+    @property
+    def nitika_configured(self) -> bool:
+        return bool(self.nitika_url.strip() and self.nitika_client_key.strip())
+
     @property
     def events_db_dsn(self) -> str:
         if self.events_db_url:

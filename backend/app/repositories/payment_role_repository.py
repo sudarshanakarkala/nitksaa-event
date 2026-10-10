@@ -88,6 +88,19 @@ class PaymentRoleRepository:
         )
         return bool(val)
 
+    async def event_admin_event_ids(self, firebase_uid: str) -> List[int]:
+        """Every event this user is an active event_admin of."""
+        rows = await self.conn.fetch(
+            """
+            SELECT event_id FROM event_members
+            WHERE firebase_uid = $1 AND role = $2 AND status = 'active'
+            ORDER BY event_id
+            """,
+            firebase_uid,
+            EVENT_ADMIN_ROLE,
+        )
+        return [r["event_id"] for r in rows]
+
     async def grant_event_admin(self, event_id: int, firebase_uid: str) -> asyncpg.Record:
         """Upsert an active event_admin membership row for one event."""
         return await self.conn.fetchrow(

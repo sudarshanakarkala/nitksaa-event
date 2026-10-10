@@ -6,10 +6,6 @@ import 'package:flutter/foundation.dart';
 /// `--dart-define=NITIKA_ENABLED=true`
 const nitikaEnabled = bool.fromEnvironment('NITIKA_ENABLED');
 
-/// Debug builds only: canned replies instead of the backend, for checking
-/// the layout without one. `--dart-define=NITIKA_FAKE=true`
-const nitikaFake = kDebugMode && bool.fromEnvironment('NITIKA_FAKE');
-
 /// The events backend, resolved as in `events_repository.dart`. The panel
 /// calls the backend's `/api/v1/nitika/chat`, never NITiKa itself.
 String get nitikaBackendBaseUrl {

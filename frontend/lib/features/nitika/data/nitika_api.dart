@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/nitika_models.dart';
 import '../nitika_config.dart';
-import 'fake_nitika_api.dart';
 
 /// NITiKa chat, through the events backend.
 abstract class NitikaApi {
@@ -78,6 +77,4 @@ class DioNitikaApi implements NitikaApi {
   }
 }
 
-final nitikaApiProvider = Provider<NitikaApi>(
-  (ref) => nitikaFake ? FakeNitikaApi() : DioNitikaApi(),
-);
+final nitikaApiProvider = Provider<NitikaApi>((ref) => DioNitikaApi());
