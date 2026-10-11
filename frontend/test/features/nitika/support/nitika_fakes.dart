@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:event_app/features/auth/domain/admin_access.dart';
 import 'package:event_app/features/auth/domain/auth_session.dart';
 import 'package:event_app/features/nitika/data/nitika_api.dart';
 import 'package:event_app/features/nitika/domain/nitika_models.dart';
@@ -13,6 +14,7 @@ const adminSession = AuthSession(
   userType: 'admin',
   email: 'admin@example.com',
   fullname: 'Ada Admin',
+  access: AdminAccess(isAdmin: true, platformRoles: ['platform_admin']),
 );
 
 typedef ChatCall = ({

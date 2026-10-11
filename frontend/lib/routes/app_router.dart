@@ -8,7 +8,8 @@ import '../features/foundation/presentation/foundation_ready_screen.dart';
 import '../features/events/presentation/screens/event_list_screen.dart';
 import '../features/events/presentation/screens/event_detail_screen.dart';
 import '../features/events/presentation/screens/checkout_screen.dart';
-import '../features/events/presentation/screens/manage_events_screen.dart';
+import '../features/admin/admin_tabs.dart';
+import '../features/admin/presentation/admin_screen.dart';
 import '../features/events/presentation/screens/event_registrations_screen.dart';
 import '../features/events/presentation/screens/my_events_screen.dart';
 import '../features/auth/services/auth_controller.dart';
@@ -62,10 +63,16 @@ abstract class AppRouter {
             path: AppRoutes.myEvents,
             builder: (context, state) => const MyEventsScreen(),
           ),
+          // Manage Events moved into the Admin page's Events tab; old
+          // links (including ?new=1) still work.
           GoRoute(
             path: AppRoutes.manageEvents,
-            builder: (context, state) => const ManageEventsScreen(),
+            redirect: (context, state) => state.uri.hasQuery
+                ? '${AppRoutes.adminEvents}?${state.uri.query}'
+                : AppRoutes.adminEvents,
           ),
+          // Before the tab route, so /admin/events/:id/registrations is not
+          // read as a tab.
           GoRoute(
             path: AppRoutes.eventRegistrations,
             builder: (context, state) {
@@ -73,6 +80,18 @@ abstract class AppRouter {
               final eventId = int.tryParse(idStr) ?? 0;
               return EventRegistrationsScreen(eventId: eventId);
             },
+          ),
+          // RouteGuards sends /admin and hidden tabs to a visible tab.
+          GoRoute(
+            path: AppRoutes.admin,
+            redirect: (context, state) => AdminTab.landing.path,
+          ),
+          GoRoute(
+            path: AppRoutes.adminTab,
+            builder: (context, state) => AdminScreen(
+              tab: AdminTab.fromSlug(state.pathParameters['tab']) ??
+                  AdminTab.landing,
+            ),
           ),
           GoRoute(
             path: AppRoutes.eventDetail,

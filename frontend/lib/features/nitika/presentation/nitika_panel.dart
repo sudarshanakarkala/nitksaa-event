@@ -219,9 +219,8 @@ class _Starters extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final p = context.palette;
     final session = ref.watch(authControllerProvider).session;
-    // The session has no finer admin role yet; every admin gets the admin
-    // starter and the backend enforces scope.
-    final isAdmin = session?.userType.toLowerCase() == 'admin';
+    // Any admin gets the admin starter; the backend scopes the answer.
+    final isAdmin = session?.access.isAnyAdmin ?? false;
     final onEventPage =
         NitikaPageContext.fromLocation(location).eventId != null;
     final starters = [

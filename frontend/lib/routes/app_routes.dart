@@ -4,7 +4,11 @@ abstract class AppRoutes {
   static const String login = '/login';
   static const String home = '/home';
   static const String myEvents = '/my-events';
+  /// Old Manage Events page; redirects to [adminEvents].
   static const String manageEvents = '/manage-events';
+  static const String admin = '/admin';
+  static const String adminTab = '/admin/:tab';
+  static const String adminEvents = '/admin/events';
   static const String eventRegistrations = '/admin/events/:id/registrations';
   static const String developer = '/developer';
   static const String eventDetail = '/events/:id';

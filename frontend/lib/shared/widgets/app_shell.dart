@@ -46,7 +46,6 @@ class _AppShellState extends State<AppShell> {
   static const _appTitle = 'NITKSAA Events';
   static final _pageTitles = <String, String>{
     AppRoutes.myEvents: 'My Events',
-    AppRoutes.manageEvents: 'Manage Events',
     AppRoutes.feedback: 'Feedback',
     AppRoutes.privacy: Policy.privacy.title,
     AppRoutes.terms: Policy.terms.title,
@@ -62,6 +61,9 @@ class _AppShellState extends State<AppShell> {
         page = 'Checkout';
       } else if (location.endsWith('/registrations')) {
         page = 'Registrations';
+      } else if (location == AppRoutes.admin ||
+          location.startsWith('${AppRoutes.admin}/')) {
+        page = 'Admin';
       } else if (location.startsWith('/events/')) {
         page = 'Event';
       }

@@ -1,3 +1,5 @@
+import 'admin_access.dart';
+
 class AuthSession {
   const AuthSession({
     required this.accessToken,
@@ -7,6 +9,7 @@ class AuthSession {
     this.fullname,
     this.refId,
     this.graduationYear,
+    this.access = AdminAccess.none,
   });
 
   final String accessToken;
@@ -16,6 +19,9 @@ class AuthSession {
   final String? fullname;
   final String? refId;
   final int? graduationYear;
+
+  /// Admin rights; [AdminAccess.none] for everyone else.
+  final AdminAccess access;
 
   bool get isValid => accessToken.isNotEmpty && firebaseUid.isNotEmpty;
 
@@ -27,6 +33,7 @@ class AuthSession {
     String? fullname,
     String? refId,
     int? graduationYear,
+    AdminAccess? access,
   }) {
     return AuthSession(
       accessToken: accessToken ?? this.accessToken,
@@ -36,6 +43,7 @@ class AuthSession {
       fullname: fullname ?? this.fullname,
       refId: refId ?? this.refId,
       graduationYear: graduationYear ?? this.graduationYear,
+      access: access ?? this.access,
     );
   }
 
@@ -47,6 +55,7 @@ class AuthSession {
       fullname: json['fullname']?.toString(),
       refId: json['ref_id']?.toString(),
       graduationYear: _intOrNull(json['graduation_year']),
+      access: AdminAccess.fromJson(json['access']),
     );
   }
 
@@ -62,6 +71,7 @@ class AuthSession {
       userType: json['user_type']?.toString() ?? '',
       refId: json['ref_id']?.toString(),
       graduationYear: _intOrNull(json['graduation_year']),
+      access: AdminAccess.fromJson(json['access']),
     );
   }
 
@@ -74,6 +84,7 @@ class AuthSession {
       userType: map['user_type']?.toString() ?? '',
       refId: map['ref_id']?.toString(),
       graduationYear: _intOrNull(map['graduation_year']),
+      access: AdminAccess.fromJson(map['access']),
     );
   }
 
@@ -86,6 +97,7 @@ class AuthSession {
       'user_type': userType,
       'ref_id': refId,
       'graduation_year': graduationYear,
+      'access': access.toJson(),
     };
   }
 

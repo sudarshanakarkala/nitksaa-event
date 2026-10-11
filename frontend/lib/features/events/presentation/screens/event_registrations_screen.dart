@@ -303,7 +303,7 @@ class _EventRegistrationsScreenState
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final isWebScreen = MediaQuery.of(context).size.width >= 900;
-    final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
+    final isAdmin = auth.session?.access.canAdminEvent(widget.eventId) ?? false;
 
     if (!auth.isAuthenticated || !isAdmin) {
       return Scaffold(
@@ -365,7 +365,7 @@ class _EventRegistrationsScreenState
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               GestureDetector(
-                                onTap: () => context.go(AppRoutes.manageEvents),
+                                onTap: () => context.go(AppRoutes.adminEvents),
                                 child: Row(
                                   mainAxisSize: MainAxisSize.min,
                                   children: [

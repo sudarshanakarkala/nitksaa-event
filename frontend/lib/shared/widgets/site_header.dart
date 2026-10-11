@@ -47,9 +47,16 @@ class SiteHeader extends ConsumerWidget {
     final compact = width < 600;
     final wide = width >= navBreakpoint;
     final location = GoRouterState.of(context).uri.path;
-    final items = visibleNavItems(ref.watch(authControllerProvider));
+    final auth = ref.watch(authControllerProvider);
+    final items = visibleNavItems(auth);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final gap = compact ? 6.0 : 8.0;
+    // Website Admin badge: shield, only for people with admin rights. The
+    // pending count arrives with the Actions tab.
+    final showAdmin =
+        auth.isAuthenticated && (auth.session?.access.isAnyAdmin ?? false);
+    final onAdminPage = location == AppRoutes.admin ||
+        location.startsWith('${AppRoutes.admin}/');
 
     return Material(
       // Website --bg-nav: background at 92% (dark) / 95% (light).
@@ -86,6 +93,15 @@ class SiteHeader extends ConsumerWidget {
                       const SizedBox(width: 4),
                     ],
                     const Spacer(),
+                  ],
+                  if (showAdmin) ...[
+                    _HeaderIconButton(
+                      tooltip: 'Admin',
+                      icon: Icons.shield_outlined,
+                      active: onAdminPage,
+                      onPressed: () => context.go(AppRoutes.admin),
+                    ),
+                    SizedBox(width: gap),
                   ],
                   if (onAssistant != null) ...[
                     _HeaderIconButton(

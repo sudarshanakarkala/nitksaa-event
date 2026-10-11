@@ -16,6 +16,7 @@ import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
+import '../../../auth/domain/admin_access.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
@@ -36,10 +37,8 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
   late TabController _tabController;
   final TextEditingController _searchController = TextEditingController();
 
-  bool get _isAdmin {
-    final userType = ref.read(authControllerProvider).session?.userType;
-    return userType?.toLowerCase() == 'admin';
-  }
+  AdminAccess get _access =>
+      ref.read(authControllerProvider).session?.access ?? AdminAccess.none;
 
   @override
   void initState() {
@@ -50,12 +49,11 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     });
     Future.microtask(_fetchEvents);
     // "Create Event" on the Events page links here with ?new=1: open the
-    // new-event form once the page is up (admins only).
+    // new-event form once the page is up (people who can create events).
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
       final isNew = GoRouterState.of(context).uri.queryParameters['new'] == '1';
-      final isAdmin = ref.read(authControllerProvider).session?.userType.toLowerCase() == 'admin';
-      if (isNew && isAdmin) _showEventForm();
+      if (isNew && _access.isEventCreator) _showEventForm();
     });
   }
 
@@ -320,9 +318,9 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
     final isWebScreen = MediaQuery.of(context).size.width >= 900;
-    final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
+    final access = auth.session?.access ?? AdminAccess.none;
 
-    if (!auth.isAuthenticated || !isAdmin) {
+    if (!auth.isAuthenticated || !access.isAnyAdmin) {
       return Scaffold(
         body: SafeArea(
           child: Center(
@@ -341,7 +339,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                     ),
                     const SizedBox(height: 8),
                     Text(
-                      'Manage Events is available only for admin users.',
+                      'Managing events is available only to admins.',
                       textAlign: TextAlign.center,
                       style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
                     ),
@@ -394,11 +392,12 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
                               onPressed: _isLoading ? null : _fetchEvents,
                               icon: const Icon(Icons.refresh),
                             ),
-                            FilledButton.icon(
-                              onPressed: () => _showEventForm(),
-                              icon: const Icon(Icons.add),
-                              label: const Text('Create Event'),
-                            ),
+                            if (access.isEventCreator)
+                              FilledButton.icon(
+                                onPressed: () => _showEventForm(),
+                                icon: const Icon(Icons.add),
+                                label: const Text('Create Event'),
+                              ),
                           ],
                         ),
                       ],
@@ -460,7 +459,11 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
   }
 
   Future<void> _showEventForm({AppEvent? event}) async {
-    if (!_isAdmin) return;
+    // Creating needs "can create events"; editing needs admin of that event.
+    final allowed = event == null
+        ? _access.isEventCreator
+        : _access.canAdminEvent(event.eventId);
+    if (!allowed) return;
     final saved = await showDialog<bool>(
       context: context,
       builder: (context) => _EventFormDialog(event: event),
