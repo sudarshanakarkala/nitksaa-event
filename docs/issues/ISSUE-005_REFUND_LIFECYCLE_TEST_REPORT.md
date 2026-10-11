@@ -1,11 +1,11 @@
 # ISSUE-005 Refund Lifecycle Test Report
 
-**Date:** 2026-10-10. Updated 2026-10-11 with the beta run (section 6).
+**Date:** 2026-10-10. Updated 2026-10-11 with the beta run (section 6) and with the fix for the defect it found.
 **Application:** `nitksaa-event/frontend` (NEW Flutter app)
 **Base commit:** `e68bddd` (branch `main`), which contains the ISSUE-004 merge (`578ec9c`) and its docs closure.
 **Fix branch:** `fix/issue-005`
 **Toolchain:** Flutter 3.44.2, Dart 3.12.2, `dio` 5.9.2, `go_router` 17.2.3, `flutter_riverpod` 2.6.1, Chrome 154 for the browser tests
-**Final result:** CODE PASS — beta run reported passed; review pending
+**Final result:** CODE PASS — beta run reported passed; one re-check and review pending
 
 ---
 
@@ -16,7 +16,7 @@
 | ID | ISSUE-005 |
 | Severity | P1 — Gate A blocker |
 | Area | Refund / My Events |
-| Status | Fixed on `fix/issue-005`. On beta since 2026-10-11 05:30 IST. The manual run was reported passed (section 6). Awaiting review. Not on the live site. |
+| Status | Fixed on `fix/issue-005`. On beta since 2026-10-11. The manual run was reported passed, and the defect it found is fixed and on beta since 05:52 IST (section 6). Step 5 needs a re-check. Awaiting review. Not on the live site. |
 
 After a paid registration was cancelled, the app showed one message and nothing more. The attendee could not see the refund's status, its amount, the backend's message, or check again later.
 
@@ -55,9 +55,9 @@ A cancelled registration appears on My Events as a card tagged "Unregistered" wi
 | `frontend/lib/features/events/domain/my_event_registration.dart` (+12 −0) | Reads `latest_order_id`; new `mayHaveRefund` |
 | `frontend/lib/features/events/presentation/providers/refund_status_provider.dart` (new, 115 lines) | `RefundStatusState`, `RefundStatusNotifier`, `refundStatusProvider`, and the refund error messages |
 | `frontend/lib/features/events/presentation/widgets/refund_status_dialog.dart` (new, 246 lines) | `RefundStatusDialog`, `showRefundStatus`, `viewRefundAction` |
-| `frontend/lib/features/events/presentation/screens/my_events_screen.dart` (+36 −1) | "View refund status" on a cancelled card; "View refund" on the message after a cancel |
-| `frontend/lib/features/events/presentation/screens/event_list_screen.dart` (+10 −1) | "View refund" on the message after a cancel |
-| `frontend/test/features/events/refund_screens_test.dart` (new, 584 lines) | 23 tests on the real My Events and event list screens |
+| `frontend/lib/features/events/presentation/screens/my_events_screen.dart` (+39 −1) | "View refund status" on a cancelled card; "View refund" on the message after a cancel, which closes by itself |
+| `frontend/lib/features/events/presentation/screens/event_list_screen.dart` (+13 −1) | "View refund" on the message after a cancel, which closes by itself |
+| `frontend/test/features/events/refund_screens_test.dart` (new, 652 lines) | 28 tests on the real My Events and event list screens |
 | `frontend/test/features/events/refund_api_test.dart` (new, 480 lines) | 20 tests on the repository, the provider, the messages and the model |
 | `frontend/test/features/events/support/registration_backend_fake.dart` (+112 −22) | The fake backend extended with `GET /registrations/{id}/refund` and `latest_order_id` |
 | `frontend/test/features/events/cancellation_screens_test.dart` (+4 −9) | One ISSUE-004 assertion updated (section 7) |
@@ -121,6 +121,10 @@ After a failure the view keeps what it was showing and offers "Check refund stat
 
 The message after a cancel has the action only when the cancel returned a refund. A free cancel has no action.
 
+### The message closes by itself
+
+Added on 2026-10-11, after the beta run (commit `816fe7d`). In this Flutter version a snackbar that has an action stays on screen until the action is pressed or the bar is swiped away: `SnackBar.persist` defaults to true when there is an action. The first version of this change added the action and so, without meaning to, made the message permanent. Both screens now pass `persist: false`. The message closes after the usual four seconds, as it did before this issue, and "View refund" can be pressed until then. After that the refund is reached from the cancelled card on My Events.
+
 ### No polling
 
 There is no timer. One request when the view opens from a card, and one for each press of "Check refund status".
@@ -168,6 +172,9 @@ Also covered, beyond the list in the task:
 
 | Check | Result |
 |---|---|
+| The message with "View refund" is still there three seconds after the cancel and gone after its four seconds, from My Events and from the event list, and no request is sent | PASS |
+| Pressed before it closes, "View refund" shows the refund from the cancel response with no request, and the message goes | PASS |
+| Once the message has closed, the cancelled card on My Events opens the refund with one GET | PASS |
 | No polling: a pending refund left open for five minutes is asked about once | PASS |
 | Closing the view and opening it again asks again | PASS |
 | A registered registration, and one whose payment failed, have no refund action | PASS |
@@ -182,10 +189,10 @@ Also covered, beyond the list in the task:
 
 | | Before ISSUE-005 (`e68bddd`) | After ISSUE-005 |
 |---|---|---|
-| `flutter test` (VM) | 168 of 168 | 211 of 211 |
-| Chrome, `test/features/auth/` and `test/features/events/` | 181 of 181 | 224 of 224 |
+| `flutter test` (VM) | 168 of 168 | 216 of 216 |
+| Chrome, `test/features/auth/` and `test/features/events/` | 181 of 181 | 229 of 229 |
 
-New tests: 43 on the VM and 43 in Chrome. All of them run on both.
+New tests: 48 on the VM and 48 in Chrome. All of them run on both. Five of them came with the fix of 2026-10-11; before it the totals were 211 and 224.
 
 ### The same tests against the code before the fix
 
@@ -208,6 +215,18 @@ What the old code did in the nineteen that fail:
 | Cancelled paid card on My Events | No "View refund status". Nothing to press |
 | Message after a paid cancel | No "View refund" action |
 | Refund status requests | None, in any test |
+
+### The five tests of 2026-10-11 against the first commit
+
+Run on the VM against `f9da077`, the build of the beta run, before `persist: false` was added.
+
+| | Fail | Pass |
+|---|---:|---:|
+| The message closes by itself, from each screen (2 tests) | 2 | 0 |
+| Once it has closed, the card opens the refund (1 test) | 1 | 0 |
+| Pressed before it closes, it shows the refund with no request, from each screen (2 tests) | 0 | 2 |
+
+The three that fail found the message still on screen after its four seconds.
 
 ### Two changes that must make the tests fail
 
@@ -248,7 +267,8 @@ The contract matches the task description. One thing the task does not mention i
 | Site | `https://nitksaa-events-beta.web.app`, in an Incognito window |
 | Build tested | `f9da077`, deployed to beta on 2026-10-11 at 05:30 IST with `firebase deploy --only hosting:beta` |
 | Before the deploy | `flutter pub get`, then `flutter test`: 211 of 211 |
-| Beta bundle | After the deploy, beta served `main.dart.js` with SHA-256 `b7f8557d77127f19613bc58e8e643a61c1c43d2383c40c8e8ebf648133b423eb`, the same as the local build of `f9da077` (section 8) |
+| Beta bundle | After the deploy, beta served `main.dart.js` with SHA-256 `b7f8557d77127f19613bc58e8e643a61c1c43d2383c40c8e8ebf648133b423eb`, the same as the local build of `f9da077` |
+| Build on beta now | `816fe7d`, the fix of finding 1 below, deployed at 05:52 IST. Not yet looked at by hand (see "Re-check after the fix") |
 | Run | 2026-10-11, about 05:33 to 05:36 IST |
 | Reported | 2026-10-11: "passed", and one screenshot taken at about 05:34 IST |
 | Live site | Not deployed from this branch. Its `main.dart.js` had the same SHA-256 before and after the beta deploy (`dd76aba1…e377`) |
@@ -290,9 +310,27 @@ Not covered by this run: a pending refund and "Check refund status" (step 4), th
 
 ### Found in this run
 
-1. **The message after a paid cancel does not go away by itself.** It was still on screen about a minute after the cancel. In this Flutter version a snackbar that has an action stays until the action is pressed or the bar is swiped away (`SnackBar.persist` defaults to true when there is an action). ISSUE-004's message had no action and closed after four seconds; adding "View refund" in this issue changed that. It is a defect of this change. A fix (`persist: false`, a set duration, and a test) is proposed and not yet made; making it means a new build on beta and a re-check of step 5.
+1. **The message after a paid cancel did not go away by itself. Fixed.** It was still on screen about a minute after the cancel. In this Flutter version a snackbar that has an action stays until the action is pressed or the bar is swiped away (`SnackBar.persist` defaults to true when there is an action). ISSUE-004's message had no action and closed after four seconds; adding "View refund" in this issue changed that. It was a defect of this change. Commit `816fe7d` passes `persist: false` on both screens and adds five tests (sections 3 and 4).
 2. **The refund of registration 8 failed at Razorpay** with `BAD_REQUEST_ERROR`. The log holds the code and not Razorpay's reason. The app showed the backend's message for a failed refund, as designed. The message says "Our team will follow up", and the backend has no way to retry a failed refund, so this one needs a person.
 3. **"Refunded on" is the time the backend learned of the refund.** For registration 52 it equals the time of the first status request, to the minute. The backend sets `finalized_at` when it marks a refund processed, and for a pending refund that happens when a status request makes it ask Razorpay. An attendee who first looks days later would see that later date. The app shows the backend's value as it is.
+
+### Re-check after the fix
+
+**Result: PENDING.** The fix changes only how long the message after a cancel stays. Steps 2 and 3 above were seen on `f9da077` and are not affected by it. Step 5 is, and has not been looked at on the new build.
+
+| Field | Value |
+|---|---|
+| Build | `816fe7d`, deployed to beta on 2026-10-11 at 05:52 IST with `firebase deploy --only hosting:beta` |
+| Before the deploy | `flutter pub get`, then `flutter test`: 216 of 216 |
+| Beta bundle | Beta serves `main.dart.js` with SHA-256 `f9022ebb37d561c6534d0f963121354219c51437ec496f06c9d04b8591778631`, the same as the local build of `816fe7d`. The first request after the deploy still got the previous file; a request ten seconds later got this one |
+| Live site | Not deployed. Same SHA-256 before and after (`dd76aba1…e377`) |
+
+| # | Step | Expected | Result |
+|---|---|---|---|
+| 5a | Unregister a paid TEST registration and leave the message alone | The message with "View refund" closes by itself after about four seconds | PENDING |
+| 5b | Unregister a paid TEST registration and press "View refund" while the message is showing | The refund view opens with the cancel response; no `/refund` request in the Network panel | PENDING |
+
+Both need a paid, registered TEST registration to cancel. Use a private window opened after 05:52 IST, or a hard reload: the previous files are cached for up to an hour.
 
 ---
 
@@ -352,9 +390,9 @@ Nothing is restyled. One button was added to the cancelled card, in the row and 
 flutter test
 ```
 
-Result: 211 of 211. (168 before this change.)
+Result: 216 of 216. (168 before this change.)
 
-ISSUE-005 tests alone: 43 of 43.
+ISSUE-005 tests alone: 48 of 48.
 
 ### Chrome tests
 
@@ -362,7 +400,7 @@ ISSUE-005 tests alone: 43 of 43.
 flutter test --platform chrome test/features/auth/ test/features/events/
 ```
 
-Result: 224 of 224. (181 before this change.)
+Result: 229 of 229. (181 before this change.)
 
 ### flutter analyze
 
@@ -406,8 +444,8 @@ Result: succeeded (`✓ Built build/web`).
 | "You cancelled your earlier registration." | Present once |
 | `quantity=` | Absent |
 | Production backend URL | Present |
-| SHA-256 | `b7f8557d77127f19613bc58e8e643a61c1c43d2383c40c8e8ebf648133b423eb` |
-| Deployed | No |
+| SHA-256 | `f9022ebb37d561c6534d0f963121354219c51437ec496f06c9d04b8591778631`, the build of `816fe7d`. The build of the first commit, `f9da077`, was `b7f8557d…23eb`; the string checks above were made on that one, and the fix adds no string |
+| Deployed | Beta only, on 2026-10-11 at 05:52 IST |
 
 ---
 
@@ -431,7 +469,7 @@ Run from the repository root after the fix.
 1. **A seat hold that ran out gets a refund action it does not need.** The backend marks an expired hold `cancelled`, and it has a `latest_order_id` because the attendee reached payment. Its My Events card shows "View refund status"; the view says "No refund. No payment was taken, so there is nothing to refund." The answer is right, but the action should not be there. The app cannot tell this case from a paid cancellation without the order's status, which the row does not carry. A fix needs ISSUE-011's status labels or a backend field.
 2. **The manual run covered part of the plan.** One refund view, of a processed refund, and one paid cancel were seen on beta. A pending refund, the view opened from the message, a free registration, a change of user and the wrong-user request were not (section 6).
 3. **The refund status of registration 14 is not known.** It was cancelled on 2026-10-10 and was not asked about in the run. Registration 8's refund failed at Razorpay and needs a person to follow up.
-4. **The message after a paid cancel stays on screen until it is pressed or swiped away.** Found in the beta run (section 6). It was meant to close by itself after a few seconds, and it is not fixed yet. Once it is gone, the route to the refund is the cancelled card on My Events; from the event list that means going to My Events.
+4. **"View refund" on the message is there for four seconds.** After that the route to the refund is the cancelled card on My Events; from the event list that means going to My Events. (The first build kept the message on screen for good; that was found in the beta run and fixed, section 6.)
 5. **A failed refund has no next step in the app.** The view shows the backend's message, "Our team will follow up." There is no retry and no contact link, because the backend has no retry API.
 6. **No TEST or LIVE indication** (ISSUE-017). A refund of real money and a TEST refund look the same.
 7. **The event page says nothing about a refund.** It was left out to keep this change away from `eventDetailProvider`.
@@ -447,7 +485,7 @@ Run from the repository root after the fix.
 
 **CODE PASS — beta run reported passed; review pending**
 
-Automated verification passes (sections 4, 7 and 8). A manual run on beta was made on 2026-10-11 and reported passed; it covered part of the plan and found one defect that is still open (section 6). The pull request awaits review.
+Automated verification passes (sections 4, 7 and 8). A manual run on beta was made on 2026-10-11 and reported passed; it covered part of the plan and found one defect, which is fixed and on beta (section 6). The re-check of step 5 on the new build is pending. The pull request awaits review.
 
 ---
 
@@ -455,15 +493,15 @@ Automated verification passes (sections 4, 7 and 8). A manual run on beta was ma
 
 Branch: `fix/issue-005`, from `main` at `e68bddd`. Nothing is committed to `main`.
 
-Commit message:
+Commits, in this order:
 
-```text
-feat(refund): add attendee refund lifecycle
+| Commit | Message |
+|---|---|
+| `f9da077` | `feat(refund): add attendee refund lifecycle` |
+| `ad56bec` | `docs(issues): record ISSUE-005 beta verification` |
+| `816fe7d` | `fix(refund): let the View refund message close by itself` |
 
-ISSUE-005
-```
-
-The hash is not written here, because a rebase before merge (section 13) would change it. The pull request shows the current hash, and the merged hash goes into the remediation plan after merge.
+The first and third carry `ISSUE-005` in the body. A rebase before merge (section 13) would change these hashes; the merged hash goes into the remediation plan after merge.
 
 Pull request: `fix/issue-005` → `main`, titled "ISSUE-005: add attendee refund lifecycle". It touches refunds, so it needs Padmanand's approval. It is not to be merged before the manual run.
 

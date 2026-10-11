@@ -138,7 +138,7 @@ The contract matches the task description. No difference was found.
 
    After a failure the view keeps what it was already showing and offers "Check refund status" to try again.
 5. **My Events card.** A cancelled registration with `mayHaveRefund` gets a "View refund status" button, in the place where Unregister sits for an active one. The two never appear together.
-6. **After a cancel.** On My Events and on the event list, the message after a cancellation has a "View refund" action when the cancel returned a refund. It opens the view with that refund.
+6. **After a cancel.** On My Events and on the event list, the message after a cancellation has a "View refund" action when the cancel returned a refund. It opens the view with that refund. The message closes by itself after the usual four seconds (`persist: false`; a snackbar with an action otherwise stays until pressed).
 7. **No polling.** One request when the view opens from a card, one per press of the button. No timer exists.
 8. **User change.** When the session changes, the provider is rebuilt empty and an open refund view closes.
 
@@ -233,10 +233,10 @@ Registration 14 on event #11 "TestOct8" was paid in TEST mode and cancelled on 2
 
 **CODE PASS — beta run reported passed; review pending**
 
-Done: the fix, 43 new tests on the VM and 43 in Chrome, the regression suites for ISSUE-001, -002, -003, -004 and -006, the analyzer comparison, the colour check, the release web build and the bundle check. Results are in `ISSUE-005_REFUND_LIFECYCLE_TEST_REPORT.md`.
+Done: the fix, 48 new tests on the VM and 48 in Chrome, the regression suites for ISSUE-001, -002, -003, -004 and -006, the analyzer comparison, the colour check, the release web build and the bundle check. Results are in `ISSUE-005_REFUND_LIFECYCLE_TEST_REPORT.md`.
 
 Beta: `f9da077` was deployed on 2026-10-11 at 05:30 IST. A manual run was reported passed the same day. It covered a refund view of a processed refund and one paid cancel; the record of it, and what it did not cover, is in section 6 of the test report.
 
-Open: the run found that the message after a paid cancel does not close by itself. A fix is proposed and not yet made.
+The run found that the message after a paid cancel did not close by itself. That is fixed in `816fe7d`, which has been on beta since 05:52 IST the same day. Open: a re-check of step 5 on that build.
 
 The pull request touches refunds, so it needs Padmanand's approval before it is merged. The steps before merge are in section 13 of the test report.
