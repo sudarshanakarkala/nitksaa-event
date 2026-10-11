@@ -69,6 +69,7 @@ class CancellationOutcome {
       case DioExceptionType.connectionTimeout:
       case DioExceptionType.sendTimeout:
       case DioExceptionType.receiveTimeout:
+      case DioExceptionType.transformTimeout:
       case DioExceptionType.connectionError:
       case DioExceptionType.badCertificate:
         return 'Unable to connect to the server. Check your internet '
