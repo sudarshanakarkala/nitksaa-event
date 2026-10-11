@@ -13,13 +13,11 @@ import 'widgets/answer_links.dart';
 import 'widgets/answer_table.dart';
 import 'widgets/answer_text.dart';
 
-/// The shell's assistant, or null: only with the build switch on and a
-/// signed-in user. The router passes [nitikaEnabled] as [enabled].
+/// The shell's assistant for a signed-in user, or null when signed out.
 Widget? nitikaAssistant({
-  required bool enabled,
   required bool signedIn,
   required String location,
-}) => enabled && signedIn ? NitikaPanel(location: location) : null;
+}) => signedIn ? NitikaPanel(location: location) : null;
 
 /// NITiKa chat, in the shell's right rail (from 1,200 px) or in the slide-in
 /// panel / sheet the chat button opens.

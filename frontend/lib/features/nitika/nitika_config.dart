@@ -1,11 +1,5 @@
 import 'package:flutter/foundation.dart';
 
-/// Build switch for the NITiKa panel. Off by default: with it off the shell
-/// gets no assistant and no code path calls NITiKa.
-///
-/// `--dart-define=NITIKA_ENABLED=true`
-const nitikaEnabled = bool.fromEnvironment('NITIKA_ENABLED');
-
 /// The events backend, resolved as in `events_repository.dart`. The panel
 /// calls the backend's `/api/v1/nitika/chat`, never NITiKa itself.
 String get nitikaBackendBaseUrl {

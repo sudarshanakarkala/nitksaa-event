@@ -14,7 +14,6 @@ import 'support/nitika_fakes.dart';
 Future<void> pumpShell(
   WidgetTester tester, {
   required double width,
-  bool enabled = true,
   bool signedIn = true,
 }) async {
   tester.view.physicalSize = Size(width, 900);
@@ -29,7 +28,6 @@ Future<void> pumpShell(
         builder: (context, state, child) => AppShell(
           location: state.uri.path,
           assistant: nitikaAssistant(
-            enabled: enabled,
             signedIn: auth.isAuthenticated,
             location: state.uri.path,
           ),
@@ -57,13 +55,6 @@ final nitikaButton = find.byTooltip('NITiKa');
 final panel = find.byType(NitikaPanel);
 
 void main() {
-  testWidgets('switched off: no NITiKa button, no panel', (tester) async {
-    await pumpShell(tester, width: 1400, enabled: false);
-    expect(nitikaButton, findsNothing);
-    expect(panel, findsNothing);
-    expect(find.byType(FloatingActionButton), findsNothing);
-  });
-
   testWidgets('signed out: no NITiKa button, no panel', (tester) async {
     await pumpShell(tester, width: 1400, signedIn: false);
     expect(nitikaButton, findsNothing);

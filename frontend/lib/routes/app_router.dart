@@ -14,7 +14,6 @@ import '../features/events/presentation/screens/event_registrations_screen.dart'
 import '../features/events/presentation/screens/my_events_screen.dart';
 import '../features/auth/services/auth_controller.dart';
 import '../features/feedback/feedback_screen.dart';
-import '../features/nitika/nitika_config.dart';
 import '../features/nitika/presentation/nitika_panel.dart';
 import '../features/policies/policy_screen.dart';
 import '../shared/widgets/app_shell.dart';
@@ -46,9 +45,7 @@ abstract class AppRouter {
           builder: (context, ref, _) => AppShell(
             location: state.uri.path,
             assistant: nitikaAssistant(
-              enabled: nitikaEnabled,
-              signedIn: nitikaEnabled &&
-                  ref.watch(authControllerProvider).isAuthenticated,
+              signedIn: ref.watch(authControllerProvider).isAuthenticated,
               location: state.uri.path,
             ),
             child: child,
