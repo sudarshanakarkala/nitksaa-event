@@ -17,7 +17,8 @@ class EventCreate(BaseModel):
     virtual_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     banner_url: Optional[str] = None
-    capacity: Optional[int] = Field(default=None, gt=0)
+    # Every event has a capacity; there is no "unlimited" (decision, 11 Oct 2026).
+    capacity: int = Field(..., gt=0)
     show_attendee_list: bool = False
     registration_opens_at: Optional[datetime] = None
     registration_closes_at: Optional[datetime] = None
