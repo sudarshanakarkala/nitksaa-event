@@ -58,6 +58,7 @@ class EventCard extends StatelessWidget {
     this.registrationStatus,
     this.registrationClosesAt,
     this.attendance = EventAttendance.none,
+    this.mine = false,
     this.viewLabel = 'View Details',
     this.onUnregister,
     this.unregistering = false,
@@ -77,6 +78,7 @@ class EventCard extends StatelessWidget {
     Key? key,
     required VoidCallback onView,
     EventAttendance attendance = EventAttendance.none,
+    bool mine = false,
     VoidCallback? onUnregister,
     bool unregistering = false,
     VoidCallback? onViewRefund,
@@ -98,6 +100,7 @@ class EventCard extends StatelessWidget {
       registrationStatus: event.registrationStatus,
       registrationClosesAt: event.registrationClosesAt,
       attendance: attendance,
+      mine: mine,
       onView: onView,
       onUnregister: onUnregister,
       unregistering: unregistering,
@@ -135,6 +138,11 @@ class EventCard extends StatelessWidget {
   final DateTime? registrationClosesAt;
   final EventAttendance attendance;
 
+  /// You created this event: the card gets the gold tint, like your own
+  /// stories on the website. Registration is shown by its badge, not the
+  /// tint.
+  final bool mine;
+
   final VoidCallback onView;
   final String viewLabel;
   final VoidCallback? onUnregister;
@@ -155,10 +163,9 @@ class EventCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final own = attendance == EventAttendance.registered;
     return _HoverCard(
       onTap: onView,
-      highlighted: own,
+      highlighted: mine,
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -471,8 +478,8 @@ class EventCardGrid extends StatelessWidget {
 // ── Parts ───────────────────────────────────────────────────────────────────
 
 /// Website `.sc-card`: card fill, hairline border, 12px radius; on hover it
-/// lifts 2px with a stronger border (the fill stays). Your own registrations get a gold tint
-/// (website `.card--own`).
+/// lifts 2px with a stronger border (the fill stays). Events you created
+/// get a gold tint (website `.card--own`).
 class _HoverCard extends StatefulWidget {
   const _HoverCard({required this.child, required this.onTap, required this.highlighted});
 
@@ -504,7 +511,7 @@ class _HoverCardState extends State<_HoverCard> {
         curve: Curves.easeOut,
         transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
         decoration: BoxDecoration(
-          // Fill only changes for your own registrations, as on the website;
+          // Fill only changes for events you created, as on the website;
           // hover is just the lift and the border.
           color: base,
           borderRadius: BorderRadius.circular(12),

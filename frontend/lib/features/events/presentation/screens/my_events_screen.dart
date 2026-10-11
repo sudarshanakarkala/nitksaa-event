@@ -9,6 +9,7 @@ import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
+import '../providers/created_events_provider.dart';
 import '../providers/my_events_provider.dart';
 import '../widgets/event_card.dart';
 import '../widgets/refund_status_dialog.dart';
@@ -42,6 +43,9 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final state = ref.watch(myEventsProvider);
+    // Events you created get the "mine" tint.
+    final created =
+        ref.watch(createdEventIdsProvider).valueOrNull ?? const <int>{};
     final theme = Theme.of(context);
     final isWebScreen = MediaQuery.of(context).size.width >= 900;
 
@@ -181,6 +185,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                                             isCancelling: state.isCancelling(
                                               registration.registrationId,
                                             ),
+                                            created: created,
                                           );
                                         },
                                       ),
@@ -200,6 +205,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
   Widget _registrationCard(
     MyEventRegistration registration, {
     required bool isCancelling,
+    required Set<int> created,
   }) {
     final summary = registration.event;
     final event = registration.publicEvent;
@@ -219,6 +225,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       registrationClosesAt: event?.registrationClosesAt,
       attendance:
           active ? EventAttendance.registered : EventAttendance.cancelled,
+      mine: created.contains(registration.eventId),
       footerNote: when == null
           ? null
           : '${active ? 'Registered' : 'Cancelled'} ${_shortDate(when)}',

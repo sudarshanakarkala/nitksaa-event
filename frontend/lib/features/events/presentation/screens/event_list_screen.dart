@@ -10,6 +10,7 @@ import '../../../../theme/app_text_styles.dart';
 import '../../../../shared/widgets/list_page.dart';
 import '../../../../shared/widgets/segment_toggle.dart';
 import '../../../auth/services/auth_controller.dart';
+import '../providers/created_events_provider.dart';
 import '../providers/events_provider.dart';
 import '../providers/my_events_provider.dart';
 import '../widgets/refund_status_dialog.dart';
@@ -1321,6 +1322,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     // narrowed to events with an active registration of yours.
     final registrations = _registrationsByEvent();
     final registeredOnly = ref.watch(_registeredOnlyProvider);
+    // Events you created get the "mine" tint.
+    final created =
+        ref.watch(createdEventIdsProvider).valueOrNull ?? const <int>{};
     final filteredEvents = registeredOnly
         ? allEvents.where((e) => registrations[e.eventId]?.isActive ?? false).toList()
         : allEvents;
@@ -1405,6 +1409,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                     attendance: registered
                         ? EventAttendance.registered
                         : EventAttendance.none,
+                    mine: created.contains(event.eventId),
                     onView: () => context.push('/events/${event.eventId}'),
                     onUnregister: registered && registration!.canCancel
                         ? () => _confirmUnregister(event, registration)

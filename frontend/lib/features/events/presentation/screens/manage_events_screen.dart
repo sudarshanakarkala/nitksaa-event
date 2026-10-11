@@ -544,6 +544,9 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
           return EventCard.forEvent(
             event,
             showAdmin: true,
+            mine: event.createdByUid != null &&
+                event.createdByUid ==
+                    ref.read(authControllerProvider).session?.firebaseUid,
             onView: () => context.push('/events/${event.eventId}'),
             // The capacity bar already shows the count; the footer says
             // who created the event.
