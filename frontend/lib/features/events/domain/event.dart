@@ -139,6 +139,8 @@ class AppEvent {
     this.publishedAt,
     required this.registrationStatus,
     required this.registeredCount,
+    this.createdByUid,
+    this.createdByName,
     this.sessions = const [],
     this.speakers = const [],
     this.sponsors = const [],
@@ -175,6 +177,11 @@ class AppEvent {
   final DateTime? publishedAt;
   final String registrationStatus;
   final int registeredCount;
+
+  /// Who created the event. Only the admin API sends these; null on the
+  /// public pages.
+  final String? createdByUid;
+  final String? createdByName;
   final List<EventSession> sessions;
   final List<EventPerson> speakers;
   final List<EventSponsor> sponsors;
@@ -215,6 +222,8 @@ class AppEvent {
           : null,
       registrationStatus: json['registration_status'] as String? ?? 'not_applicable',
       registeredCount: json['registered_count'] as int? ?? 0,
+      createdByUid: json['created_by_firebase_uid'] as String?,
+      createdByName: json['created_by_name'] as String?,
       sessions: (json['sessions'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(EventSession.fromJson)

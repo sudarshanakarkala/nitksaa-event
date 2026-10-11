@@ -478,6 +478,15 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     }
   }
 
+  String? _createdBy(AppEvent event) {
+    final me = ref.read(authControllerProvider).session?.firebaseUid;
+    if (event.createdByUid != null && event.createdByUid == me) {
+      return 'Created by you';
+    }
+    final name = event.createdByName?.trim();
+    return (name == null || name.isEmpty) ? null : 'Created by $name';
+  }
+
   Widget _buildEventsList(List<AppEvent> events, bool isDark, ThemeData theme, {required bool isPublished}) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -536,9 +545,9 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
             event,
             showAdmin: true,
             onView: () => context.push('/events/${event.eventId}'),
-            footerNote: event.capacity == null
-                ? '${event.registeredCount} registered'
-                : '${event.registeredCount} of ${event.capacity} registered',
+            // The capacity bar already shows the count; the footer says
+            // who created the event.
+            footerNote: _createdBy(event),
             adminActions: [
               EventCardAction(
                 label: 'Edit',
