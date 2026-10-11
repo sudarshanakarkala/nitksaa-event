@@ -22,6 +22,7 @@ import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
+import '../widgets/event_card.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
   const ManageEventsScreen({super.key});
@@ -477,6 +478,15 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     }
   }
 
+  String? _createdBy(AppEvent event) {
+    final me = ref.read(authControllerProvider).session?.firebaseUid;
+    if (event.createdByUid != null && event.createdByUid == me) {
+      return 'Created by you';
+    }
+    final name = event.createdByName?.trim();
+    return (name == null || name.isEmpty) ? null : 'Created by $name';
+  }
+
   Widget _buildEventsList(List<AppEvent> events, bool isDark, ThemeData theme, {required bool isPublished}) {
     if (_isLoading) {
       return const Center(child: CircularProgressIndicator());
@@ -524,31 +534,54 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
 
     return RefreshIndicator(
       onRefresh: _fetchEvents,
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          final columns = constraints.maxWidth > 980 ? 2 : 1;
-          return GridView.builder(
-            gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-              crossAxisCount: columns,
-              crossAxisSpacing: 20,
-              mainAxisSpacing: 20,
-              mainAxisExtent: columns == 1 ? 360 : 330,
-            ),
-            itemCount: events.length,
-            itemBuilder: (context, index) {
-              final event = events[index];
-              return _ManageEventCard(
-                event: event,
-                isDark: isDark,
-                theme: theme,
-                isPublished: isPublished,
-                onView: () => context.push('/events/${event.eventId}'),
-                onEdit: () => _showEventForm(event: event),
-                onPublish: isPublished ? null : () => _publishEvent(event),
-                onUnpublish: isPublished ? () => _unpublishEvent(event) : null,
-                onDelete: () => _deleteEvent(event),
-              );
-            },
+      child: EventCardGrid(
+        admin: true,
+        physics: const AlwaysScrollableScrollPhysics(),
+        itemCount: events.length,
+        itemBuilder: (context, index) {
+          final event = events[index];
+          final registrationsPath = '/admin/events/${event.eventId}/registrations';
+          return EventCard.forEvent(
+            event,
+            showAdmin: true,
+            mine: event.createdByUid != null &&
+                event.createdByUid ==
+                    ref.read(authControllerProvider).session?.firebaseUid,
+            onView: () => context.push('/events/${event.eventId}'),
+            // The capacity bar already shows the count; the footer says
+            // who created the event.
+            footerNote: _createdBy(event),
+            adminActions: [
+              EventCardAction(
+                label: 'Edit',
+                icon: Icons.edit_outlined,
+                onSelected: () => _showEventForm(event: event),
+              ),
+              if (isPublished)
+                EventCardAction(
+                  label: 'Registrations',
+                  icon: Icons.people_outline,
+                  onSelected: () => context.push(registrationsPath),
+                ),
+              if (isPublished)
+                EventCardAction(
+                  label: 'Unpublish',
+                  icon: Icons.unpublished_outlined,
+                  onSelected: () => _unpublishEvent(event),
+                )
+              else
+                EventCardAction(
+                  label: 'Publish',
+                  icon: Icons.publish_outlined,
+                  onSelected: () => _publishEvent(event),
+                ),
+              EventCardAction(
+                label: 'Delete',
+                icon: Icons.delete_outline,
+                destructive: true,
+                onSelected: () => _deleteEvent(event),
+              ),
+            ],
           );
         },
       ),
@@ -2977,155 +3010,6 @@ void _showFeeDialog(int? editIndex) {
   }
 }
 
-class _ManageEventCard extends StatelessWidget {
-  const _ManageEventCard({
-    required this.event,
-    required this.isDark,
-    required this.theme,
-    required this.isPublished,
-    required this.onView,
-    required this.onEdit,
-    this.onPublish,
-    this.onUnpublish,
-    this.onDelete,
-  });
-
-  final AppEvent event;
-  final bool isDark;
-  final ThemeData theme;
-  final bool isPublished;
-  final VoidCallback onView;
-  final VoidCallback onEdit;
-  final VoidCallback? onPublish;
-  final VoidCallback? onUnpublish;
-  final VoidCallback? onDelete;
-
-  @override
-  Widget build(BuildContext context) {
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: theme.colorScheme.outlineVariant),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    event.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                  decoration: BoxDecoration(
-                    color: (isPublished ? context.palette.success : context.palette.warning)
-                        .withValues(alpha: 0.14),
-                    borderRadius: BorderRadius.circular(999),
-                    border: Border.all(color: (isPublished ? context.palette.success : context.palette.warning).withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    isPublished ? 'Published' : 'Draft',
-                    style: TextStyle(
-                      color: isPublished ? context.palette.success : context.palette.warning,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Text(
-              event.description ?? 'No description provided.',
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: theme.colorScheme.onSurfaceVariant, fontSize: 13),
-            ),
-            const Spacer(),
-            _MetaRow(icon: Icons.event, label: _formatDateTime(event.startDatetime)),
-            const SizedBox(height: 6),
-            _MetaRow(
-              icon: event.isVirtual ? Icons.videocam_outlined : Icons.place_outlined,
-              label: event.locationText ?? (event.isVirtual ? 'Virtual event' : 'Location pending'),
-            ),
-            const SizedBox(height: 16),
-            // Action buttons
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                if (isPublished) ...[
-                  OutlinedButton.icon(
-                    onPressed: onView,
-                    icon: const Icon(Icons.visibility_outlined, size: 16),
-                    label: const Text('View', style: TextStyle(fontSize: 12)),
-                  ),
-                  OutlinedButton.icon(
-                    onPressed: () => context.push('/admin/events/${event.eventId}/registrations'),
-                    icon: const Icon(Icons.people_outline, size: 16),
-                    label: const Text('Registrations', style: TextStyle(fontSize: 12)),
-                  ),
-                  FilledButton.icon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Edit', style: TextStyle(fontSize: 12)),
-                  ),
-                  if (onUnpublish != null)
-                    OutlinedButton.icon(
-                      onPressed: onUnpublish,
-                      icon: const Icon(Icons.unpublished_outlined, size: 16),
-                      label: const Text('Unpublish', style: TextStyle(fontSize: 12)),
-                    ),
-                  if (onDelete != null)
-                    OutlinedButton.icon(
-                      onPressed: onDelete,
-                      icon: Icon(Icons.delete_outline, size: 16, color: context.palette.error),
-                      label: Text('Delete', style: TextStyle(fontSize: 12, color: context.palette.error)),
-                    ),
-                ] else ...[
-                  if (onPublish != null)
-                    FilledButton.icon(
-                      onPressed: onPublish,
-                      icon: const Icon(Icons.publish_outlined, size: 16),
-                      label: const Text('Publish', style: TextStyle(fontSize: 12)),
-                    ),
-                  FilledButton.tonalIcon(
-                    onPressed: onEdit,
-                    icon: const Icon(Icons.edit_outlined, size: 16),
-                    label: const Text('Edit', style: TextStyle(fontSize: 12)),
-                  ),
-                  if (onDelete != null)
-                    OutlinedButton.icon(
-                      onPressed: onDelete,
-                      icon: Icon(Icons.delete_outline, size: 16, color: context.palette.error),
-                      label: Text('Delete', style: TextStyle(fontSize: 12, color: context.palette.error)),
-                    ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _formatDateTime(DateTime value) {
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    final hour = value.hour == 0 ? 12 : (value.hour > 12 ? value.hour - 12 : value.hour);
-    final minute = value.minute.toString().padLeft(2, '0');
-    final period = value.hour >= 12 ? 'PM' : 'AM';
-    return '${value.day} ${months[value.month - 1]} ${value.year}, $hour:$minute $period';
-  }
-}
-
 class _StatusPill extends StatelessWidget {
   const _StatusPill({required this.label});
 
@@ -3148,26 +3032,6 @@ class _StatusPill extends StatelessWidget {
           fontWeight: FontWeight.bold,
         ),
       ),
-    );
-  }
-}
-
-class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      children: [
-        Icon(icon, size: 16, color: context.palette.primary),
-        const SizedBox(width: 8),
-        Expanded(
-          child: Text(label, maxLines: 1, overflow: TextOverflow.ellipsis),
-        ),
-      ],
     );
   }
 }

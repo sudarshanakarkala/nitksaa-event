@@ -10,9 +10,11 @@ import '../../../../theme/app_text_styles.dart';
 import '../../../../shared/widgets/list_page.dart';
 import '../../../../shared/widgets/segment_toggle.dart';
 import '../../../auth/services/auth_controller.dart';
+import '../providers/created_events_provider.dart';
 import '../providers/events_provider.dart';
 import '../providers/my_events_provider.dart';
 import '../widgets/refund_status_dialog.dart';
+import '../widgets/event_card.dart';
 import '../../domain/event.dart';
 import '../../domain/my_event_registration.dart';
 
@@ -1320,12 +1322,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     // narrowed to events with an active registration of yours.
     final registrations = _registrationsByEvent();
     final registeredOnly = ref.watch(_registeredOnlyProvider);
+    // Events you created get the "mine" tint.
+    final created =
+        ref.watch(createdEventIdsProvider).valueOrNull ?? const <int>{};
     final filteredEvents = registeredOnly
         ? allEvents.where((e) => registrations[e.eventId]?.isActive ?? false).toList()
         : allEvents;
-    final auth = ref.watch(authControllerProvider);
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final ThemeData theme = Theme.of(context);
     final p = context.palette;
     final side = ListPage.sidePadding(context);
 
@@ -1393,50 +1395,29 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ? _buildMaterialEmptyState()
             : _view == 'table' && MediaQuery.sizeOf(context).width >= 600
             ? _buildEventTable(filteredEvents, side, registrations)
-            : LayoutBuilder(
-                builder: (context, constraints) {
-                  // As many ~320px columns as fit, up to four (website grid).
-                  const spacing = 20.0;
-                  final usable = constraints.maxWidth - side * 2;
-                  final columns =
-                      ((usable + spacing) / (320 + spacing)).floor().clamp(1, 4);
-                  // Rows of cards, each row as tall as its tallest card, so
-                  // cards size to their content (website grid) instead of a
-                  // fixed 420px cell.
-                  final rows = (filteredEvents.length / columns).ceil();
-                  // Capacity bar on the cards of events this person runs.
-                  final access = auth.session?.access;
-                  return ListView.separated(
-                    padding: EdgeInsets.fromLTRB(side, 24, side, 24),
-                    itemCount: rows,
-                    separatorBuilder: (_, _) => const SizedBox(height: spacing),
-                    itemBuilder: (context, row) {
-                      return IntrinsicHeight(
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.stretch,
-                          children: [
-                            for (var col = 0; col < columns; col++) ...[
-                              if (col > 0) const SizedBox(width: spacing),
-                              Expanded(
-                                child: row * columns + col < filteredEvents.length
-                                    ? _buildMaterialEventCard(
-                                        filteredEvents[row * columns + col],
-                                        isDark,
-                                        theme,
-                                        isAdmin: access?.canAdminEvent(
-                                              filteredEvents[row * columns + col].eventId,
-                                            ) ??
-                                            false,
-                                        registration: registrations[
-                                            filteredEvents[row * columns + col].eventId],
-                                      )
-                                    : const SizedBox.shrink(),
-                              ),
-                            ],
-                          ],
-                        ),
-                      );
-                    },
+            // Website grid: columns of at least 300px, every card the same
+            // height (no intrinsic sizing).
+            : EventCardGrid(
+                padding: EdgeInsets.fromLTRB(side, 24, side, 24),
+                itemCount: filteredEvents.length,
+                itemBuilder: (context, index) {
+                  final event = filteredEvents[index];
+                  final registration = registrations[event.eventId];
+                  final registered = registration?.isActive ?? false;
+                  return EventCard.forEvent(
+                    event,
+                    attendance: registered
+                        ? EventAttendance.registered
+                        : EventAttendance.none,
+                    mine: created.contains(event.eventId),
+                    onView: () => context.push('/events/${event.eventId}'),
+                    onUnregister: registered && registration!.canCancel
+                        ? () => _confirmUnregister(event, registration)
+                        : null,
+                    unregistering: registration != null &&
+                        ref
+                            .watch(myEventsProvider)
+                            .isCancelling(registration.registrationId),
                   );
                 },
               ),
@@ -1549,303 +1530,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildMaterialEventCard(
-    AppEvent event,
-    bool isDark,
-    ThemeData theme, {
-    required bool isAdmin,
-    MyEventRegistration? registration,
-  }) {
-    // Your own registration: website .card--own (gold tint) plus a badge.
-    final isOwn = registration?.isActive ?? false;
-    final isPhysical = !event.isVirtual;
-    final tagBg = isPhysical
-        ? context.palette.primary.withValues(alpha: 0.14)
-        : context.palette.info.withValues(alpha: 0.14);
-    final tagText = isPhysical
-        ? context.palette.primary
-        : context.palette.info;
-
-    final regBg = event.registrationStatus == 'open'
-        ? context.palette.success.withValues(alpha: 0.14)
-        : context.palette.error.withValues(alpha: 0.14);
-    final regText = event.registrationStatus == 'open'
-        ? context.palette.success
-        : context.palette.error;
-
-    final capacityText = event.capacity != null
-        ? '${event.registeredCount} / ${event.capacity}'
-        : '${event.registeredCount} Registered';
-    final progress = event.capacity != null && event.capacity! > 0
-        ? (event.registeredCount / event.capacity!).clamp(0.0, 1.0)
-        : 0.0;
-
-    return Card(
-      elevation: 0,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(
-          color: isOwn
-              ? context.palette.primary.withValues(alpha: 0.45)
-              : context.palette.border,
-        ),
-      ),
-      color: isOwn
-          ? Color.alphaBlend(
-              context.palette.primary.withValues(alpha: 0.08),
-              context.palette.card,
-            )
-          : context.palette.card,
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            if (event.thumbnailUrl != null) ...[
-              ClipRRect(
-                borderRadius: BorderRadius.circular(8),
-                child: Image.network(
-                  event.thumbnailUrl!,
-                  height: 180,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Row(
-              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-              children: [
-                Expanded(
-                  child: Text(
-                    event.title,
-                    style: const TextStyle(
-                      fontSize: 16,
-                      fontWeight: FontWeight.bold,
-                    ),
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: tagBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: tagText.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    isPhysical ? 'Physical' : 'Virtual',
-                    style: TextStyle(
-                      color: tagText,
-                      fontSize: 11,
-                      fontWeight: FontWeight.w500,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-            if (event.tagline != null && event.tagline!.isNotEmpty) ...[
-              const SizedBox(height: 4),
-              Text(
-                event.tagline!,
-                style: TextStyle(
-                  fontSize: 12,
-                  color: theme.colorScheme.onSurfaceVariant,
-                ),
-                maxLines: 1,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ],
-            const SizedBox(height: 12),
-            // Details at their natural height; the Spacer below keeps the
-            // footer aligned across a row of cards (rows size to the tallest).
-            Row(
-              children: [
-                Expanded(
-                  child: _buildMaterialMetaRow(
-                    Icons.calendar_today,
-                    _formatDate(event.startDatetime),
-                    theme,
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildMaterialMetaRow(
-                    Icons.access_time,
-                    _formatTime(event.startDatetime, event.endDatetime),
-                    theme,
-                  ),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            _buildMaterialMetaRow(
-              event.isVirtual ? Icons.videocam : Icons.location_pin,
-              event.locationText ??
-                  (event.isVirtual ? 'Zoom Link' : 'TBD'),
-              theme,
-            ),
-            const Spacer(),
-            if (isAdmin) ...[
-              const SizedBox(height: 8),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Capacity',
-                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
-                  ),
-                  Text(
-                    capacityText,
-                    style: const TextStyle(
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 4),
-              ClipRRect(
-                borderRadius: BorderRadius.circular(4),
-                child: LinearProgressIndicator(
-                  value: progress,
-                  minHeight: 6,
-                  backgroundColor: context.palette.surfaceHover,
-                  valueColor: AlwaysStoppedAnimation<Color>(
-                    progress > 0.85 ? context.palette.warning : context.palette.success,
-                  ),
-                ),
-              ),
-            ],
-            const SizedBox(height: 12),
-            Builder(builder: (context) {
-              final statusBadge =
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 10,
-                    vertical: 4,
-                  ),
-                  decoration: BoxDecoration(
-                    color: regBg,
-                    borderRadius: BorderRadius.circular(20),
-                    border: Border.all(color: regText.withValues(alpha: 0.3)),
-                  ),
-                  child: Text(
-                    event.registrationStatus == 'open'
-                        ? 'Registration open'
-                        : 'Closed',
-                    style: TextStyle(
-                      color: regText,
-                      fontSize: 11,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                );
-              final viewButton =
-                TextButton(
-                  style: TextButton.styleFrom(
-                    backgroundColor: context.palette.primary,
-                    foregroundColor: context.palette.onPrimary,
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                  ),
-                  onPressed: () {
-                    context.push('/events/${event.eventId}');
-                  },
-                  child: const Text(
-                    'View details',
-                    style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold),
-                  ),
-                );
-              if (!isOwn) {
-                return Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [statusBadge, viewButton],
-                );
-              }
-              // Own card: badges on one row, Unregister + View details below.
-              return Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Wrap(
-                    spacing: 6,
-                    runSpacing: 6,
-                    children: [
-                      statusBadge,
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: context.palette.info.withValues(alpha: 0.14),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: context.palette.info.withValues(alpha: 0.3)),
-                        ),
-                        child: Text(
-                          'Registered',
-                          style: TextStyle(
-                            color: context.palette.info,
-                            fontSize: 11,
-                            fontWeight: FontWeight.bold,
-                          ),
-                        ),
-                      ),
-                    ],
-                  ),
-                  const SizedBox(height: 10),
-                  Row(
-                    mainAxisAlignment: MainAxisAlignment.end,
-                    children: [
-                      if (registration!.canCancel) ...[
-                        TextButton(
-                          onPressed: ref.watch(myEventsProvider).isCancelling(registration.registrationId)
-                              ? null
-                              : () => _confirmUnregister(event, registration),
-                          style: TextButton.styleFrom(
-                            foregroundColor: context.palette.textSecondary,
-                          ),
-                          child: const Text('Unregister', style: TextStyle(fontSize: 12)),
-                        ),
-                        const SizedBox(width: 8),
-                      ],
-                      viewButton,
-                    ],
-                  ),
-                ],
-              );
-            }),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMaterialMetaRow(IconData icon, String label, ThemeData theme) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 6.0),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: context.palette.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              style: TextStyle(
-                fontSize: 12,
-                color: theme.colorScheme.onSurfaceVariant,
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
-          ),
-        ],
       ),
     );
   }

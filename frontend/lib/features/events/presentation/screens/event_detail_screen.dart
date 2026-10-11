@@ -11,6 +11,7 @@ import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
+import '../widgets/venue_section.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -441,6 +442,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           const Divider(),
                           const SizedBox(height: 16),
                           _buildAboutSection(event),
+                          if (VenueSection.hasVenue(event)) ...[
+                            const SizedBox(height: 24),
+                            const Divider(),
+                            const SizedBox(height: 16),
+                            VenueSection(event: event),
+                          ],
                           const SizedBox(height: 24),
                           const Divider(),
                           const SizedBox(height: 16),
@@ -552,6 +559,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 const Divider(),
                 const SizedBox(height: 16),
                 _buildAboutSection(event),
+                if (VenueSection.hasVenue(event)) ...[
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  VenueSection(event: event),
+                ],
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
