@@ -27,6 +27,11 @@ class EventUpdate(BaseModel):
 
     @model_validator(mode="after")
     def validate_datetimes(self) -> "EventUpdate":
+        # capacity may be left out of a PATCH, but not cleared: every event
+        # has a capacity. update_event uses model_dump(exclude_unset=True), so
+        # without this an explicit null would reach the database.
+        if "capacity" in self.model_fields_set and self.capacity is None:
+            raise ValueError("capacity cannot be empty")
         if self.start_datetime and self.end_datetime:
             if self.end_datetime <= self.start_datetime:
                 raise ValueError("end_datetime must be after start_datetime")

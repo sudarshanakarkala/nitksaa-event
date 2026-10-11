@@ -5,6 +5,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/errors/api_error_message.dart';
+import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
@@ -151,11 +153,12 @@ class _EventRegistrationsScreenState
           }
         });
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      AppLogger.error('Failed to load registrations', error, stackTrace);
       if (mounted) {
         setState(() {
           _isLoading = false;
-          _errorMessage = error.toString();
+          _errorMessage = apiErrorMessage(error, action: 'load registrations');
         });
       }
     }
