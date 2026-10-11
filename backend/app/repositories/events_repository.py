@@ -158,9 +158,22 @@ class EventsRepository:
         status: Optional[str],
         is_virtual: Optional[bool],
         search: Optional[str],
+        period: Optional[str] = None,
+        event_ids: Optional[List[int]] = None,
     ) -> Tuple[List[asyncpg.Record], int]:
         where_parts: List[str] = []
         where_values: List[Any] = []
+
+        if event_ids is not None:
+            # Scoped admin list: an empty list must match nothing, never
+            # fall through to "all events".
+            where_parts.append(f"e.event_id = ANY(${len(where_values) + 1}::int[])")
+            where_values.append(list(event_ids))
+
+        if period == "upcoming":
+            where_parts.append("e.end_datetime >= NOW()")
+        elif period == "past":
+            where_parts.append("e.end_datetime < NOW()")
 
         if status is not None:
             where_parts.append(f"e.status = ${len(where_values) + 1}")

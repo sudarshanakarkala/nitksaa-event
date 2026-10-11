@@ -4,8 +4,9 @@ Authorization: production Firebase-JWT-backed RBAC via
 app.middleware.admin_auth (platform_admin, or event_admin scoped to the
 event_id in the route) — migrated off the development-only
 app.middleware.dev_auth placeholder in the operational-readiness sprint.
-Two routes have no event_id to scope to (create, list-all) and are
-platform_admin-only.
+Two routes have no event_id to scope to: create needs "can create
+events", and list-all is any admin, scoped to their own events (admin
+revamp step 1).
 """
 import csv
 import io
@@ -15,7 +16,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 
 from app.database import get_pool
-from app.middleware.admin_auth import require_event_admin, require_platform_role
+from app.middleware.admin_auth import require_any_admin, require_event_admin, require_event_creator
 from app.repositories.registration_repository import RegistrationRepository
 from app.schemas.checkins import CheckInCreate, CheckInResponse, QRVerifyResponse
 from app.schemas.event_create import EventCreate
@@ -58,7 +59,7 @@ _LIST_ALL_DEFAULT_PER_PAGE = 200
 @router.post("/events", response_model=EventResponse, status_code=201)
 async def create_event(
     body: EventCreate,
-    user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
+    user: Dict[str, Any] = Depends(require_event_creator),
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -109,12 +110,20 @@ async def close_event(
 async def list_all_events(
     page: int = Query(1, ge=1),
     per_page: int = Query(_LIST_ALL_DEFAULT_PER_PAGE, ge=1, le=500),
-    user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
+    status: Optional[str] = Query(None),
+    period: Optional[str] = Query(None, pattern="^(upcoming|past|all)$"),
+    search: Optional[str] = Query(None),
+    user: Dict[str, Any] = Depends(require_any_admin),
 ):
+    """Scoped: overall admins get every event (including past and
+    cancelled ones via status/period); anyone else only their own."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         svc = EventsService(conn)
-        events, _total = await svc.list_events(page=page, per_page=per_page)
+        events, _total = await svc.list_events(
+            page=page, per_page=per_page, status=status, search=search,
+            period=period, event_ids=user["access"].scope_event_ids(),
+        )
         return events
 
 
