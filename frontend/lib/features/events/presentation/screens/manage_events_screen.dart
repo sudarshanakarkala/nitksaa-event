@@ -10,6 +10,8 @@ import 'package:http/http.dart' as http;
 import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../../../core/errors/api_error_message.dart';
+import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
@@ -116,10 +118,11 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
             .toList();
         _isLoading = false;
       });
-    } catch (error) {
+    } catch (error, stackTrace) {
+      AppLogger.error('Failed to load admin events', error, stackTrace);
       setState(() {
         _isLoading = false;
-        _errorMessage = error.toString();
+        _errorMessage = apiErrorMessage(error, action: 'load events');
       });
     }
   }
@@ -163,13 +166,15 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
           ),
         );
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      AppLogger.error('Failed to publish event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error publishing event: $error'),
+            content: Text(apiErrorMessage(error, action: 'publish the event')),
             backgroundColor: context.palette.tinted(context.palette.error),
+            duration: const Duration(seconds: 6),
           ),
         );
       }
@@ -215,13 +220,15 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
           ),
         );
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      AppLogger.error('Failed to unpublish event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error unpublishing event: $error'),
+            content: Text(apiErrorMessage(error, action: 'unpublish the event')),
             backgroundColor: context.palette.tinted(context.palette.error),
+            duration: const Duration(seconds: 6),
           ),
         );
       }
@@ -290,13 +297,15 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
           ),
         );
       }
-    } catch (error) {
+    } catch (error, stackTrace) {
+      AppLogger.error('Failed to delete event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text('Error deleting event: $error'),
+            content: Text(apiErrorMessage(error, action: 'delete the event')),
             backgroundColor: context.palette.tinted(context.palette.error),
+            duration: const Duration(seconds: 6),
           ),
         );
       }
@@ -2869,11 +2878,15 @@ void _showFeeDialog(int? editIndex) {
       }
 
       if (mounted) Navigator.pop(context, true);
-    } catch (error) {
+    } catch (error, stackTrace) {
+      AppLogger.error('Failed to save event', error, stackTrace);
       if (!mounted) return;
       setState(() => _isSaving = false);
       ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Error saving event: $error')),
+        SnackBar(
+          content: Text(apiErrorMessage(error, action: 'save the event')),
+          duration: const Duration(seconds: 6),
+        ),
       );
     }
   }
