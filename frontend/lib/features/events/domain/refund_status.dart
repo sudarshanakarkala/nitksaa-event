@@ -37,6 +37,9 @@ class RefundStatus {
   final String? paymentMode;
   final bool realMoney;
 
+  /// A refund exists, in whatever state. False when nothing was paid.
+  bool get hasRefund => status != none;
+
   /// Never throws: by the time there is a response to parse the registration
   /// is already cancelled, and a field this app cannot read must not turn
   /// that into a failure.

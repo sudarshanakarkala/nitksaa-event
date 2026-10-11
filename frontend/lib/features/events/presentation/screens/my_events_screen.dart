@@ -10,6 +10,7 @@ import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
 import '../providers/my_events_provider.dart';
+import '../widgets/refund_status_dialog.dart';
 
 class MyEventsScreen extends ConsumerStatefulWidget {
   const MyEventsScreen({super.key});
@@ -200,6 +201,16 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                                                           registration,
                                                         )
                                                     : null,
+                                                onViewRefund:
+                                                    registration.mayHaveRefund
+                                                    ? () => showRefundStatus(
+                                                          context,
+                                                          ref,
+                                                          registrationId:
+                                                              registration
+                                                                  .registrationId,
+                                                        )
+                                                    : null,
                                               );
                                             },
                                           );
@@ -243,7 +254,18 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
         .cancelRegistration(registration.registrationId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(outcome.message)),
+      SnackBar(
+        content: Text(outcome.message),
+        // A snackbar with an action stays up until it is pressed unless told
+        // otherwise. This one closes after the usual four seconds.
+        persist: false,
+        action: viewRefundAction(
+          context,
+          ref,
+          outcome: outcome,
+          registrationId: registration.registrationId,
+        ),
+      ),
     );
   }
 }
@@ -256,6 +278,7 @@ class _RegistrationCard extends StatelessWidget {
     required this.isCancelling,
     required this.onView,
     required this.onCancel,
+    required this.onViewRefund,
   });
 
   final MyEventRegistration registration;
@@ -263,6 +286,7 @@ class _RegistrationCard extends StatelessWidget {
   final bool isCancelling;
   final VoidCallback onView;
   final VoidCallback? onCancel;
+  final VoidCallback? onViewRefund;
 
   @override
   Widget build(BuildContext context) {
@@ -364,6 +388,20 @@ class _RegistrationCard extends StatelessWidget {
                             )
                           : const Icon(Icons.cancel_outlined, size: 18),
                       label: const Text('Unregister'),
+                    ),
+                  ),
+                ],
+                if (onViewRefund != null) ...[
+                  const SizedBox(width: 12),
+                  Expanded(
+                    child: FilledButton.tonalIcon(
+                      onPressed: onViewRefund,
+                      icon: const Icon(Icons.receipt_long_outlined, size: 18),
+                      // Kept on one line where the card is narrow.
+                      label: const FittedBox(
+                        fit: BoxFit.scaleDown,
+                        child: Text('View refund status'),
+                      ),
                     ),
                   ),
                 ],

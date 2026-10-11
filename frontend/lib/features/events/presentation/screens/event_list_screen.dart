@@ -12,6 +12,7 @@ import '../../../../shared/widgets/segment_toggle.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/events_provider.dart';
 import '../providers/my_events_provider.dart';
+import '../widgets/refund_status_dialog.dart';
 import '../../domain/event.dart';
 import '../../domain/my_event_registration.dart';
 
@@ -105,7 +106,18 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         .cancelRegistration(registration.registrationId);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(outcome.message)),
+      SnackBar(
+        content: Text(outcome.message),
+        // A snackbar with an action stays up until it is pressed unless told
+        // otherwise. This one closes after the usual four seconds.
+        persist: false,
+        action: viewRefundAction(
+          context,
+          ref,
+          outcome: outcome,
+          registrationId: registration.registrationId,
+        ),
+      ),
     );
   }
 

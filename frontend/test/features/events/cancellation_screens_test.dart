@@ -295,9 +295,7 @@ void main() {
       });
 
       testWidgets('Test E: a paid registration is cancelled and the attendee '
-          'is told the refund has started, with no other refund UI', (
-        tester,
-      ) async {
+          'is told the refund has started', (tester) async {
         final backend = FakeRegistrationBackend();
         final registration = backend.seedRegistration(
           tokenA,
@@ -315,12 +313,9 @@ void main() {
           backend.refunds[registration['registration_id']]!['status'],
           'refund_pending',
         );
-        // The message is the only mention of a refund. The refund status
-        // page is ISSUE-005.
-        expect(
-          find.textContaining(RegExp('refund', caseSensitive: false)),
-          findsOneWidget,
-        );
+        // Until ISSUE-005 the message was the only mention of a refund. It
+        // now leads to the refund status (refund_screens_test.dart).
+        expect(find.text('View refund'), findsOneWidget);
         _expectNotRegistered(tester, screen);
       });
 

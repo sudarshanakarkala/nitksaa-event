@@ -210,6 +210,22 @@ class EventsRepository {
     return RefundStatus.fromJson(response.data ?? <String, dynamic>{});
   }
 
+  /// The refund of one of the attendee's own registrations, or a status of
+  /// `none` when nothing was paid.
+  ///
+  /// While a refund is still pending the backend asks the payment provider
+  /// again before it answers, so calling this again is how to check on it.
+  Future<RefundStatus> getRefundStatus(
+    int registrationId,
+    String accessToken,
+  ) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/registrations/$registrationId/refund',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return RefundStatus.fromJson(response.data ?? <String, dynamic>{});
+  }
+
   /// Registers the signed-in attendee for the event: one registration, one
   /// seat. `attendee_note` is the only field the backend accepts.
   Future<Map<String, dynamic>> registerForEvent(
