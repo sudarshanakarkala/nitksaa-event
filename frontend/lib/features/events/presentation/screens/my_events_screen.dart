@@ -256,6 +256,9 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(outcome.message),
+        // A snackbar with an action stays up until it is pressed unless told
+        // otherwise. This one closes after the usual four seconds.
+        persist: false,
         action: viewRefundAction(
           context,
           ref,

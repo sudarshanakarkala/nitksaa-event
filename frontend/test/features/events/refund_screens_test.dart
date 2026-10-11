@@ -38,6 +38,8 @@ const _noConnection =
     'Unable to connect to the server. Check your internet connection and try '
     'again.';
 const _couldNotLoad = 'Could not load the refund status. Please try again.';
+const _cancelledAndRefunding =
+    'Your registration has been cancelled. Your refund has been initiated.';
 
 /// A date and time as the refund view writes it, in whatever time zone the
 /// test runs in.
@@ -505,7 +507,73 @@ void main() {
         expect(find.text(_viewRefundStatus), findsNothing);
         expect(backend.refundStatusRequests, isEmpty);
       });
+
+      testWidgets('from ${screen.name}: the message with "View refund" '
+          'closes by itself after the usual four seconds', (tester) async {
+        final backend = FakeRegistrationBackend();
+        backend.seedRegistration(tokenA, status: 'registered', paid: true);
+        await _openApp(
+          tester,
+          backend,
+          location: screen.location,
+          windowSize: screen.size,
+        );
+
+        await _unregister(tester);
+        // It has been up for about two seconds by now.
+        await tester.pump(const Duration(seconds: 1));
+        expect(find.text(_cancelledAndRefunding), findsOneWidget);
+        expect(find.text('View refund'), findsOneWidget);
+
+        await tester.pump(const Duration(seconds: 3));
+        await settleRequests(tester);
+
+        expect(find.text(_cancelledAndRefunding), findsNothing);
+        expect(find.text('View refund'), findsNothing);
+        expect(find.byType(SnackBar), findsNothing);
+        expect(backend.refundStatusRequests, isEmpty);
+      });
+
+      testWidgets('from ${screen.name}: pressed before it closes, "View '
+          'refund" shows the refund without a request, and the message goes', (
+        tester,
+      ) async {
+        final backend = FakeRegistrationBackend(finalAmount: '123.45');
+        backend.seedRegistration(tokenA, status: 'registered', paid: true);
+        await _openApp(
+          tester,
+          backend,
+          location: screen.location,
+          windowSize: screen.size,
+        );
+
+        await _unregister(tester);
+        await tester.pump(const Duration(seconds: 1));
+        await tester.tap(find.text('View refund'));
+        await settleRequests(tester);
+
+        expect(_inDialog('Refund in progress'), findsOneWidget);
+        expect(_inDialog('₹123.45'), findsOneWidget);
+        expect(backend.refundStatusRequests, isEmpty);
+        expect(find.byType(SnackBar), findsNothing);
+      });
     }
+
+    testWidgets('once the message has closed, the refund is still reached '
+        'from the card on My Events', (tester) async {
+      final backend = FakeRegistrationBackend();
+      backend.seedRegistration(tokenA, status: 'registered', paid: true);
+      await _openApp(tester, backend);
+      await _unregister(tester);
+      await tester.pump(const Duration(seconds: 4));
+      await settleRequests(tester);
+      expect(find.byType(SnackBar), findsNothing);
+
+      await _viewRefund(tester);
+
+      expect(backend.refundStatusRequests, hasLength(1));
+      expect(_inDialog('Refund in progress'), findsOneWidget);
+    });
 
     testWidgets('after a paid cancellation the card on My Events has "View '
         'refund status"', (tester) async {
