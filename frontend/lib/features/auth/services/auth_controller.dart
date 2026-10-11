@@ -152,7 +152,12 @@ class AuthController extends ChangeNotifier {
       AppLogger.warning('Sign-in link check failed: $error');
       return;
     }
-    removeSignInLinkFromUrl();
+    // Cosmetic and refresh-safety only: never let it stop the sign-in.
+    try {
+      removeSignInLinkFromUrl();
+    } catch (error) {
+      AppLogger.warning('Could not clean the sign-in link from the URL: $error');
+    }
 
     final email = EmailLinkStore.load();
     if (email == null) {
