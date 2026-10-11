@@ -1,11 +1,11 @@
 # ISSUE-005 Refund Lifecycle Test Report
 
-**Date:** 2026-10-10
+**Date:** 2026-10-10. Updated 2026-10-11 with the beta run (section 6).
 **Application:** `nitksaa-event/frontend` (NEW Flutter app)
 **Base commit:** `e68bddd` (branch `main`), which contains the ISSUE-004 merge (`578ec9c`) and its docs closure.
 **Fix branch:** `fix/issue-005`
 **Toolchain:** Flutter 3.44.2, Dart 3.12.2, `dio` 5.9.2, `go_router` 17.2.3, `flutter_riverpod` 2.6.1, Chrome 154 for the browser tests
-**Final result:** CODE PASS — MANUAL E2E PENDING
+**Final result:** CODE PASS — beta run reported passed; review pending
 
 ---
 
@@ -16,7 +16,7 @@
 | ID | ISSUE-005 |
 | Severity | P1 — Gate A blocker |
 | Area | Refund / My Events |
-| Status | Fixed on `fix/issue-005`. Not deployed. Manual verification not run. |
+| Status | Fixed on `fix/issue-005`. On beta since 2026-10-11 05:30 IST. The manual run was reported passed (section 6). Awaiting review. Not on the live site. |
 
 After a paid registration was cancelled, the app showed one message and nothing more. The attendee could not see the refund's status, its amount, the backend's message, or check again later.
 
@@ -241,44 +241,58 @@ The contract matches the task description. One thing the task does not mention i
 
 ## 6. Manual Verification
 
-**Result: PENDING.** Nothing in this section has been run. The fix is not deployed to beta or to the live site.
+**Result: passed, as reported by the tester.** The report was the one word "passed", with one screenshot and no result for each step. The table of steps below therefore gives what is on record for each one: the screenshot, and the backend's request log for the same minutes. A step with nothing on record is marked NOT REPORTED, and a step the record shows could not have been run is marked NOT RUN.
 
-Manual testing is on beta only, after the deploy is approved. A branch is never deployed to the live site. Before deploying, post "beta = fix/issue-005 until <time>" in the team's WhatsApp group, and say when it is done.
+| Field | Value |
+|---|---|
+| Site | `https://nitksaa-events-beta.web.app`, in an Incognito window |
+| Build tested | `f9da077`, deployed to beta on 2026-10-11 at 05:30 IST with `firebase deploy --only hosting:beta` |
+| Before the deploy | `flutter pub get`, then `flutter test`: 211 of 211 |
+| Beta bundle | After the deploy, beta served `main.dart.js` with SHA-256 `b7f8557d77127f19613bc58e8e643a61c1c43d2383c40c8e8ebf648133b423eb`, the same as the local build of `f9da077` (section 8) |
+| Run | 2026-10-11, about 05:33 to 05:36 IST |
+| Reported | 2026-10-11: "passed", and one screenshot taken at about 05:34 IST |
+| Live site | Not deployed from this branch. Its `main.dart.js` had the same SHA-256 before and after the beta deploy (`dd76aba1…e377`) |
 
-```bash
-cd frontend
-flutter pub get
-flutter test
-flutter build web --release \
-  --dart-define=BACKEND_BASE_URL=https://nitksaa-events-api-246773894709.asia-south1.run.app
-firebase deploy --only hosting:beta --project project-d22bed42-f302-4e23-8dc
-git checkout -- pubspec.lock analysis_options.yaml linux macos windows
-```
+Beta and live share one backend, so the cancellation in this run is a real backend record.
 
-Then test on `https://nitksaa-events-beta.web.app` in a private window, with DevTools → Network open.
+### What the screenshot shows
 
-### Prerequisites
+- The beta site at `/#/my-events`, with DevTools → Network filtered by "refund": 1 request of 86.
+- That request: `GET …/api/v1/registrations/52/refund`, status 200, answered at 05:34:32 IST.
+- The refund view: "Refunded", "Amount: ₹1", "Refunded on: 11 Oct 2026, 5:34 AM", "Your cancellation is confirmed and the refund has been processed by the payment provider.", and "Close". No "Check refund status".
+- Behind it, My Events cards for "TestOct8" tagged "Unregistered".
+- At the bottom of the page, the message "Your registration is cancelled, but the refund could not be completed automatically. Our team will follow up." with the action "View refund".
 
-- **Approval for the beta deploy.**
-- **A signed-in account that owns registration 14** on event #11 "TestOct8". It was paid in TEST mode and cancelled on 2026-10-10 in the ISSUE-004 beta run, so it should already have a refund.
-- **A second account** for steps 7 and 8.
-- **For steps 5 and 6, new events.** Event #11 closes at 23:59 IST on 2026-10-10. An admin has to create an open TEST-mode paid event and a free event.
-- **Beta and live share one backend.** TEST mode only. Step 5 makes a real payment and a real refund request in Razorpay TEST mode.
+### What the backend's request log shows
+
+All requests to `/api/v1/registrations/…` between 05:25 and 05:38 IST:
+
+| Time (IST) | Request | Status | Note |
+|---|---|---|---|
+| 05:33:35 | `POST /registrations/8/cancel` | 200 | The backend's own log one second later: the refund call to Razorpay failed with `BAD_REQUEST_ERROR`. The registration is cancelled and its refund is recorded as failed |
+| 05:34:32 | `GET /registrations/52/refund` | 200 | The request in the screenshot |
+| 05:36:00, 05:36:05, 05:36:10 | `GET /registrations/52/refund` | 200 | Three more, each one opening of the view |
+
+The message at the bottom of the screenshot belongs to the cancel of registration 8. The refund view belongs to registration 52. They are two registrations.
 
 ### Steps
 
-| # | Step | Expected | Result |
-|---|---|---|---|
-| 1 | My Events → cancelled TestOct8 card → "View refund status" | One `GET /registrations/14/refund`, 200; "Refund in progress" or "Refunded", ₹1 | PENDING |
-| 2 | If pending, press "Check refund status" | Another GET; the status changes once Razorpay has processed it | PENDING |
-| 3 | Optional: Razorpay TEST dashboard | The refund for the payment has the amount and status shown | PENDING |
-| 4 | Open My Events without opening any refund view | No `/refund` request in the Network panel | PENDING |
-| 5 | Pay for a new TEST paid event, Unregister, press "View refund" on the message | The view opens at once with the cancel response; no GET for the first view | PENDING |
-| 6 | Cancel a free registration, if a free event exists | No refund action on the card or on the message | PENDING |
-| 7 | Sign out, sign in as another user, open My Events | None of the first user's refunds appear | PENDING |
-| 8 | With user B's token, `GET` user A's `/registrations/{id}/refund` | 404 `registration_not_found` | PENDING |
+| # | Step | Expected | On record | Result |
+|---|---|---|---|---|
+| 1 | Incognito → beta → sign in → Network, filter "refund" | | The screenshot shows exactly this | Done |
+| 2 | My Events, without opening anything | No `/refund` request | The Network panel holds one `/refund` request, the one of step 3. The backend log has none before it | PASS |
+| 3 | TestOct8 (cancelled, paid) → "View refund status" | One `GET /registrations/14/refund`, 200; "Refund in progress" or "Refunded", ₹1 | Run on registration 52, not 14: one GET, 200, "Refunded", ₹1. Registration 14 was not asked about | PASS, on registration 52 |
+| 4 | If pending: "Check refund status" | One more GET | Registration 52 answered "Refunded" at once, so the button was never offered. The three later GETs are the view being opened again | NOT RUN |
+| 5 | Unregister a paid TEST registration → "View refund" on the message opens the view with no extra GET | | Registration 8 was cancelled. The message with "View refund" is in the screenshot. Its refund failed at Razorpay, so the view would have shown "Refund could not be completed". Whether "View refund" was pressed is not on record; the backend log has no refund request for registration 8, which is what pressing it should cause | Cancel and message: shown. Pressing "View refund": NOT REPORTED |
+| 6 | A free cancelled registration shows no "View refund status" | | Nothing on record | NOT REPORTED |
 
-For step 5, the message stays for a few seconds. If it has gone, the same refund is on the cancelled card in My Events; opening it there sends one GET, which is step 1 again and not step 5.
+Not covered by this run: a pending refund and "Check refund status" (step 4), the view opened from the message after a cancel (step 5), a free cancelled registration (step 6), a change of user, and the wrong-user request. They rest on the automated tests.
+
+### Found in this run
+
+1. **The message after a paid cancel does not go away by itself.** It was still on screen about a minute after the cancel. In this Flutter version a snackbar that has an action stays until the action is pressed or the bar is swiped away (`SnackBar.persist` defaults to true when there is an action). ISSUE-004's message had no action and closed after four seconds; adding "View refund" in this issue changed that. It is a defect of this change. A fix (`persist: false`, a set duration, and a test) is proposed and not yet made; making it means a new build on beta and a re-check of step 5.
+2. **The refund of registration 8 failed at Razorpay** with `BAD_REQUEST_ERROR`. The log holds the code and not Razorpay's reason. The app showed the backend's message for a failed refund, as designed. The message says "Our team will follow up", and the backend has no way to retry a failed refund, so this one needs a person.
+3. **"Refunded on" is the time the backend learned of the refund.** For registration 52 it equals the time of the first status request, to the minute. The backend sets `finalized_at` when it marks a refund processed, and for a pending refund that happens when a status request makes it ask Razorpay. An attendee who first looks days later would see that later date. The app shows the backend's value as it is.
 
 ---
 
@@ -415,9 +429,9 @@ Run from the repository root after the fix.
 ## 10. Remaining Risks
 
 1. **A seat hold that ran out gets a refund action it does not need.** The backend marks an expired hold `cancelled`, and it has a `latest_order_id` because the attendee reached payment. Its My Events card shows "View refund status"; the view says "No refund. No payment was taken, so there is nothing to refund." The answer is right, but the action should not be there. The app cannot tell this case from a paid cancellation without the order's status, which the row does not carry. A fix needs ISSUE-011's status labels or a backend field.
-2. **Manual verification has not been run.** Everything about the real backend and Razorpay rests on the automated tests and on reading the backend code.
-3. **The refund status of registration 14 is not known.** It was cancelled on 2026-10-10. Whether Razorpay TEST mode has processed it will show in step 1.
-4. **"View refund" on the message is there for a few seconds.** After that the route to the refund is the cancelled card on My Events. From the event list that means going to My Events.
+2. **The manual run covered part of the plan.** One refund view, of a processed refund, and one paid cancel were seen on beta. A pending refund, the view opened from the message, a free registration, a change of user and the wrong-user request were not (section 6).
+3. **The refund status of registration 14 is not known.** It was cancelled on 2026-10-10 and was not asked about in the run. Registration 8's refund failed at Razorpay and needs a person to follow up.
+4. **The message after a paid cancel stays on screen until it is pressed or swiped away.** Found in the beta run (section 6). It was meant to close by itself after a few seconds, and it is not fixed yet. Once it is gone, the route to the refund is the cancelled card on My Events; from the event list that means going to My Events.
 5. **A failed refund has no next step in the app.** The view shows the backend's message, "Our team will follow up." There is no retry and no contact link, because the backend has no retry API.
 6. **No TEST or LIVE indication** (ISSUE-017). A refund of real money and a TEST refund look the same.
 7. **The event page says nothing about a refund.** It was left out to keep this change away from `eventDetailProvider`.
@@ -431,9 +445,9 @@ Run from the repository root after the fix.
 
 ## 11. Final Result
 
-**CODE PASS — MANUAL E2E PENDING**
+**CODE PASS — beta run reported passed; review pending**
 
-Automated verification passes (sections 4, 7 and 8). The manual run on beta has not been made (section 6).
+Automated verification passes (sections 4, 7 and 8). A manual run on beta was made on 2026-10-11 and reported passed; it covered part of the plan and found one defect that is still open (section 6). The pull request awaits review.
 
 ---
 

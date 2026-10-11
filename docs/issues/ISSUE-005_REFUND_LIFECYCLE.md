@@ -6,9 +6,9 @@ P1 — Gate A blocker.
 
 ## Status
 
-CODE PASS — MANUAL E2E PENDING
+CODE PASS — beta run reported passed; review pending
 
-The fix is on branch `fix/issue-005`. Automated verification passes. It is not deployed to beta or to the live site, and no manual run has been made. See "Status" at the end.
+The fix is on branch `fix/issue-005`. Automated verification passes. It was deployed to beta on 2026-10-11, and a manual run there was reported passed. It is not on the live site. See "Status" at the end.
 
 ## Gap
 
@@ -231,10 +231,12 @@ Registration 14 on event #11 "TestOct8" was paid in TEST mode and cancelled on 2
 
 ## Status
 
-**CODE PASS — MANUAL E2E PENDING**
+**CODE PASS — beta run reported passed; review pending**
 
 Done: the fix, 43 new tests on the VM and 43 in Chrome, the regression suites for ISSUE-001, -002, -003, -004 and -006, the analyzer comparison, the colour check, the release web build and the bundle check. Results are in `ISSUE-005_REFUND_LIFECYCLE_TEST_REPORT.md`.
 
-Not done: the beta deploy, which needs approval, and the eight manual steps above.
+Beta: `f9da077` was deployed on 2026-10-11 at 05:30 IST. A manual run was reported passed the same day. It covered a refund view of a processed refund and one paid cancel; the record of it, and what it did not cover, is in section 6 of the test report.
 
-The pull request must not be merged before the manual run. It touches refunds, so it needs Padmanand's approval. The steps before merge are in section 13 of the test report.
+Open: the run found that the message after a paid cancel does not close by itself. A fix is proposed and not yet made.
+
+The pull request touches refunds, so it needs Padmanand's approval before it is merged. The steps before merge are in section 13 of the test report.
