@@ -4,6 +4,7 @@ import 'dart:convert';
 
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show FilteringTextInputFormatter, TextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +19,7 @@ import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
+import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
@@ -758,6 +760,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _timezone.addListener(_onFieldChanged);
     _location.addListener(_onFieldChanged);
     _virtualUrl.addListener(_onFieldChanged);
+    _capacity.addListener(_onFieldChanged);
   }
 
   void _onFieldChanged() {
@@ -806,17 +809,25 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     super.dispose();
   }
 
-  bool get _isStep1Complete {
-    final titleFilled = _title.text.trim().isNotEmpty;
-    final descFilled = _description.text.trim().isNotEmpty;
-    final startDateFilled = _startDate.text.trim().isNotEmpty;
-    final endDateFilled = _endDate.text.trim().isNotEmpty;
-    final timezoneFilled = _timezone.text.trim().isNotEmpty;
-    final locationFilled = _isVirtual
-        ? _virtualUrl.text.trim().isNotEmpty
-        : _location.text.trim().isNotEmpty;
-    return titleFilled && descFilled && startDateFilled && endDateFilled && timezoneFilled && locationFilled;
-  }
+  /// Every field the backend needs to publish is filled in, so the admin
+  /// can leave step 1. Same rule as `_validate_for_publish` in
+  /// backend/app/services/events_service.py (see event_publish_requirements.dart).
+  bool get _isStep1Complete => _missingRequiredFields().isEmpty;
+
+  /// Labels of the publish-required fields still missing, e.g.
+  /// ['Capacity', 'Description']. Checked again in [_save], because the
+  /// step-1 validators aren't mounted while the admin is on step 3.
+  List<String> _missingRequiredFields() => missingPublishFields(
+        title: _title.text,
+        description: _description.text,
+        startDate: _startDate.text,
+        endDate: _endDate.text,
+        timezone: _timezone.text,
+        capacity: _capacity.text,
+        isVirtual: _isVirtual,
+        location: _location.text,
+        virtualUrl: _virtualUrl.text,
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1104,7 +1115,15 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           ],
         ),
         const SizedBox(height: 12),
-        _buildTextField(_capacity, 'Capacity', hint: 'Leave empty for unlimited', keyboardType: TextInputType.number),
+        _buildTextField(
+          _capacity,
+          'Capacity',
+          hint: 'Maximum number of attendees',
+          required: true,
+          keyboardType: TextInputType.number,
+          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+          validator: validateCapacity,
+        ),
         
         const SizedBox(height: 28),
         // ── Images Section ──
@@ -1222,10 +1241,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     bool required = false,
     int maxLines = 1,
     TextInputType? keyboardType,
+    List<TextInputFormatter>? inputFormatters,
+    FormFieldValidator<String>? validator,
   }) {
     final displayLabel = required ? '$label *' : label;
     return TextFormField(
       controller: controller,
+      inputFormatters: inputFormatters,
       decoration: InputDecoration(
         labelText: displayLabel,
         hintText: hint,
@@ -1235,9 +1257,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       maxLines: maxLines,
       minLines: maxLines == 1 ? 1 : null,
       keyboardType: keyboardType,
-      validator: required
-          ? (value) => value == null || value.trim().isEmpty ? '$label is required' : null
-          : null,
+      validator: validator ??
+          (required
+              ? (value) => value == null || value.trim().isEmpty ? '$label is required' : null
+              : null),
     );
   }
 
@@ -2619,6 +2642,22 @@ void _showFeeDialog(int? editIndex) {
   }
 
   Future<void> _save() async {
+    // The step-1 fields aren't in the widget tree on step 3, so their
+    // validators don't run below. Check the publish-required fields here and
+    // send the admin back to step 1 with them highlighted.
+    final missing = _missingRequiredFields();
+    if (missing.isNotEmpty) {
+      setState(() => _currentStep = 0);
+      WidgetsBinding.instance.addPostFrameCallback((_) => _formKey.currentState?.validate());
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Please fill in: ${missing.join(', ')}'),
+          duration: const Duration(seconds: 6),
+        ),
+      );
+      return;
+    }
+
     if (!_formKey.currentState!.validate()) return;
 
     // Parse and validate dates
@@ -2829,7 +2868,7 @@ void _showFeeDialog(int? editIndex) {
         'location_maps_url': _isVirtual ? null : _locationMapsUrl.text.trim().isEmpty ? null : _locationMapsUrl.text.trim(),
         'virtual_url': _isVirtual ? _virtualUrl.text.trim() : null,
         'is_full_day': _isFullDay,
-        'capacity': _capacity.text.trim().isEmpty ? null : int.tryParse(_capacity.text.trim()),
+        'capacity': parseCapacity(_capacity.text),
         'is_free': _isFree,
         'ticket_price': _isFree ? null : double.tryParse(_ticketPrice.text.trim()),
         'registration_min_quantity': regMinQty,
