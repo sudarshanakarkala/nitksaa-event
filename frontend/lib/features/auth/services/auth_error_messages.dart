@@ -20,6 +20,16 @@ String friendlyAuthError(Object error) {
       'too-many-requests' => 'Too many attempts. Please wait a moment and try again.',
       'network-request-failed' => 'A network error occurred. Check your connection and try again.',
       'popup-blocked' => 'Sign-in popup was blocked. Please allow popups and try again.',
+      // Email sign-in links.
+      'invalid-action-code' || 'expired-action-code' =>
+        'This sign-in link has expired or was already used. Send yourself a new one.',
+      'missing-email' => 'Enter the email address the sign-in link was sent to.',
+      'quota-exceeded' =>
+        'Too many sign-in emails were sent today. Please try again later or use Google Sign-In.',
+      'operation-not-allowed' =>
+        'Email sign-in links are not available right now. Please use Google Sign-In.',
+      'unauthorized-continue-uri' || 'invalid-continue-uri' =>
+        'Sign-in links are not set up for this site yet. Please use Google Sign-In.',
       _ => 'Sign in failed. Please try again or use Google Sign-In.',
     };
   }

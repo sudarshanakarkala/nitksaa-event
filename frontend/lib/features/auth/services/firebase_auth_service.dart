@@ -61,6 +61,39 @@ abstract class FirebaseAuthService {
     return userCredential.user;
   }
 
+  /// Emails a one-time sign-in link (website's magic link).
+  ///
+  /// The continue URL is the site's origin with no `#/` route: Firebase
+  /// appends `?apiKey=…&oobCode=…&mode=signIn` to it, and a query after a
+  /// `#` fragment would be lost.
+  static Future<void> sendSignInLink(String email) async {
+    AppLogger.info('sendSignInLink called');
+    await FirebaseAuth.instance.sendSignInLinkToEmail(
+      email: email,
+      actionCodeSettings: ActionCodeSettings(
+        url: '${Uri.base.origin}/',
+        handleCodeInApp: true,
+      ),
+    );
+  }
+
+  /// Whether [link] (normally the page's own URL) is a Firebase sign-in link.
+  static bool isSignInLink(String link) =>
+      FirebaseAuth.instance.isSignInWithEmailLink(link);
+
+  /// Completes a sign-in link for [email].
+  static Future<User?> signInWithEmailLink({
+    required String email,
+    required String link,
+  }) async {
+    AppLogger.info('signInWithEmailLink called');
+    final credential = await FirebaseAuth.instance.signInWithEmailLink(
+      email: email,
+      emailLink: link,
+    );
+    return credential.user;
+  }
+
   static Future<String> freshIdToken() async {
     final user = FirebaseAuth.instance.currentUser;
     final token = await user?.getIdToken(true);

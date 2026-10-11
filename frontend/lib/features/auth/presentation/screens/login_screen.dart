@@ -1,21 +1,27 @@
-import 'package:flutter/cupertino.dart';
+import 'dart:async';
 
-import 'package:flutter/foundation.dart';
-import 'package:flutter/material.dart';
-import 'package:flutter_riverpod/flutter_riverpod.dart';
-import '../../../../core/logger/app_logger.dart';
-import 'package:go_router/go_router.dart';
 import 'package:event_app/routes/app_routes.dart';
-import '../../services/auth_controller.dart';
-import '../../services/auth_error_messages.dart';
-import 'package:event_app/widgets/material/app_scaffold.dart';
-import 'package:event_app/widgets/material/app_primary_button.dart';
-
-
+import 'package:event_app/shared/widgets/emblem_ring.dart';
 import 'package:event_app/theme/app_palette.dart';
 import 'package:event_app/theme/app_text_styles.dart';
-import 'package:event_app/shared/widgets/emblem_ring.dart';
+import 'package:event_app/widgets/material/app_primary_button.dart';
+import 'package:event_app/widgets/material/app_scaffold.dart';
+import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
+import '../../../../core/logger/app_logger.dart';
+import '../../services/auth_controller.dart';
+import '../../services/auth_error_messages.dart';
+
+/// Sign-in, laid out like the website's login (website: pages/Login.jsx):
+/// Continue with Google first, then an emailed sign-in link. Password
+/// sign-in (kept for the admin-only accounts) is behind "Sign in with
+/// password instead".
+///
+/// After a link is sent the card shows "Check your email" with Resend. A
+/// link opened on a device that doesn't know the email lands here asking
+/// for it (AuthController.pendingEmailLink).
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
 
@@ -24,23 +30,103 @@ class LoginScreen extends ConsumerStatefulWidget {
 }
 
 class _LoginScreenState extends ConsumerState<LoginScreen> {
+  static const _resendWait = 30;
+
+  /// Google accounts sign in with Google, as on the website. Firebase can't
+  /// tell us reliably (email-enumeration protection hides it), so Gmail
+  /// addresses are steered by domain.
+  static const _googleDomains = {'gmail.com', 'googlemail.com'};
+
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
   final _authController = AuthController.instance;
+
+  bool _usePassword = false;
   bool _obscurePassword = true;
-  bool _emailLoading = false;
+  bool _busy = false;
   bool _googleLoading = false;
+
+  /// The address a link was sent to; non-null shows "Check your email".
+  String? _sentTo;
+  int _resendIn = 0;
+  Timer? _resendTimer;
+
   String? _statusMessage;
   String? _errorMessage;
 
   @override
   void dispose() {
+    _resendTimer?.cancel();
     _emailController.dispose();
     _passwordController.dispose();
     super.dispose();
   }
 
-  Future<void> _handleEmailLogin() async {
+  // ── Actions ──────────────────────────────────────────────────────────────
+
+  String? _checkEmail(String email) {
+    if (email.isEmpty) return 'Enter your email address.';
+    if (!email.contains('@') || !email.split('@').last.contains('.')) {
+      return 'Enter a valid email address.';
+    }
+    return null;
+  }
+
+  Future<void> _sendLink({bool resend = false}) async {
+    final email = resend ? (_sentTo ?? '') : _emailController.text.trim();
+    final problem = _checkEmail(email);
+    if (problem != null) {
+      setState(() => _errorMessage = problem);
+      return;
+    }
+    if (_googleDomains.contains(email.split('@').last.toLowerCase())) {
+      setState(() => _errorMessage =
+          'This is a Google (Gmail) address. Use "Continue with Google" above.');
+      return;
+    }
+
+    setState(() {
+      _busy = true;
+      _errorMessage = null;
+      _statusMessage = null;
+    });
+    try {
+      await _authController.sendSignInLink(email);
+      if (!mounted) return;
+      setState(() => _sentTo = email);
+      _startResendCountdown();
+    } catch (_) {
+      if (!mounted) return;
+      setState(() => _errorMessage =
+          _authController.errorMessage ?? 'Could not send the sign-in link. Please try again.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  void _startResendCountdown() {
+    _resendTimer?.cancel();
+    setState(() => _resendIn = _resendWait);
+    _resendTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (!mounted || _resendIn <= 1) timer.cancel();
+      if (mounted) setState(() => _resendIn--);
+    });
+  }
+
+  Future<void> _finishWithLink() async {
+    final email = _emailController.text.trim();
+    final problem = _checkEmail(email);
+    if (problem != null) {
+      setState(() => _errorMessage = problem);
+      return;
+    }
+    await _runLogin(
+      loadingSetter: (loading) => _busy = loading,
+      login: () => _authController.completeEmailLinkSignIn(email: email),
+    );
+  }
+
+  Future<void> _handlePasswordLogin() async {
     final email = _emailController.text.trim();
     final password = _passwordController.text;
     if (email.isEmpty || password.isEmpty) {
@@ -49,13 +135,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
     AppLogger.info('Email login attempt initiated');
     await _runLogin(
-      loadingSetter: (loading) => _emailLoading = loading,
+      loadingSetter: (loading) => _busy = loading,
       login: () => _authController.signInWithEmail(email: email, password: password),
     );
   }
 
   Future<void> _handleGoogleSignIn() async {
     AppLogger.info('Google Sign-In tapped');
+    _authController.dismissEmailLink();
     await _runLogin(
       loadingSetter: (loading) => _googleLoading = loading,
       login: _authController.signInWithGoogle,
@@ -66,7 +153,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     required void Function(bool loading) loadingSetter,
     required Future<void> Function() login,
   }) async {
-    if (_emailLoading || _googleLoading) return;
+    if (_busy || _googleLoading) return;
     setState(() {
       loadingSetter(true);
       _errorMessage = null;
@@ -75,7 +162,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       await login();
       if (!mounted) return;
-      setState(() => _statusMessage = 'Backend session validated. Opening home...');
+      setState(() => _statusMessage = 'Signed in. Opening Events...');
       context.go(AppRoutes.home);
     } catch (_) {
       if (!mounted) return;
@@ -88,17 +175,42 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    // Web (including Safari on iPhone) always uses the Material layout.
-    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
-    return isIOS ? _buildCupertinoLogin() : _buildMaterialLogin();
+  void _useDifferentEmail() {
+    _resendTimer?.cancel();
+    setState(() {
+      _sentTo = null;
+      _resendIn = 0;
+      _errorMessage = null;
+      _emailController.clear();
+    });
   }
 
-  // ---------------- Material UI (Android / Web) ----------------
-  Widget _buildMaterialLogin() {
+  void _cancelPendingLink() {
+    _authController.dismissEmailLink();
+    setState(() => _errorMessage = null);
+  }
+
+  // ── Layout ───────────────────────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final auth = ref.watch(authControllerProvider);
     final colorScheme = Theme.of(context).colorScheme;
-    final textTheme = Theme.of(context).textTheme;
+
+    final List<Widget> body;
+    if (auth.pendingEmailLink != null) {
+      body = _confirmEmailView();
+    } else if (_sentTo != null) {
+      body = _checkEmailView();
+    } else {
+      body = _signInView();
+    }
+
+    // A link opened at startup that failed (expired, already used…).
+    final notice = auth.pendingEmailLink == null ? auth.emailLinkNotice : null;
+    final banner = _errorMessage ?? notice ?? _statusMessage;
+    final bannerIsError = _errorMessage != null || notice != null;
+
     return AppScaffold(
       appBar: AppBar(
         backgroundColor: colorScheme.surface,
@@ -111,7 +223,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             child: ConstrainedBox(
               constraints: const BoxConstraints(maxWidth: 420),
               child: _LoginCard(
-                children: _buildFormChildren(colorScheme, textTheme, false),
+                children: [
+                  _logo(),
+                  const SizedBox(height: 28),
+                  ...body,
+                  if (banner != null) ...[
+                    const SizedBox(height: 16),
+                    _LoginStatusBanner(message: banner, isError: bannerIsError),
+                  ],
+                  const SizedBox(height: 24),
+                  Center(
+                    child: Text(
+                      'NITKSAA Event v1.0.0',
+                      style: AppTextStyles.labelSmall.copyWith(color: colorScheme.outline),
+                    ),
+                  ),
+                ],
               ),
             ),
           ),
@@ -120,148 +247,199 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     );
   }
 
-  // ---------------- Cupertino UI (iOS) ----------------
-  Widget _buildCupertinoLogin() {
-    final bg = context.palette.background;
-    return CupertinoPageScaffold(
-      backgroundColor: bg,
-      navigationBar: const CupertinoNavigationBar(
-        middle: Text('Sign In'),
-      ),
-      child: SafeArea(
-        child: Center(
-          child: SingleChildScrollView(
-            padding: const EdgeInsets.symmetric(horizontal: 28, vertical: 32),
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: _LoginCard(
-                children: _buildFormChildren(null, null, true),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  // Shared form widgets for both platforms
-  List<Widget> _buildFormChildren(ColorScheme? colorScheme, TextTheme? textTheme, bool isCupertino) {
-    final logo = Column(
+  Widget _logo() {
+    final p = context.palette;
+    return Column(
       children: [
         const EmblemRing(size: 72),
         const SizedBox(height: 16),
         Text(
           'Sign in',
-          style: AppTextStyles.headlineMedium.copyWith(color: context.palette.textPrimary),
+          style: AppTextStyles.headlineMedium.copyWith(color: p.textPrimary),
           textAlign: TextAlign.center,
         ),
         const SizedBox(height: 4),
         Text(
           'NITKSAA Events',
-          style: AppTextStyles.bodyMedium.copyWith(color: context.palette.textSecondary),
+          style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary),
           textAlign: TextAlign.center,
         ),
       ],
     );
-    final emailField = isCupertino
-        ? CupertinoTextField(
-            controller: _emailController,
-            placeholder: 'Email',
-            keyboardType: TextInputType.emailAddress,
-            prefix: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(CupertinoIcons.mail)),
-          )
-        : TextField(
-            controller: _emailController,
-            keyboardType: TextInputType.emailAddress,
-            decoration: const InputDecoration(
-              labelText: 'Email',
-              prefixIcon: Icon(Icons.email_outlined),
-              border: OutlineInputBorder(),
-            ),
-          );
-    final passwordField = isCupertino
-        ? CupertinoTextField(
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            placeholder: 'Password',
-            prefix: const Padding(padding: EdgeInsets.only(left: 8), child: Icon(CupertinoIcons.lock)),
-            suffix: GestureDetector(
-              onTap: () => setState(() => _obscurePassword = !_obscurePassword),
-              child: Icon(_obscurePassword ? CupertinoIcons.eye : CupertinoIcons.eye_slash),
-            ),
-          )
-        : TextField(
-            controller: _passwordController,
-            obscureText: _obscurePassword,
-            decoration: InputDecoration(
-              labelText: 'Password',
-              prefixIcon: const Icon(Icons.lock_outline),
-              border: const OutlineInputBorder(),
-              suffixIcon: IconButton(
-                icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
-                onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
-              ),
-            ),
-          );
-    final loginButton = isCupertino
-        ? CupertinoButton.filled(
-            onPressed: (_emailLoading || _googleLoading) ? null : _handleEmailLogin,
-            child: const Text('Sign In'),
-          )
-        : AppPrimaryButton(
-            onPressed: (_emailLoading || _googleLoading) ? null : _handleEmailLogin,
-            isLoading: _emailLoading,
-            child: const Text('Sign In'),
-          );
-    final divider = Row(
-      children: const [
-        Expanded(child: Divider()),
-        Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('or')),
-        Expanded(child: Divider()),
-      ],
-    );
-    final googleButton = isCupertino
-        ? CupertinoButton(
-            color: context.palette.surface,
-            onPressed: (_emailLoading || _googleLoading) ? null : _handleGoogleSignIn,
-            child: Row(mainAxisSize: MainAxisSize.min, children: [
-              Icon(CupertinoIcons.cloud, color: context.palette.textPrimary),
-              const SizedBox(width: 8),
-              Text(_googleLoading ? 'Validating…' : 'Continue with Google')
-            ]
-          ),
-        )
-        : OutlinedButton.icon(
-            onPressed: (_emailLoading || _googleLoading) ? null : _handleGoogleSignIn,
-            style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
-            icon: _googleLoading
-                ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                : const Icon(Icons.g_mobiledata, size: 22),
-            label: Text(_googleLoading ? 'Validating...' : 'Continue with Google'),
-          );
-    return [
-      logo,
-      const SizedBox(height: 28),
-      googleButton,
-      const SizedBox(height: 16),
-      divider,
-      const SizedBox(height: 16),
-      emailField,
-      const SizedBox(height: 16),
-      passwordField,
-      const SizedBox(height: 24),
-      if (_statusMessage != null || _errorMessage != null) ...[
-        _LoginStatusBanner(message: _errorMessage ?? _statusMessage!, isError: _errorMessage != null),
-        const SizedBox(height: 16),
-      ],
-      loginButton,
-      const SizedBox(height: 24),
-      Center(
-        child: Text(
-          'NITKSAA Event v1.0.0',
-          style: (textTheme?.labelSmall ?? Theme.of(context).textTheme.labelSmall ?? const TextStyle())
-              .copyWith(color: colorScheme?.outline ?? Theme.of(context).colorScheme.outline),
+  }
+
+  Widget _emailField({VoidCallback? onSubmitted}) => TextField(
+        controller: _emailController,
+        keyboardType: TextInputType.emailAddress,
+        autofillHints: const [AutofillHints.email],
+        textInputAction: onSubmitted == null ? TextInputAction.next : TextInputAction.go,
+        onSubmitted: onSubmitted == null ? null : (_) => onSubmitted(),
+        decoration: const InputDecoration(
+          labelText: 'Email',
+          prefixIcon: Icon(Icons.email_outlined),
+          border: OutlineInputBorder(),
         ),
+      );
+
+  List<Widget> _signInView() {
+    final p = context.palette;
+    final disabled = _busy || _googleLoading;
+    return [
+      OutlinedButton.icon(
+        onPressed: disabled ? null : _handleGoogleSignIn,
+        style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+        icon: _googleLoading
+            ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.g_mobiledata, size: 22),
+        label: Text(_googleLoading ? 'Signing in...' : 'Continue with Google'),
+      ),
+      const SizedBox(height: 16),
+      const Row(
+        children: [
+          Expanded(child: Divider()),
+          Padding(padding: EdgeInsets.symmetric(horizontal: 12), child: Text('or')),
+          Expanded(child: Divider()),
+        ],
+      ),
+      const SizedBox(height: 16),
+      Text(
+        'Sign in with email',
+        style: AppTextStyles.labelLarge.copyWith(color: p.textPrimary, letterSpacing: 0),
+      ),
+      const SizedBox(height: 10),
+      _emailField(onSubmitted: _usePassword ? null : () => _sendLink()),
+      if (_usePassword) ...[
+        const SizedBox(height: 16),
+        TextField(
+          controller: _passwordController,
+          obscureText: _obscurePassword,
+          autofillHints: const [AutofillHints.password],
+          textInputAction: TextInputAction.go,
+          onSubmitted: (_) => _handlePasswordLogin(),
+          decoration: InputDecoration(
+            labelText: 'Password',
+            prefixIcon: const Icon(Icons.lock_outline),
+            border: const OutlineInputBorder(),
+            suffixIcon: IconButton(
+              icon: Icon(_obscurePassword ? Icons.visibility_outlined : Icons.visibility_off_outlined),
+              onPressed: () => setState(() => _obscurePassword = !_obscurePassword),
+            ),
+          ),
+        ),
+        const SizedBox(height: 16),
+        AppPrimaryButton(
+          onPressed: disabled ? null : _handlePasswordLogin,
+          isLoading: _busy,
+          child: const Text('Sign In'),
+        ),
+      ] else ...[
+        const SizedBox(height: 16),
+        AppPrimaryButton(
+          onPressed: disabled ? null : () => _sendLink(),
+          isLoading: _busy,
+          child: const Text('Send sign-in link'),
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'We email you a link; no password needed. For Gmail and other '
+          'Google accounts, use Continue with Google.',
+          style: AppTextStyles.bodySmall.copyWith(color: p.textMuted),
+        ),
+      ],
+      const SizedBox(height: 4),
+      Align(
+        child: TextButton(
+          onPressed: disabled
+              ? null
+              : () => setState(() {
+                    _usePassword = !_usePassword;
+                    _errorMessage = null;
+                  }),
+          child: Text(_usePassword
+              ? 'Email me a sign-in link instead'
+              : 'Sign in with password instead'),
+        ),
+      ),
+    ];
+  }
+
+  List<Widget> _checkEmailView() {
+    final p = context.palette;
+    return [
+      Icon(Icons.mark_email_read_outlined, size: 44, color: p.primary),
+      const SizedBox(height: 12),
+      Text(
+        'Check your email',
+        textAlign: TextAlign.center,
+        style: AppTextStyles.titleLarge.copyWith(color: p.textPrimary),
+      ),
+      const SizedBox(height: 8),
+      Text.rich(
+        TextSpan(
+          children: [
+            const TextSpan(text: 'We sent a sign-in link to '),
+            TextSpan(
+              text: _sentTo,
+              style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600),
+            ),
+            const TextSpan(
+              text: '. Open it on this device to sign in. It works once and '
+                  'expires after a while.',
+            ),
+          ],
+        ),
+        textAlign: TextAlign.center,
+        style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary),
+      ),
+      const SizedBox(height: 6),
+      Text(
+        "Can't find it? Check your spam folder.",
+        textAlign: TextAlign.center,
+        style: AppTextStyles.bodySmall.copyWith(color: p.textMuted),
+      ),
+      const SizedBox(height: 20),
+      OutlinedButton(
+        onPressed: _busy || _resendIn > 0 ? null : () => _sendLink(resend: true),
+        child: Text(_busy
+            ? 'Sending...'
+            : _resendIn > 0
+            ? 'Resend in ${_resendIn}s'
+            : 'Resend link'),
+      ),
+      const SizedBox(height: 4),
+      TextButton(
+        onPressed: _busy ? null : _useDifferentEmail,
+        child: const Text('Use a different email'),
+      ),
+    ];
+  }
+
+  List<Widget> _confirmEmailView() {
+    final p = context.palette;
+    return [
+      Text(
+        'Finish signing in',
+        textAlign: TextAlign.center,
+        style: AppTextStyles.titleLarge.copyWith(color: p.textPrimary),
+      ),
+      const SizedBox(height: 8),
+      Text(
+        'Enter the email address the sign-in link was sent to.',
+        textAlign: TextAlign.center,
+        style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary),
+      ),
+      const SizedBox(height: 16),
+      _emailField(onSubmitted: _finishWithLink),
+      const SizedBox(height: 16),
+      AppPrimaryButton(
+        onPressed: _busy ? null : _finishWithLink,
+        isLoading: _busy,
+        child: const Text('Finish signing in'),
+      ),
+      const SizedBox(height: 4),
+      TextButton(
+        onPressed: _busy ? null : _cancelPendingLink,
+        child: const Text('Cancel'),
       ),
     ];
   }
@@ -287,14 +465,21 @@ class _LoginStatusBanner extends StatelessWidget {
           children: [
             Icon(isError ? Icons.error_outline : Icons.verified_user_outlined, color: foreground, size: 20),
             const SizedBox(width: 10),
-            Expanded(child: Text(message, style: Theme.of(context).textTheme.bodyMedium?.copyWith(color: foreground, fontWeight: FontWeight.w600))),
+            Expanded(
+              child: Text(
+                message,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodyMedium
+                    ?.copyWith(color: foreground, fontWeight: FontWeight.w600),
+              ),
+            ),
           ],
         ),
       ),
     );
   }
 }
-
 
 /// Website login card: navy panel with a gold-tinted border.
 class _LoginCard extends StatelessWidget {
