@@ -117,6 +117,24 @@ class AuthController extends ChangeNotifier {
     _setStatus(AuthStatus.unauthenticated);
   }
 
+  /// Re-reads the signed-in user (and their admin rights) from `/auth/me`,
+  /// e.g. when the Admin page opens, so a role change shows without a
+  /// reload. Keeps the current session if the refresh fails.
+  Future<void> refreshSession() async {
+    final current = _session;
+    if (current == null || !isAuthenticated) return;
+    try {
+      final refreshed = await _backendAuthService.validateAccessToken(
+        current.accessToken,
+      );
+      _session = refreshed;
+      await _sessionStore.save(refreshed);
+      notifyListeners();
+    } catch (error) {
+      AppLogger.warning('Session refresh failed: $error');
+    }
+  }
+
   Future<void> _runLoginFlow(Future<User?> Function() firebaseLogin) async {
     _errorMessage = null;
     _setStatus(AuthStatus.authenticating);

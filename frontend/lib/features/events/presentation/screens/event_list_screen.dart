@@ -625,7 +625,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                       ),
                       itemCount: filteredEvents.length,
                       itemBuilder: (context, index) {
-                        final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
+                        final isAdmin = auth.session?.access
+                                .canAdminEvent(filteredEvents[index].eventId) ??
+                            false;
                         return _buildCupertinoEventCard(
                           filteredEvents[index],
                           cardBg,
@@ -925,7 +927,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       child: GestureDetector(
         onTap: () {
           if (label == 'Manage') {
-            context.go(AppRoutes.manageEvents);
+            context.go(AppRoutes.adminEvents);
             return;
           }
           if (!active) {
@@ -1370,32 +1372,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ),
                 style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
               ),
-        // Admins: Manage Events / Create Event, like the website's Manage
-        // Stories / Write a Story. Phones get them in a "more" menu.
-        actions: auth.session?.userType.toLowerCase() != 'admin'
-            ? const []
-            : MediaQuery.sizeOf(context).width < 600
-            ? [
-                PopupMenuButton<String>(
-                  tooltip: 'Admin',
-                  icon: Icon(Icons.more_horiz, color: p.textSecondary),
-                  onSelected: (route) => context.go(route),
-                  itemBuilder: (_) => const [
-                    PopupMenuItem(value: AppRoutes.manageEvents, child: Text('Manage Events')),
-                    PopupMenuItem(value: '${AppRoutes.manageEvents}?new=1', child: Text('Create Event')),
-                  ],
-                ),
-              ]
-            : [
-                OutlinedButton(
-                  onPressed: () => context.go(AppRoutes.manageEvents),
-                  child: const Text('Manage Events'),
-                ),
-                OutlinedButton(
-                  onPressed: () => context.go('${AppRoutes.manageEvents}?new=1'),
-                  child: const Text('Create Event'),
-                ),
-              ],
+        // Admin tools moved behind the header's Admin badge.
         filters: (context) => _buildFilterPanel(ref, true),
         onOpenFilters: _showFilterBottomSheet,
         activeFilterCount: _activeFilterCount(state) + (registeredOnly ? 1 : 0),
@@ -1427,7 +1404,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   // cards size to their content (website grid) instead of a
                   // fixed 420px cell.
                   final rows = (filteredEvents.length / columns).ceil();
-                  final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
+                  // Capacity bar on the cards of events this person runs.
+                  final access = auth.session?.access;
                   return ListView.separated(
                     padding: EdgeInsets.fromLTRB(side, 24, side, 24),
                     itemCount: rows,
@@ -1445,7 +1423,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                                         filteredEvents[row * columns + col],
                                         isDark,
                                         theme,
-                                        isAdmin: isAdmin,
+                                        isAdmin: access?.canAdminEvent(
+                                              filteredEvents[row * columns + col].eventId,
+                                            ) ??
+                                            false,
                                         registration: registrations[
                                             filteredEvents[row * columns + col].eventId],
                                       )

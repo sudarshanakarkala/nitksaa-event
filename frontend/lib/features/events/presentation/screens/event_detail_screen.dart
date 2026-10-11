@@ -58,7 +58,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     final state = ref.watch(eventDetailProvider(widget.eventId));
     final auth = ref.watch(authControllerProvider);
-    final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
+    final isAdmin = auth.session?.access.canAdminEvent(widget.eventId) ?? false;
 
     if (state.isLoading && state.event == null) {
       return Scaffold(

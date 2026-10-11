@@ -2,6 +2,8 @@ import 'package:flutter/foundation.dart';
 import 'package:flutter/widgets.dart';
 import 'package:go_router/go_router.dart';
 
+import '../features/admin/admin_tabs.dart';
+import '../features/auth/domain/admin_access.dart';
 import '../features/auth/services/auth_controller.dart';
 import 'app_routes.dart';
 
@@ -26,6 +28,10 @@ abstract class RouteGuards {
       return isSplash ? null : AppRoutes.splash;
     }
 
+    if (location == AppRoutes.admin || location.startsWith('${AppRoutes.admin}/')) {
+      return _adminRedirect(auth, location);
+    }
+
     if (auth.isAuthenticated) {
       if (isLogin) return AppRoutes.home;
       return null;
@@ -36,5 +42,26 @@ abstract class RouteGuards {
     if (isLogin || isFoundation || isDeveloper) return null;
 
     return null;
+  }
+
+  /// `/admin…`: signed-out people go to login, non-admins to Events.
+  /// `/admin` and tabs the person can't see go to their landing tab.
+  static String? _adminRedirect(AuthController auth, String location) {
+    if (!auth.isAuthenticated) return AppRoutes.login;
+    final access = auth.session?.access ?? AdminAccess.none;
+    if (!access.isAnyAdmin) return AppRoutes.home;
+
+    final segments = Uri.parse(location).pathSegments;
+    // Deeper admin pages, e.g. /admin/events/:id/registrations.
+    if (segments.length > 2) return null;
+
+    final tab = segments.length == 2 ? AdminTab.fromSlug(segments[1]) : null;
+    if (tab != null && tab.visibleTo(access)) return null;
+
+    final visible = AdminTab.visibleTabs(access);
+    final landing = visible.contains(AdminTab.landing)
+        ? AdminTab.landing
+        : visible.first;
+    return landing.path;
   }
 }

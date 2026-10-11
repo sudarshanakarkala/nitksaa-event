@@ -20,15 +20,15 @@ class NavItem {
   final bool adminOnly;
 }
 
-// Website pattern: "My ..." is a filter on the list page and "Manage" is
-// an admin button there, not a nav link. My Events is also in the account
-// menu.
+// Website pattern: "My ..." is a filter on the list page and admin lives
+// behind the header's Admin badge, not a nav link. My Events is also in
+// the account menu.
 const List<NavItem> navItems = [
   NavItem(label: 'Events', route: AppRoutes.home, icon: Icons.calendar_month_outlined),
 ];
 
 List<NavItem> visibleNavItems(AuthController auth) {
-  final isAdmin = auth.session?.userType.toLowerCase() == 'admin';
+  final isAdmin = auth.session?.access.isAnyAdmin ?? false;
   return navItems.where((item) {
     if (item.adminOnly) return auth.isAuthenticated && isAdmin;
     if (item.signedInOnly) return auth.isAuthenticated;
@@ -40,15 +40,11 @@ List<NavItem> visibleNavItems(AuthController auth) {
 bool isNavItemActive(NavItem item, String location) {
   switch (item.route) {
     case AppRoutes.home:
-      // The whole Events section: list, detail, checkout, my events, manage.
+      // The whole Events section: list, detail, checkout, my events. The
+      // Admin page has its own header badge.
       return location == AppRoutes.home ||
           location.startsWith('/events/') ||
-          location.startsWith(AppRoutes.myEvents) ||
-          location.startsWith(AppRoutes.manageEvents) ||
-          location.startsWith('/admin/');
-    case AppRoutes.manageEvents:
-      return location.startsWith(AppRoutes.manageEvents) ||
-          location.startsWith('/admin/');
+          location.startsWith(AppRoutes.myEvents);
     default:
       return location.startsWith(item.route);
   }
