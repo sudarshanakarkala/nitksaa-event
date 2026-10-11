@@ -1,12 +1,13 @@
 """Firebase login exchange and internal auth verification endpoints."""
 import logging
-from typing import Any, Dict, Optional
+from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, Field
 
 from app.database import get_pool
 from app.middleware.auth import get_current_user, make_access_token, verify_firebase_token
+from app.services.access import load_access
 from app.services.alumni_service import find_alumni_by_email
 
 router = APIRouter(prefix="/api/v1/auth", tags=["auth"])
@@ -15,6 +16,15 @@ logger = logging.getLogger(__name__)
 
 class FirebaseLoginRequest(BaseModel):
     token: str = Field(..., min_length=1)
+
+
+class AccessResponse(BaseModel):
+    """The caller's admin rights. Computed per request (never in the JWT),
+    so a role change applies at the next app load without re-signing in."""
+    is_admin: bool
+    is_event_creator: bool
+    platform_roles: List[str]
+    admin_event_ids: List[int]
 
 
 class AuthResponse(BaseModel):
@@ -26,6 +36,7 @@ class AuthResponse(BaseModel):
     fullname: str
     ref_id: Optional[str]
     graduation_year: Optional[int]
+    access: AccessResponse
 
 
 class CurrentUserResponse(BaseModel):
@@ -35,6 +46,7 @@ class CurrentUserResponse(BaseModel):
     user_type: str
     ref_id: Optional[str]
     graduation_year: Optional[int]
+    access: AccessResponse
 
 
 @router.post("/firebase", response_model=AuthResponse)
@@ -100,12 +112,14 @@ async def firebase_login(body: FirebaseLoginRequest):
         "fullname": user["fullname"],
         "ref_id": user["ref_id"],
         "graduation_year": user["graduation_year"],
+        "access": (await load_access(user["firebase_uid"])).to_dict(),
     }
 
 
 @router.get("/me", response_model=CurrentUserResponse)
 async def read_me(user: Dict[str, Any] = Depends(get_current_user)):
-    return user
+    access = await load_access(user["firebase_uid"])
+    return {**user, "access": access.to_dict()}
 
 
 async def _upsert_event_user(

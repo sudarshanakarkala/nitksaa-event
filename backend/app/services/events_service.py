@@ -1,3 +1,4 @@
+import json
 from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
@@ -7,6 +8,7 @@ from fastapi import HTTPException
 
 from app.repositories.events_repository import EventsRepository
 from app.repositories.payment_repository import PaymentRepository
+from app.repositories.payment_role_repository import PaymentRoleRepository
 from app.repositories.people_repository import PeopleRepository
 from app.repositories.sponsors_partners_repository import SponsorsRepository, PartnersRepository
 from app.schemas.event_create import EventCreate
@@ -67,13 +69,20 @@ class EventsService:
     def _to_dict(self, record: asyncpg.Record) -> Dict[str, Any]:
         return dict(record)
 
-    async def _audit(self, actor_uid: str, event_type: str, entity_id: int) -> None:
+    async def _audit(
+        self,
+        actor_uid: str,
+        event_type: str,
+        entity_id: int,
+        context: Optional[Dict[str, Any]] = None,
+    ) -> None:
         await self.conn.execute(
             """
-            INSERT INTO event_audit_log (actor_uid, event_type, entity_type, entity_id)
-            VALUES ($1, $2, 'event', $3)
+            INSERT INTO event_audit_log (actor_uid, event_type, entity_type, entity_id, context)
+            VALUES ($1, $2, 'event', $3, $4::jsonb)
             """,
             actor_uid, event_type, entity_id,
+            json.dumps(context) if context is not None else None,
         )
 
     # ── Admin: Create ────────────────────────────────────────────────────────
@@ -81,10 +90,32 @@ class EventsService:
     async def create_event(
         self, data: EventCreate, user: Dict[str, Any]
     ) -> Dict[str, Any]:
-        slug = await self.slug_svc.generate_slug(data.title)
-        record = await self.repo.create_event(data, slug, user["firebase_uid"])
-        d = self._to_dict(record)
-        await self._audit(user["firebase_uid"], "event_created", d["event_id"])
+        creator_uid = user["firebase_uid"]
+        # One transaction: the event, its creator's event_admin membership
+        # and both audit rows land together or not at all (admin revamp 1.3).
+        async with self.conn.transaction():
+            slug = await self.slug_svc.generate_slug(data.title)
+            record = await self.repo.create_event(data, slug, creator_uid)
+            d = self._to_dict(record)
+            event_id = d["event_id"]
+            await self._audit(creator_uid, "event_created", event_id)
+
+            # event_members.firebase_uid references event_users; an
+            # env-var-only emergency admin may never have signed in, and
+            # overall admins see every event anyway.
+            has_user_row = await self.conn.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM event_users WHERE firebase_uid = $1)",
+                creator_uid,
+            )
+            if has_user_row:
+                await PaymentRoleRepository(self.conn).grant_event_admin(event_id, creator_uid)
+                await self._audit(
+                    creator_uid,
+                    "event_admin_granted",
+                    event_id,
+                    {"target_uid": creator_uid, "role": "event_admin",
+                     "event_id": event_id, "reason": "creator"},
+                )
         return _enrich(d)
 
     # ── Admin: List ──────────────────────────────────────────────────────────
@@ -96,8 +127,14 @@ class EventsService:
         status: Optional[str] = None,
         is_virtual: Optional[bool] = None,
         search: Optional[str] = None,
+        period: Optional[str] = None,
+        event_ids: Optional[List[int]] = None,
     ) -> Tuple[List[Dict[str, Any]], int]:
-        rows, total = await self.repo.list_events(page, per_page, status, is_virtual, search)
+        """event_ids=None lists every event (overall admin); a list —
+        even an empty one — restricts to exactly those events."""
+        rows, total = await self.repo.list_events(
+            page, per_page, status, is_virtual, search, period=period, event_ids=event_ids
+        )
         return [_enrich(self._to_dict(r)) for r in rows], total
 
     # ── Admin: Get ───────────────────────────────────────────────────────────

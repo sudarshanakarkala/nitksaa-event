@@ -6,7 +6,7 @@ from app.database import get_pool, close_pool
 from app.api import (
     health, events, admin_events, auth, dev_diagnostics, alumni, registrations,
     people, sponsors_partners, week5_diagnostics, payments, admin_payments,
-    refunds, nitika,
+    refunds, nitika, admin_roles,
 )
 
 
@@ -44,6 +44,7 @@ app.add_middleware(CORSMiddleware, **_cors_kwargs)
 app.include_router(health.router)
 app.include_router(events.router)
 app.include_router(admin_events.router)
+app.include_router(admin_roles.router)
 app.include_router(auth.router)
 app.include_router(dev_diagnostics.router)
 app.include_router(week5_diagnostics.router)

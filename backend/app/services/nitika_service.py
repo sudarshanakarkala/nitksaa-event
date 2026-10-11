@@ -19,8 +19,7 @@ from urllib.parse import urlparse
 import httpx
 
 from app.config import get_settings
-from app.database import get_pool
-from app.repositories.payment_role_repository import PaymentRoleRepository
+from app.services.access import load_access
 
 logger = logging.getLogger(__name__)
 
@@ -68,19 +67,11 @@ def admin_scope_from_roles(
 
 
 async def resolve_admin_scope(firebase_uid: str) -> Optional[Dict[str, Any]]:
-    settings = get_settings()
-    roles: set = set()
-    if firebase_uid in settings.platform_admin_firebase_uids:
-        roles.add("platform_admin")
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        repo = PaymentRoleRepository(conn)
-        roles |= await repo.active_platform_roles(firebase_uid)
-        event_ids = (
-            [] if "platform_admin" in roles
-            else await repo.event_admin_event_ids(firebase_uid)
-        )
-    return admin_scope_from_roles(roles, event_ids)
+    """Scope from the shared access resolver (app.services.access), so
+    NITiKa honours exactly the same admin levels as the API: overall admin
+    (any source) → all events; event admin → their events."""
+    access = await load_access(firebase_uid)
+    return admin_scope_from_roles(access.platform_roles, access.admin_event_ids)
 
 
 def nitika_user(user: Dict[str, Any], scope: Optional[Dict[str, Any]]) -> Dict[str, Any]:

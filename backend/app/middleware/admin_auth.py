@@ -25,6 +25,11 @@ Role sources, in priority order:
      event" is the same permission regardless of which admin surface is
      asking.
 
+Admin revamp step 1: every check below resolves roles through
+app.services.access.get_access — one resolver that also counts
+event_users.is_admin (migration 026) as overall admin (reported as
+platform_admin) and event_users.is_event_creator as "may create events".
+
 Nothing here ever reads a role from a request body, query string, or
 header — the caller's identity always comes from a verified JWT, and their
 roles always come from the database or the server-side settings object.
@@ -33,28 +38,28 @@ from typing import Any, Dict
 
 from fastapi import Depends, HTTPException
 
-from app.config import get_settings
 from app.database import get_pool
 from app.middleware.auth import get_current_user
 from app.repositories.payment_role_repository import PaymentRoleRepository
+from app.services.access import Access, get_access, load_access
 
 _ALL_PLATFORM_ROLES = {"platform_admin", "finance_operator", "auditor", "support"}
 
 
 async def _resolve_platform_roles(firebase_uid: str) -> set:
-    settings = get_settings()
-    roles: set = set()
-    if firebase_uid in settings.platform_admin_firebase_uids:
-        roles.add("platform_admin")
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        roles |= await PaymentRoleRepository(conn).active_platform_roles(firebase_uid)
-    return roles
+    return (await load_access(firebase_uid)).platform_roles
+
+
+def _with_access(user: Dict[str, Any], access: Access) -> Dict[str, Any]:
+    """The caller's user dict plus their resolved Access, so routes can
+    scope queries without resolving roles a second time."""
+    return {**user, "access": access}
 
 
 def require_platform_role(*allowed_roles: str):
     """Dependency factory — the caller must hold at least one of
-    allowed_roles (platform_admin always satisfies any check)."""
+    allowed_roles (platform_admin, i.e. any overall admin, always satisfies
+    any check)."""
 
     async def _dep(user: Dict[str, Any] = Depends(get_current_user)) -> Dict[str, Any]:
         roles = await _resolve_platform_roles(user["firebase_uid"])
@@ -65,17 +70,47 @@ def require_platform_role(*allowed_roles: str):
     return _dep
 
 
+async def require_overall_admin(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    access = await load_access(user["firebase_uid"])
+    if access.is_admin:
+        return _with_access(user, access)
+    raise HTTPException(status_code=403, detail="overall_admin_required")
+
+
+async def require_event_creator(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Overall admin, or event_users.is_event_creator."""
+    access = await load_access(user["firebase_uid"])
+    if access.is_event_creator:
+        return _with_access(user, access)
+    raise HTTPException(status_code=403, detail="event_creator_required")
+
+
+async def require_any_admin(
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Overall admin, an event creator, or admin of at least one event.
+    Routes using this must scope their data with
+    user["access"].scope_event_ids()."""
+    access = await load_access(user["firebase_uid"])
+    if access.is_any_admin:
+        return _with_access(user, access)
+    raise HTTPException(status_code=403, detail="admin_required")
+
+
 async def require_event_admin(
     event_id: int,
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> Dict[str, Any]:
-    """Route dependency for event-scoped administration: platform_admin
+    """Route dependency for event-scoped administration: overall admin
     (any event) or event_admin (this event only). Shared by
     admin_payments.py's config-mutation routes and every admin_events.py
     route — "manage this event" is one permission, not a payment-specific
     one. `event_id` is bound by FastAPI from the enclosing route's path
     parameter of the same name."""
-    settings = get_settings()
     pool = await get_pool()
     async with pool.acquire() as conn:
         event_exists = await conn.fetchval(
@@ -84,13 +119,10 @@ async def require_event_admin(
         if not event_exists:
             raise HTTPException(status_code=404, detail="event_not_found")
 
-        if user["firebase_uid"] in settings.platform_admin_firebase_uids:
+        access = await get_access(conn, user["firebase_uid"])
+        if access.is_admin:
             return user
-
-        role_repo = PaymentRoleRepository(conn)
-        if "platform_admin" in await role_repo.active_platform_roles(user["firebase_uid"]):
-            return user
-        if await role_repo.is_event_admin(event_id, user["firebase_uid"]):
+        if await PaymentRoleRepository(conn).is_event_admin(event_id, user["firebase_uid"]):
             return user
 
     raise HTTPException(status_code=403, detail="event_admin_required")
@@ -108,7 +140,6 @@ async def require_event_payment_read_access(
     event-management data through a generically-named dependency — see
     require_event_admin's docstring and the admin RBAC unification
     decision recorded in the operational-readiness sprint report."""
-    settings = get_settings()
     pool = await get_pool()
     async with pool.acquire() as conn:
         event_exists = await conn.fetchval(
@@ -117,13 +148,10 @@ async def require_event_payment_read_access(
         if not event_exists:
             raise HTTPException(status_code=404, detail="event_not_found")
 
-        if user["firebase_uid"] in settings.platform_admin_firebase_uids:
+        access = await get_access(conn, user["firebase_uid"])
+        if access.platform_roles & _ALL_PLATFORM_ROLES:
             return user
-
-        role_repo = PaymentRoleRepository(conn)
-        if await role_repo.active_platform_roles(user["firebase_uid"]) & _ALL_PLATFORM_ROLES:
-            return user
-        if await role_repo.is_event_admin(event_id, user["firebase_uid"]):
+        if await PaymentRoleRepository(conn).is_event_admin(event_id, user["firebase_uid"]):
             return user
 
     raise HTTPException(status_code=403, detail="payment_read_access_required")

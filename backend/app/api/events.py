@@ -6,7 +6,9 @@ so FastAPI does not consume the literal "public" as an integer event_id.
 Authorization (admin routes): real Firebase-JWT-backed RBAC via
 app.middleware.admin_auth — migrated off the development-only
 app.middleware.dev_auth placeholder in the admin-auth-unification sprint.
-create/list (no event_id to scope to) are platform_admin-only; get/update/
+create needs "can create events" (overall admin or
+event_users.is_event_creator); list is any admin, scoped to the events
+they administer (admin revamp step 1); get/update/
 status (event_id in path) are platform_admin or the event's own
 event_admin — the same policy admin_events.py already uses for the
 equivalent routes. This router and admin_events.py both delegate to the
@@ -19,7 +21,7 @@ from typing import Any, Dict, Optional
 from fastapi import APIRouter, Depends, Query
 
 from app.database import get_pool
-from app.middleware.admin_auth import require_event_admin, require_platform_role
+from app.middleware.admin_auth import require_any_admin, require_event_admin, require_event_creator
 from app.schemas.event_create import EventCreate
 from app.schemas.event_status import EventStatusUpdate
 from app.schemas.event_update import EventUpdate
@@ -57,7 +59,7 @@ async def get_public_event(event_id: int) -> Dict[str, Any]:
 @router.post("/events", status_code=201)
 async def create_event(
     body: EventCreate,
-    user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
+    user: Dict[str, Any] = Depends(require_event_creator),
 ) -> Dict[str, Any]:
     pool = await get_pool()
     async with pool.acquire() as conn:
@@ -73,12 +75,18 @@ async def list_events(
     status: Optional[str] = Query(default=None),
     is_virtual: Optional[bool] = Query(default=None),
     search: Optional[str] = Query(default=None),
-    user: Dict[str, Any] = Depends(require_platform_role("platform_admin")),
+    period: Optional[str] = Query(default=None, pattern="^(upcoming|past|all)$"),
+    user: Dict[str, Any] = Depends(require_any_admin),
 ) -> Dict[str, Any]:
+    """Admin list, scoped: overall admins get every event; anyone else
+    only the events they administer."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         svc = EventsService(conn)
-        events, total = await svc.list_events(page, per_page, status, is_virtual, search)
+        events, total = await svc.list_events(
+            page, per_page, status, is_virtual, search,
+            period=period, event_ids=user["access"].scope_event_ids(),
+        )
     return {"events": events, "total": total, "page": page, "per_page": per_page}
 
 
