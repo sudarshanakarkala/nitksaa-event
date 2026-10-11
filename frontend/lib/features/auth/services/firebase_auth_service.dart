@@ -78,8 +78,22 @@ abstract class FirebaseAuthService {
   }
 
   /// Whether [link] (normally the page's own URL) is a Firebase sign-in link.
-  static bool isSignInLink(String link) =>
-      FirebaseAuth.instance.isSignInWithEmailLink(link);
+  ///
+  /// Checked here, not with `FirebaseAuth.isSignInWithEmailLink`: on the web
+  /// the FlutterFire plugin calls Firebase's JS `isSignInWithEmailLink`
+  /// without the auth instance it requires, so it always answers false and
+  /// the link is ignored. This is Firebase's own rule: `mode=signIn` with an
+  /// `oobCode`, either on the URL itself or inside a `link` parameter.
+  static bool isSignInLink(String link) {
+    final uri = Uri.tryParse(link);
+    if (uri == null) return false;
+    final params = uri.queryParameters;
+    if (params['mode'] == 'signIn' && (params['oobCode'] ?? '').isNotEmpty) {
+      return true;
+    }
+    final nested = params['link'];
+    return nested != null && nested != link && isSignInLink(nested);
+  }
 
   /// Completes a sign-in link for [email].
   static Future<User?> signInWithEmailLink({

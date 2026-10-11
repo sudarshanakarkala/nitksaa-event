@@ -290,7 +290,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
         icon: _googleLoading
             ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.g_mobiledata, size: 22),
+            // Google's "G", as on the website (Google sign-in branding).
+            : Image.asset('assets/images/google-g.png', width: 18, height: 18),
         label: Text(_googleLoading ? 'Signing in...' : 'Continue with Google'),
       ),
       const SizedBox(height: 16),
