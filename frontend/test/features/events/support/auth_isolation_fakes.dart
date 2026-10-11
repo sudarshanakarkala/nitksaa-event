@@ -103,6 +103,10 @@ class FakeAuthController extends ChangeNotifier implements AuthController {
   @override
   Future<void> signInWithGoogle() => throw UnimplementedError();
 
+  /// The real one re-reads the session from the backend; the fake keeps it.
+  @override
+  Future<void> refreshSession() async {}
+
   void _setStatus(AuthStatus status) {
     if (_status == status) return;
     _status = status;

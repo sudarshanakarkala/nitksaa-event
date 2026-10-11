@@ -138,8 +138,8 @@ class AdminApi {
     final response = await _dio.patch<Map<String, dynamic>>(
       '/api/v1/admin/users/${Uri.encodeComponent(firebaseUid)}/roles',
       data: {
-        if (isAdmin != null) 'is_admin': isAdmin,
-        if (isEventCreator != null) 'is_event_creator': isEventCreator,
+        'is_admin': ?isAdmin,
+        'is_event_creator': ?isEventCreator,
       },
       options: _auth(accessToken),
     );
