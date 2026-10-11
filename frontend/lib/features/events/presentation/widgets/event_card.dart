@@ -28,7 +28,7 @@ class EventCardAction {
 class EventCardBrand {
   const EventCardBrand({this.accent, this.logoUrl});
 
-  /// Banner gradient and date-tile month colour. Null: the theme's gold.
+  /// Banner tint and date-tile month colour. Null: the theme's gold.
   final Color? accent;
 
   /// Shown on the banner when the event has no image.
@@ -471,7 +471,7 @@ class EventCardGrid extends StatelessWidget {
 // ── Parts ───────────────────────────────────────────────────────────────────
 
 /// Website `.sc-card`: card fill, hairline border, 12px radius; on hover it
-/// lifts 2px with a stronger border. Your own registrations get a gold tint
+/// lifts 2px with a stronger border (the fill stays). Your own registrations get a gold tint
 /// (website `.card--own`).
 class _HoverCard extends StatefulWidget {
   const _HoverCard({required this.child, required this.onTap, required this.highlighted});
@@ -504,14 +504,21 @@ class _HoverCardState extends State<_HoverCard> {
         curve: Curves.easeOut,
         transform: Matrix4.translationValues(0, _hover ? -2 : 0, 0),
         decoration: BoxDecoration(
-          color: _hover ? Color.alphaBlend(p.surfaceHover.withValues(alpha: 0.5), base) : base,
+          // Fill only changes for your own registrations, as on the website;
+          // hover is just the lift and the border.
+          color: base,
           borderRadius: BorderRadius.circular(12),
           border: Border.all(color: border),
         ),
         clipBehavior: Clip.antiAlias,
         child: Material(
           type: MaterialType.transparency,
-          child: InkWell(onTap: widget.onTap, child: widget.child),
+          // No hover wash from the ink either: hover is the lift and border.
+          child: InkWell(
+            onTap: widget.onTap,
+            hoverColor: Colors.transparent,
+            child: widget.child,
+          ),
         ),
       ),
     );
@@ -564,8 +571,7 @@ class _Banner extends StatelessWidget {
   }
 }
 
-/// No image: a gradient in the event's accent with the mode, as on the
-/// website's image-less covers.
+/// No image: an even tint of the event's accent with the mode.
 class _Placeholder extends StatelessWidget {
   const _Placeholder({required this.accent, required this.isVirtual, this.logoUrl});
 
@@ -576,16 +582,10 @@ class _Placeholder extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    // One even tint: a diagonal fade read as a smudge on the light theme.
     return DecoratedBox(
       decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            accent.withValues(alpha: 0.30),
-            Color.alphaBlend(accent.withValues(alpha: 0.06), p.card),
-          ],
-        ),
+        color: Color.alphaBlend(accent.withValues(alpha: 0.14), p.card),
       ),
       child: Align(
         alignment: const Alignment(0.55, 0.1),
