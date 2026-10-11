@@ -10,6 +10,7 @@ import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
 import '../providers/my_events_provider.dart';
+import '../widgets/event_card.dart';
 import '../widgets/refund_status_dialog.dart';
 
 class MyEventsScreen extends ConsumerStatefulWidget {
@@ -42,7 +43,6 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     final auth = ref.watch(authControllerProvider);
     final state = ref.watch(myEventsProvider);
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     final isWebScreen = MediaQuery.of(context).size.width >= 900;
 
     // Get search query and filter registrations
@@ -169,50 +169,18 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                                       onRefresh: () => ref
                                           .read(myEventsProvider.notifier)
                                           .fetchMyEvents(),
-                                      child: LayoutBuilder(
-                                        builder: (context, constraints) {
-                                          final columns =
-                                              constraints.maxWidth > 980 ? 2 : 1;
-                                          return GridView.builder(
-                                            gridDelegate:
-                                                SliverGridDelegateWithFixedCrossAxisCount(
-                                              crossAxisCount: columns,
-                                              crossAxisSpacing: 20,
-                                              mainAxisSpacing: 20,
-                                              mainAxisExtent: 280,
+                                      child: EventCardGrid(
+                                        physics:
+                                            const AlwaysScrollableScrollPhysics(),
+                                        itemCount: filteredRegistrations.length,
+                                        itemBuilder: (context, index) {
+                                          final registration =
+                                              filteredRegistrations[index];
+                                          return _registrationCard(
+                                            registration,
+                                            isCancelling: state.isCancelling(
+                                              registration.registrationId,
                                             ),
-                                            itemCount: filteredRegistrations.length,
-                                            itemBuilder: (context, index) {
-                                              final registration =
-                                                  filteredRegistrations[index];
-                                              return _RegistrationCard(
-                                                registration: registration,
-                                                isDark: isDark,
-                                                isCancelling:
-                                                    state.isCancelling(
-                                                      registration
-                                                          .registrationId,
-                                                    ),
-                                                onView: () => context.push(
-                                                  '/events/${registration.eventId}',
-                                                ),
-                                                onCancel: registration.canCancel
-                                                    ? () => _confirmCancel(
-                                                          registration,
-                                                        )
-                                                    : null,
-                                                onViewRefund:
-                                                    registration.mayHaveRefund
-                                                    ? () => showRefundStatus(
-                                                          context,
-                                                          ref,
-                                                          registrationId:
-                                                              registration
-                                                                  .registrationId,
-                                                        )
-                                                    : null,
-                                              );
-                                            },
                                           );
                                         },
                                       ),
@@ -226,6 +194,54 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
         ),
       ),
     );
+  }
+
+  /// The shared event card for one of your registrations.
+  Widget _registrationCard(
+    MyEventRegistration registration, {
+    required bool isCancelling,
+  }) {
+    final summary = registration.event;
+    final event = registration.publicEvent;
+    final active = registration.isActive;
+    final when = active ? registration.registeredAt : registration.cancelledAt;
+    return EventCard(
+      title: summary?.title ?? event?.title ?? 'Registered event',
+      tagline: event?.tagline,
+      start: summary?.startDatetime ?? event?.startDatetime,
+      end: summary?.endDatetime ?? event?.endDatetime,
+      isVirtual: summary?.isVirtual ?? event?.isVirtual ?? false,
+      location: summary?.locationText ?? event?.locationText,
+      imageUrl: event?.thumbnailUrl ?? event?.bannerUrl,
+      isFree: event?.isFree,
+      price: event?.ticketPrice,
+      registrationStatus: event?.registrationStatus,
+      registrationClosesAt: event?.registrationClosesAt,
+      attendance:
+          active ? EventAttendance.registered : EventAttendance.cancelled,
+      footerNote: when == null
+          ? null
+          : '${active ? 'Registered' : 'Cancelled'} ${_shortDate(when)}',
+      onView: () => context.push('/events/${registration.eventId}'),
+      onUnregister:
+          registration.canCancel ? () => _confirmCancel(registration) : null,
+      unregistering: isCancelling,
+      onViewRefund: registration.mayHaveRefund
+          ? () => showRefundStatus(
+                context,
+                ref,
+                registrationId: registration.registrationId,
+              )
+          : null,
+    );
+  }
+
+  static String _shortDate(DateTime d) {
+    const months = [
+      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+    ];
+    return '${d.day} ${months[d.month - 1]}';
   }
 
   Future<void> _confirmCancel(MyEventRegistration registration) async {
@@ -270,233 +286,6 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
   }
 }
 
-
-class _RegistrationCard extends StatelessWidget {
-  const _RegistrationCard({
-    required this.registration,
-    required this.isDark,
-    required this.isCancelling,
-    required this.onView,
-    required this.onCancel,
-    required this.onViewRefund,
-  });
-
-  final MyEventRegistration registration;
-  final bool isDark;
-  final bool isCancelling;
-  final VoidCallback onView;
-  final VoidCallback? onCancel;
-  final VoidCallback? onViewRefund;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final event = registration.event;
-    final publicEvent = registration.publicEvent;
-    final isVirtual = event?.isVirtual ?? publicEvent?.isVirtual ?? false;
-    final eventTitle = event?.title ?? publicEvent?.title ?? 'Registered Event';
-    final start = event?.startDatetime ?? publicEvent?.startDatetime;
-    final end = event?.endDatetime ?? publicEvent?.endDatetime;
-    final location = event?.locationText ??
-        publicEvent?.locationText ??
-        (isVirtual ? 'Online event' : 'Venue to be announced');
-    final open = publicEvent?.registrationStatus == 'open';
-
-    return Card(
-      elevation: 0,
-      color: p.card,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(12),
-        side: BorderSide(color: p.border),
-      ),
-      child: Padding(
-        padding: const EdgeInsets.all(20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    eventTitle,
-                    maxLines: 2,
-                    overflow: TextOverflow.ellipsis,
-                    style: const TextStyle(
-                      fontSize: 18,
-                      fontWeight: FontWeight.bold,
-                    ),
-                  ),
-                ),
-                _Tag(
-                  label: registration.isActive ? 'Registered' : 'Unregistered',
-                  bg: (registration.isActive ? p.info : p.error)
-                      .withValues(alpha: 0.14),
-                  fg: registration.isActive ? p.info : p.error,
-                ),
-              ],
-            ),
-            const SizedBox(height: 14),
-            _MetaRow(
-              icon: Icons.calendar_today,
-              label: start == null ? 'Date pending' : _formatDate(start),
-            ),
-            _MetaRow(
-              icon: Icons.access_time,
-              label: start == null ? 'Time pending' : _formatTime(start, end),
-            ),
-            _MetaRow(
-              icon: isVirtual ? Icons.videocam : Icons.location_pin,
-              label: location,
-            ),
-            const SizedBox(height: 10),
-            Wrap(
-              spacing: 8,
-              runSpacing: 8,
-              children: [
-                _Tag(
-                  label: isVirtual ? 'Virtual' : 'Physical',
-                  bg: (isVirtual ? p.info : p.primary).withValues(alpha: 0.14),
-                  fg: isVirtual ? p.info : p.primary,
-                ),
-                _Tag(
-                  label: open ? 'Registration open' : 'Registration closed',
-                  bg: (open ? p.success : p.error).withValues(alpha: 0.14),
-                  fg: open ? p.success : p.error,
-                ),
-              ],
-            ),
-            const Spacer(),
-            Row(
-              children: [
-                Expanded(
-                  child: OutlinedButton.icon(
-                    onPressed: onView,
-                    icon: const Icon(Icons.open_in_new, size: 18),
-                    label: const Text('View Details'),
-                  ),
-                ),
-                if (onCancel != null) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.tonalIcon(
-                      onPressed: isCancelling ? null : onCancel,
-                      icon: isCancelling
-                          ? const SizedBox(
-                              width: 16,
-                              height: 16,
-                              child: CircularProgressIndicator(strokeWidth: 2),
-                            )
-                          : const Icon(Icons.cancel_outlined, size: 18),
-                      label: const Text('Unregister'),
-                    ),
-                  ),
-                ],
-                if (onViewRefund != null) ...[
-                  const SizedBox(width: 12),
-                  Expanded(
-                    child: FilledButton.tonalIcon(
-                      onPressed: onViewRefund,
-                      icon: const Icon(Icons.receipt_long_outlined, size: 18),
-                      // Kept on one line where the card is narrow.
-                      label: const FittedBox(
-                        fit: BoxFit.scaleDown,
-                        child: Text('View refund status'),
-                      ),
-                    ),
-                  ),
-                ],
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  static String _formatDate(DateTime dt) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
-
-  static String _formatTime(DateTime start, DateTime? end) {
-    String one(DateTime dt) {
-      final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
-      final minute = dt.minute.toString().padLeft(2, '0');
-      final period = dt.hour >= 12 ? 'PM' : 'AM';
-      return '$hour:$minute $period';
-    }
-
-    return end == null ? one(start) : '${one(start)} - ${one(end)}';
-  }
-}
-
-class _MetaRow extends StatelessWidget {
-  const _MetaRow({required this.icon, required this.label});
-
-  final IconData icon;
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8),
-      child: Row(
-        children: [
-          Icon(icon, size: 16, color: context.palette.primary),
-          const SizedBox(width: 8),
-          Expanded(
-            child: Text(
-              label,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: TextStyle(
-                fontSize: 13,
-                color: Theme.of(context).colorScheme.onSurfaceVariant,
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _Tag extends StatelessWidget {
-  const _Tag({required this.label, required this.bg, required this.fg});
-
-  final String label;
-  final Color bg;
-  final Color fg;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: fg.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label,
-        style: TextStyle(color: fg, fontSize: 11, fontWeight: FontWeight.bold),
-      ),
-    );
-  }
-}
 
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
