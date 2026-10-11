@@ -237,6 +237,6 @@ Done: the fix, 48 new tests on the VM and 48 in Chrome, the regression suites fo
 
 Beta: `f9da077` was deployed on 2026-10-11 at 05:30 IST. A manual run was reported passed the same day. It covered a refund view of a processed refund and one paid cancel; the record of it, and what it did not cover, is in section 6 of the test report.
 
-The run found that the message after a paid cancel did not close by itself. That is fixed in `816fe7d`, which has been on beta since 05:52 IST the same day. Open: a re-check of step 5 on that build.
+The run found that the message after a paid cancel did not close by itself. That is fixed in `816fe7d`, which has been on beta since 05:52 IST the same day. The re-check of step 5 on that build was reported passed.
 
 The pull request touches refunds, so it needs Padmanand's approval before it is merged. The steps before merge are in section 13 of the test report.

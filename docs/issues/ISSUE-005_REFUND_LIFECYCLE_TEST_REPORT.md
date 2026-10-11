@@ -5,7 +5,7 @@
 **Base commit:** `e68bddd` (branch `main`), which contains the ISSUE-004 merge (`578ec9c`) and its docs closure.
 **Fix branch:** `fix/issue-005`
 **Toolchain:** Flutter 3.44.2, Dart 3.12.2, `dio` 5.9.2, `go_router` 17.2.3, `flutter_riverpod` 2.6.1, Chrome 154 for the browser tests
-**Final result:** CODE PASS — beta run reported passed; one re-check and review pending
+**Final result:** CODE PASS — beta run and re-check reported passed; review pending
 
 ---
 
@@ -16,7 +16,7 @@
 | ID | ISSUE-005 |
 | Severity | P1 — Gate A blocker |
 | Area | Refund / My Events |
-| Status | Fixed on `fix/issue-005`. On beta since 2026-10-11. The manual run was reported passed, and the defect it found is fixed and on beta since 05:52 IST (section 6). Step 5 needs a re-check. Awaiting review. Not on the live site. |
+| Status | Fixed on `fix/issue-005`. On beta since 2026-10-11. The manual run was reported passed, and the defect it found is fixed and on beta since 05:52 IST. The re-check of step 5 on that build was reported passed (section 6). Awaiting review. Not on the live site. |
 
 After a paid registration was cancelled, the app showed one message and nothing more. The attendee could not see the refund's status, its amount, the backend's message, or check again later.
 
@@ -268,7 +268,7 @@ The contract matches the task description. One thing the task does not mention i
 | Build tested | `f9da077`, deployed to beta on 2026-10-11 at 05:30 IST with `firebase deploy --only hosting:beta` |
 | Before the deploy | `flutter pub get`, then `flutter test`: 211 of 211 |
 | Beta bundle | After the deploy, beta served `main.dart.js` with SHA-256 `b7f8557d77127f19613bc58e8e643a61c1c43d2383c40c8e8ebf648133b423eb`, the same as the local build of `f9da077` |
-| Build on beta now | `816fe7d`, the fix of finding 1 below, deployed at 05:52 IST. Not yet looked at by hand (see "Re-check after the fix") |
+| Build on beta now | `816fe7d`, the fix of finding 1 below, deployed at 05:52 IST. Step 5 was re-checked on it (see "Re-check after the fix") |
 | Run | 2026-10-11, about 05:33 to 05:36 IST |
 | Reported | 2026-10-11: "passed", and one screenshot taken at about 05:34 IST |
 | Live site | Not deployed from this branch. Its `main.dart.js` had the same SHA-256 before and after the beta deploy (`dd76aba1…e377`) |
@@ -316,7 +316,9 @@ Not covered by this run: a pending refund and "Check refund status" (step 4), th
 
 ### Re-check after the fix
 
-**Result: PENDING.** The fix changes only how long the message after a cancel stays. Steps 2 and 3 above were seen on `f9da077` and are not affected by it. Step 5 is, and has not been looked at on the new build.
+**Result: PASS, as reported by the tester** on 2026-10-11: "5a PASS, 5b PASS".
+
+The fix changes only how long the message after a cancel stays. Steps 2 and 3 above were seen on `f9da077` and are not affected by it. Step 5 is, and was run again on the new build.
 
 | Field | Value |
 |---|---|
@@ -327,10 +329,21 @@ Not covered by this run: a pending refund and "Check refund status" (step 4), th
 
 | # | Step | Expected | Result |
 |---|---|---|---|
-| 5a | Unregister a paid TEST registration and leave the message alone | The message with "View refund" closes by itself after about four seconds | PENDING |
-| 5b | Unregister a paid TEST registration and press "View refund" while the message is showing | The refund view opens with the cancel response; no `/refund` request in the Network panel | PENDING |
+| 5a | Unregister a paid TEST registration and leave the message alone | The message with "View refund" closes by itself after about four seconds | PASS |
+| 5b | Unregister a paid TEST registration and press "View refund" while the message is showing | The refund view opens with the cancel response; no `/refund` request in the Network panel | PASS |
 
-Both need a paid, registered TEST registration to cancel. Use a private window opened after 05:52 IST, or a hard reload: the previous files are cached for up to an hour.
+The results are the tester's. No screenshot was supplied, and which registration was used for which step was not reported.
+
+The backend's request log for the time after the redeploy, all requests to `/api/v1/registrations/…` from 05:52 to 06:00 IST:
+
+| Time (IST) | Request | Status |
+|---|---|---|
+| 05:57:19 | `POST /registrations/48/cancel` | 200 |
+| 05:58:17 | `POST /registrations/53/payment-order` | 201 |
+| 05:59:58 | `POST /registrations/53/cancel` | 200 |
+| 06:00:07 | `GET /registrations/53/refund` | 200 |
+
+This agrees with the report. Two registrations were cancelled. The cancel of registration 48 was followed by no refund request. The cancel of registration 53 was followed nine seconds later by one, which is what opening the refund from the card, or pressing "Check refund status" in the view, sends; the message itself closes after four.
 
 ---
 
@@ -485,7 +498,7 @@ Run from the repository root after the fix.
 
 **CODE PASS — beta run reported passed; review pending**
 
-Automated verification passes (sections 4, 7 and 8). A manual run on beta was made on 2026-10-11 and reported passed; it covered part of the plan and found one defect, which is fixed and on beta (section 6). The re-check of step 5 on the new build is pending. The pull request awaits review.
+Automated verification passes (sections 4, 7 and 8). A manual run on beta was made on 2026-10-11 and reported passed; it covered part of the plan and found one defect, which is fixed and on beta. The re-check of step 5 on the new build was reported passed (section 6). The pull request awaits review.
 
 ---
 
