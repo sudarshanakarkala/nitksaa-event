@@ -9,6 +9,8 @@ import '../domain/auth_session.dart';
 import 'auth_error_messages.dart';
 import 'auth_session_store.dart';
 import 'backend_auth_service.dart';
+import 'email_link_store.dart';
+import 'email_link_url.dart';
 import 'firebase_auth_service.dart';
 
 enum AuthStatus { checking, unauthenticated, authenticating, authenticated }
@@ -42,6 +44,14 @@ class AuthController extends ChangeNotifier {
   String? _errorMessage;
   bool _initialized = false;
 
+  /// A sign-in link opened on a device that doesn't know which email it was
+  /// sent to: the login screen asks for the email to finish.
+  String? _pendingEmailLink;
+
+  /// Why an opened sign-in link didn't sign the user in; the login screen
+  /// shows it.
+  String? _emailLinkNotice;
+
   AuthStatus get status => _status;
   AuthSession? get session => _session;
   String? get errorMessage => _errorMessage;
@@ -49,6 +59,13 @@ class AuthController extends ChangeNotifier {
   bool get isAuthenticating => _status == AuthStatus.authenticating;
   bool get isAuthenticated =>
       _status == AuthStatus.authenticated && _session?.isValid == true;
+  String? get pendingEmailLink => _pendingEmailLink;
+  String? get emailLinkNotice => _emailLinkNotice;
+
+  /// Startup should open the login screen rather than Events: a sign-in
+  /// link needs the email, or it failed and the user should see why.
+  bool get needsLoginScreen =>
+      !isAuthenticated && (_pendingEmailLink != null || _emailLinkNotice != null);
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -103,6 +120,102 @@ class AuthController extends ChangeNotifier {
 
   Future<void> signInWithGoogle() async {
     await _runLoginFlow(FirebaseAuthService.signInWithGoogle);
+  }
+
+  /// Emails a sign-in link to [email] and remembers the email on this
+  /// device. Throws on failure, with [errorMessage] set.
+  Future<void> sendSignInLink(String email) async {
+    _errorMessage = null;
+    _emailLinkNotice = null;
+    try {
+      await FirebaseAuthService.sendSignInLink(email);
+      await EmailLinkStore.save(email);
+    } catch (error, stackTrace) {
+      AppLogger.error('Sending the sign-in link failed', error, stackTrace);
+      _errorMessage = friendlyAuthError(error);
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Run once at startup, after [initialize]: if the page was opened from a
+  /// sign-in link, complete it. Never throws.
+  ///
+  /// The link's parameters are removed from the address bar straight away,
+  /// so a refresh doesn't retry a link that is single-use.
+  Future<void> handleIncomingEmailLink() async {
+    if (!kIsWeb) return;
+    final link = Uri.base.toString();
+    try {
+      if (!FirebaseAuthService.isSignInLink(link)) return;
+    } catch (error) {
+      AppLogger.warning('Sign-in link check failed: $error');
+      return;
+    }
+    // Cosmetic and refresh-safety only: never let it stop the sign-in.
+    try {
+      removeSignInLinkFromUrl();
+    } catch (error) {
+      AppLogger.warning('Could not clean the sign-in link from the URL: $error');
+    }
+
+    final email = EmailLinkStore.load();
+    if (email == null) {
+      // Opened on another device (or storage was cleared).
+      _pendingEmailLink = link;
+      notifyListeners();
+      return;
+    }
+    try {
+      await completeEmailLinkSignIn(email: email, link: link);
+    } catch (_) {
+      // completeEmailLinkSignIn has set the notice for the login screen.
+    }
+  }
+
+  /// Signs in with a sign-in link: [link] or the pending one. Throws on
+  /// failure, with [errorMessage] and [emailLinkNotice] set.
+  Future<void> completeEmailLinkSignIn({
+    required String email,
+    String? link,
+  }) async {
+    final emailLink = link ?? _pendingEmailLink;
+    if (emailLink == null) {
+      throw StateError('No sign-in link to complete.');
+    }
+    _emailLinkNotice = null;
+    try {
+      await _runLoginFlow(
+        () => FirebaseAuthService.signInWithEmailLink(
+          email: email,
+          link: emailLink,
+        ),
+      );
+      _pendingEmailLink = null;
+      await EmailLinkStore.clear();
+    } on FirebaseAuthException catch (error) {
+      _emailLinkNotice = _errorMessage;
+      // A wrong email can be retried with the same link; a used or expired
+      // link can't, so the user starts again.
+      if (error.code != 'invalid-email') {
+        _pendingEmailLink = null;
+        await EmailLinkStore.clear();
+      }
+      notifyListeners();
+      rethrow;
+    } catch (_) {
+      _emailLinkNotice = _errorMessage;
+      notifyListeners();
+      rethrow;
+    }
+  }
+
+  /// Clears a pending link or notice when the user moves on.
+  void dismissEmailLink() {
+    if (_pendingEmailLink == null && _emailLinkNotice == null) return;
+    _pendingEmailLink = null;
+    _emailLinkNotice = null;
+    notifyListeners();
   }
 
   Future<void> signOut() async {

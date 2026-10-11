@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -32,6 +34,11 @@ Future<void> main() async {
 
   await AuthController.instance.initialize();
   AppLogger.info('Auth controller initialized');
+
+  // Opened from an emailed sign-in link: start completing it now. Not
+  // awaited, but it reads and cleans the URL (and marks sign-in as in
+  // progress) before the router starts, so the splash screen waits for it.
+  unawaited(AuthController.instance.handleIncomingEmailLink());
 
   runApp(const ProviderScope(child: App()));
 }

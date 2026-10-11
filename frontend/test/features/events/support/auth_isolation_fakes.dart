@@ -107,6 +107,31 @@ class FakeAuthController extends ChangeNotifier implements AuthController {
   @override
   Future<void> refreshSession() async {}
 
+  // Email sign-in links: not exercised by these tests.
+  @override
+  String? get pendingEmailLink => null;
+
+  @override
+  String? get emailLinkNotice => null;
+
+  @override
+  bool get needsLoginScreen => false;
+
+  @override
+  Future<void> sendSignInLink(String email) => throw UnimplementedError();
+
+  @override
+  Future<void> handleIncomingEmailLink() async {}
+
+  @override
+  Future<void> completeEmailLinkSignIn({
+    required String email,
+    String? link,
+  }) => throw UnimplementedError();
+
+  @override
+  void dismissEmailLink() {}
+
   void _setStatus(AuthStatus status) {
     if (_status == status) return;
     _status = status;

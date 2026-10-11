@@ -39,6 +39,12 @@ class _SplashScreenState extends State<SplashScreen> {
     final elapsed = DateTime.now().difference(_startTime);
     final remaining = const Duration(milliseconds: 1500) - elapsed;
     if (remaining.isNegative) {
+      // A sign-in link that needs the email, or that failed: the login
+      // screen asks or explains.
+      if (auth.needsLoginScreen) {
+        context.go(AppRoutes.login);
+        return;
+      }
       AppLogger.info('Splash screen completed. Navigating to home.');
       context.go(AppRoutes.home);
     } else {

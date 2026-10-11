@@ -27,6 +27,7 @@ String apiErrorMessage(Object error, {required String action}) {
     case DioExceptionType.connectionTimeout:
     case DioExceptionType.sendTimeout:
     case DioExceptionType.receiveTimeout:
+    case DioExceptionType.transformTimeout:
     case DioExceptionType.connectionError:
     case DioExceptionType.badCertificate:
       return 'Could not reach the server. Check your connection and try again.';

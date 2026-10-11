@@ -61,6 +61,53 @@ abstract class FirebaseAuthService {
     return userCredential.user;
   }
 
+  /// Emails a one-time sign-in link (website's magic link).
+  ///
+  /// The continue URL is the site's origin with no `#/` route: Firebase
+  /// appends `?apiKey=…&oobCode=…&mode=signIn` to it, and a query after a
+  /// `#` fragment would be lost.
+  static Future<void> sendSignInLink(String email) async {
+    AppLogger.info('sendSignInLink called');
+    await FirebaseAuth.instance.sendSignInLinkToEmail(
+      email: email,
+      actionCodeSettings: ActionCodeSettings(
+        url: '${Uri.base.origin}/',
+        handleCodeInApp: true,
+      ),
+    );
+  }
+
+  /// Whether [link] (normally the page's own URL) is a Firebase sign-in link.
+  ///
+  /// Checked here, not with `FirebaseAuth.isSignInWithEmailLink`: on the web
+  /// the FlutterFire plugin calls Firebase's JS `isSignInWithEmailLink`
+  /// without the auth instance it requires, so it always answers false and
+  /// the link is ignored. This is Firebase's own rule: `mode=signIn` with an
+  /// `oobCode`, either on the URL itself or inside a `link` parameter.
+  static bool isSignInLink(String link) {
+    final uri = Uri.tryParse(link);
+    if (uri == null) return false;
+    final params = uri.queryParameters;
+    if (params['mode'] == 'signIn' && (params['oobCode'] ?? '').isNotEmpty) {
+      return true;
+    }
+    final nested = params['link'];
+    return nested != null && nested != link && isSignInLink(nested);
+  }
+
+  /// Completes a sign-in link for [email].
+  static Future<User?> signInWithEmailLink({
+    required String email,
+    required String link,
+  }) async {
+    AppLogger.info('signInWithEmailLink called');
+    final credential = await FirebaseAuth.instance.signInWithEmailLink(
+      email: email,
+      emailLink: link,
+    );
+    return credential.user;
+  }
+
   static Future<String> freshIdToken() async {
     final user = FirebaseAuth.instance.currentUser;
     final token = await user?.getIdToken(true);
