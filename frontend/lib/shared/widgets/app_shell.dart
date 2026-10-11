@@ -13,11 +13,12 @@ import 'site_header.dart';
 /// and sticky footer; the page content scrolls between them. Screens render
 /// only their own body.
 ///
-/// [assistant] is the right-rail slot (website: NITiKa). Empty for now.
-/// From [assistantRailFrom] it is a collapsible 320px rail; below that a
-/// floating chat button opens it (slide-in panel on tablets, full-height
-/// sheet on phones).
-class AppShell extends StatelessWidget {
+/// [assistant] is the right-rail slot (website: NITiKa). The header's chat
+/// button opens it. From [assistantRailFrom] it is a 320px rail that
+/// collapses to a 28px strip, and starts collapsed, as on the website; below
+/// that the button opens it as a slide-in panel (tablets) or a full-height
+/// sheet (phones).
+class AppShell extends StatefulWidget {
   const AppShell({
     super.key,
     required this.location,
@@ -32,10 +33,18 @@ class AppShell extends StatelessWidget {
 
   static const double assistantRailFrom = 1200;
 
+  @override
+  State<AppShell> createState() => _AppShellState();
+}
+
+class _AppShellState extends State<AppShell> {
+  /// The rail's state; kept across pages, like the website's.
+  bool _railOpen = false;
+
   // Browser tab title per page. Set on every navigation, so leaving a page
   // always puts the right title back.
   static const _appTitle = 'NITKSAA Events';
-  static final _pageTitles = {
+  static final _pageTitles = <String, String>{
     AppRoutes.myEvents: 'My Events',
     AppRoutes.manageEvents: 'Manage Events',
     AppRoutes.feedback: 'Feedback',
@@ -46,6 +55,7 @@ class AppShell extends StatelessWidget {
   };
 
   String get _title {
+    final location = widget.location;
     var page = _pageTitles[location];
     if (page == null) {
       if (location.endsWith('/checkout')) {
@@ -63,23 +73,28 @@ class AppShell extends StatelessWidget {
   Widget build(BuildContext context) {
     final width = MediaQuery.sizeOf(context).width;
     final wide = width >= SiteHeader.navBreakpoint;
-    final assistantRail = assistant != null && width >= assistantRailFrom;
+    final assistant = widget.assistant;
+    final assistantRail =
+        assistant != null && width >= AppShell.assistantRailFrom;
 
     return Title(
       title: _title,
       color: context.palette.primary,
       child: Scaffold(
-        endDrawer: wide ? null : SiteNavDrawer(location: location),
-        floatingActionButton: assistant != null && !assistantRail
-            ? FloatingActionButton(
-                tooltip: 'Assistant',
-                onPressed: () => _openAssistant(context, width),
-                child: const Icon(Icons.chat_bubble_outline),
-              )
-            : null,
+        endDrawer: wide ? null : SiteNavDrawer(location: widget.location),
         body: Column(
           children: [
-            const SafeArea(bottom: false, child: SiteHeader()),
+            SafeArea(
+              bottom: false,
+              child: SiteHeader(
+                onAssistant: assistant == null
+                    ? null
+                    : assistantRail
+                    ? _toggleRail
+                    : () => _openAssistant(context, width, assistant),
+                assistantOpen: assistantRail && _railOpen,
+              ),
+            ),
             Expanded(
               // The header and footer handle the safe-area insets.
               child: MediaQuery.removePadding(
@@ -90,11 +105,15 @@ class AppShell extends StatelessWidget {
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
-                          Expanded(child: child),
-                          _AssistantRail(child: assistant!),
+                          Expanded(child: widget.child),
+                          _AssistantRail(
+                            open: _railOpen,
+                            onToggle: _toggleRail,
+                            child: assistant,
+                          ),
                         ],
                       )
-                    : child,
+                    : widget.child,
               ),
             ),
             const SafeArea(top: false, child: SiteFooter()),
@@ -103,10 +122,10 @@ class AppShell extends StatelessWidget {
       ),
     );
   }
-}
 
-extension on AppShell {
-  void _openAssistant(BuildContext context, double width) {
+  void _toggleRail() => setState(() => _railOpen = !_railOpen);
+
+  void _openAssistant(BuildContext context, double width, Widget assistant) {
     final p = context.palette;
     if (width < 600) {
       // Phones: full-height sheet, room for the conversation and keyboard.
@@ -125,7 +144,7 @@ extension on AppShell {
     showGeneralDialog<void>(
       context: context,
       barrierDismissible: true,
-      barrierLabel: 'Close assistant',
+      barrierLabel: 'Close NITiKa',
       barrierColor: p.overlay,
       transitionDuration: const Duration(milliseconds: 250),
       pageBuilder: (_, _, _) => Align(
@@ -146,17 +165,16 @@ extension on AppShell {
 }
 
 /// Website right rail: 320px, collapsible to a 28px strip.
-class _AssistantRail extends StatefulWidget {
-  const _AssistantRail({required this.child});
+class _AssistantRail extends StatelessWidget {
+  const _AssistantRail({
+    required this.open,
+    required this.onToggle,
+    required this.child,
+  });
 
+  final bool open;
+  final VoidCallback onToggle;
   final Widget child;
-
-  @override
-  State<_AssistantRail> createState() => _AssistantRailState();
-}
-
-class _AssistantRailState extends State<_AssistantRail> {
-  bool _open = true;
 
   @override
   Widget build(BuildContext context) {
@@ -164,29 +182,29 @@ class _AssistantRailState extends State<_AssistantRail> {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
-      width: _open ? 320 : 28,
+      width: open ? 320 : 28,
       decoration: BoxDecoration(
         color: p.card,
         border: Border(left: BorderSide(color: p.border)),
       ),
       clipBehavior: Clip.hardEdge,
-      child: _open
+      child: open
           ? OverflowBox(
               alignment: Alignment.topRight,
               minWidth: 320,
               maxWidth: 320,
               child: Stack(
                 children: [
-                  Positioned.fill(child: widget.child),
+                  Positioned.fill(child: child),
                   Positioned(
                     top: 8,
                     right: 8,
                     child: IconButton(
-                      tooltip: 'Hide assistant',
+                      tooltip: 'Collapse NITiKa',
                       iconSize: 18,
                       color: p.textMuted,
                       icon: const Icon(Icons.chevron_right),
-                      onPressed: () => setState(() => _open = false),
+                      onPressed: onToggle,
                     ),
                   ),
                 ],
@@ -195,13 +213,13 @@ class _AssistantRailState extends State<_AssistantRail> {
           : Align(
               alignment: Alignment.topCenter,
               child: IconButton(
-                tooltip: 'Show assistant',
+                tooltip: 'Open NITiKa',
                 iconSize: 16,
                 padding: const EdgeInsets.only(top: 12),
                 constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
                 color: p.textMuted,
                 icon: const Icon(Icons.chevron_left),
-                onPressed: () => setState(() => _open = true),
+                onPressed: onToggle,
               ),
             ),
     );
