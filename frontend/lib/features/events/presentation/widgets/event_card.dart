@@ -112,8 +112,8 @@ class EventCard extends StatelessWidget {
   }
 
   /// Card heights, so a grid can give every card in a row the same size.
-  static const double height = 376;
-  static const double adminHeight = 414;
+  static const double height = 352;
+  static const double adminHeight = 390;
 
   /// Website grid: cards at least this wide, as many columns as fit.
   static const double minWidth = 300;
@@ -526,7 +526,7 @@ class _Banner extends StatelessWidget {
     required this.brand,
   });
 
-  static const double height = 140;
+  static const double height = 116;
 
   final String? imageUrl;
   final DateTime? start;
