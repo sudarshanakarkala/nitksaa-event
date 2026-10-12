@@ -163,8 +163,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     return true;
   }
 
-  int get _activeFilterCount =>
-      [_modes.isNotEmpty, _registration.isNotEmpty, _mine].where((on) => on).length;
+  int get _activeFilterCount => [
+        _filter != _Filter.all,
+        _modes.isNotEmpty,
+        _registration.isNotEmpty,
+        _mine,
+      ].where((on) => on).length;
 
   void _clearFilters() {
     setState(() {
@@ -526,6 +530,22 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          // The status pills, so the rail has every filter.
+          const FilterLabel('Status'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final f in _Filter.values)
+                FilterChipToggle(
+                  label: f.label,
+                  selected: f == _filter,
+                  onChanged: (_) => setState(() => _filter = f),
+                ),
+            ],
+          ),
+          const SizedBox(height: 20),
           FilterChipSection(
             label: 'Event mode',
             options: const {'in_person': 'In person', 'online': 'Online'},

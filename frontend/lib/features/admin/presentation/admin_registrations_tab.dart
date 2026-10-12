@@ -551,7 +551,18 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
           ),
         ),
       ),
+      // Quick filters: shortcuts to filters that are also in the rail.
       quickFilters: [
+        SizedBox(
+          width: compact ? 240 : 320,
+          child: _EventPicker(
+            events: _events,
+            selected: _selected,
+            onChanged: _pick,
+            width: compact ? 240 : 320,
+          ),
+        ),
+        const SizedBox(width: 6),
         for (final v in RegistrationView.values)
           QuickFilterPill(
             label: v.label,
@@ -664,6 +675,21 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
           const FilterLabel('Event'),
           const SizedBox(height: 8),
           _EventPicker(events: _events, selected: _selected, onChanged: _pick),
+          const SizedBox(height: 20),
+          const FilterLabel('Show'),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [
+              for (final v in RegistrationView.values)
+                FilterChipToggle(
+                  label: v.label,
+                  selected: v == _view,
+                  onChanged: (_) => setState(() => _view = v),
+                ),
+            ],
+          ),
           const SizedBox(height: 20),
           ...sections,
         ],
@@ -902,7 +928,11 @@ class _EventPicker extends StatelessWidget {
     required this.events,
     required this.selected,
     required this.onChanged,
+    this.width,
   });
+
+  /// Fixed width (in the pill row); null fills the space (in the rail).
+  final double? width;
 
   /// Newest first.
   final List<AppEvent> events;
@@ -916,7 +946,8 @@ class _EventPicker extends StatelessWidget {
       // Rebuild when the URL changes the selection.
       key: ValueKey(selected),
       initialSelection: known ? selected : null,
-      expandedInsets: EdgeInsets.zero,
+      expandedInsets: width == null ? EdgeInsets.zero : null,
+      width: width,
       enableFilter: true,
       requestFocusOnTap: true,
       menuHeight: 380,
