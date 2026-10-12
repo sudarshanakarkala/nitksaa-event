@@ -433,6 +433,10 @@ class EventCard extends StatelessWidget {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     String date(DateTime d) => '${days[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]}';
     if (end == null) return '${date(start)} · ${_clock(start)}';
+    // Full-day events end at midnight after their last day.
+    if (end.hour == 0 && end.minute == 0 && end.isAfter(start)) {
+      end = end.subtract(const Duration(minutes: 1));
+    }
     final sameDay = start.year == end.year && start.month == end.month && start.day == end.day;
     return sameDay
         ? '${date(start)} · ${_clock(start)} – ${_clock(end)}'

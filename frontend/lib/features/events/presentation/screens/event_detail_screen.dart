@@ -199,8 +199,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    _buildCupertinoMetaRow(CupertinoIcons.calendar, _formatDate(event.startDatetime), textSecondary),
-                    _buildCupertinoMetaRow(CupertinoIcons.clock, _formatTime(event.startDatetime, event.endDatetime), textSecondary),
+                    _buildCupertinoMetaRow(CupertinoIcons.calendar, _eventDateLabel(event), textSecondary),
+                    _buildCupertinoMetaRow(CupertinoIcons.clock, _eventTimeLabel(event), textSecondary),
                     _buildCupertinoMetaRow(
                       event.isVirtual ? CupertinoIcons.videocam : CupertinoIcons.location,
                       event.locationText ?? (event.isVirtual ? 'Virtual Zoom Link' : 'To Be Decided'),
@@ -564,8 +564,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 ],
                 _organiserLine(event, isAdmin: isAdmin),
                 const SizedBox(height: 16),
-                _buildMaterialMetaRow(Icons.calendar_today, _formatDate(event.startDatetime)),
-                _buildMaterialMetaRow(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime)),
+                _buildMaterialMetaRow(Icons.calendar_today, _eventDateLabel(event)),
+                _buildMaterialMetaRow(Icons.access_time, _eventTimeLabel(event)),
                 _buildMaterialMetaRow(
                   event.isVirtual ? Icons.videocam : Icons.location_on,
                   event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
@@ -752,8 +752,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       spacing: 16,
       runSpacing: 12,
       children: [
-        _buildMetaGridItem(Icons.calendar_today, _formatDate(event.startDatetime)),
-        _buildMetaGridItem(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime)),
+        _buildMetaGridItem(Icons.calendar_today, _eventDateLabel(event)),
+        _buildMetaGridItem(Icons.access_time, _eventTimeLabel(event)),
         _buildMetaGridItem(
           event.isVirtual ? Icons.videocam : Icons.location_on,
           event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
@@ -1936,7 +1936,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          '${_formatDate(event.startDatetime)} · ${_formatTime(event.startDatetime, event.endDatetime)}',
+          '${_eventDateLabel(event)} · ${_eventTimeLabel(event)}',
           style: TextStyle(
             fontSize: 12,
             color: context.palette.textSecondary,
@@ -1994,6 +1994,49 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       return formatSingle(start);
     }
     return '${formatSingle(start)} – ${formatSingle(end)}';
+  }
+
+  /// The last moment of the event. A full-day event is stored ending at
+  /// midnight after its last day, which belongs to the day before.
+  DateTime? _lastMoment(AppEvent event) {
+    final end = event.endDatetime;
+    if (end == null) return null;
+    return event.isFullDay ? end.subtract(const Duration(minutes: 1)) : end;
+  }
+
+  /// "26 Oct 2026", or for several days "26 – 27 Oct 2026 · 2 days".
+  String _eventDateLabel(AppEvent event) {
+    final start = event.startDatetime;
+    final last = _lastMoment(event);
+    if (last == null ||
+        (last.year == start.year && last.month == start.month && last.day == start.day)) {
+      return _formatDate(start);
+    }
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final days = DateTime(last.year, last.month, last.day)
+            .difference(DateTime(start.year, start.month, start.day))
+            .inDays +
+        1;
+    final String range;
+    if (start.year != last.year) {
+      range = '${_formatDate(start)} – ${_formatDate(last)}';
+    } else if (start.month != last.month) {
+      range = '${start.day} ${months[start.month - 1]} – ${last.day} ${months[last.month - 1]} ${last.year}';
+    } else {
+      range = '${start.day} – ${last.day} ${months[last.month - 1]} ${last.year}';
+    }
+    return '$range · $days days';
+  }
+
+  /// "9:00 AM – 5:00 PM" for one day; across days, when it starts and ends.
+  String _eventTimeLabel(AppEvent event) {
+    if (event.isFullDay) return 'All day';
+    final start = event.startDatetime;
+    final end = event.endDatetime;
+    if (end == null) return _formatTime(start, null);
+    final sameDay = end.year == start.year && end.month == start.month && end.day == start.day;
+    if (sameDay) return _formatTime(start, end);
+    return 'Starts ${_formatTime(start, null)}, ends ${_formatTime(end, null)}';
   }
 
   String _formatDateTime(DateTime dt) {
