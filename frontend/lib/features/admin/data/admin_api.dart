@@ -69,6 +69,23 @@ class EventAdmin {
       );
 }
 
+/// One active payment-role grant (`GET /api/v1/admin/payment-roles`).
+class PaymentRoleGrant {
+  const PaymentRoleGrant({required this.id, required this.firebaseUid, required this.role});
+
+  final int id;
+  final String firebaseUid;
+
+  /// platform_admin / finance_operator / auditor / support.
+  final String role;
+
+  factory PaymentRoleGrant.fromJson(Map<String, dynamic> json) => PaymentRoleGrant(
+        id: (json['id'] as num?)?.toInt() ?? 0,
+        firebaseUid: json['firebase_uid']?.toString() ?? '',
+        role: json['role']?.toString() ?? '',
+      );
+}
+
 class AdminUserPage {
   const AdminUserPage({
     required this.users,
@@ -194,6 +211,38 @@ class AdminApi {
       options: _auth(accessToken),
     );
     return EventAdmin.fromJson(response.data ?? const {});
+  }
+
+  // ── Payment roles (overall admins) ──────────────────────────────────────
+
+  /// Active payment-role grants, e.g. finance_operator.
+  Future<List<PaymentRoleGrant>> listPaymentRoles({required String accessToken}) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/admin/payment-roles',
+      options: _auth(accessToken),
+    );
+    final rows = response.data?['roles'] as List<dynamic>? ?? const [];
+    return rows.whereType<Map<String, dynamic>>().map(PaymentRoleGrant.fromJson).toList();
+  }
+
+  Future<PaymentRoleGrant> grantPaymentRole({
+    required String accessToken,
+    required String firebaseUid,
+    required String role,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/admin/payment-roles',
+      data: {'firebase_uid': firebaseUid, 'role': role},
+      options: _auth(accessToken),
+    );
+    return PaymentRoleGrant.fromJson(response.data ?? const {});
+  }
+
+  Future<void> revokePaymentRole({required String accessToken, required int grantId}) async {
+    await _dio.post<Map<String, dynamic>>(
+      '/api/v1/admin/payment-roles/$grantId/revoke',
+      options: _auth(accessToken),
+    );
   }
 
   Future<void> revokeEventAdmin({

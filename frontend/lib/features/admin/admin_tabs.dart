@@ -20,6 +20,8 @@ enum AdminTab {
 
   /// Who sees the tab. The backend scopes the data inside each tab.
   bool visibleTo(AdminAccess access) {
+    // Payment roles alone open Payments only.
+    if (this == AdminTab.payments) return access.canSeePayments;
     if (!access.isAnyAdmin) return false;
     switch (this) {
       case AdminTab.payments:

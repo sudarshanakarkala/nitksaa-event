@@ -6,7 +6,7 @@ from app.database import get_pool, close_pool
 from app.api import (
     health, events, admin_events, auth, dev_diagnostics, alumni, registrations,
     people, sponsors_partners, week5_diagnostics, payments, admin_payments,
-    refunds, nitika, admin_roles, admin_dashboard,
+    refunds, nitika, admin_roles, admin_dashboard, admin_payment_lists,
 )
 
 
@@ -46,6 +46,7 @@ app.include_router(events.router)
 app.include_router(admin_events.router)
 app.include_router(admin_roles.router)
 app.include_router(admin_dashboard.router)
+app.include_router(admin_payment_lists.router)
 app.include_router(auth.router)
 app.include_router(dev_diagnostics.router)
 app.include_router(week5_diagnostics.router)

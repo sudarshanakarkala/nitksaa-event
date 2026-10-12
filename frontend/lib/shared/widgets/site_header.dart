@@ -54,7 +54,7 @@ class SiteHeader extends ConsumerWidget {
     // Website Admin badge: shield, only for people with admin rights. The
     // pending count arrives with the Actions tab.
     final showAdmin =
-        auth.isAuthenticated && (auth.session?.access.isAnyAdmin ?? false);
+        auth.isAuthenticated && (auth.session?.access.hasAdminArea ?? false);
     final onAdminPage = location == AppRoutes.admin ||
         location.startsWith('${AppRoutes.admin}/');
 

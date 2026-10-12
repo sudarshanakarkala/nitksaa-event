@@ -5,16 +5,19 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
+import '../../../shared/widgets/site_toggle.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/services/auth_controller.dart';
 import '../../events/data/events_repository.dart';
 import '../data/admin_api.dart';
-import 'admin_screen.dart' show AdminContainer;
+import '../../../shared/widgets/list_page.dart';
 
 /// Roles tab (overall admins only): search people and switch their
-/// "Overall admin" and "Can create events" flags. Per-event admins are
-/// managed on the event itself (Events tab, step 5).
+/// "Overall admin", "Can create events" and "Finance" roles. Per-event
+/// admins are managed on the event itself (Events tab, step 5). Finance is
+/// the backend's finance_operator payment role: sees every event's payments
+/// and refunds without being an admin.
 class RolesTab extends ConsumerStatefulWidget {
   const RolesTab({super.key});
 
@@ -36,6 +39,9 @@ class _RolesTabState extends ConsumerState<RolesTab> {
   /// event_id → title, for the "Admin of N events" list.
   Map<int, String> _eventTitles = const {};
 
+  /// uid → their active Finance grant.
+  Map<String, PaymentRoleGrant> _finance = const {};
+
   String? get _token => ref.read(authControllerProvider).session?.accessToken;
   String? get _myUid => ref.read(authControllerProvider).session?.firebaseUid;
 
@@ -45,6 +51,7 @@ class _RolesTabState extends ConsumerState<RolesTab> {
     Future.microtask(() {
       _load();
       _loadEventTitles();
+      _loadFinance();
     });
   }
 
@@ -104,6 +111,74 @@ class _RolesTabState extends ConsumerState<RolesTab> {
       if (mounted) setState(() => _eventTitles = titles);
     } catch (error) {
       AppLogger.warning('Roles: event titles not loaded: $error');
+    }
+  }
+
+  Future<void> _loadFinance() async {
+    final token = _token;
+    if (token == null) return;
+    try {
+      final grants = await ref.read(adminApiProvider).listPaymentRoles(accessToken: token);
+      if (!mounted) return;
+      setState(() => _finance = {
+            for (final g in grants)
+              if (g.role == 'finance_operator') g.firebaseUid: g,
+          });
+    } catch (error) {
+      AppLogger.warning('Roles: payment roles not loaded: $error');
+    }
+  }
+
+  Future<void> _changeFinance(AdminUser user, bool on) async {
+    final name = user.fullname.isNotEmpty ? user.fullname : user.email;
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: Text(on ? 'Give $name the Finance role?' : 'Remove Finance from $name?'),
+        content: Text(
+          on
+              ? 'They will see every event\'s payments and refunds in the Payments tab. '
+                  'They can\'t edit events or roles.'
+              : 'They will no longer see payments, unless they admin an event.',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text('Cancel'),
+          ),
+          FilledButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text('Confirm'),
+          ),
+        ],
+      ),
+    );
+    if (confirmed != true || !mounted) return;
+    final token = _token;
+    if (token == null) return;
+    setState(() => _saving.add(user.firebaseUid));
+    try {
+      final api = ref.read(adminApiProvider);
+      if (on) {
+        final grant = await api.grantPaymentRole(
+          accessToken: token,
+          firebaseUid: user.firebaseUid,
+          role: 'finance_operator',
+        );
+        if (mounted) setState(() => _finance = {..._finance, user.firebaseUid: grant});
+      } else {
+        final grant = _finance[user.firebaseUid];
+        if (grant != null) {
+          await api.revokePaymentRole(accessToken: token, grantId: grant.id);
+        }
+        if (mounted) setState(() => _finance = {..._finance}..remove(user.firebaseUid));
+      }
+      _snack('Roles updated for $name.');
+    } catch (error, stackTrace) {
+      AppLogger.error('Roles: finance change failed', error, stackTrace);
+      if (mounted) _snack(apiErrorMessage(error, action: 'update roles'), isError: true);
+    } finally {
+      if (mounted) setState(() => _saving.remove(user.firebaseUid));
     }
   }
 
@@ -216,26 +291,26 @@ class _RolesTabState extends ConsumerState<RolesTab> {
     final p = context.palette;
     final result = _result;
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        AdminContainer(
-          child: Padding(
-            padding: const EdgeInsets.only(top: 16, bottom: 12),
-            child: TextField(
-            controller: _search,
-            onChanged: _onSearchChanged,
-            textInputAction: TextInputAction.search,
-            onSubmitted: (_) => _load(),
-            decoration: InputDecoration(
-              hintText: 'Search people by name or email',
-              prefixIcon: const Icon(Icons.search, size: 20),
-              isDense: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-            ),
-          ),
+    // Same frame as the other admin tabs (search on top, list below).
+    return ListPage(
+      search: SizedBox(
+        height: 44,
+        child: TextField(
+          controller: _search,
+          onChanged: _onSearchChanged,
+          textInputAction: TextInputAction.search,
+          onSubmitted: (_) => _load(),
+          decoration: const InputDecoration(
+            hintText: 'Search people by name or email',
+            prefixIcon: Icon(Icons.search, size: 20),
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
+      ),
+      body: Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
         if (_loading) const LinearProgressIndicator(minHeight: 2),
         Expanded(
           child: _error != null && result == null
@@ -251,10 +326,10 @@ class _RolesTabState extends ConsumerState<RolesTab> {
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 900;
                     return ListView.separated(
-                      padding: AdminContainer.scrollPadding(
+                      padding: ListPage.contentPadding(
                         context,
                         constraints.maxWidth,
-                        top: 4,
+                        top: 16,
                       ),
                       itemCount: result.users.length + 1,
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
@@ -272,8 +347,10 @@ class _RolesTabState extends ConsumerState<RolesTab> {
                           isMe: user.firebaseUid == _myUid,
                           saving: _saving.contains(user.firebaseUid),
                           eventTitles: _eventTitles,
+                          finance: _finance.containsKey(user.firebaseUid),
                           onAdmin: (v) => _change(user, isAdmin: v),
                           onCreator: (v) => _change(user, isEventCreator: v),
+                          onFinance: (v) => _changeFinance(user, v),
                         );
                       },
                     );
@@ -281,13 +358,12 @@ class _RolesTabState extends ConsumerState<RolesTab> {
                 ),
         ),
         if (_error != null && result != null)
-          AdminContainer(
-            child: Padding(
-              padding: const EdgeInsets.only(bottom: 8),
-              child: Text(_error!, style: TextStyle(color: p.error)),
-            ),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+            child: Text(_error!, style: TextStyle(color: p.error)),
           ),
       ],
+      ),
     );
   }
 }
@@ -299,8 +375,10 @@ class _UserCard extends StatefulWidget {
     required this.isMe,
     required this.saving,
     required this.eventTitles,
+    required this.finance,
     required this.onAdmin,
     required this.onCreator,
+    required this.onFinance,
   });
 
   final AdminUser user;
@@ -308,8 +386,10 @@ class _UserCard extends StatefulWidget {
   final bool isMe;
   final bool saving;
   final Map<int, String> eventTitles;
+  final bool finance;
   final ValueChanged<bool> onAdmin;
   final ValueChanged<bool> onCreator;
+  final ValueChanged<bool> onFinance;
 
   @override
   State<_UserCard> createState() => _UserCardState();
@@ -377,6 +457,12 @@ class _UserCardState extends State<_UserCard> {
       note: creatorNote,
       onChanged: creatorLocked ? null : widget.onCreator,
     );
+    final financeSwitch = _LabelledSwitch(
+      label: 'Finance',
+      value: widget.finance || overall,
+      note: overall ? 'Included with overall admin' : 'Sees all payments',
+      onChanged: widget.saving || overall ? null : widget.onFinance,
+    );
     final events = _EventsLink(
       count: user.adminEventIds.length,
       open: _showEvents,
@@ -401,6 +487,7 @@ class _UserCardState extends State<_UserCard> {
                 Expanded(flex: 4, child: identity),
                 Expanded(flex: 3, child: adminSwitch),
                 Expanded(flex: 3, child: creatorSwitch),
+                Expanded(flex: 3, child: financeSwitch),
                 Expanded(flex: 2, child: events),
               ],
             )
@@ -410,7 +497,7 @@ class _UserCardState extends State<_UserCard> {
             Wrap(
               spacing: 24,
               runSpacing: 8,
-              children: [adminSwitch, creatorSwitch, events],
+              children: [adminSwitch, creatorSwitch, financeSwitch, events],
             ),
           ],
           if (_showEvents && user.adminEventIds.isNotEmpty) ...[
@@ -451,8 +538,8 @@ class _LabelledSwitch extends StatelessWidget {
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Switch(value: value, onChanged: onChanged),
-        const SizedBox(width: 8),
+        SiteToggle(value: value, onChanged: onChanged),
+        const SizedBox(width: 10),
         Flexible(
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -460,9 +547,9 @@ class _LabelledSwitch extends StatelessWidget {
             children: [
               Text(
                 label,
-                style: AppTextStyles.labelLarge.copyWith(
-                  color: p.textPrimary,
-                  letterSpacing: 0,
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontSize: 13.5,
+                  color: p.textSecondary,
                 ),
               ),
               if (note != null)
