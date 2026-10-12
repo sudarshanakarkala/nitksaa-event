@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -10,7 +11,7 @@ import '../../../../shared/widgets/page_insets.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
-import 'manage_events_screen.dart' show showEventFormDialog;
+import '../../../admin/presentation/event_admin_actions.dart' show EventAdminActions;
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
 import '../widgets/venue_section.dart';
@@ -198,8 +199,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       ),
                     ],
                     const SizedBox(height: 16),
-                    _buildCupertinoMetaRow(CupertinoIcons.calendar, _formatDate(event.startDatetime), textSecondary),
-                    _buildCupertinoMetaRow(CupertinoIcons.clock, _formatTime(event.startDatetime, event.endDatetime), textSecondary),
+                    _buildCupertinoMetaRow(CupertinoIcons.calendar, _eventDateLabel(event), textSecondary),
+                    _buildCupertinoMetaRow(CupertinoIcons.clock, _eventTimeLabel(event), textSecondary),
                     _buildCupertinoMetaRow(
                       event.isVirtual ? CupertinoIcons.videocam : CupertinoIcons.location,
                       event.locationText ?? (event.isVirtual ? 'Virtual Zoom Link' : 'To Be Decided'),
@@ -563,8 +564,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 ],
                 _organiserLine(event, isAdmin: isAdmin),
                 const SizedBox(height: 16),
-                _buildMaterialMetaRow(Icons.calendar_today, _formatDate(event.startDatetime)),
-                _buildMaterialMetaRow(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime)),
+                _buildMaterialMetaRow(Icons.calendar_today, _eventDateLabel(event)),
+                _buildMaterialMetaRow(Icons.access_time, _eventTimeLabel(event)),
                 _buildMaterialMetaRow(
                   event.isVirtual ? Icons.videocam : Icons.location_on,
                   event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
@@ -751,8 +752,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       spacing: 16,
       runSpacing: 12,
       children: [
-        _buildMetaGridItem(Icons.calendar_today, _formatDate(event.startDatetime)),
-        _buildMetaGridItem(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime)),
+        _buildMetaGridItem(Icons.calendar_today, _eventDateLabel(event)),
+        _buildMetaGridItem(Icons.access_time, _eventTimeLabel(event)),
         _buildMetaGridItem(
           event.isVirtual ? Icons.videocam : Icons.location_on,
           event.locationText ?? (event.isVirtual ? 'Virtual Link' : 'To Be Decided'),
@@ -1063,7 +1064,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final p = context.palette;
     final who = event.creatorName(ref.read(authControllerProvider).session?.firebaseUid);
     if (who == null && !isAdmin) return const SizedBox.shrink();
-    return Padding(
+    final link = event.virtualUrl?.trim() ?? '';
+    final line = Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -1077,19 +1079,96 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             ),
           if (isAdmin)
             TextButton.icon(
-              onPressed: () async {
-                final saved = await showEventFormDialog(context, event: event);
-                if (saved && mounted) {
-                  await ref
-                      .read(eventDetailProvider(widget.eventId).notifier)
-                      .fetchEventDetails(widget.eventId);
-                }
-              },
+              onPressed: () => EventAdminActions(
+                context: context,
+                ref: ref,
+                onChanged: () => ref
+                    .read(eventDetailProvider(widget.eventId).notifier)
+                    .fetchEventDetails(widget.eventId),
+                isBusy: (_) => false,
+                setBusy: (_, _) {},
+              ).edit(event),
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('Edit event'),
             ),
         ],
       ),
+    );
+    if (!isAdmin || !event.isVirtual || link.isEmpty) return line;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [line, _organiserMeetingLink(link)],
+    );
+  }
+
+  /// The meeting link, for the event's organisers only. Attendees get it
+  /// through Join meeting once registered.
+  Widget _organiserMeetingLink(String link) {
+    final p = context.palette;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: p.border),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.videocam_outlined, size: 18, color: p.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SelectableText(link, style: TextStyle(fontSize: 13, color: p.textPrimary)),
+                Text(
+                  'Meeting link · only organisers see this',
+                  style: TextStyle(fontSize: 11, color: p.textMuted),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copy link',
+            icon: const Icon(Icons.copy, size: 16),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: link));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Meeting link copied')),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Join meeting for registered attendees; a note for everyone else.
+  Widget? _attendeeMeetingLink(AppEvent event, {required bool registered, String? joinUrl}) {
+    if (!event.isVirtual) return null;
+    final p = context.palette;
+    final url = joinUrl?.trim() ?? '';
+    if (registered && url.isNotEmpty) {
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => _launchUrl(url),
+          icon: const Icon(Icons.videocam_outlined, size: 18),
+          label: const Text('Join meeting'),
+          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+        ),
+      );
+    }
+    if (registered) return null;
+    // Organisers already see the link at the top of the page.
+    final isOrganiser =
+        ref.read(authControllerProvider).session?.access.canAdminEvent(event.eventId) ?? false;
+    if (isOrganiser) return null;
+    return Text(
+      'The meeting link is shared once you register.',
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 13, color: p.textSecondary),
     );
   }
 
@@ -1315,6 +1394,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         state.eligibilityStatus == 'eligible' &&
         !isPastEvent;
 
+    // Once it's over there is nothing to register for: just say it ended.
+    final isRegistered =
+        hasActiveRegistration || state.eligibilityStatus == 'already_registered';
+    if (isPastEvent && !isRegistered) return _endedNotice();
+
     Widget ctaWidget;
     if (hasCancelledRegistration && !canRegisterAgain) {
       ctaWidget = Container(
@@ -1523,6 +1607,20 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ],
         );
       }
+    }
+
+    final meeting = isPastEvent
+        ? null
+        : _attendeeMeetingLink(
+            event,
+            registered: isRegistered,
+            joinUrl: state.myRegistration?['join_url']?.toString(),
+          );
+    if (meeting != null) {
+      ctaWidget = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [ctaWidget, const SizedBox(height: 12), meeting],
+      );
     }
 
     if (countdownWidget != null) {
@@ -1838,7 +1936,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ),
         const SizedBox(height: 6),
         Text(
-          '${_formatDate(event.startDatetime)} · ${_formatTime(event.startDatetime, event.endDatetime)}',
+          '${_eventDateLabel(event)} · ${_eventTimeLabel(event)}',
           style: TextStyle(
             fontSize: 12,
             color: context.palette.textSecondary,
@@ -1896,6 +1994,49 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       return formatSingle(start);
     }
     return '${formatSingle(start)} – ${formatSingle(end)}';
+  }
+
+  /// The last moment of the event. A full-day event is stored ending at
+  /// midnight after its last day, which belongs to the day before.
+  DateTime? _lastMoment(AppEvent event) {
+    final end = event.endDatetime;
+    if (end == null) return null;
+    return event.isFullDay ? end.subtract(const Duration(minutes: 1)) : end;
+  }
+
+  /// "26 Oct 2026", or for several days "26 – 27 Oct 2026 · 2 days".
+  String _eventDateLabel(AppEvent event) {
+    final start = event.startDatetime;
+    final last = _lastMoment(event);
+    if (last == null ||
+        (last.year == start.year && last.month == start.month && last.day == start.day)) {
+      return _formatDate(start);
+    }
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final days = DateTime(last.year, last.month, last.day)
+            .difference(DateTime(start.year, start.month, start.day))
+            .inDays +
+        1;
+    final String range;
+    if (start.year != last.year) {
+      range = '${_formatDate(start)} – ${_formatDate(last)}';
+    } else if (start.month != last.month) {
+      range = '${start.day} ${months[start.month - 1]} – ${last.day} ${months[last.month - 1]} ${last.year}';
+    } else {
+      range = '${start.day} – ${last.day} ${months[last.month - 1]} ${last.year}';
+    }
+    return '$range · $days days';
+  }
+
+  /// "9:00 AM – 5:00 PM" for one day; across days, when it starts and ends.
+  String _eventTimeLabel(AppEvent event) {
+    if (event.isFullDay) return 'All day';
+    final start = event.startDatetime;
+    final end = event.endDatetime;
+    if (end == null) return _formatTime(start, null);
+    final sameDay = end.year == start.year && end.month == start.month && end.day == start.day;
+    if (sameDay) return _formatTime(start, end);
+    return 'Starts ${_formatTime(start, null)}, ends ${_formatTime(end, null)}';
   }
 
   String _formatDateTime(DateTime dt) {

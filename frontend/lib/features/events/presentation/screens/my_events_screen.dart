@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
@@ -211,6 +212,9 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     final event = registration.publicEvent;
     final active = registration.isActive;
     final when = active ? registration.registeredAt : registration.cancelledAt;
+    final end = summary?.endDatetime ?? event?.endDatetime ?? summary?.startDatetime ?? event?.startDatetime;
+    final joinUrl = registration.joinUrl?.trim() ?? '';
+    final canJoin = active && joinUrl.isNotEmpty && (end == null || end.isAfter(DateTime.now()));
     return EventCard(
       title: summary?.title ?? event?.title ?? 'Registered event',
       tagline: event?.tagline,
@@ -233,6 +237,9 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       onUnregister:
           registration.canCancel ? () => _confirmCancel(registration) : null,
       unregistering: isCancelling,
+      onJoin: canJoin
+          ? () => launchUrl(Uri.parse(joinUrl), mode: LaunchMode.externalApplication)
+          : null,
       onViewRefund: registration.mayHaveRefund
           ? () => showRefundStatus(
                 context,

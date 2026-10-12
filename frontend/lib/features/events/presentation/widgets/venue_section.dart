@@ -58,7 +58,16 @@ class VenueSection extends StatelessWidget {
             borderRadius: BorderRadius.circular(12),
             child: DecoratedBox(
               decoration: BoxDecoration(border: Border.all(color: p.border)),
-              child: SizedBox(height: 240, width: double.infinity, child: map),
+              // The map ignores the mouse (see venueMapFrame); a click
+              // on it opens Google Maps.
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: HitTestBehavior.opaque,
+                  onTap: () => launchUrl(_openUrl, mode: LaunchMode.externalApplication),
+                  child: SizedBox(height: 240, width: double.infinity, child: map),
+                ),
+              ),
             ),
           ),
         ],

@@ -63,6 +63,7 @@ class EventCard extends StatelessWidget {
     this.onUnregister,
     this.unregistering = false,
     this.onViewRefund,
+    this.onJoin,
     this.footerNote,
     this.showAdmin = false,
     this.eventStatus,
@@ -148,6 +149,9 @@ class EventCard extends StatelessWidget {
   final VoidCallback? onUnregister;
   final bool unregistering;
   final VoidCallback? onViewRefund;
+
+  /// Join meeting: a registered attendee's link to a virtual event.
+  final VoidCallback? onJoin;
 
   /// Short muted text at the left of the footer.
   final String? footerNote;
@@ -326,7 +330,7 @@ class EventCard extends StatelessWidget {
           style: compact,
           child: const Text('View refund status'),
         ),
-      if (showAdmin && adminActions.isNotEmpty)
+      if (adminActions.isNotEmpty)
         PopupMenuButton<int>(
           tooltip: 'More actions',
           icon: Icon(Icons.more_horiz, color: p.textSecondary),
@@ -353,6 +357,13 @@ class EventCard extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      if (onJoin != null)
+        OutlinedButton.icon(
+          onPressed: onJoin,
+          style: compact,
+          icon: const Icon(Icons.videocam_outlined, size: 16),
+          label: const Text('Join meeting'),
         ),
       FilledButton(onPressed: onView, style: compact, child: Text(viewLabel)),
     ];
@@ -422,6 +433,10 @@ class EventCard extends StatelessWidget {
     const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
     String date(DateTime d) => '${days[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]}';
     if (end == null) return '${date(start)} · ${_clock(start)}';
+    // Full-day events end at midnight after their last day.
+    if (end.hour == 0 && end.minute == 0 && end.isAfter(start)) {
+      end = end.subtract(const Duration(minutes: 1));
+    }
     final sameDay = start.year == end.year && start.month == end.month && start.day == end.day;
     return sameDay
         ? '${date(start)} · ${_clock(start)} – ${_clock(end)}'

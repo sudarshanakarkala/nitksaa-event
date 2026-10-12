@@ -770,14 +770,18 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _description = TextEditingController(text: event?.description ?? '');
     
     final startDt = event?.startDatetime ?? DateTime.now();
-    final endDt = event?.endDatetime ?? DateTime.now().add(const Duration(hours: 2));
+    var endDt = event?.endDatetime ?? DateTime.now().add(const Duration(hours: 2));
+    // A full-day event is saved ending at midnight after its last day.
+    if ((event?.isFullDay ?? false) && endDt.isAfter(startDt)) {
+      endDt = endDt.subtract(const Duration(days: 1));
+    }
     
     _startDate = TextEditingController(text: _formatDateOnly(startDt));
     _endDate = TextEditingController(text: _formatDateOnly(endDt));
     _startTime = TextEditingController(text: _formatTimeFromDateTime(startDt));
     _endTime = TextEditingController(text: _formatTimeFromDateTime(endDt));
     _timezone = TextEditingController(text: event?.timezone ?? 'Asia/Kolkata');
-    _isFullDay = false;
+    _isFullDay = event?.isFullDay ?? false;
     
     _isVirtual = event?.isVirtual ?? false;
     _location = TextEditingController(text: event?.locationText ?? '');
@@ -837,10 +841,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       };
     }).toList() ?? [];
     
-    // Add listeners for syncing dates and times
-    _startDate.addListener(_syncDates);
-    _startTime.addListener(_syncTimes);
-    
     // Add listeners to step 1 required fields to trigger rebuild for Next button state
     _title.addListener(_onFieldChanged);
     _description.addListener(_onFieldChanged);
@@ -857,18 +857,28 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     setState(() {});
   }
 
-  void _syncDates() {
-    _endDate.text = _startDate.text;
+  /// One moment from a date field and a time field.
+  DateTime? _fieldsToDateTime(TextEditingController date, TextEditingController time) {
+    final d = _parseDate(date.text);
+    if (d == null) return null;
+    final t = _parseTime(time.text) ?? const TimeOfDay(hour: 0, minute: 0);
+    return DateTime(d.year, d.month, d.day, t.hour, t.minute);
   }
 
-  void _syncTimes() {
-    final startTime = _parseTime(_startTime.text);
-    if (startTime != null) {
-      var totalMinutes = startTime.hour * 60 + startTime.minute + 180; // +3 hours
-      var endHours = (totalMinutes ~/ 60) % 24;
-      var endMinutes = totalMinutes % 60;
-      _endTime.text = _formatTimeOfDay(TimeOfDay(hour: endHours, minute: endMinutes));
-    }
+  /// Moving the start moves the end with it, so the event keeps its length.
+  /// [apply] changes the start fields.
+  void _moveStart(void Function() apply) {
+    final oldStart = _fieldsToDateTime(_startDate, _startTime);
+    final oldEnd = _fieldsToDateTime(_endDate, _endTime);
+    apply();
+    final newStart = _fieldsToDateTime(_startDate, _startTime);
+    if (oldStart == null || newStart == null) return;
+    final length = (oldEnd != null && !oldEnd.isBefore(oldStart))
+        ? oldEnd.difference(oldStart)
+        : const Duration(hours: 3);
+    final newEnd = newStart.add(length);
+    _endDate.text = _formatDateOnly(newEnd);
+    _endTime.text = _formatTimeFromDateTime(newEnd);
   }
 
   @override
@@ -876,8 +886,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _title.dispose();
     _tagline.dispose();
     _description.dispose();
-    _startDate.removeListener(_syncDates);
-    _startTime.removeListener(_syncTimes);
     _startDate.dispose();
     _endDate.dispose();
     _startTime.dispose();
@@ -1126,10 +1134,17 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         const SizedBox(height: 12),
         
         // Date/time fields
+        // Full day: dates only (an event can run several days).
         if (_isFullDay)
           Column(
             children: [
-              _buildDateField(_startDate, 'Event Date', required: true),
+              Row(
+                children: [
+                  Expanded(child: _buildDateField(_startDate, 'Start Date', required: true)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildDateField(_endDate, 'End Date', required: true)),
+                ],
+              ),
               const SizedBox(height: 12),
             ],
           )
@@ -1320,31 +1335,42 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
+  // Date and time fields are read-only: a click anywhere opens the picker,
+  // and nothing changes unless something is picked. Past dates are allowed
+  // (an old draft can be moved to a new date).
+
+  /// True while a picker is open, so extra clicks don't stack more pickers.
+  bool _picking = false;
+
+  Future<T?> _onePicker<T>(Future<T?> Function() open) async {
+    if (_picking) return null;
+    _picking = true;
+    try {
+      return await open();
+    } finally {
+      _picking = false;
+    }
+  }
+
   Widget _buildDateField(TextEditingController controller, String label, {bool required = false}) {
     final displayLabel = required ? '$label *' : label;
-    return TextFormField(
+    Future<void> pick() async {
+      final picked = await _onePicker(() => showDatePicker(
+        context: context,
+        initialDate: _parseDate(controller.text) ?? DateTime.now(),
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+      ));
+      if (picked == null) return;
+      void apply() => controller.text = _formatDateOnly(picked);
+      identical(controller, _startDate) ? _moveStart(apply) : apply();
+    }
+
+    return _PickerField(
       controller: controller,
-      decoration: InputDecoration(
-        labelText: displayLabel,
-        hintText: 'YYYY-MM-DD',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        suffixIcon: GestureDetector(
-          onTap: () async {
-            final picked = await showDatePicker(
-              context: context,
-              initialDate: _parseDate(controller.text) ?? DateTime.now(),
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2040),
-            );
-            if (picked != null) {
-              controller.text = _formatDateOnly(picked);
-            }
-          },
-          child: const Icon(Icons.calendar_today),
-        ),
-      ),
-      keyboardType: TextInputType.datetime,
+      label: displayLabel,
+      icon: Icons.calendar_today,
+      onPick: pick,
       validator: required
           ? (value) => value == null || value.trim().isEmpty ? '$label is required' : null
           : null,
@@ -1353,27 +1379,21 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
 
   Widget _buildTimeField(TextEditingController controller, String label, {bool required = false}) {
     final displayLabel = required ? '$label *' : label;
-    return TextFormField(
+    Future<void> pick() async {
+      final picked = await _onePicker(() => showTimePicker(
+        context: context,
+        initialTime: _parseTime(controller.text) ?? TimeOfDay.now(),
+      ));
+      if (picked == null) return;
+      void apply() => controller.text = _formatTimeOfDay(picked);
+      identical(controller, _startTime) ? _moveStart(apply) : apply();
+    }
+
+    return _PickerField(
       controller: controller,
-      decoration: InputDecoration(
-        labelText: displayLabel,
-        hintText: 'HH:mm',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        suffixIcon: GestureDetector(
-          onTap: () async {
-            final picked = await showTimePicker(
-              context: context,
-              initialTime: _parseTime(controller.text) ?? TimeOfDay.now(),
-            );
-            if (picked != null) {
-              controller.text = _formatTimeOfDay(picked);
-            }
-          },
-          child: const Icon(Icons.access_time),
-        ),
-      ),
-      keyboardType: TextInputType.datetime,
+      label: displayLabel,
+      icon: Icons.access_time,
+      onPick: pick,
       validator: required
           ? (value) => value == null || value.trim().isEmpty ? '$label is required' : null
           : null,
@@ -1381,36 +1401,36 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   }
 
   Widget _buildDateTimeField(TextEditingController controller, String label, {String? hint}) {
-    return TextFormField(
+    Future<void> pick() async {
+      if (_picking) return;
+      final current = DateTime.tryParse(controller.text.trim()) ?? DateTime.now();
+      final date = await _onePicker(() => showDatePicker(
+        context: context,
+        initialDate: current,
+        firstDate: DateTime(2000),
+        lastDate: DateTime(2100),
+      ));
+      if (date == null || !mounted) return;
+      final time = await _onePicker(() => showTimePicker(
+        context: context,
+        initialTime: TimeOfDay.fromDateTime(current),
+      ));
+      if (time == null) return;
+      setState(() {
+        controller.text = _formatDateTimeOnly(
+          DateTime(date.year, date.month, date.day, time.hour, time.minute),
+        );
+      });
+    }
+
+    return _PickerField(
       controller: controller,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        suffixIcon: GestureDetector(
-          onTap: () async {
-            final date = await showDatePicker(
-              context: context,
-              initialDate: DateTime.now(),
-              firstDate: DateTime(2020),
-              lastDate: DateTime(2040),
-            );
-            if (date == null) return;
-
-            final time = await showTimePicker(
-              context: context,
-              initialTime: TimeOfDay.now(),
-            );
-            if (time == null) return;
-
-            final dateTime = DateTime(date.year, date.month, date.day, time.hour, time.minute);
-            controller.text = _formatDateTimeOnly(dateTime);
-          },
-          child: const Icon(Icons.schedule),
-        ),
-      ),
-      keyboardType: TextInputType.datetime,
+      label: label,
+      hint: hint,
+      icon: Icons.schedule,
+      onPick: pick,
+      // These are optional, so they can be cleared.
+      onClear: () => setState(controller.clear),
     );
   }
 
@@ -3174,6 +3194,67 @@ void _showFeeDialog(int? editIndex) {
     } catch (e) {
       return null;
     }
+  }
+}
+
+/// A date or time field: shows the value, and a click anywhere on it opens
+/// [onPick]. There is no typing, so nothing changes unless something is
+/// picked.
+class _PickerField extends StatelessWidget {
+  const _PickerField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.onPick,
+    this.hint,
+    this.onClear,
+    this.validator,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final IconData icon;
+  final Future<void> Function() onPick;
+  final VoidCallback? onClear;
+  final FormFieldValidator<String>? validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return FormField<String>(
+      validator: validator == null ? null : (_) => validator!(controller.text),
+      builder: (field) => ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (context, value, _) {
+          final text = value.text;
+          return InkWell(
+            onTap: () async {
+              await onPick();
+              field.didChange(controller.text);
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
+              isEmpty: text.isEmpty,
+              decoration: InputDecoration(
+                labelText: label,
+                hintText: hint,
+                errorText: field.errorText,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                suffixIcon: onClear != null && text.isNotEmpty
+                    ? IconButton(
+                        tooltip: 'Clear',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: onClear,
+                      )
+                    : Icon(icon),
+              ),
+              child: Text(text.isEmpty ? '' : text),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

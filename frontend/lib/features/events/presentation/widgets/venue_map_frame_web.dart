@@ -20,11 +20,12 @@ extension type _Style._(JSObject _) implements JSObject {
   external set border(String value);
   external set width(String value);
   external set height(String value);
+  external set pointerEvents(String value);
 }
 
 final _registered = <String>{};
 
-/// An iframe showing [embedUrl], lazily loaded.
+/// An iframe showing [embedUrl], lazily loaded. It ignores the mouse.
 Widget? venueMapFrame(String embedUrl) {
   final viewType = 'venue-map-${embedUrl.hashCode}';
   if (_registered.add(viewType)) {
@@ -37,7 +38,13 @@ Widget? venueMapFrame(String embedUrl) {
       frame.style
         ..border = '0'
         ..width = '100%'
-        ..height = '100%';
+        ..height = '100%'
+        // The map is a picture, not a control. A web page embedded in the
+        // app sits above Flutter and would otherwise take every click over
+        // it, even through dialogs opened on top (the event form's date
+        // pickers stopped responding wherever the map was underneath).
+        // "Open in Google Maps" is there for panning and zooming.
+        ..pointerEvents = 'none';
       return frame;
     });
   }
