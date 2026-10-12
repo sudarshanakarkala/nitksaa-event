@@ -63,38 +63,6 @@ class DashboardUpcoming {
       );
 }
 
-/// How a past event went.
-@immutable
-class DashboardRecent {
-  const DashboardRecent({
-    required this.eventId,
-    required this.title,
-    required this.start,
-    required this.registered,
-    required this.checkedIn,
-    required this.noShows,
-    required this.money,
-  });
-
-  final int eventId;
-  final String title;
-  final DateTime start;
-  final int registered;
-  final int checkedIn;
-  final int noShows;
-  final double money;
-
-  factory DashboardRecent.fromJson(Map<String, dynamic> j) => DashboardRecent(
-        eventId: _int(j['event_id']),
-        title: j['title']?.toString() ?? '',
-        start: _date(j['start_datetime']) ?? DateTime.now(),
-        registered: _int(j['registered']),
-        checkedIn: _int(j['checked_in']),
-        noShows: _int(j['no_shows']),
-        money: _double(j['money_collected']),
-      );
-}
-
 @immutable
 class DashboardWeek {
   const DashboardWeek(this.week, this.registrations, this.cancellations);
@@ -113,7 +81,6 @@ class DashboardData {
     required this.cancellations,
     required this.money,
     required this.upcoming,
-    required this.recent,
     required this.weekly,
     required this.byDecade,
   });
@@ -125,7 +92,6 @@ class DashboardData {
   /// LIVE payments only.
   final double money;
   final List<DashboardUpcoming> upcoming;
-  final List<DashboardRecent> recent;
   final List<DashboardWeek> weekly;
 
   /// Decade (1990, 2000 …) → registrations.
@@ -141,7 +107,6 @@ class DashboardData {
       cancellations: _int(tiles['cancellations']),
       money: _double(tiles['money_collected']),
       upcoming: list('upcoming').map(DashboardUpcoming.fromJson).toList(),
-      recent: list('recent').map(DashboardRecent.fromJson).toList(),
       weekly: [
         for (final w in list('weekly'))
           DashboardWeek(

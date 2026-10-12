@@ -16,9 +16,10 @@ import '../../auth/services/auth_controller.dart';
 import '../data/dashboard_api.dart';
 import '../domain/registration_filters.dart' show formatDate;
 
-/// Admin → Dashboard: how the events you administer are doing. Upcoming
-/// events and their progress first, then the period's numbers, the weekly
-/// trend, how recent events went, and who is registering.
+/// Admin → Dashboard: how the events you administer are doing. The
+/// period's numbers, upcoming events and their progress, the weekly trend
+/// and who is registering. Past-event detail lives in Events, money in
+/// Payments.
 ///
 /// Same frame as the other admin tabs: the period pills are quick filters,
 /// and the rail has the same choice.
@@ -221,26 +222,6 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
                 const SizedBox(height: 20),
                 charts[1],
               ],
-              const SizedBox(height: 20),
-              _Card(
-                title: 'Recent events',
-                subtitle: 'How the last few went',
-                child: data.recent.isEmpty
-                    ? const _Empty('No past events yet.')
-                    : Column(
-                        children: [
-                          for (var i = 0; i < data.recent.length; i++) ...[
-                            if (i > 0) Divider(height: 1, color: p.border),
-                            _RecentRow(
-                              event: data.recent[i],
-                              onTap: () => context.go(
-                                '/admin/registrations?event=${data.recent[i].eventId}',
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
-              ),
             ],
           ),
         );
@@ -463,62 +444,6 @@ class _UpcomingRow extends StatelessWidget {
               style: secondary.copyWith(
                 color: e.isToday || e.newThisWeek > 0 ? p.textSecondary : p.textMuted,
               ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-}
-
-class _RecentRow extends StatelessWidget {
-  const _RecentRow({required this.event, required this.onTap});
-
-  final DashboardRecent event;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final e = event;
-    final attendance = e.registered > 0 ? '${(e.checkedIn * 100 / e.registered).round()}%' : '—';
-    Widget figure(String label, String value) => Padding(
-          padding: const EdgeInsets.only(right: 24),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(value, style: AppTextStyles.titleSmall.copyWith(color: p.textPrimary)),
-              Text(label, style: AppTextStyles.bodySmall.copyWith(color: p.textMuted)),
-            ],
-          ),
-        );
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              e.title,
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: AppTextStyles.titleSmall.copyWith(color: p.textPrimary),
-            ),
-            Text(
-              formatDate(e.start),
-              style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
-            ),
-            const SizedBox(height: 8),
-            Wrap(
-              runSpacing: 8,
-              children: [
-                figure('Registered', '${e.registered}'),
-                figure('Attended', '${e.checkedIn} · $attendance'),
-                figure('No-shows', '${e.noShows}'),
-                figure('Money', _money(e.money)),
-              ],
             ),
           ],
         ),
