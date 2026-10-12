@@ -326,7 +326,7 @@ class EventCard extends StatelessWidget {
           style: compact,
           child: const Text('View refund status'),
         ),
-      if (showAdmin && adminActions.isNotEmpty)
+      if (adminActions.isNotEmpty)
         PopupMenuButton<int>(
           tooltip: 'More actions',
           icon: Icon(Icons.more_horiz, color: p.textSecondary),

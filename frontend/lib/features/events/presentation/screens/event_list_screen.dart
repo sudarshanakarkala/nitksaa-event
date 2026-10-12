@@ -10,6 +10,8 @@ import '../../../../theme/app_text_styles.dart';
 import '../../../../shared/widgets/list_page.dart';
 import '../../../../shared/widgets/quick_filter_pill.dart';
 import '../../../../shared/widgets/segment_toggle.dart';
+import '../../../admin/presentation/event_admin_actions.dart';
+import '../../../auth/domain/admin_access.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/created_events_provider.dart';
 import '../providers/events_provider.dart';
@@ -31,6 +33,20 @@ class EventListScreen extends ConsumerStatefulWidget {
 }
 
 class _EventListScreenState extends ConsumerState<EventListScreen> {
+  /// Admin actions in place (website pattern): on cards of events you
+  /// administer, the same ⋯ menu as Admin → Events.
+  final Set<int> _busy = {};
+  late final EventAdminActions _adminActions = EventAdminActions(
+    context: context,
+    ref: ref,
+    onChanged: () async {}, // the shared refresh reloads this list
+    isBusy: _busy.contains,
+    setBusy: (id, busy) {
+      if (!mounted) return;
+      setState(() => busy ? _busy.add(id) : _busy.remove(id));
+    },
+  );
+
   final TextEditingController _searchController = TextEditingController();
   final GlobalKey<ScaffoldState> _scaffoldKey = GlobalKey<ScaffoldState>();
 
@@ -1327,6 +1343,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         : allEvents;
     final p = context.palette;
     final signedIn = ref.watch(authControllerProvider).isAuthenticated;
+    final access = ref.watch(authControllerProvider).session?.access ?? AdminAccess.none;
+    final drafts = access.isAnyAdmin ? (ref.watch(myDraftCountProvider).valueOrNull ?? 0) : 0;
     // Quick "when" pills: shortcuts to the same filters as the panel.
     final noDates = state.dateRangeStart == null && state.dateRangeEnd == null;
     void when({required String period, String? timeline}) {
@@ -1380,6 +1398,22 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ),
                 style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
               ),
+        // Admins act here too: their drafts (kept off the public grid, as on
+        // the website) and Create event.
+        actions: [
+          if (drafts > 0)
+            TextButton.icon(
+              onPressed: () => context.go('/admin/events?filter=draft'),
+              icon: const Icon(Icons.edit_note_outlined, size: 18),
+              label: Text(drafts == 1 ? '1 draft' : '$drafts drafts'),
+            ),
+          if (access.isEventCreator)
+            FilledButton.icon(
+              onPressed: _adminActions.create,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Create event'),
+            ),
+        ],
         quickFilters: [
           QuickFilterPill(
             label: 'Upcoming',
@@ -1446,6 +1480,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         : EventAttendance.none,
                     mine: created.contains(event.eventId),
                     onView: () => context.push('/events/${event.eventId}'),
+                    adminActions: access.canAdminEvent(event.eventId)
+                        ? _adminActions.actionsFor(event)
+                        : const [],
                     onUnregister: registered && registration!.canCancel
                         ? () => _confirmUnregister(event, registration)
                         : null,

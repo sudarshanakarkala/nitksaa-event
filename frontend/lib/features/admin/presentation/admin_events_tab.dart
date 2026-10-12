@@ -1,4 +1,3 @@
-import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -15,11 +14,8 @@ import '../../auth/domain/admin_access.dart';
 import '../../auth/services/auth_controller.dart';
 import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
-import '../../events/presentation/providers/created_events_provider.dart';
-import '../../events/presentation/providers/events_provider.dart';
-import '../../events/presentation/screens/manage_events_screen.dart' show showEventFormDialog;
 import '../../events/presentation/widgets/event_card.dart';
-import 'event_admins_dialog.dart';
+import 'event_admin_actions.dart';
 
 /// Status filters, website pill style.
 enum _Filter {
@@ -75,8 +71,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     // "Create Event" links elsewhere arrive as /admin/events?new=1.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
-      final isNew = GoRouterState.of(context).uri.queryParameters['new'] == '1';
-      if (isNew && _access.isEventCreator) _create();
+      final query = GoRouterState.of(context).uri.queryParameters;
+      // e.g. the Events page's "2 drafts" link: /admin/events?filter=draft
+      for (final f in _Filter.values) {
+        if (f.name == query['filter']) setState(() => _filter = f);
+      }
+      if (query['new'] == '1' && _access.isEventCreator) _create();
     });
   }
 
@@ -110,14 +110,6 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
         _error = apiErrorMessage(error, action: 'load events');
       });
     }
-  }
-
-  /// After a change: reload here, and refresh the public list and "mine".
-  Future<void> _afterChange() async {
-    await _load();
-    if (!mounted) return;
-    ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true);
-    ref.invalidate(createdEventIdsProvider);
   }
 
   static bool _ended(AppEvent e) =>
@@ -195,259 +187,22 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
 
   String? _createdBy(AppEvent e) => e.createdByLabel(_myUid);
 
-  // ── Actions ──────────────────────────────────────────────────────────────
+  // ── Actions (shared with the Events page) ─────────────────────────────
 
-  Future<void> _create() async {
-    if (await showEventFormDialog(context)) await _afterChange();
-  }
+  late final EventAdminActions _actions = EventAdminActions(
+    context: context,
+    ref: ref,
+    onChanged: _load,
+    isBusy: _busy.contains,
+    setBusy: (id, busy) {
+      if (!mounted) return;
+      setState(() => busy ? _busy.add(id) : _busy.remove(id));
+    },
+  );
 
-  Future<void> _edit(AppEvent e) async {
-    if (await showEventFormDialog(context, event: e)) await _afterChange();
-  }
+  Future<void> _create() => _actions.create();
 
-  Future<bool> _confirm(
-    String title,
-    String body, {
-    String confirm = 'Confirm',
-    bool destructive = false,
-  }) async {
-    final p = context.palette;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: Text(title),
-        content: Text(body),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep it'),
-          ),
-          FilledButton(
-            style: destructive
-                ? FilledButton.styleFrom(backgroundColor: p.error, foregroundColor: p.onPrimary)
-                : null,
-            onPressed: () => Navigator.pop(context, true),
-            child: Text(confirm),
-          ),
-        ],
-      ),
-    );
-    return ok == true;
-  }
-
-  /// Runs [action] for [e] with the event marked busy, then reloads.
-  Future<void> _run(
-    AppEvent e,
-    String what,
-    Future<void> Function(String token) action, {
-    required String done,
-  }) async {
-    final token = _token;
-    if (token == null) return;
-    setState(() => _busy.add(e.eventId));
-    try {
-      await action(token);
-      _snack(done);
-      await _afterChange();
-    } catch (error, stackTrace) {
-      AppLogger.error('Admin events: $what failed', error, stackTrace);
-      _snack(_friendly(error, what), isError: true);
-    } finally {
-      if (mounted) setState(() => _busy.remove(e.eventId));
-    }
-  }
-
-  /// Plain messages for the refusals people will actually meet.
-  String _friendly(Object error, String what) {
-    if (error is DioException) {
-      final detail = error.response?.data is Map ? (error.response!.data as Map)['detail'] : null;
-      switch (detail) {
-        case 'event_not_draft':
-          return 'Only drafts can be deleted. Cancel the event instead.';
-        case 'event_has_registrations':
-          return 'This event has registrations, so it can\'t be deleted. Cancel it instead.';
-        case 'event_admin_required':
-          return 'You\'re not an admin of this event.';
-      }
-    }
-    return apiErrorMessage(error, action: what);
-  }
-
-  void _snack(String message, {bool isError = false}) {
-    if (!mounted) return;
-    final p = context.palette;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message, style: TextStyle(color: p.textPrimary)),
-          backgroundColor: p.tinted(isError ? p.error : p.success),
-          duration: Duration(seconds: isError ? 7 : 3),
-        ),
-      );
-  }
-
-  Future<void> _publish(AppEvent e) => _run(
-        e,
-        'publish the event',
-        (t) => ref.read(eventsRepositoryProvider).updateEventStatus(e.eventId, 'published', t),
-        done: '"${e.title}" is published.',
-      );
-
-  Future<void> _unpublish(AppEvent e) async {
-    final hasRegs = e.registeredCount > 0;
-    if (!await _confirm(
-      'Unpublish "${e.title}"?',
-      hasRegs
-          ? 'It goes back to draft and disappears from the Events page. '
-              'Its ${e.registeredCount} registrations are kept.'
-          : 'It goes back to draft and disappears from the Events page.',
-      confirm: 'Unpublish',
-    )) {
-      return;
-    }
-    await _run(
-      e,
-      'unpublish the event',
-      (t) => ref.read(eventsRepositoryProvider).updateEventStatus(e.eventId, 'draft', t),
-      done: '"${e.title}" is back in draft.',
-    );
-  }
-
-  /// Sets the closing time to now. Reversible: Reopen clears it.
-  Future<void> _closeRegistration(AppEvent e) async {
-    if (!await _confirm(
-      'Close registration for "${e.title}"?',
-      'No one else can register. You can reopen registration later.',
-      confirm: 'Close registration',
-    )) {
-      return;
-    }
-    await _run(
-      e,
-      'close registration',
-      (t) => ref.read(eventsRepositoryProvider).updateAdminEvent(
-            e.eventId,
-            {'registration_closes_at': DateTime.now().toUtc().toIso8601String()},
-            t,
-          ),
-      done: 'Registration is closed for "${e.title}".',
-    );
-  }
-
-  Future<void> _reopenRegistration(AppEvent e) => _run(
-        e,
-        'reopen registration',
-        (t) => ref.read(eventsRepositoryProvider).updateAdminEvent(
-              e.eventId,
-              {'registration_closes_at': null},
-              t,
-            ),
-        done: 'Registration is open again for "${e.title}".',
-      );
-
-  Future<void> _cancel(AppEvent e) async {
-    if (!await _confirm(
-      'Cancel "${e.title}"?',
-      'The event is marked cancelled for everyone and can\'t be reopened. '
-          '${e.registeredCount > 0 ? 'Its ${e.registeredCount} registrations are kept; refunds aren\'t sent automatically. ' : ''}'
-          'To remove a draft entirely, delete it instead.',
-      confirm: 'Cancel event',
-      destructive: true,
-    )) {
-      return;
-    }
-    await _run(
-      e,
-      'cancel the event',
-      (t) => ref.read(eventsRepositoryProvider).updateEventStatus(e.eventId, 'cancelled', t),
-      done: '"${e.title}" is cancelled.',
-    );
-  }
-
-  Future<void> _delete(AppEvent e) async {
-    if (!await _confirm(
-      'Delete "${e.title}"?',
-      'The draft and everything in it (sessions, sponsors, partners) are '
-          'removed for good.',
-      confirm: 'Delete',
-      destructive: true,
-    )) {
-      return;
-    }
-    await _run(
-      e,
-      'delete the event',
-      (t) => ref.read(eventsRepositoryProvider).deleteAdminEvent(e.eventId, t),
-      done: '"${e.title}" is deleted.',
-    );
-  }
-
-  Future<void> _admins(AppEvent e) async {
-    await showEventAdminsDialog(context, event: e);
-    // Your own rights may have changed (e.g. you removed yourself).
-    await ref.read(authControllerProvider.notifier).refreshSession();
-    if (mounted) await _load();
-  }
-
-  /// What can be done to [e], by status (design step 5).
-  List<EventCardAction> _actionsFor(AppEvent e) {
-    if (_busy.contains(e.eventId)) return const [];
-    final draft = e.status == 'draft';
-    final published = e.status == 'published';
-    final live = draft || published;
-    final ended = _ended(e);
-    final regs = '/admin/registrations?event=${e.eventId}';
-    return [
-      if (live)
-        EventCardAction(label: 'Edit', icon: Icons.edit_outlined, onSelected: () => _edit(e)),
-      if (!draft || e.registeredCount > 0)
-        EventCardAction(
-          label: 'Registrations',
-          icon: Icons.people_outline,
-          onSelected: () => context.go(regs),
-        ),
-      if (draft)
-        EventCardAction(label: 'Publish', icon: Icons.publish_outlined, onSelected: () => _publish(e)),
-      if (published && !ended && e.registrationStatus != 'closed')
-        EventCardAction(
-          label: 'Close registration',
-          icon: Icons.lock_outline,
-          onSelected: () => _closeRegistration(e),
-        ),
-      if (published && !ended && e.registrationStatus == 'closed')
-        EventCardAction(
-          label: 'Reopen registration',
-          icon: Icons.lock_open_outlined,
-          onSelected: () => _reopenRegistration(e),
-        ),
-      if (published)
-        EventCardAction(
-          label: 'Unpublish',
-          icon: Icons.unpublished_outlined,
-          onSelected: () => _unpublish(e),
-        ),
-      EventCardAction(
-        label: 'Admins',
-        icon: Icons.admin_panel_settings_outlined,
-        onSelected: () => _admins(e),
-      ),
-      if (live)
-        EventCardAction(
-          label: 'Cancel event',
-          icon: Icons.event_busy_outlined,
-          destructive: true,
-          onSelected: () => _cancel(e),
-        ),
-      if (draft)
-        EventCardAction(
-          label: 'Delete',
-          icon: Icons.delete_outline,
-          destructive: true,
-          onSelected: () => _delete(e),
-        ),
-    ];
-  }
+  List<EventCardAction> _actionsFor(AppEvent e) => _actions.actionsFor(e);
 
   // ── Layout ───────────────────────────────────────────────────────────────
 

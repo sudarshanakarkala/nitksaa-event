@@ -10,7 +10,7 @@ import '../../../../shared/widgets/page_insets.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
-import 'manage_events_screen.dart' show showEventFormDialog;
+import '../../../admin/presentation/event_admin_actions.dart' show EventAdminActions;
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
 import '../widgets/venue_section.dart';
@@ -1077,14 +1077,15 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             ),
           if (isAdmin)
             TextButton.icon(
-              onPressed: () async {
-                final saved = await showEventFormDialog(context, event: event);
-                if (saved && mounted) {
-                  await ref
-                      .read(eventDetailProvider(widget.eventId).notifier)
-                      .fetchEventDetails(widget.eventId);
-                }
-              },
+              onPressed: () => EventAdminActions(
+                context: context,
+                ref: ref,
+                onChanged: () => ref
+                    .read(eventDetailProvider(widget.eventId).notifier)
+                    .fetchEventDetails(widget.eventId),
+                isBusy: (_) => false,
+                setBusy: (_, _) {},
+              ).edit(event),
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('Edit event'),
             ),
