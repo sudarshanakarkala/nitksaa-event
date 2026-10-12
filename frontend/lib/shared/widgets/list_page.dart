@@ -143,7 +143,9 @@ class _ListPageState extends State<ListPage> {
             ],
             Row(
               children: [
-                if (widget.search != null) Expanded(child: widget.search!),
+                // No search box: keep the toggle and Filters at the right
+                // end, where they sit on every other page.
+                if (widget.search != null) Expanded(child: widget.search!) else const Spacer(),
                 if (widget.toggle != null && !compact) ...[
                   const SizedBox(width: 12),
                   widget.toggle!,

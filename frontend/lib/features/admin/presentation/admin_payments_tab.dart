@@ -20,7 +20,7 @@ import 'admin_widgets.dart';
 enum _View {
   orders('Orders'),
   refunds('Refunds'),
-  pricing('Pricing');
+  pricing('Paid events');
 
   const _View(this.label);
   final String label;
@@ -202,6 +202,17 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
       if (o.eventId == id) return o.eventTitle;
     }
     return 'Event $id';
+  }
+
+  /// "Created by you" / "Created by Name"; null when unknown (e.g. a
+  /// Finance-only person, who can't load the event list).
+  String? _createdBy(int id) {
+    final e = _appEvent(id);
+    if (e == null) return null;
+    final me = ref.read(authControllerProvider).session?.firebaseUid;
+    if (e.createdByUid != null && e.createdByUid == me) return 'Created by you';
+    final name = e.createdByName?.trim();
+    return (name == null || name.isEmpty) ? null : 'Created by $name';
   }
 
   AppEvent? _appEvent(int id) {
@@ -574,6 +585,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                 for (final id in ids) ...[
                   _PricingCard(
                     title: _eventTitle(id),
+                    createdBy: _createdBy(id),
                     pricing: _pricing[id],
                     onEdit: _appEvent(id) != null && _access.canAdminEvent(id)
                         ? () => _editEvent(_appEvent(id)!)
@@ -600,9 +612,10 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
 // ── Pieces ───────────────────────────────────────────────────────────────
 
 class _PricingCard extends StatelessWidget {
-  const _PricingCard({required this.title, required this.pricing, this.onEdit});
+  const _PricingCard({required this.title, required this.pricing, this.createdBy, this.onEdit});
 
   final String title;
+  final String? createdBy;
   final EventPricing? pricing;
   final VoidCallback? onEdit;
 
@@ -661,6 +674,8 @@ class _PricingCard extends StatelessWidget {
               ],
             ],
           ),
+          if (createdBy != null)
+            Text(createdBy!, style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary)),
           const SizedBox(height: 10),
           if (pr == null)
             Text(
@@ -689,12 +704,7 @@ class _PricingCard extends StatelessWidget {
                 ),
                 figure('Attendee pays', _money(pr.finalAmount)),
                 figure('Gateway', pr.gateway == 'razorpay' ? 'Razorpay' : pr.gateway),
-                figure(
-                  'Version',
-                  pr.updatedAt == null
-                      ? '${pr.version}'
-                      : '${pr.version} · ${formatDate(pr.updatedAt!)}',
-                ),
+                if (pr.updatedAt != null) figure('Price last changed', formatDate(pr.updatedAt!)),
               ],
             ),
         ],
