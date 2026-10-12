@@ -63,6 +63,14 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   /// applies the ones for columns it has.
   final Map<String, Set<String>> _rail = {};
 
+  /// Batch: a decade, or a From/To year range (website "Graduation era").
+  int? _decade;
+  int? _yearFrom;
+  int? _yearTo;
+
+  /// Branch: one, typed or picked (website searchable select).
+  String? _branch;
+
   /// Sort, per list.
   final Map<RegistrationView, (String, bool)> _sorts = {
     RegistrationView.registered: ('registered', false),
@@ -248,15 +256,29 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   void _resetFilters() {
     _search.clear();
     _rail.clear();
+    _decade = null;
+    _yearFrom = null;
+    _yearTo = null;
+    _branch = null;
   }
+
+  bool get _batchActive => _decade != null || _yearFrom != null || _yearTo != null;
 
   Map<String, ColumnFilter> get _columnFilters => {
         for (final e in _rail.entries)
           if (e.value.isNotEmpty) e.key: ColumnFilter(values: e.value),
+        if (_batchActive)
+          'batch': _decade != null
+              ? ColumnFilter(from: _decade, to: _decade! + 9)
+              : ColumnFilter(from: _yearFrom, to: _yearTo),
+        if (_branch != null) 'branch': ColumnFilter(values: {_branch!}),
       };
 
   int get _activeFilterCount =>
-      _rail.values.where((v) => v.isNotEmpty).length + (_isAll ? 0 : 1);
+      _rail.values.where((v) => v.isNotEmpty).length +
+      (_batchActive ? 1 : 0) +
+      (_branch != null ? 1 : 0) +
+      (_isAll ? 0 : 1);
 
   void _clearAll() {
     setState(_resetFilters);
@@ -420,7 +442,10 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       : _registrationRows(view).length;
 
   bool get _anyFilter =>
-      _search.text.trim().isNotEmpty || _rail.values.any((v) => v.isNotEmpty);
+      _search.text.trim().isNotEmpty ||
+      _rail.values.any((v) => v.isNotEmpty) ||
+      _batchActive ||
+      _branch != null;
 
   /// Tapping a heading: same column flips the order; a new column starts
   /// A–Z, or newest first for dates.
@@ -597,7 +622,37 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       final cancelled = _view == RegistrationView.cancelled;
       final rows = cancelled ? _cancelled : _registered;
       final columns = _registrationColumns(cancelled: cancelled);
-      for (final c in columns.where((c) => c.kind == ColumnKind.category && c.id != 'event')) {
+      if (!cancelled) {
+        sections.add(
+          FilterYearRange(
+            label: 'Graduation era',
+            decades: decadesOf(rows.map((r) => r.batchYear)),
+            decade: _decade,
+            from: _yearFrom,
+            to: _yearTo,
+            onChanged: (decade, from, to) => setState(() {
+              _decade = decade;
+              _yearFrom = from;
+              _yearTo = to;
+            }),
+          ),
+        );
+        final branches = rows.map((r) => r.branch).whereType<String>().toSet().toList()
+          ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
+        if (branches.isNotEmpty) {
+          sections.add(
+            FilterSearchSelect(
+              label: 'Branch',
+              allLabel: 'All branches',
+              options: {for (final b in branches) b: b},
+              value: _branch,
+              onChanged: (v) => setState(() => _branch = v),
+            ),
+          );
+        }
+      }
+      const handled = {'event', 'batch', 'branch'};
+      for (final c in columns.where((c) => c.kind == ColumnKind.category && !handled.contains(c.id))) {
         section(c.id, c.label, rows, c);
       }
     }

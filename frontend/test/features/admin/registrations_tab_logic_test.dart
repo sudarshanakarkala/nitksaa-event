@@ -251,6 +251,25 @@ void main() {
       expect(distinctValues(rows, columns[3]), ['CSE', 'ECE']);
     });
 
+    test('a year range keeps batches inside it and drops blanks', () {
+      expect(
+        ids(applyGrid(rows, columns, filters: {'batch': const ColumnFilter(from: 1990, to: 1999)})),
+        [1],
+      );
+      expect(
+        ids(applyGrid(rows, columns, filters: {'batch': const ColumnFilter(from: 2000)})),
+        [2],
+      );
+      expect(
+        ids(applyGrid(rows, columns, filters: {'batch': const ColumnFilter(to: 2010)})),
+        [1, 2],
+      );
+    });
+
+    test('decades come from the batch years present', () {
+      expect(decadesOf([1998, 2005, null, 2009, 1971]), [1970, 1990, 2000]);
+    });
+
     test('a person without a name shows their email', () {
       expect(rows[2].displayName, 'bob@example.com');
     });

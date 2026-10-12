@@ -45,20 +45,29 @@ class GridColumn<T> {
   bool get filterable => kind != ColumnKind.date;
 }
 
-/// A column's filter: typed text (text columns) or ticked values (category
-/// columns). Values are the cells' [GridColumn.text]; '' stands for blank.
+/// A column's filter: typed text, ticked values (the cells'
+/// [GridColumn.text]; '' stands for blank) and/or a number range
+/// ([from]–[to], inclusive; either end may be open).
 class ColumnFilter {
-  const ColumnFilter({this.query = '', this.values = const {}});
+  const ColumnFilter({this.query = '', this.values = const {}, this.from, this.to});
 
   final String query;
   final Set<String> values;
+  final num? from;
+  final num? to;
 
-  bool get isActive => query.trim().isNotEmpty || values.isNotEmpty;
+  bool get isActive =>
+      query.trim().isNotEmpty || values.isNotEmpty || from != null || to != null;
 
-  bool matches(String cell) {
+  bool matches(String cell, [Object? value]) {
     final q = query.trim().toLowerCase();
     if (q.isNotEmpty && !cell.toLowerCase().contains(q)) return false;
     if (values.isNotEmpty && !values.contains(cell)) return false;
+    if (from != null || to != null) {
+      if (value is! num) return false;
+      if (from != null && value < from!) return false;
+      if (to != null && value > to!) return false;
+    }
     return true;
   }
 }
@@ -83,7 +92,7 @@ List<T> applyGrid<T>(
   final kept = <T>[
     for (final row in rows)
       if ((q.isEmpty || searchable.any((c) => c.text(row).toLowerCase().contains(q))) &&
-          active.every((f) => f.$2.matches(f.$1.text(row))))
+          active.every((f) => f.$2.matches(f.$1.text(row), f.$1.value(row))))
         row,
   ];
 
@@ -133,6 +142,12 @@ List<String> distinctValues<T>(List<T> rows, GridColumn<T> column) {
   final entries = seen.entries.toList()
     ..sort((a, b) => compareCells(a.value, b.value, ascending: true));
   return [for (final e in entries) e.key];
+}
+
+/// Decades (1990, 2000 …) the years in [years] fall in, oldest first.
+List<int> decadesOf(Iterable<int?> years) {
+  final decades = years.whereType<int>().map((y) => y - y % 10).toSet().toList()..sort();
+  return decades;
 }
 
 /// A check-in with the person it belongs to (null if their registration

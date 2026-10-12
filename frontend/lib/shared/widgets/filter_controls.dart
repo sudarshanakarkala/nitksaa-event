@@ -194,3 +194,185 @@ Future<void> showFilterSheet(
     ),
   );
 }
+
+/// Website `select` filter: one choice from a list you can type into
+/// ("All …" clears it). For lists too long for chips, such as branches.
+class FilterSearchSelect extends StatelessWidget {
+  const FilterSearchSelect({
+    super.key,
+    required this.label,
+    required this.allLabel,
+    required this.options,
+    required this.value,
+    required this.onChanged,
+  });
+
+  final String label;
+
+  /// The "no filter" entry, e.g. "All branches".
+  final String allLabel;
+
+  /// Value → text.
+  final Map<String, String> options;
+
+  /// The chosen value, or null for all.
+  final String? value;
+  final ValueChanged<String?> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final known = value != null && options.containsKey(value);
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FilterLabel(label),
+          const SizedBox(height: 8),
+          DropdownMenu<String>(
+            // Rebuild when the choice is cleared from outside.
+            key: ValueKey(value),
+            initialSelection: known ? value : '',
+            expandedInsets: EdgeInsets.zero,
+            enableFilter: true,
+            requestFocusOnTap: true,
+            menuHeight: 320,
+            hintText: allLabel,
+            dropdownMenuEntries: [
+              DropdownMenuEntry<String>(value: '', label: allLabel),
+              for (final entry in options.entries)
+                DropdownMenuEntry<String>(value: entry.key, label: entry.value),
+            ],
+            onSelected: (v) => onChanged(v == null || v.isEmpty ? null : v),
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// Website "Graduation Era": decade buttons (1990s, 2000s …) and a From /
+/// To year range. Choosing a decade clears the years, and typing a year
+/// clears the decade.
+class FilterYearRange extends StatefulWidget {
+  const FilterYearRange({
+    super.key,
+    required this.label,
+    required this.decades,
+    required this.decade,
+    required this.from,
+    required this.to,
+    required this.onChanged,
+  });
+
+  final String label;
+
+  /// Decades to offer, e.g. [1990, 2000, 2010].
+  final List<int> decades;
+  final int? decade;
+  final int? from;
+  final int? to;
+
+  /// (decade, from, to).
+  final void Function(int? decade, int? from, int? to) onChanged;
+
+  @override
+  State<FilterYearRange> createState() => _FilterYearRangeState();
+}
+
+class _FilterYearRangeState extends State<FilterYearRange> {
+  late final _from = TextEditingController(text: widget.from?.toString() ?? '');
+  late final _to = TextEditingController(text: widget.to?.toString() ?? '');
+
+  @override
+  void didUpdateWidget(FilterYearRange old) {
+    super.didUpdateWidget(old);
+    // Keep the boxes in step when the range is cleared or set elsewhere.
+    final from = widget.from?.toString() ?? '';
+    final to = widget.to?.toString() ?? '';
+    if (_from.text != from && int.tryParse(_from.text) != widget.from) _from.text = from;
+    if (_to.text != to && int.tryParse(_to.text) != widget.to) _to.text = to;
+  }
+
+  @override
+  void dispose() {
+    _from.dispose();
+    _to.dispose();
+    super.dispose();
+  }
+
+  void _typed() {
+    final from = int.tryParse(_from.text.trim());
+    final to = int.tryParse(_to.text.trim());
+    widget.onChanged(null, from, to);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    InputDecoration box(String hint) => InputDecoration(
+          hintText: hint,
+          isDense: true,
+          counterText: '',
+          contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+        );
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FilterLabel(widget.label),
+          const SizedBox(height: 8),
+          if (widget.decades.isNotEmpty) ...[
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final d in widget.decades)
+                  FilterChipToggle(
+                    label: '${d}s',
+                    selected: widget.decade == d,
+                    onChanged: (on) {
+                      _from.clear();
+                      _to.clear();
+                      widget.onChanged(on ? d : null, null, null);
+                    },
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+          ],
+          Row(
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _from,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: box('From year'),
+                  style: AppTextStyles.bodySmall.copyWith(color: p.textPrimary),
+                  onChanged: (_) => _typed(),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                child: Text('–', style: TextStyle(color: p.textMuted)),
+              ),
+              Expanded(
+                child: TextField(
+                  controller: _to,
+                  keyboardType: TextInputType.number,
+                  maxLength: 4,
+                  decoration: box('To year'),
+                  style: AppTextStyles.bodySmall.copyWith(color: p.textPrimary),
+                  onChanged: (_) => _typed(),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+}
