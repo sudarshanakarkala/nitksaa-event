@@ -279,7 +279,13 @@ class EventsService:
             raise HTTPException(status_code=404, detail="event_not_found")
         d = self._to_dict(record)
         _with_public_card_metadata(d)
-        d["sessions"] = []
+        d["sessions"] = [self._to_dict(r) for r in await self.repo.list_sessions(event_id)]
+        fee_rows = await self.conn.fetch(
+            "SELECT fee_id, name, fee_type, amount FROM event_fees"
+            " WHERE event_id = $1::int ORDER BY display_order, fee_id",
+            event_id,
+        )
+        d["fees"] = [{**dict(r), "amount": float(r["amount"])} for r in fee_rows]
 
         people_rows = await PeopleRepository(self.conn).list_public_by_event(event_id)
         people = [dict(r) for r in people_rows]
