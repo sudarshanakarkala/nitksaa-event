@@ -2,9 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/page_header.dart';
-import '../../../shared/widgets/site_header.dart';
+import '../../../shared/widgets/page_insets.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/domain/admin_access.dart';
@@ -92,41 +91,29 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 }
 
-/// The website's `.container`: at most [maxWidth] wide (the site header's
-/// width), centred, with the page side padding (40px, 16px on phones).
+/// The website's `.container`, lined up with the site header (content
+/// starts under the NITKSAA logo; see [PageInsets]).
 class AdminContainer extends StatelessWidget {
   const AdminContainer({super.key, required this.child});
-
-  static const double maxWidth = SiteHeader.maxContentWidth;
 
   final Widget child;
 
   /// Padding for a scroll view that fills the width (so its scrollbar sits
-  /// at the window edge, as on the website) but keeps its content inside
-  /// the container. Website `.mgmt-content`: 28px top, 60px bottom.
+  /// at the window edge, as on the website) but keeps its content in the
+  /// header's column. Website `.mgmt-content`: 28px top, 60px bottom.
   static EdgeInsets scrollPadding(
     BuildContext context,
     double width, {
     double top = 28,
     double bottom = 60,
   }) {
-    final side = ListPage.sidePadding(context);
-    final extra = ((width - maxWidth) / 2).clamp(0.0, double.infinity);
-    return EdgeInsets.fromLTRB(side + extra, top, side + extra, bottom);
+    final h = PageInsets.horizontal(context, width);
+    return EdgeInsets.fromLTRB(h.left, top, h.right, bottom);
   }
 
   @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: maxWidth),
-        child: Padding(
-          padding: EdgeInsets.symmetric(horizontal: ListPage.sidePadding(context)),
-          child: SizedBox(width: double.infinity, child: child),
-        ),
-      ),
-    );
-  }
+  Widget build(BuildContext context) =>
+      PageContainer(child: SizedBox(width: double.infinity, child: child));
 }
 
 /// Website `.adm-tab-group` of `.tab-btn`s: small bordered buttons 6px

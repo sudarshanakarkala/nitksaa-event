@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../shared/widgets/page_insets.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
@@ -609,21 +610,17 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   /// Wide screens: the site header's container (1520px, page side padding),
   /// breadcrumb and optional status notice on top, [child] filling the rest.
   Widget _pageFrame({required String? title, required Widget child, Widget? banner}) {
-    final side = MediaQuery.sizeOf(context).width < 600 ? 16.0 : 40.0;
-    return Center(
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 1520),
-        child: Padding(
-          padding: EdgeInsets.fromLTRB(side, 20, side, 0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              _breadcrumb(title),
-              if (banner != null) ...[const SizedBox(height: 12), banner],
-              const SizedBox(height: 20),
-              Expanded(child: child),
-            ],
-          ),
+    return PageContainer(
+      child: Padding(
+        padding: const EdgeInsets.only(top: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            _breadcrumb(title),
+            if (banner != null) ...[const SizedBox(height: 12), banner],
+            const SizedBox(height: 20),
+            Expanded(child: child),
+          ],
         ),
       ),
     );
