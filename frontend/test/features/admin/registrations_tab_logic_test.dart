@@ -180,72 +180,79 @@ void main() {
     });
   });
 
-  group('RegistrationFilters', () {
-    final rows = [
-      _reg(1, name: 'Asha Rao', email: 'asha@example.com', phone: '+91 98450 11111', batch: 1998, branch: 'CSE'),
-      _reg(2, name: 'Vikram Shenoy', email: 'vik@example.com', batch: 2005, branch: 'ECE'),
-      _reg(3, name: null, email: 'noname@example.com', batch: 1998, branch: 'ECE'),
+  group('applyGrid', () {
+    final columns = <GridColumn<AdminRegistration>>[
+      GridColumn(id: 'number', label: 'No.', kind: ColumnKind.text, value: (r) => r.registrationNumber),
+      GridColumn(id: 'name', label: 'Name', kind: ColumnKind.text, value: (r) => r.displayName),
+      GridColumn(id: 'batch', label: 'Batch', kind: ColumnKind.category, value: (r) => r.batchYear),
+      GridColumn(id: 'branch', label: 'Branch', kind: ColumnKind.category, value: (r) => r.branch),
+      GridColumn(id: 'email', label: 'Email', kind: ColumnKind.text, value: (r) => r.email),
+      GridColumn(id: 'phone', label: 'Phone', kind: ColumnKind.text, value: (r) => r.phone),
+      GridColumn(id: 'registered', label: 'Registered', kind: ColumnKind.date, value: (r) => r.registeredAt),
     ];
+    final rows = [
+      _reg(1, name: 'charlie', email: 'c@example.com', phone: '+91 98450 11111', batch: 1998, branch: 'CSE'),
+      _reg(2, name: 'Alice', email: 'a@example.com', batch: 2005, branch: 'ECE'),
+      _reg(3, name: null, email: 'bob@example.com', batch: null, branch: 'ECE'),
+    ];
+
+    List<int> ids(List<AdminRegistration> r) => [for (final x in r) x.registrationId];
 
     test('search matches name, email, phone or registration number', () {
-      expect(const RegistrationFilters(query: 'asha').apply(rows).single.registrationId, 1);
-      expect(const RegistrationFilters(query: 'VIK@').apply(rows).single.registrationId, 2);
-      expect(const RegistrationFilters(query: '98450').apply(rows).single.registrationId, 1);
-      expect(const RegistrationFilters(query: 'reg-3').apply(rows).single.registrationId, 3);
-      expect(const RegistrationFilters(query: '  ').apply(rows), hasLength(3));
+      expect(ids(applyGrid(rows, columns, search: 'ALICE')), [2]);
+      expect(ids(applyGrid(rows, columns, search: 'bob@')), [3]);
+      expect(ids(applyGrid(rows, columns, search: '98450')), [1]);
+      expect(ids(applyGrid(rows, columns, search: 'reg-3')), [3]);
+      expect(ids(applyGrid(rows, columns, search: '  ')), [1, 2, 3]);
     });
 
-    test('batch and branch combine with the search', () {
-      expect(const RegistrationFilters(batchYear: 1998).apply(rows).map((r) => r.registrationId), [1, 3]);
+    test('column filters combine with each other and the search', () {
       expect(
-        const RegistrationFilters(batchYear: 1998, branch: 'ECE').apply(rows).single.registrationId,
-        3,
+        ids(applyGrid(rows, columns, filters: {'branch': const ColumnFilter(values: {'ECE'})})),
+        [2, 3],
       );
-      expect(const RegistrationFilters(query: 'asha', branch: 'ECE').apply(rows), isEmpty);
-      expect(const RegistrationFilters().isEmpty, isTrue);
-      expect(const RegistrationFilters(branch: 'CSE').isEmpty, isFalse);
+      expect(
+        ids(applyGrid(rows, columns, filters: {
+          'branch': const ColumnFilter(values: {'ECE'}),
+          'batch': const ColumnFilter(values: {'2005'}),
+        })),
+        [2],
+      );
+      expect(
+        ids(applyGrid(rows, columns, filters: {'batch': const ColumnFilter(values: {''})})),
+        [3],
+      );
+      expect(
+        ids(applyGrid(rows, columns, filters: {'name': const ColumnFilter(query: 'li')})),
+        [1, 2],
+      );
+      expect(
+        ids(applyGrid(rows, columns, search: 'charlie', filters: {'branch': const ColumnFilter(values: {'ECE'})})),
+        isEmpty,
+      );
     });
 
-    test('filter choices come from the loaded rows', () {
-      expect(batchYearsIn(rows), [2005, 1998]);
-      expect(branchesIn(rows), ['CSE', 'ECE']);
-    });
-
-    test('a person without a name shows their email', () {
-      expect(rows[2].displayName, 'noname@example.com');
-    });
-  });
-
-  group('sortRegistrations', () {
-    final rows = [
-      _reg(1, name: 'charlie', batch: 2001, cancelledAt: DateTime(2026, 9, 3)),
-      _reg(2, name: 'Alice', batch: null, cancelledAt: DateTime(2026, 9, 1)),
-      _reg(3, name: 'bob', batch: 1999, cancelledAt: null),
-    ];
-
-    test('names sort A–Z ignoring case', () {
-      final sorted = sortRegistrations(rows, RegistrationSort.name, ascending: true);
-      expect(sorted.map((r) => r.fullname), ['Alice', 'bob', 'charlie']);
-    });
-
-    test('newest registration first when descending', () {
-      final sorted = sortRegistrations(rows, RegistrationSort.registeredAt, ascending: false);
-      expect(sorted.map((r) => r.registrationId), [3, 2, 1]);
-    });
-
-    test('missing values go last either way', () {
-      final up = sortRegistrations(rows, RegistrationSort.batch, ascending: true);
-      final down = sortRegistrations(rows, RegistrationSort.batch, ascending: false);
-      expect(up.map((r) => r.registrationId), [3, 1, 2]);
-      expect(down.map((r) => r.registrationId), [1, 3, 2]);
-
-      final cancelled = sortRegistrations(rows, RegistrationSort.cancelledAt, ascending: true);
-      expect(cancelled.last.registrationId, 3);
+    test('every column sorts; text ignores case and blanks go last', () {
+      expect(ids(applyGrid(rows, columns, sortId: 'name', ascending: true)), [2, 3, 1]);
+      expect(ids(applyGrid(rows, columns, sortId: 'batch', ascending: true)), [1, 2, 3]);
+      expect(ids(applyGrid(rows, columns, sortId: 'batch', ascending: false)), [2, 1, 3]);
+      expect(ids(applyGrid(rows, columns, sortId: 'phone', ascending: true)), [1, 2, 3]);
+      expect(ids(applyGrid(rows, columns, sortId: 'registered', ascending: false)), [3, 2, 1]);
+      expect(ids(applyGrid(rows, columns, sortId: 'branch', ascending: true)), [1, 2, 3]);
     });
 
     test('does not change the list it is given', () {
-      sortRegistrations(rows, RegistrationSort.name, ascending: true);
-      expect(rows.map((r) => r.registrationId), [1, 2, 3]);
+      applyGrid(rows, columns, sortId: 'name', ascending: true);
+      expect(ids(rows), [1, 2, 3]);
+    });
+
+    test('tick-list values come from the rows, in sort order, blank included', () {
+      expect(distinctValues(rows, columns[2]), ['1998', '2005', '']);
+      expect(distinctValues(rows, columns[3]), ['CSE', 'ECE']);
+    });
+
+    test('a person without a name shows their email', () {
+      expect(rows[2].displayName, 'bob@example.com');
     });
   });
 
@@ -253,7 +260,7 @@ void main() {
     expect(confirmationEmailLabel('sent'), 'Sent');
     expect(confirmationEmailLabel('failed'), 'Failed');
     expect(confirmationEmailLabel('pending'), 'Pending');
-    expect(confirmationEmailLabel(null), '—');
+    expect(confirmationEmailLabel(null), '');
     expect(confirmationEmailLabel('not_required'), 'Not required');
   });
 }

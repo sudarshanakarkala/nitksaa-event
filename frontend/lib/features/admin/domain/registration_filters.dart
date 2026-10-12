@@ -10,87 +10,138 @@ enum RegistrationView {
   final String label;
 }
 
-/// Columns the tables can be sorted by.
-enum RegistrationSort { name, batch, registeredAt, cancelledAt }
+/// How a column filters: text columns match what you type, category
+/// columns offer a tick-list of their values, dates only sort.
+enum ColumnKind { text, category, date }
 
-/// Search, batch and branch filters for the registration lists.
-class RegistrationFilters {
-  const RegistrationFilters({this.query = '', this.batchYear, this.branch});
+/// One column of an admin table: what it shows, how it sorts and filters.
+class GridColumn<T> {
+  const GridColumn({
+    required this.id,
+    required this.label,
+    required this.kind,
+    required this.value,
+    String Function(T row)? text,
+  }) : _text = text;
+
+  final String id;
+  final String label;
+  final ColumnKind kind;
+
+  /// The sort value: a String, num or DateTime, or null when there's none.
+  final Object? Function(T row) value;
+  final String Function(T row)? _text;
+
+  /// What the cell shows, and what filters match against ('' when empty).
+  String text(T row) {
+    final custom = _text;
+    if (custom != null) return custom(row);
+    final v = value(row);
+    if (v == null) return '';
+    if (v is DateTime) return formatDateTime(v);
+    return v.toString();
+  }
+
+  bool get filterable => kind != ColumnKind.date;
+}
+
+/// A column's filter: typed text (text columns) or ticked values (category
+/// columns). Values are the cells' [GridColumn.text]; '' stands for blank.
+class ColumnFilter {
+  const ColumnFilter({this.query = '', this.values = const {}});
 
   final String query;
-  final int? batchYear;
-  final String? branch;
+  final Set<String> values;
 
-  bool get isEmpty => query.trim().isEmpty && batchYear == null && branch == null;
+  bool get isActive => query.trim().isNotEmpty || values.isNotEmpty;
 
-  /// Matches name, email, phone or registration number (case-insensitive).
-  bool matchesText(AdminRegistration r) {
+  bool matches(String cell) {
     final q = query.trim().toLowerCase();
-    if (q.isEmpty) return true;
-    for (final field in [r.fullname, r.email, r.phone, r.registrationNumber]) {
-      if (field != null && field.toLowerCase().contains(q)) return true;
-    }
-    return false;
-  }
-
-  bool matches(AdminRegistration r) {
-    if (!matchesText(r)) return false;
-    if (batchYear != null && r.batchYear != batchYear) return false;
-    if (branch != null && r.branch != branch) return false;
+    if (q.isNotEmpty && !cell.toLowerCase().contains(q)) return false;
+    if (values.isNotEmpty && !values.contains(cell)) return false;
     return true;
   }
-
-  List<AdminRegistration> apply(Iterable<AdminRegistration> rows) =>
-      rows.where(matches).toList();
 }
 
-/// Sorts [rows] by [by]; rows with no value for the column go last.
-List<AdminRegistration> sortRegistrations(
-  List<AdminRegistration> rows,
-  RegistrationSort by, {
-  required bool ascending,
+/// Rows matching the search box (any text or category column contains it)
+/// and every active column filter, sorted by [sortId].
+List<T> applyGrid<T>(
+  List<T> rows,
+  List<GridColumn<T>> columns, {
+  String search = '',
+  Map<String, ColumnFilter> filters = const {},
+  String? sortId,
+  bool ascending = true,
 }) {
-  int compareNullable(Comparable<dynamic>? a, Comparable<dynamic>? b) {
-    if (a == null && b == null) return 0;
-    if (a == null) return 1;
-    if (b == null) return -1;
-    return ascending ? a.compareTo(b) : b.compareTo(a);
+  final q = search.trim().toLowerCase();
+  final searchable = columns.where((c) => c.kind != ColumnKind.date).toList();
+  final active = [
+    for (final c in columns)
+      if (filters[c.id]?.isActive ?? false) (c, filters[c.id]!),
+  ];
+
+  final kept = <T>[
+    for (final row in rows)
+      if ((q.isEmpty || searchable.any((c) => c.text(row).toLowerCase().contains(q))) &&
+          active.every((f) => f.$2.matches(f.$1.text(row))))
+        row,
+  ];
+
+  GridColumn<T>? sortColumn;
+  for (final c in columns) {
+    if (c.id == sortId) sortColumn = c;
   }
+  if (sortColumn == null) return kept;
+  final by = sortColumn;
 
-  final sorted = [...rows];
-  sorted.sort((a, b) {
-    final int result;
-    switch (by) {
-      case RegistrationSort.name:
-        result = compareNullable(
-          a.displayName.toLowerCase(),
-          b.displayName.toLowerCase(),
-        );
-      case RegistrationSort.batch:
-        result = compareNullable(a.batchYear, b.batchYear);
-      case RegistrationSort.registeredAt:
-        result = compareNullable(a.registeredAt, b.registeredAt);
-      case RegistrationSort.cancelledAt:
-        result = compareNullable(a.cancelledAt, b.cancelledAt);
-    }
-    // Stable tie-break so equal rows don't jump around between rebuilds.
-    return result != 0 ? result : a.registrationId.compareTo(b.registrationId);
+  // Sort with the original position as tie-break, so equal rows keep their
+  // order (Dart's sort isn't stable).
+  final indexed = [for (var i = 0; i < kept.length; i++) (i, kept[i])];
+  indexed.sort((a, b) {
+    final result = compareCells(by.value(a.$2), by.value(b.$2), ascending: ascending);
+    return result != 0 ? result : a.$1.compareTo(b.$1);
   });
-  return sorted;
+  return [for (final e in indexed) e.$2];
 }
 
-/// Batch years present in [rows], newest first.
-List<int> batchYearsIn(Iterable<AdminRegistration> rows) {
-  final years = rows.map((r) => r.batchYear).whereType<int>().toSet().toList()
-    ..sort((a, b) => b.compareTo(a));
-  return years;
+/// Compares two sort values; empty values go last either way, and text
+/// ignores case.
+int compareCells(Object? a, Object? b, {required bool ascending}) {
+  final aEmpty = a == null || (a is String && a.trim().isEmpty);
+  final bEmpty = b == null || (b is String && b.trim().isEmpty);
+  if (aEmpty && bEmpty) return 0;
+  if (aEmpty) return 1;
+  if (bEmpty) return -1;
+  final int result;
+  if (a is String && b is String) {
+    result = a.toLowerCase().compareTo(b.toLowerCase());
+  } else if (a is Comparable && b is Comparable) {
+    result = a.compareTo(b);
+  } else {
+    result = a.toString().compareTo(b.toString());
+  }
+  return ascending ? result : -result;
 }
 
-/// Branches present in [rows], A–Z.
-List<String> branchesIn(Iterable<AdminRegistration> rows) {
-  final branches = rows.map((r) => r.branch).whereType<String>().toSet().toList()
-    ..sort((a, b) => a.toLowerCase().compareTo(b.toLowerCase()));
-  return branches;
+/// The distinct cell texts in [column], in its sort order, for a tick-list
+/// filter. A blank cell is ''.
+List<String> distinctValues<T>(List<T> rows, GridColumn<T> column) {
+  final seen = <String, Object?>{};
+  for (final row in rows) {
+    seen.putIfAbsent(column.text(row), () => column.value(row));
+  }
+  final entries = seen.entries.toList()
+    ..sort((a, b) => compareCells(a.value, b.value, ascending: true));
+  return [for (final e in entries) e.key];
+}
+
+/// A check-in with the person it belongs to (null if their registration
+/// isn't in the loaded lists).
+class CheckInEntry {
+  const CheckInEntry(this.checkIn, this.person);
+
+  final AdminCheckIn checkIn;
+  final AdminRegistration? person;
 }
 
 /// Plain words for the confirmation-email status the backend stores.
@@ -107,8 +158,23 @@ String confirmationEmailLabel(String? raw) {
     case 'skipped':
       return 'Not sent';
     case '':
-      return '—';
+      return '';
     default:
       return status[0].toUpperCase() + status.substring(1).replaceAll('_', ' ');
   }
+}
+
+const _months = [
+  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
+];
+
+/// e.g. `12 Oct 2026`.
+String formatDate(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
+
+/// e.g. `12 Oct 2026, 4:05 PM`.
+String formatDateTime(DateTime d) {
+  final hour = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
+  final minute = d.minute.toString().padLeft(2, '0');
+  return '${formatDate(d)}, $hour:$minute ${d.hour >= 12 ? 'PM' : 'AM'}';
 }

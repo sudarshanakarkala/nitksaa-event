@@ -16,7 +16,7 @@ import '../data/registrations_api.dart';
 import '../domain/registration_filters.dart';
 import 'admin_screen.dart' show AdminContainer;
 
-/// Value of the event picker meaning "all my events".
+/// Value of the event picker meaning "all events".
 const int _allEvents = -1;
 
 /// How many events load at once in the all-events view.
@@ -26,7 +26,8 @@ const int _parallelLoads = 4;
 /// for one event or for every event you administer.
 ///
 /// The picked event lives in the URL (`/admin/registrations?event=12`), so
-/// links from the Events tab open it directly and Back works.
+/// links from the Events tab open it directly and Back works. Every table
+/// column sorts (tap its heading) and filters (its funnel icon).
 class AdminRegistrationsTab extends ConsumerStatefulWidget {
   const AdminRegistrationsTab({super.key});
 
@@ -55,10 +56,17 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   int _failedEvents = 0;
 
   RegistrationView _view = RegistrationView.registered;
-  int? _batch;
-  String? _branch;
-  RegistrationSort _sort = RegistrationSort.registeredAt;
-  bool _ascending = false;
+
+  /// Column filters and sort, per list.
+  final Map<RegistrationView, Map<String, ColumnFilter>> _filters = {
+    for (final v in RegistrationView.values) v: <String, ColumnFilter>{},
+  };
+  final Map<RegistrationView, (String, bool)> _sorts = {
+    RegistrationView.registered: ('registered', false),
+    RegistrationView.cancelled: ('cancelled', false),
+    RegistrationView.checkIns: ('checkedIn', false),
+  };
+
   bool _exporting = false;
 
   String? get _token => ref.read(authControllerProvider).session?.accessToken;
@@ -106,7 +114,8 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       final events = await ref.read(eventsRepositoryProvider).getAllAdminEvents(token);
       if (!mounted) return;
       setState(() {
-        _events = _ordered(events);
+        // Newest first.
+        _events = [...events]..sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
         _eventsLoading = false;
       });
       await _loadData();
@@ -120,28 +129,12 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     }
   }
 
-  static bool _ended(AppEvent e) =>
-      (e.endDatetime ?? e.startDatetime).isBefore(DateTime.now());
-
-  /// Upcoming first (soonest at the top), then past (most recent first).
-  static List<AppEvent> _ordered(List<AppEvent> events) {
-    final upcoming = events.where((e) => !_ended(e)).toList()
-      ..sort((a, b) => a.startDatetime.compareTo(b.startDatetime));
-    final past = events.where(_ended).toList()
-      ..sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
-    return [...upcoming, ...past];
-  }
-
   AppEvent? _event(int id) {
     for (final e in _events) {
       if (e.eventId == id) return e;
     }
     return null;
   }
-
-  /// With a single event there's nothing to choose: show it.
-  int get _effective =>
-      _selected == _allEvents && _events.length == 1 ? _events.first.eventId : _selected;
 
   /// Events worth asking about in the all-events view: drafts that nobody
   /// has registered for have nothing to show.
@@ -150,7 +143,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   Future<void> _loadData({bool force = false}) async {
     final token = _token;
-    final target = _effective;
+    final target = _selected;
     if (token == null || (!force && target == _loadedFor && _error == null)) return;
     if (target != _allEvents && _event(target) == null) {
       // Not one of your events (or it no longer exists); nothing to load.
@@ -192,7 +185,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
               loaded[r.eventId] = r;
             }
           }
-          if (!mounted || _effective != target) return;
+          if (!mounted || _selected != target) return;
         }
         if (ids.isNotEmpty && loaded.isEmpty) {
           throw StateError('every event failed to load');
@@ -200,7 +193,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       } else {
         loaded[target] = await api.loadEvent(accessToken: token, eventId: target);
       }
-      if (!mounted || _effective != target) return;
+      if (!mounted || _selected != target) return;
       setState(() {
         _data = loaded;
         _loadedFor = target;
@@ -209,7 +202,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       });
     } catch (error, stackTrace) {
       AppLogger.error('Admin registrations: load failed', error, stackTrace);
-      if (!mounted || _effective != target) return;
+      if (!mounted || _selected != target) return;
       setState(() {
         _loading = false;
         _loadedFor = target;
@@ -251,81 +244,198 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   void _resetFilters() {
     _search.clear();
-    _batch = null;
-    _branch = null;
-  }
-
-  // ── What's shown ─────────────────────────────────────────────────────────
-
-  bool get _isAll => _effective == _allEvents;
-
-  Iterable<EventRegistrationData> get _loaded => _data.values;
-
-  List<AdminRegistration> get _registered =>
-      [for (final d in _loaded) ...d.registered];
-
-  List<AdminRegistration> get _cancelled =>
-      [for (final d in _loaded) ...d.cancelled];
-
-  List<AdminCheckIn> get _checkIns =>
-      [for (final d in _loaded) ...d.checkIns]
-        ..sort((a, b) => b.checkedInAt.compareTo(a.checkedInAt));
-
-  /// Every registration by id, so check-ins can show who it was.
-  Map<int, AdminRegistration> get _byId => {
-        for (final r in [..._registered, ..._cancelled]) r.registrationId: r,
-      };
-
-  RegistrationFilters get _filters => RegistrationFilters(
-        query: _search.text,
-        batchYear: _view == RegistrationView.registered ? _batch : null,
-        branch: _view == RegistrationView.registered ? _branch : null,
-      );
-
-  List<AdminRegistration> _rowsFor(RegistrationView view) {
-    final source = view == RegistrationView.cancelled ? _cancelled : _registered;
-    final filtered = _filters.apply(source);
-    var sort = _sort;
-    if (view != RegistrationView.cancelled && sort == RegistrationSort.cancelledAt) {
-      sort = RegistrationSort.registeredAt;
-    }
-    if (view == RegistrationView.cancelled && sort == RegistrationSort.batch) {
-      sort = RegistrationSort.cancelledAt;
-    }
-    return sortRegistrations(filtered, sort, ascending: _ascending);
-  }
-
-  List<AdminCheckIn> get _visibleCheckIns {
-    final byId = _byId;
-    final text = RegistrationFilters(query: _search.text);
-    return _checkIns.where((c) {
-      final r = byId[c.registrationId];
-      return r == null ? text.isEmpty : text.matchesText(r);
-    }).toList();
-  }
-
-  int _count(RegistrationView view) {
-    final text = RegistrationFilters(query: _search.text);
-    switch (view) {
-      case RegistrationView.registered:
-        return _filters.apply(_registered).length;
-      case RegistrationView.cancelled:
-        return text.apply(_cancelled).length;
-      case RegistrationView.checkIns:
-        return _visibleCheckIns.length;
+    for (final f in _filters.values) {
+      f.clear();
     }
   }
+
+  // ── Columns ──────────────────────────────────────────────────────────────
+
+  bool get _isAll => _selected == _allEvents;
 
   String _eventTitle(int id) => _event(id)?.title ?? 'Event $id';
 
-  void _sortBy(RegistrationSort by) {
+  List<GridColumn<AdminRegistration>> _registrationColumns({required bool cancelled}) => [
+        GridColumn(
+          id: 'number',
+          label: 'No.',
+          kind: ColumnKind.text,
+          value: (r) => r.registrationNumber,
+        ),
+        GridColumn(
+          id: 'name',
+          label: 'Name',
+          kind: ColumnKind.text,
+          value: (r) => r.displayName,
+        ),
+        if (_isAll)
+          GridColumn(
+            id: 'event',
+            label: 'Event',
+            kind: ColumnKind.category,
+            value: (r) => _eventTitle(r.eventId),
+          ),
+        if (!cancelled) ...[
+          GridColumn(
+            id: 'batch',
+            label: 'Batch',
+            kind: ColumnKind.category,
+            value: (r) => r.batchYear,
+          ),
+          GridColumn(
+            id: 'branch',
+            label: 'Branch',
+            kind: ColumnKind.category,
+            value: (r) => r.branch,
+          ),
+        ],
+        GridColumn(
+          id: 'email',
+          label: 'Email',
+          kind: ColumnKind.text,
+          value: (r) => r.email,
+        ),
+        if (!cancelled) ...[
+          GridColumn(
+            id: 'phone',
+            label: 'Phone',
+            kind: ColumnKind.text,
+            value: (r) => r.phone,
+          ),
+          GridColumn(
+            id: 'emailStatus',
+            label: 'Confirmation email',
+            kind: ColumnKind.category,
+            value: (r) => confirmationEmailLabel(r.confirmationEmailStatus),
+          ),
+        ],
+        GridColumn(
+          id: 'registered',
+          label: 'Registered',
+          kind: ColumnKind.date,
+          value: (r) => r.registeredAt,
+        ),
+        if (cancelled)
+          GridColumn(
+            id: 'cancelled',
+            label: 'Cancelled',
+            kind: ColumnKind.date,
+            value: (r) => r.cancelledAt,
+          ),
+      ];
+
+  List<GridColumn<CheckInEntry>> get _checkInColumns => [
+        GridColumn(
+          id: 'name',
+          label: 'Name',
+          kind: ColumnKind.text,
+          value: (c) => c.person?.displayName ?? 'Registration ${c.checkIn.registrationId}',
+        ),
+        GridColumn(
+          id: 'number',
+          label: 'No.',
+          kind: ColumnKind.text,
+          value: (c) => c.person?.registrationNumber,
+        ),
+        if (_isAll)
+          GridColumn(
+            id: 'event',
+            label: 'Event',
+            kind: ColumnKind.category,
+            value: (c) => _eventTitle(c.checkIn.eventId),
+          ),
+        GridColumn(
+          id: 'checkedIn',
+          label: 'Checked in',
+          kind: ColumnKind.date,
+          value: (c) => c.checkIn.checkedInAt,
+        ),
+        GridColumn(
+          id: 'for',
+          label: 'For',
+          kind: ColumnKind.category,
+          value: (c) => c.checkIn.sessionId == null ? 'Event entry' : 'Session ${c.checkIn.sessionId}',
+        ),
+      ];
+
+  // ── Rows ─────────────────────────────────────────────────────────────────
+
+  Iterable<EventRegistrationData> get _loaded => _data.values;
+
+  List<AdminRegistration> get _registered => [for (final d in _loaded) ...d.registered];
+
+  List<AdminRegistration> get _cancelled => [for (final d in _loaded) ...d.cancelled];
+
+  List<CheckInEntry> get _checkIns {
+    final people = {
+      for (final r in [..._registered, ..._cancelled]) r.registrationId: r,
+    };
+    return [
+      for (final d in _loaded)
+        for (final c in d.checkIns) CheckInEntry(c, people[c.registrationId]),
+    ];
+  }
+
+  List<AdminRegistration> _registrationRows(RegistrationView view) {
+    final cancelled = view == RegistrationView.cancelled;
+    final sort = _sorts[view]!;
+    return applyGrid(
+      cancelled ? _cancelled : _registered,
+      _registrationColumns(cancelled: cancelled),
+      search: _search.text,
+      filters: _filters[view]!,
+      sortId: sort.$1,
+      ascending: sort.$2,
+    );
+  }
+
+  List<CheckInEntry> get _checkInRows {
+    final sort = _sorts[RegistrationView.checkIns]!;
+    return applyGrid(
+      _checkIns,
+      _checkInColumns,
+      search: _search.text,
+      filters: _filters[RegistrationView.checkIns]!,
+      sortId: sort.$1,
+      ascending: sort.$2,
+    );
+  }
+
+  int _count(RegistrationView view) => view == RegistrationView.checkIns
+      ? _checkInRows.length
+      : _registrationRows(view).length;
+
+  bool get _anyFilter =>
+      _search.text.trim().isNotEmpty ||
+      _filters.values.any((m) => m.values.any((f) => f.isActive));
+
+  /// Tapping a heading: same column flips the order; a new column starts
+  /// A–Z, or newest first for dates.
+  void _sortBy(String id, ColumnKind kind) {
     setState(() {
-      if (_sort == by) {
-        _ascending = !_ascending;
+      final current = _sorts[_view]!;
+      _sorts[_view] = current.$1 == id
+          ? (id, !current.$2)
+          : (id, kind != ColumnKind.date);
+    });
+  }
+
+  Future<void> _editFilter<T>(GridColumn<T> column, List<T> allRows) async {
+    final current = _filters[_view]![column.id] ?? const ColumnFilter();
+    final result = await showDialog<ColumnFilter>(
+      context: context,
+      builder: (context) => _ColumnFilterDialog(
+        title: column.label,
+        values: column.kind == ColumnKind.category ? distinctValues(allRows, column) : null,
+        current: current,
+      ),
+    );
+    if (result == null || !mounted) return;
+    setState(() {
+      if (result.isActive) {
+        _filters[_view]![column.id] = result;
       } else {
-        _sort = by;
-        // Names A–Z first; dates and batches newest first.
-        _ascending = by == RegistrationSort.name;
+        _filters[_view]!.remove(column.id);
       }
     });
   }
@@ -334,7 +444,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   Future<void> _export() async {
     final token = _token;
-    final id = _effective;
+    final id = _selected;
     if (token == null || id == _allEvents) return;
     setState(() => _exporting = true);
     try {
@@ -415,8 +525,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     final p = context.palette;
     final picker = _EventPicker(
       events: _events,
-      selected: _effective,
-      showAll: _events.length > 1,
+      selected: _selected,
       onChanged: _pick,
     );
     final search = TextField(
@@ -447,31 +556,6 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       icon: const Icon(Icons.refresh),
     );
 
-    final registered = _view == RegistrationView.registered;
-    final years = batchYearsIn(_registered);
-    final branches = branchesIn(_registered);
-    final filters = [
-      if (registered && years.isNotEmpty)
-        _SmallDropdown<int>(
-          hint: 'All batches',
-          value: _batch,
-          items: {for (final y in years) y: '$y'},
-          onChanged: (v) => setState(() => _batch = v),
-        ),
-      if (registered && branches.isNotEmpty)
-        _SmallDropdown<String>(
-          hint: 'All branches',
-          value: _branch,
-          items: {for (final b in branches) b: b},
-          onChanged: (v) => setState(() => _branch = v),
-        ),
-      if (_batch != null || _branch != null || _search.text.isNotEmpty)
-        TextButton(
-          onPressed: () => setState(_resetFilters),
-          child: const Text('Clear'),
-        ),
-    ];
-
     return DecoratedBox(
       decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
       child: AdminContainer(
@@ -491,7 +575,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
               ] else
                 Row(
                   children: [
-                    SizedBox(width: 340, child: picker),
+                    SizedBox(width: 380, child: picker),
                     const SizedBox(width: 12),
                     Expanded(child: search),
                     if (export != null) ...[const SizedBox(width: 12), export],
@@ -512,8 +596,13 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
                       active: v == _view,
                       onTap: () => setState(() => _view = v),
                     ),
-                  if (filters.isNotEmpty) const SizedBox(width: 10),
-                  ...filters,
+                  if (compact) _compactSortMenu(),
+                  if (_anyFilter)
+                    TextButton.icon(
+                      onPressed: () => setState(_resetFilters),
+                      icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
+                      label: const Text('Clear filters'),
+                    ),
                 ],
               ),
             ],
@@ -523,8 +612,43 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     );
   }
 
+  /// Phones show cards, not a table: sorting moves to a menu.
+  Widget _compactSortMenu() {
+    final p = context.palette;
+    final columns = _view == RegistrationView.checkIns
+        ? [for (final c in _checkInColumns) (c.id, c.label, c.kind)]
+        : [
+            for (final c in _registrationColumns(cancelled: _view == RegistrationView.cancelled))
+              (c.id, c.label, c.kind),
+          ];
+    final current = _sorts[_view]!;
+    return PopupMenuButton<(String, ColumnKind)>(
+      tooltip: 'Sort',
+      onSelected: (c) => _sortBy(c.$1, c.$2),
+      itemBuilder: (_) => [
+        for (final c in columns)
+          CheckedPopupMenuItem<(String, ColumnKind)>(
+            value: (c.$1, c.$3),
+            checked: c.$1 == current.$1,
+            child: Text(c.$2),
+          ),
+      ],
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.sort, size: 18, color: p.textSecondary),
+            const SizedBox(width: 4),
+            Text('Sort', style: AppTextStyles.labelMedium.copyWith(color: p.textSecondary)),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _body(bool compact) {
-    final target = _effective;
+    final target = _selected;
     if (target != _allEvents && _event(target) == null && !_eventsLoading) {
       return _Message(
         icon: Icons.lock_outline,
@@ -532,7 +656,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
         body: 'This event doesn\'t exist, or you\'re not one of its admins.',
         action: TextButton(
           onPressed: () => _pick(_allEvents),
-          child: Text(_events.length > 1 ? 'Show all my events' : 'Show my event'),
+          child: const Text('Show all events'),
         ),
       );
     }
@@ -584,10 +708,10 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   Widget _summary() {
     final registered = _registered.length;
     final cancelled = _cancelled.length;
-    final checkedIn = _checkIns.map((c) => c.registrationId).toSet().length;
+    final checkedIn = _checkIns.map((c) => c.checkIn.registrationId).toSet().length;
     if (_isAll) {
       return _SummaryCard(
-        title: 'All my events',
+        title: 'All events',
         tiles: [
           _Tile('Events', '${_events.length}'),
           _Tile('Registered', '$registered'),
@@ -596,24 +720,24 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
         ],
       );
     }
-    final e = _event(_effective)!;
+    final e = _event(_selected)!;
     final cap = e.capacity;
     return _SummaryCard(
       title: e.title,
-      subtitle: 'Starts ${_formatDateTime(e.startDatetime)}',
+      subtitle: 'Starts ${formatDateTime(e.startDatetime.toLocal())}',
       tiles: [
         _Tile('Capacity', cap == null ? 'No limit' : '$cap'),
         _Tile('Registered', '$registered'),
         _Tile(
           'Seats left',
           cap == null ? '—' : '${(cap - registered).clamp(0, cap)}',
-          tone: cap != null && registered >= cap ? _Tone.error : null,
+          isError: cap != null && registered >= cap,
         ),
         _Tile('Cancelled', '$cancelled'),
         _Tile('Checked in', '$checkedIn'),
         _Tile(
           'Published',
-          e.publishedAt == null ? 'Not yet' : _formatDate(e.publishedAt!.toLocal()),
+          e.publishedAt == null ? 'Not yet' : formatDate(e.publishedAt!.toLocal()),
         ),
       ],
       capacityFraction: cap != null && cap > 0 ? registered / cap : null,
@@ -621,10 +745,13 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   }
 
   List<Widget> _list(bool compact) {
+    final filters = _filters[_view]!;
+    final sort = _sorts[_view]!;
     switch (_view) {
       case RegistrationView.registered:
       case RegistrationView.cancelled:
-        final rows = _rowsFor(_view);
+        final cancelled = _view == RegistrationView.cancelled;
+        final rows = _registrationRows(_view);
         if (rows.isEmpty) return [_empty()];
         if (compact) {
           return [
@@ -637,39 +764,68 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
             ],
           ];
         }
+        final all = cancelled ? _cancelled : _registered;
         return [
-          _RegistrationsTable(
+          _GridTable<AdminRegistration>(
             rows: rows,
-            cancelledView: _view == RegistrationView.cancelled,
-            eventTitle: _isAll ? _eventTitle : null,
-            sort: _sort,
-            ascending: _ascending,
+            columns: _registrationColumns(cancelled: cancelled),
+            sortId: sort.$1,
+            ascending: sort.$2,
+            filters: filters,
             onSort: _sortBy,
+            onFilter: (c) => _editFilter(c, all),
+            cell: _registrationCell,
           ),
         ];
       case RegistrationView.checkIns:
-        final rows = _visibleCheckIns;
-        final byId = _byId;
-        return [
-          const _Note(
+        final rows = _checkInRows;
+        final all = _checkIns;
+        const note = [
+          _Note(
             text: 'Check-ins scanned at the door. Rejected scans aren\'t recorded, so they don\'t appear here.',
           ),
-          const SizedBox(height: 12),
-          if (rows.isEmpty)
-            _empty()
-          else
-            _CheckInsTable(
-              rows: rows,
-              people: byId,
-              eventTitle: _isAll ? _eventTitle : null,
-              compact: compact,
-            ),
+          SizedBox(height: 12),
+        ];
+        if (rows.isEmpty) return [...note, _empty()];
+        if (compact) {
+          return [
+            ...note,
+            for (final c in rows) ...[
+              _CheckInTile(entry: c, eventTitle: _isAll ? _eventTitle(c.checkIn.eventId) : null),
+              const SizedBox(height: 10),
+            ],
+          ];
+        }
+        return [
+          ...note,
+          _GridTable<CheckInEntry>(
+            rows: rows,
+            columns: _checkInColumns,
+            sortId: sort.$1,
+            ascending: sort.$2,
+            filters: filters,
+            onSort: _sortBy,
+            onFilter: (c) => _editFilter(c, all),
+          ),
         ];
     }
   }
 
+  /// Cells that need more than plain text.
+  Widget? _registrationCell(GridColumn<AdminRegistration> column, AdminRegistration r) {
+    switch (column.id) {
+      case 'emailStatus':
+        return _EmailStatus(status: r.confirmationEmailStatus);
+      case 'email':
+      case 'phone':
+        final text = column.text(r);
+        return text.isEmpty ? null : SelectableText(text, style: _cellStyle(context.palette));
+      default:
+        return null;
+    }
+  }
+
   Widget _empty() {
-    final filtering = !_filters.isEmpty;
     final what = switch (_view) {
       RegistrationView.registered => 'No one has registered yet',
       RegistrationView.cancelled => 'No cancelled registrations',
@@ -678,142 +834,193 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40),
       child: _Message(
-        icon: filtering ? Icons.search_off : Icons.people_outline,
-        title: filtering ? 'No one matches' : what,
-        body: filtering ? 'Try a different search or clear the filters.' : '',
+        icon: _anyFilter ? Icons.search_off : Icons.people_outline,
+        title: _anyFilter ? 'No one matches' : what,
+        body: _anyFilter ? 'Try a different search or clear the filters.' : '',
       ),
     );
   }
 }
 
-// ── Formatting ───────────────────────────────────────────────────────────
-
-const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
-String _formatDate(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
-
-String _formatDateTime(DateTime d) {
-  final hour = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
-  final minute = d.minute.toString().padLeft(2, '0');
-  return '${_formatDate(d)}, $hour:$minute ${d.hour >= 12 ? 'PM' : 'AM'}';
-}
-
 // ── Widgets ──────────────────────────────────────────────────────────────
 
+/// Event picker you can type into: the list narrows to matching events.
 class _EventPicker extends StatelessWidget {
   const _EventPicker({
     required this.events,
     required this.selected,
-    required this.showAll,
     required this.onChanged,
   });
 
+  /// Newest first.
   final List<AppEvent> events;
   final int selected;
-  final bool showAll;
   final ValueChanged<int> onChanged;
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
     final known = selected == _allEvents || events.any((e) => e.eventId == selected);
-    return DropdownButtonFormField<int>(
+    return DropdownMenu<int>(
       // Rebuild when the URL changes the selection.
       key: ValueKey(selected),
-      initialValue: known ? selected : null,
-      isExpanded: true,
-      decoration: InputDecoration(
-        isDense: true,
-        prefixIcon: const Icon(Icons.event_outlined, size: 20),
-        hintText: 'Pick an event',
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-      ),
-      items: [
-        if (showAll)
-          const DropdownMenuItem<int>(
-            value: _allEvents,
-            child: Text('All my events', overflow: TextOverflow.ellipsis),
-          ),
+      initialSelection: known ? selected : null,
+      expandedInsets: EdgeInsets.zero,
+      enableFilter: true,
+      requestFocusOnTap: true,
+      menuHeight: 380,
+      leadingIcon: const Icon(Icons.event_outlined, size: 20),
+      hintText: 'Type to find an event',
+      dropdownMenuEntries: [
+        const DropdownMenuEntry<int>(value: _allEvents, label: 'All events'),
         for (final e in events)
-          DropdownMenuItem<int>(
+          DropdownMenuEntry<int>(
             value: e.eventId,
-            child: Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: e.title),
-                  TextSpan(
-                    text: '  ·  ${_formatDate(e.startDatetime.toLocal())}',
-                    style: TextStyle(color: p.textMuted),
-                  ),
-                ],
-              ),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-            ),
+            label: '${e.title} · ${formatDate(e.startDatetime.toLocal())}',
           ),
       ],
-      onChanged: (v) {
+      onSelected: (v) {
         if (v != null) onChanged(v);
       },
     );
   }
 }
 
-class _SmallDropdown<T> extends StatelessWidget {
-  const _SmallDropdown({
-    required this.hint,
-    required this.value,
-    required this.items,
-    required this.onChanged,
+/// Filter for one column: a text box for text columns, a tick-list for
+/// the others. Returns the new filter, or null when cancelled.
+class _ColumnFilterDialog extends StatefulWidget {
+  const _ColumnFilterDialog({
+    required this.title,
+    required this.values,
+    required this.current,
   });
 
-  final String hint;
-  final T? value;
-  final Map<T, String> items;
-  final ValueChanged<T?> onChanged;
+  final String title;
+
+  /// The column's values for a tick-list; null for a text filter.
+  final List<String>? values;
+  final ColumnFilter current;
+
+  @override
+  State<_ColumnFilterDialog> createState() => _ColumnFilterDialogState();
+}
+
+class _ColumnFilterDialogState extends State<_ColumnFilterDialog> {
+  late final _text = TextEditingController(text: widget.current.query);
+  final _find = TextEditingController();
+  late final Set<String> _ticked = {...widget.current.values};
+
+  @override
+  void initState() {
+    super.initState();
+    _find.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _text.dispose();
+    _find.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return Container(
-      height: 32,
-      padding: const EdgeInsets.symmetric(horizontal: 10),
-      decoration: BoxDecoration(
-        color: value == null ? p.surfaceSubtle : p.primary.withValues(alpha: 0.06),
-        border: Border.all(
-          color: value == null ? p.border : p.primary.withValues(alpha: 0.4),
-        ),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<T?>(
-          value: items.containsKey(value) ? value : null,
+    final values = widget.values;
+    final Widget content;
+    if (values == null) {
+      content = TextField(
+        controller: _text,
+        autofocus: true,
+        decoration: const InputDecoration(
+          hintText: 'Contains…',
           isDense: true,
-          hint: Text(hint, style: AppTextStyles.labelMedium.copyWith(color: p.textSecondary)),
-          style: AppTextStyles.labelMedium.copyWith(color: p.textPrimary),
-          items: [
-            DropdownMenuItem<T?>(value: null, child: Text(hint)),
-            for (final entry in items.entries)
-              DropdownMenuItem<T?>(value: entry.key, child: Text(entry.value)),
-          ],
-          onChanged: onChanged,
+          border: OutlineInputBorder(),
         ),
+        onSubmitted: (_) => Navigator.pop(context, ColumnFilter(query: _text.text)),
+      );
+    } else {
+      final q = _find.text.trim().toLowerCase();
+      final shown = values.where((v) => q.isEmpty || v.toLowerCase().contains(q)).toList();
+      content = SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (values.length > 8) ...[
+              TextField(
+                controller: _find,
+                decoration: const InputDecoration(
+                  hintText: 'Find a value…',
+                  prefixIcon: Icon(Icons.search, size: 20),
+                  isDense: true,
+                  border: OutlineInputBorder(),
+                ),
+              ),
+              const SizedBox(height: 8),
+            ],
+            Flexible(
+              child: ListView(
+                shrinkWrap: true,
+                children: [
+                  for (final v in shown)
+                    CheckboxListTile(
+                      dense: true,
+                      contentPadding: EdgeInsets.zero,
+                      controlAffinity: ListTileControlAffinity.leading,
+                      value: _ticked.contains(v),
+                      title: Text(
+                        v.isEmpty ? '(blank)' : v,
+                        style: v.isEmpty ? TextStyle(color: p.textMuted) : null,
+                      ),
+                      onChanged: (on) => setState(() {
+                        if (on ?? false) {
+                          _ticked.add(v);
+                        } else {
+                          _ticked.remove(v);
+                        }
+                      }),
+                    ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    return AlertDialog(
+      title: Text('Filter: ${widget.title}'),
+      content: ConstrainedBox(
+        constraints: const BoxConstraints(maxHeight: 420),
+        child: content,
       ),
+      actions: [
+        TextButton(
+          onPressed: () => Navigator.pop(context, const ColumnFilter()),
+          child: const Text('Clear'),
+        ),
+        TextButton(
+          onPressed: () => Navigator.pop(context),
+          child: const Text('Cancel'),
+        ),
+        FilledButton(
+          onPressed: () => Navigator.pop(
+            context,
+            values == null ? ColumnFilter(query: _text.text) : ColumnFilter(values: {..._ticked}),
+          ),
+          child: const Text('Apply'),
+        ),
+      ],
     );
   }
 }
 
-enum _Tone { error }
-
 class _Tile {
-  const _Tile(this.label, this.value, {this.tone});
+  const _Tile(this.label, this.value, {this.isError = false});
 
   final String label;
   final String value;
-  final _Tone? tone;
+  final bool isError;
 }
 
 class _SummaryCard extends StatelessWidget {
@@ -885,7 +1092,7 @@ class _SummaryCard extends StatelessWidget {
                     Text(
                       t.value,
                       style: AppTextStyles.titleLarge.copyWith(
-                        color: t.tone == _Tone.error ? p.error : p.textPrimary,
+                        color: t.isError ? p.error : p.textPrimary,
                       ),
                     ),
                   ],
@@ -936,16 +1143,100 @@ class _Note extends StatelessWidget {
   }
 }
 
-/// Bordered card holding a sideways-scrolling [DataTable], like the
-/// Events tab's table.
-class _TableFrame extends StatelessWidget {
-  const _TableFrame({required this.table});
+TextStyle _headStyle(AppPalette p) => AppTextStyles.labelSmall.copyWith(
+      color: p.textMuted,
+      fontWeight: FontWeight.w600,
+      letterSpacing: 0.6,
+    );
 
-  final DataTable table;
+TextStyle _cellStyle(AppPalette p) =>
+    AppTextStyles.bodySmall.copyWith(fontSize: 13, color: p.textPrimary);
+
+/// A table whose every heading sorts (tap it) and filters (funnel icon),
+/// in a bordered card that scrolls sideways when it's wider than the page.
+class _GridTable<T> extends StatelessWidget {
+  const _GridTable({
+    required this.rows,
+    required this.columns,
+    required this.sortId,
+    required this.ascending,
+    required this.filters,
+    required this.onSort,
+    required this.onFilter,
+    this.cell,
+  });
+
+  final List<T> rows;
+  final List<GridColumn<T>> columns;
+  final String sortId;
+  final bool ascending;
+  final Map<String, ColumnFilter> filters;
+  final void Function(String id, ColumnKind kind) onSort;
+  final void Function(GridColumn<T> column) onFilter;
+
+  /// Custom cell for a column, or null for plain text.
+  final Widget? Function(GridColumn<T> column, T row)? cell;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final head = _headStyle(p);
+    final text = _cellStyle(p);
+    final sortIndex = columns.indexWhere((c) => c.id == sortId);
+
+    Widget plain(GridColumn<T> c, T row) {
+      final value = c.text(row);
+      if (value.isEmpty) return Text('—', style: text.copyWith(color: p.textMuted));
+      final style = c.id == 'name'
+          ? text.copyWith(fontWeight: FontWeight.w600)
+          : (c.id == 'number' || c.id == 'event')
+          ? text.copyWith(color: p.textSecondary)
+          : text;
+      return ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 240),
+        child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: style),
+      );
+    }
+
+    final table = DataTable(
+      headingRowHeight: 40,
+      dataRowMinHeight: 48,
+      dataRowMaxHeight: 56,
+      horizontalMargin: 16,
+      columnSpacing: 24,
+      dividerThickness: 0.6,
+      headingRowColor: WidgetStatePropertyAll(p.surfaceSubtle),
+      sortColumnIndex: sortIndex < 0 ? null : sortIndex,
+      sortAscending: ascending,
+      columns: [
+        for (final c in columns)
+          DataColumn(
+            onSort: (_, _) => onSort(c.id, c.kind),
+            label: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(c.label.toUpperCase(), style: head),
+                if (c.filterable) ...[
+                  const SizedBox(width: 2),
+                  _FilterButton(
+                    active: filters[c.id]?.isActive ?? false,
+                    onPressed: () => onFilter(c),
+                  ),
+                ],
+              ],
+            ),
+          ),
+      ],
+      rows: [
+        for (final row in rows)
+          DataRow(
+            cells: [
+              for (final c in columns) DataCell(cell?.call(c, row) ?? plain(c, row)),
+            ],
+          ),
+      ],
+    );
+
     return DecoratedBox(
       decoration: BoxDecoration(
         color: p.card,
@@ -968,142 +1259,27 @@ class _TableFrame extends StatelessWidget {
   }
 }
 
-TextStyle _headStyle(AppPalette p) => AppTextStyles.labelSmall.copyWith(
-      color: p.textMuted,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.6,
-    );
+class _FilterButton extends StatelessWidget {
+  const _FilterButton({required this.active, required this.onPressed});
 
-TextStyle _cellStyle(AppPalette p) =>
-    AppTextStyles.bodySmall.copyWith(fontSize: 13, color: p.textPrimary);
-
-DataTable _dataTable(
-  AppPalette p, {
-  required List<DataColumn> columns,
-  required List<DataRow> rows,
-  int? sortColumnIndex,
-  bool sortAscending = true,
-}) {
-  return DataTable(
-    headingRowHeight: 40,
-    dataRowMinHeight: 48,
-    dataRowMaxHeight: 56,
-    horizontalMargin: 16,
-    columnSpacing: 24,
-    dividerThickness: 0.6,
-    headingRowColor: WidgetStatePropertyAll(p.surfaceSubtle),
-    sortColumnIndex: sortColumnIndex,
-    sortAscending: sortAscending,
-    columns: columns,
-    rows: rows,
-  );
-}
-
-class _RegistrationsTable extends StatelessWidget {
-  const _RegistrationsTable({
-    required this.rows,
-    required this.cancelledView,
-    required this.eventTitle,
-    required this.sort,
-    required this.ascending,
-    required this.onSort,
-  });
-
-  final List<AdminRegistration> rows;
-  final bool cancelledView;
-
-  /// Set in the all-events view, which adds an Event column.
-  final String Function(int eventId)? eventTitle;
-  final RegistrationSort sort;
-  final bool ascending;
-  final ValueChanged<RegistrationSort> onSort;
+  final bool active;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final head = _headStyle(p);
-    final cell = _cellStyle(p);
-    final muted = cell.copyWith(color: p.textSecondary);
-
-    // Column order, with the sort each column uses (null: not sortable).
-    final columns = <(String, RegistrationSort?)>[
-      ('NO.', null),
-      ('NAME', RegistrationSort.name),
-      if (eventTitle != null) ('EVENT', null),
-      if (!cancelledView) ...[
-        ('BATCH', RegistrationSort.batch),
-        ('BRANCH', null),
-      ],
-      ('EMAIL', null),
-      if (!cancelledView) ...[
-        ('PHONE', null),
-        ('CONFIRMATION EMAIL', null),
-      ],
-      ('REGISTERED', RegistrationSort.registeredAt),
-      if (cancelledView) ('CANCELLED', RegistrationSort.cancelledAt),
-    ];
-    final sortIndex = columns.indexWhere((c) => c.$2 == sort);
-
-    return _TableFrame(
-      table: _dataTable(
-        p,
-        sortColumnIndex: sortIndex < 0 ? null : sortIndex,
-        sortAscending: ascending,
-        columns: [
-          for (final c in columns)
-            DataColumn(
-              label: Text(c.$1, style: head),
-              onSort: c.$2 == null ? null : (_, _) => onSort(c.$2!),
-            ),
-        ],
-        rows: [
-          for (final r in rows)
-            DataRow(
-              cells: [
-                DataCell(Text(r.registrationNumber ?? '—', style: muted)),
-                DataCell(
-                  ConstrainedBox(
-                    constraints: const BoxConstraints(maxWidth: 220),
-                    child: Text(
-                      r.displayName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: cell.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ),
-                ),
-                if (eventTitle != null)
-                  DataCell(
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 200),
-                      child: Text(
-                        eventTitle!(r.eventId),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: muted,
-                      ),
-                    ),
-                  ),
-                if (!cancelledView) ...[
-                  DataCell(Text(r.batchYear?.toString() ?? '—', style: cell)),
-                  DataCell(Text(r.branch ?? '—', style: cell)),
-                ],
-                DataCell(SelectableText(r.email ?? '—', style: cell)),
-                if (!cancelledView) ...[
-                  DataCell(SelectableText(r.phone ?? '—', style: cell)),
-                  DataCell(_EmailStatus(status: r.confirmationEmailStatus)),
-                ],
-                DataCell(Text(_formatDateTime(r.registeredAt), style: cell)),
-                if (cancelledView)
-                  DataCell(
-                    Text(
-                      r.cancelledAt == null ? '—' : _formatDateTime(r.cancelledAt!),
-                      style: cell,
-                    ),
-                  ),
-              ],
-            ),
-        ],
+    return SizedBox(
+      width: 26,
+      height: 26,
+      child: IconButton(
+        tooltip: active ? 'Change filter' : 'Filter',
+        padding: EdgeInsets.zero,
+        iconSize: 16,
+        onPressed: onPressed,
+        icon: Icon(
+          active ? Icons.filter_alt : Icons.filter_alt_outlined,
+          color: active ? p.primary : p.textMuted,
+        ),
       ),
     );
   }
@@ -1118,13 +1294,13 @@ class _EmailStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final label = confirmationEmailLabel(status);
+    if (label.isEmpty) return Text('—', style: _cellStyle(p).copyWith(color: p.textMuted));
     final tone = switch (status) {
       'sent' => p.success,
       'failed' => p.error,
       'pending' || 'queued' => p.warning,
       _ => p.textMuted,
     };
-    if (label == '—') return Text(label, style: _cellStyle(p).copyWith(color: p.textMuted));
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
       decoration: BoxDecoration(
@@ -1200,8 +1376,8 @@ class _RegistrationTile extends StatelessWidget {
           const SizedBox(height: 6),
           Text(
             r.isCancelled && r.cancelledAt != null
-                ? 'Registered ${_formatDate(r.registeredAt)} · Cancelled ${_formatDate(r.cancelledAt!)}'
-                : 'Registered ${_formatDateTime(r.registeredAt)}',
+                ? 'Registered ${formatDate(r.registeredAt)} · Cancelled ${formatDate(r.cancelledAt!)}'
+                : 'Registered ${formatDateTime(r.registeredAt)}',
             style: secondary.copyWith(color: p.textMuted),
           ),
         ],
@@ -1210,94 +1386,38 @@ class _RegistrationTile extends StatelessWidget {
   }
 }
 
-class _CheckInsTable extends StatelessWidget {
-  const _CheckInsTable({
-    required this.rows,
-    required this.people,
-    required this.eventTitle,
-    required this.compact,
-  });
+/// Phone layout: one card per check-in.
+class _CheckInTile extends StatelessWidget {
+  const _CheckInTile({required this.entry, this.eventTitle});
 
-  final List<AdminCheckIn> rows;
-  final Map<int, AdminRegistration> people;
-  final String Function(int eventId)? eventTitle;
-  final bool compact;
+  final CheckInEntry entry;
+  final String? eventTitle;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final cell = _cellStyle(p);
-    final muted = cell.copyWith(color: p.textSecondary);
-
-    String who(AdminCheckIn c) =>
-        people[c.registrationId]?.displayName ?? 'Registration ${c.registrationId}';
-    String? number(AdminCheckIn c) => people[c.registrationId]?.registrationNumber;
-    String scope(AdminCheckIn c) =>
-        c.sessionId == null ? 'Event entry' : 'Session ${c.sessionId}';
-
-    if (compact) {
-      return Column(
+    final c = entry.checkIn;
+    final muted = AppTextStyles.bodySmall.copyWith(color: p.textSecondary);
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: p.card,
+        border: Border.all(color: p.border),
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          for (final c in rows) ...[
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.all(14),
-              decoration: BoxDecoration(
-                color: p.card,
-                border: Border.all(color: p.border),
-                borderRadius: BorderRadius.circular(12),
-              ),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(who(c), style: AppTextStyles.titleSmall.copyWith(color: p.textPrimary)),
-                  if (eventTitle != null) Text(eventTitle!(c.eventId), style: muted),
-                  Text(
-                    '${_formatDateTime(c.checkedInAt)} · ${scope(c)}',
-                    style: muted,
-                  ),
-                ],
-              ),
-            ),
-            const SizedBox(height: 10),
-          ],
-        ],
-      );
-    }
-
-    final head = _headStyle(p);
-    return _TableFrame(
-      table: _dataTable(
-        p,
-        columns: [
-          DataColumn(label: Text('NAME', style: head)),
-          DataColumn(label: Text('NO.', style: head)),
-          if (eventTitle != null) DataColumn(label: Text('EVENT', style: head)),
-          DataColumn(label: Text('CHECKED IN', style: head)),
-          DataColumn(label: Text('FOR', style: head)),
-        ],
-        rows: [
-          for (final c in rows)
-            DataRow(
-              cells: [
-                DataCell(Text(who(c), style: cell.copyWith(fontWeight: FontWeight.w600))),
-                DataCell(Text(number(c) ?? '—', style: muted)),
-                if (eventTitle != null)
-                  DataCell(
-                    ConstrainedBox(
-                      constraints: const BoxConstraints(maxWidth: 220),
-                      child: Text(
-                        eventTitle!(c.eventId),
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: muted,
-                      ),
-                    ),
-                  ),
-                DataCell(Text(_formatDateTime(c.checkedInAt), style: cell)),
-                DataCell(Text(scope(c), style: muted)),
-              ],
-            ),
+          Text(
+            entry.person?.displayName ?? 'Registration ${c.registrationId}',
+            style: AppTextStyles.titleSmall.copyWith(color: p.textPrimary),
+          ),
+          if (eventTitle != null) Text(eventTitle!, style: muted),
+          Text(
+            '${formatDateTime(c.checkedInAt)} · ${c.sessionId == null ? 'Event entry' : 'Session ${c.sessionId}'}',
+            style: muted,
+          ),
         ],
       ),
     );
