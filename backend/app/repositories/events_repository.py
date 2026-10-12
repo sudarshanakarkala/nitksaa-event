@@ -243,7 +243,10 @@ class EventsRepository:
     async def get_public_event(self, event_id: int) -> Optional[asyncpg.Record]:
         return await self.conn.fetchrow(
             f"""
-            SELECT {_PUBLIC_COLUMNS}
+            SELECT {_PUBLIC_COLUMNS},
+                   -- "Organised by" on the event page (the name only).
+                   (SELECT u.fullname FROM event_users u
+                     WHERE u.firebase_uid = e.created_by_firebase_uid) AS created_by_name
             FROM events e
             WHERE e.event_id = $1 AND e.status = 'published'
             """,

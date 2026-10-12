@@ -475,14 +475,8 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
     }
   }
 
-  String? _createdBy(AppEvent event) {
-    final me = ref.read(authControllerProvider).session?.firebaseUid;
-    if (event.createdByUid != null && event.createdByUid == me) {
-      return 'Created by you';
-    }
-    final name = event.createdByName?.trim();
-    return (name == null || name.isEmpty) ? null : 'Created by $name';
-  }
+  String? _createdBy(AppEvent event) =>
+      event.createdByLabel(ref.read(authControllerProvider).session?.firebaseUid);
 
   Widget _buildEventsList(List<AppEvent> events, bool isDark, ThemeData theme, {required bool isPublished}) {
     if (_isLoading) {
@@ -975,7 +969,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       const SizedBox(width: 8),
                       Flexible(
                         flex: 2,
-                        child: _buildStepIndicator(2, 'Fees', 'Registration fee tiers'),
+                        child: _buildStepIndicator(2, 'Pricing', 'Free, or what attendees pay'),
                       ),
                     ],
                   ),
@@ -1227,30 +1221,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         const SizedBox(height: 12),
         _buildTextField(_bannerUrl, 'Banner URL', hint: 'Wide image URL for event header'),
         
-        const SizedBox(height: 28),
-        // ── Pricing Section ──
-        _buildSectionHeader('Pricing'),
-        const SizedBox(height: 16),
-        
-        _buildToggleField('Free Event', _isFree, (val) {
-          setState(() => _isFree = val);
-        }),
-        const SizedBox(height: 12),
-        
-        if (!_isFree && _fees.isNotEmpty)
-          Text(
-            'Ticket price: ${_formatFeeAmount(_feesTotal.toString())}, the total of '
-            'the fee tiers in the next step.',
-            style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
-          )
-        else if (!_isFree)
-          _buildTextField(
-            _ticketPrice, 
-            'Ticket Price', 
-            hint: 'e.g., 499.99',
-            keyboardType: TextInputType.number,
-            required: true,
-          ),
       ],
     );
   }
@@ -1289,16 +1259,22 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Fee Tiers Section ──
-        _buildSectionHeader('Fee Tiers'),
-        const SizedBox(height: 8),
-        Text(
-          'Optional. Tiers break down the ticket price (for example participation '
-          'and food pass); the ticket price becomes their total.',
-          style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
-        ),
+        // ── Pricing: the one place the price is set ──
+        _buildSectionHeader('Pricing'),
         const SizedBox(height: 16),
-        _buildFeesSection(),
+        _buildToggleField('Free Event', _isFree, (val) {
+          setState(() => _isFree = val);
+        }),
+        if (!_isFree) ...[
+          const SizedBox(height: 12),
+          Text(
+            'List what attendees pay. A single price is one line (for example '
+            'Registration ₹599). The total is the ticket price checkout charges.',
+            style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+          ),
+          const SizedBox(height: 16),
+          _buildFeesSection(),
+        ],
       ],
     );
   }
@@ -1834,6 +1810,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               'fee_amount': text(r['amount']),
             },
         ];
+        // Paid events made before fees saved: show their price as one line,
+        // so saving keeps it.
+        final price = double.tryParse(_ticketPrice.text.trim()) ?? 0;
+        if (_fees.isEmpty && !_isFree && price > 0) {
+          _fees = [
+            {'fee_name': 'Registration', 'fee_type': 'PARTICIPATION', 'fee_amount': _ticketPrice.text.trim()},
+          ];
+        }
         _detailsLoading = false;
       });
     } catch (error, stackTrace) {
@@ -1842,6 +1826,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       setState(() {
         _detailsLoading = false;
         _detailsLoadFailed = true;
+        // Still let a paid event be saved at its current price.
+        final price = double.tryParse(_ticketPrice.text.trim()) ?? 0;
+        if (_fees.isEmpty && !_isFree && price > 0) {
+          _fees = [
+            {'fee_name': 'Registration', 'fee_type': 'PARTICIPATION', 'fee_amount': _ticketPrice.text.trim()},
+          ];
+        }
       });
     }
   }
@@ -1880,7 +1871,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             },
         ],
         'fees': [
-          for (final f in _fees)
+          if (!_isFree)
+            for (final f in _fees)
             {
               'name': f['fee_name'] ?? '',
               'fee_type': (f['fee_type'] ?? 'PARTICIPATION').toLowerCase(),
@@ -3054,10 +3046,12 @@ void _showFeeDialog(int? editIndex) {
       return;
     }
 
-    if (!_isFree && _fees.isEmpty && _ticketPrice.text.trim().isEmpty) {
+    if (!_isFree && (_fees.isEmpty || _feesTotal <= 0)) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter ticket price for paid events')),
+          const SnackBar(
+            content: Text('A paid event needs at least one fee with an amount (Pricing step).'),
+          ),
         );
       }
       return;
@@ -3083,12 +3077,8 @@ void _showFeeDialog(int? editIndex) {
         'is_full_day': _isFullDay,
         'capacity': parseCapacity(_capacity.text),
         'is_free': _isFree,
-        // With fee tiers, the price is their total (what checkout charges).
-        'ticket_price': _isFree
-            ? null
-            : _fees.isNotEmpty
-            ? _feesTotal
-            : double.tryParse(_ticketPrice.text.trim()),
+        // The price is the total of the fees (what checkout charges).
+        'ticket_price': _isFree ? null : _feesTotal,
         'thumbnail_url': _thumbnailUrl.text.trim().isEmpty ? null : _thumbnailUrl.text.trim(),
         'banner_url': _bannerUrl.text.trim().isEmpty ? null : _bannerUrl.text.trim(),
         if (_registrationOpensAt.text.trim().isNotEmpty)

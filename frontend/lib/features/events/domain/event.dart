@@ -370,3 +370,19 @@ class EventFee {
         amount: (json['amount'] as num?)?.toDouble() ?? 0,
       );
 }
+
+/// Who made the event, worded the same everywhere.
+extension AppEventCreator on AppEvent {
+  /// "you" when [myUid] created it, else the creator's name; null if unknown.
+  String? creatorName(String? myUid) {
+    if (createdByUid != null && createdByUid == myUid) return 'you';
+    final name = createdByName?.trim();
+    return (name == null || name.isEmpty) ? null : name;
+  }
+
+  /// "Created by you" / "Created by Name" (admin screens).
+  String? createdByLabel(String? myUid) {
+    final who = creatorName(myUid);
+    return who == null ? null : 'Created by $who';
+  }
+}
