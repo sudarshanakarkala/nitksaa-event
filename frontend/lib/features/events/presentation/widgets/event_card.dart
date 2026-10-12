@@ -63,6 +63,7 @@ class EventCard extends StatelessWidget {
     this.onUnregister,
     this.unregistering = false,
     this.onViewRefund,
+    this.onJoin,
     this.footerNote,
     this.showAdmin = false,
     this.eventStatus,
@@ -148,6 +149,9 @@ class EventCard extends StatelessWidget {
   final VoidCallback? onUnregister;
   final bool unregistering;
   final VoidCallback? onViewRefund;
+
+  /// Join meeting: a registered attendee's link to a virtual event.
+  final VoidCallback? onJoin;
 
   /// Short muted text at the left of the footer.
   final String? footerNote;
@@ -353,6 +357,13 @@ class EventCard extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      if (onJoin != null)
+        OutlinedButton.icon(
+          onPressed: onJoin,
+          style: compact,
+          icon: const Icon(Icons.videocam_outlined, size: 16),
+          label: const Text('Join meeting'),
         ),
       FilledButton(onPressed: onView, style: compact, child: Text(viewLabel)),
     ];

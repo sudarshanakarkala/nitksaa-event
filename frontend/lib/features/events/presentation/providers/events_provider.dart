@@ -18,6 +18,7 @@ class EventsState {
     this.dateRangeEnd,
     this.filterModes = const {'physical': true, 'virtual': true},
     this.filterRegistrationStatus = const {'open': true, 'closed': true},
+    this.filterPrice = const {'free': true, 'paid': true},
     this.timeline,
   });
 
@@ -33,6 +34,7 @@ class EventsState {
   final DateTime? dateRangeEnd;
   final Map<String, bool> filterModes; // {'physical': bool, 'virtual': bool}
   final Map<String, bool> filterRegistrationStatus; // {'open': bool, 'closed': bool}
+  final Map<String, bool> filterPrice; // {'free': bool, 'paid': bool}
   final String? timeline; // 'this_week', 'next_week', 'this_month', 'next_month', 'next_3_months', or null
 
   EventsState copyWith({
@@ -48,6 +50,7 @@ class EventsState {
     dynamic dateRangeEnd = _kUnsetValue,
     Map<String, bool>? filterModes,
     Map<String, bool>? filterRegistrationStatus,
+    Map<String, bool>? filterPrice,
     dynamic timeline = _kUnsetValue,
   }) {
     return EventsState(
@@ -63,6 +66,7 @@ class EventsState {
       dateRangeEnd: identical(dateRangeEnd, _kUnsetValue) ? this.dateRangeEnd : dateRangeEnd as DateTime?,
       filterModes: filterModes ?? this.filterModes,
       filterRegistrationStatus: filterRegistrationStatus ?? this.filterRegistrationStatus,
+      filterPrice: filterPrice ?? this.filterPrice,
       timeline: identical(timeline, _kUnsetValue) ? this.timeline : timeline as String?,
     );
   }
@@ -142,6 +146,12 @@ class EventsNotifier extends StateNotifier<EventsState> {
     state = state.copyWith(filterRegistrationStatus: updated);
   }
 
+  void toggleFilterPrice(String price) {
+    final updated = Map<String, bool>.from(state.filterPrice);
+    updated[price] = !(updated[price] ?? true);
+    state = state.copyWith(filterPrice: updated);
+  }
+
   void setTimeline(String? value) {
     state = state.copyWith(timeline: value);
   }
@@ -152,6 +162,7 @@ class EventsNotifier extends StateNotifier<EventsState> {
       dateRangeEnd: null,
       filterModes: const {'physical': true, 'virtual': true},
       filterRegistrationStatus: const {'open': true, 'closed': true},
+      filterPrice: const {'free': true, 'paid': true},
       searchQuery: '',
       timeline: null,
     );
@@ -276,6 +287,13 @@ final filteredEventsProvider = Provider<List<AppEvent>>((ref) {
       if (hasClosed && event.registrationStatus != 'open') return true;
       return false;
     }).toList();
+  }
+
+  // Apply price filter (Free/Paid)
+  final hasFree = state.filterPrice['free'] ?? true;
+  final hasPaid = state.filterPrice['paid'] ?? true;
+  if (!(hasFree && hasPaid)) {
+    filtered = filtered.where((event) => event.isPaid ? hasPaid : hasFree).toList();
   }
 
   return filtered;

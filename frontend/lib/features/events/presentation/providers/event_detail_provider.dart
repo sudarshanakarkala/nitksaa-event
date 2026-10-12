@@ -55,10 +55,14 @@ class EventDetailState {
 }
 
 class EventDetailNotifier extends StateNotifier<EventDetailState> {
-  EventDetailNotifier(this._repository, this._accessToken)
+  EventDetailNotifier(this._repository, this._accessToken, {this.canAdmin = false})
       : super(const EventDetailState(isLoading: true));
 
   final EventsRepository _repository;
+
+  /// True when the signed-in person is an admin of this event. They get the
+  /// full (admin) version, which includes the meeting link.
+  final bool canAdmin;
 
   /// Access token of the session this notifier was created for, or null when
   /// signed out. [eventDetailProvider] builds a new notifier whenever the
@@ -147,6 +151,14 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
   /// event's admins (and overall admins) get it through the admin API;
   /// everyone else gets the public API's 404.
   Future<AppEvent> _loadEvent(int eventId) async {
+    final adminToken = _accessToken;
+    if (canAdmin && adminToken != null) {
+      try {
+        return await _repository.getAdminEvent(eventId, adminToken);
+      } catch (_) {
+        // Fall back to the public version below.
+      }
+    }
     try {
       return await _repository.getPublicEvent(eventId);
     } on DioException catch (e) {
@@ -195,7 +207,8 @@ final eventDetailProvider = StateNotifierProvider.autoDispose.family<EventDetail
       (auth) => auth.isAuthenticated ? auth.session?.accessToken : null,
     ),
   );
-  final notifier = EventDetailNotifier(repo, accessToken);
+  final canAdmin = ref.read(authControllerProvider).session?.access.canAdminEvent(eventId) ?? false;
+  final notifier = EventDetailNotifier(repo, accessToken, canAdmin: canAdmin);
   // Auto fetch
   Future.microtask(() => notifier.fetchEventDetails(eventId));
   return notifier;

@@ -249,6 +249,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         !((s.filterModes['physical'] ?? true) && (s.filterModes['virtual'] ?? true)),
         !((s.filterRegistrationStatus['open'] ?? true) &&
             (s.filterRegistrationStatus['closed'] ?? true)),
+        !((s.filterPrice['free'] ?? true) && (s.filterPrice['paid'] ?? true)),
       ].where((active) => active).length;
 
   Widget _buildFilterPanel([WidgetRef? panelRef, bool inRail = false]) {
@@ -258,6 +259,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       state.dateRangeEnd != null ||
       !((state.filterModes?['physical'] ?? true) && (state.filterModes?['virtual'] ?? true)) ||
       !((state.filterRegistrationStatus?['open'] ?? true) && (state.filterRegistrationStatus?['closed'] ?? true)) ||
+      !((state.filterPrice['free'] ?? true) && (state.filterPrice['paid'] ?? true)) ||
       state.searchQuery.isNotEmpty ||
       state.timeline != null;
     final isInDrawer = MediaQuery.of(context).size.width >= 900;
@@ -457,6 +459,24 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               }
             },
           ),
+          ]),
+          const SizedBox(height: 20),
+
+          // Price Section (website chips)
+          _filterLabel('Price'),
+          const SizedBox(height: 8),
+          Wrap(spacing: 6, runSpacing: 6, children: [
+            for (final (key, label) in const [('free', 'Free'), ('paid', 'Paid')])
+              _filterChip(
+                label,
+                state.filterPrice[key] ?? true,
+                (val) {
+                  if (val == null) return;
+                  if (val != (state.filterPrice[key] ?? true)) {
+                    rf.read(eventsProvider.notifier).toggleFilterPrice(key);
+                  }
+                },
+              ),
           ]),
           const SizedBox(height: 24),
 

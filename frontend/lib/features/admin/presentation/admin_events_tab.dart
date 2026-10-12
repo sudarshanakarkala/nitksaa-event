@@ -53,6 +53,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   // Filters rail (the pills are the status shortcuts).
   Set<String> _modes = const {};
   Set<String> _registration = const {};
+  Set<String> _price = const {};
   bool _mine = false;
 
   /// Events with an action in flight; their actions are disabled.
@@ -142,7 +143,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     }).toList();
   }
 
-  /// The rail's filters (mode, registration, created by me).
+  /// The rail's filters (mode, registration, price, created by me).
   bool _railMatches(AppEvent e) {
     if (_modes.isNotEmpty && !_modes.contains(e.isVirtual ? 'online' : 'in_person')) {
       return false;
@@ -151,6 +152,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       final open = e.status == 'published' && e.registrationStatus == 'open' && !_ended(e);
       if (!_registration.contains(open ? 'open' : 'closed')) return false;
     }
+    if (_price.isNotEmpty && !_price.contains(e.isPaid ? 'paid' : 'free')) return false;
     if (_mine && (e.createdByUid == null || e.createdByUid != _myUid)) return false;
     return true;
   }
@@ -159,6 +161,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
         _filter != _Filter.all,
         _modes.isNotEmpty,
         _registration.isNotEmpty,
+        _price.isNotEmpty,
         _mine,
       ].where((on) => on).length;
 
@@ -166,6 +169,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     setState(() {
       _modes = const {};
       _registration = const {};
+      _price = const {};
       _mine = false;
       _filter = _Filter.all;
       _search.clear();
@@ -308,6 +312,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
             options: const {'open': 'Open', 'closed': 'Closed'},
             selected: _registration,
             onChanged: (v) => setState(() => _registration = v),
+          ),
+          FilterChipSection(
+            label: 'Price',
+            options: const {'free': 'Free', 'paid': 'Paid'},
+            selected: _price,
+            onChanged: (v) => setState(() => _price = v),
           ),
           const FilterLabel('Created by'),
           const SizedBox(height: 8),

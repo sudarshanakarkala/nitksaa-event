@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -1063,7 +1064,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final p = context.palette;
     final who = event.creatorName(ref.read(authControllerProvider).session?.firebaseUid);
     if (who == null && !isAdmin) return const SizedBox.shrink();
-    return Padding(
+    final link = event.virtualUrl?.trim() ?? '';
+    final line = Padding(
       padding: const EdgeInsets.only(top: 8),
       child: Wrap(
         crossAxisAlignment: WrapCrossAlignment.center,
@@ -1091,6 +1093,82 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             ),
         ],
       ),
+    );
+    if (!isAdmin || !event.isVirtual || link.isEmpty) return line;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [line, _organiserMeetingLink(link)],
+    );
+  }
+
+  /// The meeting link, for the event's organisers only. Attendees get it
+  /// through Join meeting once registered.
+  Widget _organiserMeetingLink(String link) {
+    final p = context.palette;
+    return Container(
+      margin: const EdgeInsets.only(top: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: p.surface,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: p.border),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.videocam_outlined, size: 18, color: p.textSecondary),
+          const SizedBox(width: 8),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SelectableText(link, style: TextStyle(fontSize: 13, color: p.textPrimary)),
+                Text(
+                  'Meeting link · only organisers see this',
+                  style: TextStyle(fontSize: 11, color: p.textMuted),
+                ),
+              ],
+            ),
+          ),
+          IconButton(
+            tooltip: 'Copy link',
+            icon: const Icon(Icons.copy, size: 16),
+            onPressed: () {
+              Clipboard.setData(ClipboardData(text: link));
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Meeting link copied')),
+              );
+            },
+          ),
+        ],
+      ),
+    );
+  }
+
+  /// Join meeting for registered attendees; a note for everyone else.
+  Widget? _attendeeMeetingLink(AppEvent event, {required bool registered, String? joinUrl}) {
+    if (!event.isVirtual) return null;
+    final p = context.palette;
+    final url = joinUrl?.trim() ?? '';
+    if (registered && url.isNotEmpty) {
+      return SizedBox(
+        width: double.infinity,
+        child: OutlinedButton.icon(
+          onPressed: () => _launchUrl(url),
+          icon: const Icon(Icons.videocam_outlined, size: 18),
+          label: const Text('Join meeting'),
+          style: OutlinedButton.styleFrom(padding: const EdgeInsets.symmetric(vertical: 14)),
+        ),
+      );
+    }
+    if (registered) return null;
+    // Organisers already see the link at the top of the page.
+    final isOrganiser =
+        ref.read(authControllerProvider).session?.access.canAdminEvent(event.eventId) ?? false;
+    if (isOrganiser) return null;
+    return Text(
+      'The meeting link is shared once you register.',
+      textAlign: TextAlign.center,
+      style: TextStyle(fontSize: 13, color: p.textSecondary),
     );
   }
 
@@ -1316,6 +1394,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         state.eligibilityStatus == 'eligible' &&
         !isPastEvent;
 
+    // Once it's over there is nothing to register for: just say it ended.
+    final isRegistered =
+        hasActiveRegistration || state.eligibilityStatus == 'already_registered';
+    if (isPastEvent && !isRegistered) return _endedNotice();
+
     Widget ctaWidget;
     if (hasCancelledRegistration && !canRegisterAgain) {
       ctaWidget = Container(
@@ -1524,6 +1607,20 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ],
         );
       }
+    }
+
+    final meeting = isPastEvent
+        ? null
+        : _attendeeMeetingLink(
+            event,
+            registered: isRegistered,
+            joinUrl: state.myRegistration?['join_url']?.toString(),
+          );
+    if (meeting != null) {
+      ctaWidget = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [ctaWidget, const SizedBox(height: 12), meeting],
+      );
     }
 
     if (countdownWidget != null) {

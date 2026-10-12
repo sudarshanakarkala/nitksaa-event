@@ -372,6 +372,11 @@ class EventFee {
 }
 
 /// Who made the event, worded the same everywhere.
+extension AppEventPrice on AppEvent {
+  /// Paid = it has a ticket price above zero (what checkout charges).
+  bool get isPaid => (ticketPrice ?? 0) > 0 && isFree != true;
+}
+
 extension AppEventCreator on AppEvent {
   /// "you" when [myUid] created it, else the creator's name; null if unknown.
   String? creatorName(String? myUid) {
