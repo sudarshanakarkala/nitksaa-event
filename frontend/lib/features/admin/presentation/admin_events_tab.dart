@@ -193,11 +193,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     return [...upcoming, ...past];
   }
 
-  String? _createdBy(AppEvent e) {
-    if (e.createdByUid != null && e.createdByUid == _myUid) return 'Created by you';
-    final name = e.createdByName?.trim();
-    return (name == null || name.isEmpty) ? null : 'Created by $name';
-  }
+  String? _createdBy(AppEvent e) => e.createdByLabel(_myUid);
 
   // ── Actions ──────────────────────────────────────────────────────────────
 

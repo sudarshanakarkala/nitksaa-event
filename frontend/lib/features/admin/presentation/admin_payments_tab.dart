@@ -209,10 +209,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
   String? _createdBy(int id) {
     final e = _appEvent(id);
     if (e == null) return null;
-    final me = ref.read(authControllerProvider).session?.firebaseUid;
-    if (e.createdByUid != null && e.createdByUid == me) return 'Created by you';
-    final name = e.createdByName?.trim();
-    return (name == null || name.isEmpty) ? null : 'Created by $name';
+    return e.createdByLabel(ref.read(authControllerProvider).session?.firebaseUid);
   }
 
   AppEvent? _appEvent(int id) {

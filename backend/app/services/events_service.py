@@ -142,7 +142,9 @@ class EventsService:
         record = await self.repo.get_event(event_id)
         if not record:
             raise HTTPException(status_code=404, detail="event_not_found")
-        return _enrich(self._to_dict(record))
+        d = _enrich(self._to_dict(record))
+        await self._attach_details(d, event_id)
+        return d
 
     # ── Admin: Update ────────────────────────────────────────────────────────
 
@@ -271,14 +273,11 @@ class EventsService:
             result.append(_with_public_card_metadata(d))
         return result, total
 
-    # ── Public: Get ──────────────────────────────────────────────────────────
-
-    async def get_public_event(self, event_id: int) -> Dict[str, Any]:
-        record = await self.repo.get_public_event(event_id)
-        if not record:
-            raise HTTPException(status_code=404, detail="event_not_found")
-        d = self._to_dict(record)
-        _with_public_card_metadata(d)
+    async def _attach_details(self, d: Dict[str, Any], event_id: int) -> None:
+        """What the event page shows besides the event itself: sessions,
+        fee tiers, speakers (and other people), sponsors and partners.
+        Shared by the public page and the admin view, so a draft previews
+        exactly as it will look once published."""
         d["sessions"] = [self._to_dict(r) for r in await self.repo.list_sessions(event_id)]
         fee_rows = await self.conn.fetch(
             "SELECT fee_id, name, fee_type, amount FROM event_fees"
@@ -299,4 +298,13 @@ class EventsService:
         partner_rows = await PartnersRepository(self.conn).list_public_by_event(event_id)
         d["partners"] = [dict(r) for r in partner_rows]
 
+    # ── Public: Get ──────────────────────────────────────────────────────────
+
+    async def get_public_event(self, event_id: int) -> Dict[str, Any]:
+        record = await self.repo.get_public_event(event_id)
+        if not record:
+            raise HTTPException(status_code=404, detail="event_not_found")
+        d = self._to_dict(record)
+        _with_public_card_metadata(d)
+        await self._attach_details(d, event_id)
         return d

@@ -10,6 +10,7 @@ import '../../../../shared/widgets/page_insets.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
+import 'manage_events_screen.dart' show showEventFormDialog;
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
 import '../widgets/venue_section.dart';
@@ -441,6 +442,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                   ),
                             ),
                           ],
+                          _organiserLine(event, isAdmin: isAdmin),
                           const SizedBox(height: 16),
                           _buildMaterialMetaGrid(event),
                           const SizedBox(height: 24),
@@ -466,13 +468,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                             const Divider(),
                             const SizedBox(height: 16),
                           ],
-                          if (event.fees.isNotEmpty) ...[
-                  _buildFeesSection(event),
-                  const SizedBox(height: 24),
-                  const Divider(),
-                  const SizedBox(height: 16),
-                ],
-                _buildAgendaSection(event),
+                          _buildAgendaSection(event),
                           const SizedBox(height: 24),
                           const Divider(),
                           const SizedBox(height: 16),
@@ -565,6 +561,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                     style: TextStyle(fontSize: 14, color: context.palette.textMuted, fontStyle: FontStyle.italic),
                   ),
                 ],
+                _organiserLine(event, isAdmin: isAdmin),
                 const SizedBox(height: 16),
                 _buildMaterialMetaRow(Icons.calendar_today, _formatDate(event.startDatetime)),
                 _buildMaterialMetaRow(Icons.access_time, _formatTime(event.startDatetime, event.endDatetime)),
@@ -601,6 +598,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
+                if (event.fees.isNotEmpty) ...[
+                  _buildFeesSection(event),
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                ],
                 _buildAgendaSection(event),
                 const SizedBox(height: 16),
                 const Divider(),
@@ -1054,6 +1057,42 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return card;
   }
 
+  /// "Organised by …" for everyone; "Edit event" for the event's admins,
+  /// opening the same form as Admin → Events.
+  Widget _organiserLine(AppEvent event, {required bool isAdmin}) {
+    final p = context.palette;
+    final who = event.creatorName(ref.read(authControllerProvider).session?.firebaseUid);
+    if (who == null && !isAdmin) return const SizedBox.shrink();
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Wrap(
+        crossAxisAlignment: WrapCrossAlignment.center,
+        spacing: 12,
+        runSpacing: 4,
+        children: [
+          if (who != null)
+            Text(
+              'Organised by $who',
+              style: TextStyle(fontSize: 13, color: p.textSecondary),
+            ),
+          if (isAdmin)
+            TextButton.icon(
+              onPressed: () async {
+                final saved = await showEventFormDialog(context, event: event);
+                if (saved && mounted) {
+                  await ref
+                      .read(eventDetailProvider(widget.eventId).notifier)
+                      .fetchEventDetails(widget.eventId);
+                }
+              },
+              icon: const Icon(Icons.edit_outlined, size: 16),
+              label: const Text('Edit event'),
+            ),
+        ],
+      ),
+    );
+  }
+
   /// Fee tiers: what the ticket price covers. Their total is the price.
   Widget _buildFeesSection(AppEvent event) {
     final p = context.palette;
@@ -1234,8 +1273,19 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final event = state.event;
     if (event == null) return const SizedBox.shrink();
 
+    final isPastEvent = event.endDatetime != null
+        ? event.endDatetime!.isBefore(DateTime.now())
+        : event.startDatetime.isBefore(DateTime.now());
+
+    // A countdown only makes sense while its moment is still ahead; once
+    // the event is over, say so instead.
+    final now = DateTime.now();
     Widget? countdownWidget;
-    if (event.registrationStatus == 'open' && event.registrationClosesAt != null) {
+    if (isPastEvent) {
+      countdownWidget = _endedNotice();
+    } else if (event.registrationStatus == 'open' &&
+        event.registrationClosesAt != null &&
+        event.registrationClosesAt!.isAfter(now)) {
       countdownWidget = _buildCountdownSection(
         title: 'Registration closes in',
         countdown: _formatRemainingTime(event.registrationClosesAt!),
@@ -1243,7 +1293,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         dateValue: _formatDateTime(event.registrationClosesAt!),
         isIOS: isIOS,
       );
-    } else if (event.registrationStatus != 'open' && event.registrationOpensAt != null) {
+    } else if (event.registrationStatus != 'open' &&
+        event.registrationOpensAt != null &&
+        event.registrationOpensAt!.isAfter(now)) {
       countdownWidget = _buildCountdownSection(
         title: 'Registration opens in',
         countdown: _formatRemainingTime(event.registrationOpensAt!),
@@ -1257,9 +1309,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         state.myRegistration?['status']?.toString().toLowerCase();
     final hasActiveRegistration = registrationStatus == 'registered';
     final hasCancelledRegistration = registrationStatus == 'cancelled';
-    final isPastEvent = event.endDatetime != null
-        ? event.endDatetime!.isBefore(DateTime.now())
-        : event.startDatetime.isBefore(DateTime.now());
     // After a cancellation the backend lets the attendee register again. The
     // Register button comes back only when the backend says so.
     final canRegisterAgain = hasCancelledRegistration &&
@@ -1894,6 +1943,31 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       return 'Event Fee: ₹$amountText';
     }
     return 'Free Event';
+  }
+
+  /// Shown in place of a countdown once the event is over.
+  Widget _endedNotice() {
+    final p = context.palette;
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: p.surfaceSubtle,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: p.border),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.event_available_outlined, size: 18, color: p.textMuted),
+          const SizedBox(width: 8),
+          Text(
+            'This event has ended',
+            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textSecondary),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildCountdownSection({
