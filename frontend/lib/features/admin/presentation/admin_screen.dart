@@ -10,6 +10,7 @@ import '../../auth/domain/admin_access.dart';
 import '../../auth/services/auth_controller.dart';
 import '../admin_tabs.dart';
 import 'admin_events_tab.dart';
+import 'admin_registrations_tab.dart';
 import 'roles_tab.dart';
 
 /// `/admin/<tab>`: the one admin area, modelled on the website's Admin page
@@ -79,9 +80,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       case AdminTab.roles:
         return const RolesTab();
       case AdminTab.registrations:
-        return const _ComingSoon(
-          note: 'Until then, open an event\'s registrations from the Events tab.',
-        );
+        return const AdminRegistrationsTab();
       case AdminTab.actions:
       case AdminTab.dashboard:
       case AdminTab.payments:

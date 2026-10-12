@@ -537,7 +537,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
         itemCount: events.length,
         itemBuilder: (context, index) {
           final event = events[index];
-          final registrationsPath = '/admin/events/${event.eventId}/registrations';
+          final registrationsPath = '/admin/registrations?event=${event.eventId}';
           return EventCard.forEvent(
             event,
             showAdmin: true,

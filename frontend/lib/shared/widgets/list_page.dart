@@ -17,7 +17,7 @@ import 'page_insets.dart';
 class ListPage extends StatefulWidget {
   const ListPage({
     super.key,
-    required this.title,
+    this.title,
     required this.body,
     this.eyebrow = 'NITKSAA Alumni Network',
     this.subtitle,
@@ -32,7 +32,8 @@ class ListPage extends StatefulWidget {
     this.onClearFilters,
   });
 
-  final String title;
+  /// Page title. Null inside a page that already has one (the Admin tabs).
+  final String? title;
   final String eyebrow;
   final String? subtitle;
   final Widget? search;
@@ -125,16 +126,21 @@ class _ListPageState extends State<ListPage> {
       builder: (context, constraints) => Padding(
         padding: PageInsets.horizontal(context, constraints.maxWidth, minLeft: reservedLeft),
         child: Padding(
-        padding: EdgeInsets.only(top: compact ? 20 : 28, bottom: 14),
+        padding: EdgeInsets.only(
+          top: widget.title == null ? 16 : (compact ? 20 : 28),
+          bottom: 14,
+        ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            PageHeader(
-              eyebrow: widget.eyebrow,
-              title: widget.title,
-              subtitle: compact ? null : widget.subtitle,
-            ),
-            const SizedBox(height: 20),
+            if (widget.title != null) ...[
+              PageHeader(
+                eyebrow: widget.eyebrow,
+                title: widget.title!,
+                subtitle: compact ? null : widget.subtitle,
+              ),
+              const SizedBox(height: 20),
+            ],
             Row(
               children: [
                 if (widget.search != null) Expanded(child: widget.search!),
