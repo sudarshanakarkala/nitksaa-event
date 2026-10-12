@@ -33,6 +33,11 @@ class AppShell extends StatefulWidget {
 
   static const double assistantRailFrom = 1200;
 
+  /// From this width the NITiKa rail's full width is always kept free, so
+  /// opening it never moves the page. Between [assistantRailFrom] and this,
+  /// the open rail slides over the page instead.
+  static const double assistantReserveFrom = 1600;
+
   @override
   State<AppShell> createState() => _AppShellState();
 }
@@ -103,19 +108,51 @@ class _AppShellState extends State<AppShell> {
                 context: context,
                 removeTop: true,
                 removeBottom: true,
-                child: assistantRail
+                // The page never changes width when NITiKa opens or closes:
+                // on very wide screens its space is always kept; otherwise
+                // the open rail slides over the page.
+                child: !assistantRail
+                    ? widget.child
+                    : width >= AppShell.assistantReserveFrom
                     ? Row(
                         crossAxisAlignment: CrossAxisAlignment.stretch,
                         children: [
                           Expanded(child: widget.child),
-                          _AssistantRail(
-                            open: _railOpen,
-                            onToggle: _toggleRail,
-                            child: assistant,
+                          SizedBox(
+                            width: _AssistantRail.openWidth,
+                            child: Align(
+                              alignment: Alignment.centerRight,
+                              child: _AssistantRail(
+                                open: _railOpen,
+                                onToggle: _toggleRail,
+                                child: assistant,
+                              ),
+                            ),
                           ),
                         ],
                       )
-                    : widget.child,
+                    : Stack(
+                        children: [
+                          Positioned.fill(
+                            right: _AssistantRail.closedWidth,
+                            child: widget.child,
+                          ),
+                          Positioned(
+                            top: 0,
+                            bottom: 0,
+                            right: 0,
+                            child: Material(
+                              elevation: _railOpen ? 8 : 0,
+                              shadowColor: context.palette.overlay,
+                              child: _AssistantRail(
+                                open: _railOpen,
+                                onToggle: _toggleRail,
+                                child: assistant,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
               ),
             ),
             const SafeArea(top: false, child: SiteFooter()),
@@ -178,13 +215,16 @@ class _AssistantRail extends StatelessWidget {
   final VoidCallback onToggle;
   final Widget child;
 
+  static const double openWidth = 320;
+  static const double closedWidth = 28;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     return AnimatedContainer(
       duration: const Duration(milliseconds: 250),
       curve: Curves.easeInOut,
-      width: open ? 320 : 28,
+      width: open ? openWidth : closedWidth,
       decoration: BoxDecoration(
         color: p.card,
         border: Border(left: BorderSide(color: p.border)),
