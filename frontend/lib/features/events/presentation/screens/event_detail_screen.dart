@@ -72,28 +72,43 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     }
 
     if (state.errorMessage != null && state.event == null) {
+      final notAvailable =
+          state.errorMessage == EventDetailNotifier.notAvailableMessage;
       return Scaffold(
-        appBar: AppBar(title: const Text('Error')),
-        body: Center(
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.error_outline, size: 48, color: context.palette.error),
-                const SizedBox(height: 16),
-                Text(
-                  'Failed to load event details:\n${state.errorMessage}',
-                  textAlign: TextAlign.center,
-                ),
-                const SizedBox(height: 16),
-                ElevatedButton(
-                  onPressed: () => ref
-                      .read(eventDetailProvider(widget.eventId).notifier)
-                      .fetchEventDetails(widget.eventId),
-                  child: const Text('Retry'),
-                ),
-              ],
+        body: _pageFrame(
+          title: null,
+          child: Center(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(
+                    notAvailable ? Icons.event_busy_outlined : Icons.error_outline,
+                    size: 48,
+                    color: notAvailable ? context.palette.textMuted : context.palette.error,
+                  ),
+                  const SizedBox(height: 16),
+                  Text(
+                    state.errorMessage!,
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.bodyLarge.copyWith(color: context.palette.textSecondary),
+                  ),
+                  const SizedBox(height: 16),
+                  if (notAvailable)
+                    FilledButton(
+                      onPressed: () => context.go(AppRoutes.home),
+                      child: const Text('See all events'),
+                    )
+                  else
+                    FilledButton(
+                      onPressed: () => ref
+                          .read(eventDetailProvider(widget.eventId).notifier)
+                          .fetchEventDetails(widget.eventId),
+                      child: const Text('Try again'),
+                    ),
+                ],
+              ),
             ),
           ),
         ),
@@ -374,27 +389,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final isWebScreen = MediaQuery.of(context).size.width >= 900;
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
-    final appBar = AppBar(
-      title: Text(event.title),
-      backgroundColor: context.palette.background,
-      foregroundColor: context.palette.textPrimary,
-      elevation: 0,
-      leading: IconButton(
-        icon: const Icon(Icons.arrow_back),
-        onPressed: () => context.pop(),
-      ),
-    );
+    // Website detail page: no back bar; a breadcrumb lined up with the
+    // content, and "Back" at the end of the page.
+    final unpublished = event.status != 'published';
 
     if (isWebScreen) {
       return Scaffold(
-        appBar: appBar,
-        body: SafeArea(
-          top: false,
-          child: Center(
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 1200),
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 32),
-              child: Row(
+        body: _pageFrame(
+          title: event.title,
+          banner: unpublished ? _statusNotice(event) : null,
+          child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Expanded(
@@ -460,6 +464,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           const Divider(),
                           const SizedBox(height: 16),
                           _buildSpeakersSection(event),
+                          const SizedBox(height: 32),
+                          _backLink(),
+                          const SizedBox(height: 32),
                         ],
                       ),
                     ),
@@ -485,7 +492,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                               const SizedBox(height: 12),
                               if (isAdmin) _buildCapacityBar(event, isDark),
                               const SizedBox(height: 16),
-                              _buildRegistrationCTA(state, isIOS: false),
+                              if (unpublished)
+                                Text(
+                                  'Registration opens once the event is published.',
+                                  style: TextStyle(color: context.palette.textSecondary),
+                                )
+                              else
+                                _buildRegistrationCTA(state, isIOS: false),
                             ],
                           ),
                         ),
@@ -494,14 +507,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   ),
                 ],
               ),
-            ),
-          ),
         ),
       );
     } else {
-      // Android / Mobile Material Layout
+      // Phones and narrow windows: everything scrolls, breadcrumb included.
       return Scaffold(
-        appBar: appBar,
         body: SafeArea(
           top: false,
           child: SingleChildScrollView(
@@ -509,6 +519,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
+                _breadcrumb(event.title),
+                if (unpublished) ...[
+                  const SizedBox(height: 12),
+                  _statusNotice(event),
+                ],
+                const SizedBox(height: 16),
                 if (event.bannerUrl != null || event.thumbnailUrl != null)
                   ClipRRect(
                     borderRadius: BorderRadius.circular(12),
@@ -554,7 +570,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   _buildCapacityBar(event, isDark),
                   const SizedBox(height: 16),
                 ],
-                _buildRegistrationCTA(state, isIOS: false),
+                if (!unpublished) _buildRegistrationCTA(state, isIOS: false),
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
@@ -577,12 +593,113 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 const Divider(),
                 const SizedBox(height: 16),
                 _buildSpeakersSection(event),
+                const SizedBox(height: 24),
+                _backLink(),
+                const SizedBox(height: 16),
               ],
             ),
           ),
         ),
       );
     }
+  }
+
+  // ── Page frame (website detail page) ──────────────────────────────────
+
+  /// Wide screens: the site header's container (1520px, page side padding),
+  /// breadcrumb and optional status notice on top, [child] filling the rest.
+  Widget _pageFrame({required String? title, required Widget child, Widget? banner}) {
+    final side = MediaQuery.sizeOf(context).width < 600 ? 16.0 : 40.0;
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 1520),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(side, 20, side, 0),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              _breadcrumb(title),
+              if (banner != null) ...[const SizedBox(height: 12), banner],
+              const SizedBox(height: 20),
+              Expanded(child: child),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  /// Website breadcrumb: "Events › Event title".
+  Widget _breadcrumb(String? title) {
+    final p = context.palette;
+    final style = AppTextStyles.bodySmall.copyWith(fontSize: 13);
+    return Row(
+      children: [
+        InkWell(
+          onTap: () => context.go(AppRoutes.home),
+          borderRadius: BorderRadius.circular(4),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 4),
+            child: Text('Events', style: style.copyWith(color: p.primary)),
+          ),
+        ),
+        if (title != null) ...[
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            child: Text('›', style: style.copyWith(color: p.textMuted)),
+          ),
+          Flexible(
+            child: Text(
+              title,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: style.copyWith(color: p.textSecondary),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  /// Website "← Back to …" at the end of the page: back to wherever you came
+  /// from (Events or Admin), or to Events when opened directly.
+  Widget _backLink() {
+    return TextButton.icon(
+      onPressed: () => context.canPop() ? context.pop() : context.go(AppRoutes.home),
+      icon: const Icon(Icons.arrow_back, size: 16),
+      label: const Text('Back'),
+    );
+  }
+
+  /// Shown to admins on an event that isn't published.
+  Widget _statusNotice(AppEvent event) {
+    final p = context.palette;
+    final (tone, text) = switch (event.status) {
+      'draft' => (
+          p.warning,
+          'Draft: only admins can see this page. Publish it from Admin › Events.',
+        ),
+      'cancelled' => (p.error, 'Cancelled: this event was cancelled and is no longer listed.'),
+      'completed' => (p.textMuted, 'Completed: this event is closed.'),
+      _ => (p.textMuted, 'Not published: only admins can see this page.'),
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: tone.withValues(alpha: 0.07),
+        border: Border.all(color: tone.withValues(alpha: 0.25)),
+        borderRadius: BorderRadius.circular(6),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.visibility_off_outlined, size: 18, color: tone),
+          const SizedBox(width: 9),
+          Expanded(
+            child: Text(text, style: AppTextStyles.bodySmall.copyWith(fontSize: 13.5, color: p.textPrimary)),
+          ),
+        ],
+      ),
+    );
   }
 
   Widget _buildMaterialMetaRow(IconData icon, String text, {VoidCallback? onTap}) {

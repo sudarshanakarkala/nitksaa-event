@@ -47,6 +47,28 @@ class AdminUser {
   }
 }
 
+/// One admin of an event (`GET /api/v1/admin/events/{id}/admins`).
+class EventAdmin {
+  const EventAdmin({
+    required this.firebaseUid,
+    this.email,
+    this.fullname,
+    this.isCreator = false,
+  });
+
+  final String firebaseUid;
+  final String? email;
+  final String? fullname;
+  final bool isCreator;
+
+  factory EventAdmin.fromJson(Map<String, dynamic> json) => EventAdmin(
+        firebaseUid: json['firebase_uid']?.toString() ?? '',
+        email: json['email']?.toString(),
+        fullname: json['fullname']?.toString(),
+        isCreator: json['is_creator'] == true,
+      );
+}
+
 class AdminUserPage {
   const AdminUserPage({
     required this.users,
@@ -144,6 +166,45 @@ class AdminApi {
       options: _auth(accessToken),
     );
     return AdminUser.fromJson(response.data ?? <String, dynamic>{});
+  }
+
+  // ── Event admins (overall admins and the event's own admins) ────────────
+
+  Future<List<EventAdmin>> listEventAdmins({
+    required String accessToken,
+    required int eventId,
+  }) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/admin/events/$eventId/admins',
+      options: _auth(accessToken),
+    );
+    final rows = response.data?['admins'] as List<dynamic>? ?? const [];
+    return rows.whereType<Map<String, dynamic>>().map(EventAdmin.fromJson).toList();
+  }
+
+  /// Adds the person who signs in with [email] as an admin of the event.
+  Future<EventAdmin> grantEventAdmin({
+    required String accessToken,
+    required int eventId,
+    required String email,
+  }) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/admin/events/$eventId/admins',
+      data: {'email': email.trim()},
+      options: _auth(accessToken),
+    );
+    return EventAdmin.fromJson(response.data ?? const {});
+  }
+
+  Future<void> revokeEventAdmin({
+    required String accessToken,
+    required int eventId,
+    required String firebaseUid,
+  }) async {
+    await _dio.delete<Map<String, dynamic>>(
+      '/api/v1/admin/events/$eventId/admins/${Uri.encodeComponent(firebaseUid)}',
+      options: _auth(accessToken),
+    );
   }
 }
 

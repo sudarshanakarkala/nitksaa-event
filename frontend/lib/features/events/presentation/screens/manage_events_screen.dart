@@ -465,11 +465,8 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
         ? _access.isEventCreator
         : _access.canAdminEvent(event.eventId);
     if (!allowed) return;
-    final saved = await showDialog<bool>(
-      context: context,
-      builder: (context) => _EventFormDialog(event: event),
-    );
-    if (saved == true) {
+    final saved = await showEventFormDialog(context, event: event);
+    if (saved) {
       await _fetchEvents();
       // Also refresh the public events list so EventListScreen shows updated data
       if (mounted) {
@@ -636,6 +633,62 @@ String _getTimezoneOffset(String timezone) {
   return TZ_OFFSETS[timezone] ?? '+05:30';
 }
 
+/// Opens the create/edit event form. Returns true when the event was saved.
+Future<bool> showEventFormDialog(BuildContext context, {AppEvent? event}) async {
+  final saved = await showDialog<bool>(
+    context: context,
+    builder: (_) => _EventFormDialog(event: event),
+  );
+  return saved == true;
+}
+
+/// Sponsors and partners share one list UI in the form; this says which.
+class _OrgKind {
+  const _OrgKind({
+    required this.noun,
+    required this.apiPath,
+    required this.typeKey,
+    required this.idKey,
+    required this.types,
+  });
+
+  final String noun;
+  final String apiPath;
+  final String typeKey;
+  final String idKey;
+  final List<String> types;
+}
+
+const _sponsorKind = _OrgKind(
+  noun: 'Sponsor',
+  apiPath: 'sponsors',
+  typeKey: 'sponsor_type',
+  idKey: 'sponsor_id',
+  types: [
+    'TITLE_SPONSOR',
+    'GOLD_SPONSOR',
+    'SILVER_SPONSOR',
+    'BRONZE_SPONSOR',
+    'ASSOCIATE_SPONSOR',
+  ],
+);
+
+const _partnerKind = _OrgKind(
+  noun: 'Partner',
+  apiPath: 'partners',
+  typeKey: 'partner_type',
+  idKey: 'partner_id',
+  types: [
+    'COMMUNITY_PARTNER',
+    'KNOWLEDGE_PARTNER',
+    'MEDIA_PARTNER',
+    'VENUE_PARTNER',
+    'TECHNOLOGY_PARTNER',
+    'ECOSYSTEM_PARTNER',
+    'HIRING_PARTNER',
+  ],
+);
+
 class _EventFormDialog extends ConsumerStatefulWidget {
   const _EventFormDialog({this.event});
 
@@ -684,8 +737,17 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   late List<Map<String, String>> _speakers;
   late List<Map<String, String>> _sessions;
   
-  // Sponsors
+  // Sponsors and partners. Each entry keeps its server id (when it has
+  // one) under the kind's idKey, so saving can update, add and remove.
   late List<Map<String, String>> _sponsors;
+  List<Map<String, String>> _partners = [];
+
+  /// Ids as loaded, to know which were removed. Null until loaded (new
+  /// events have none); if loading failed, saving leaves them untouched.
+  Set<String>? _loadedSponsorIds;
+  Set<String>? _loadedPartnerIds;
+  bool _orgsLoading = false;
+  bool _orgsLoadFailed = false;
   
   // Fees
   late List<Map<String, String>> _fees;
@@ -750,13 +812,15 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       'organisation': sp.organisation ?? '',
     }).toList() ?? [];
     
-    // Initialize sponsors (convert EventSponsor to Map)
-    _sponsors = event?.sponsors.map((sp) => {
-      'name': sp.name,
-      'sponsor_type': sp.sponsorType,
-      'logo_url': sp.logoUrl ?? '',
-      'website_url': sp.websiteUrl ?? '',
-    }).toList() ?? [];
+    // Sponsors and partners come from their own endpoints when editing.
+    _sponsors = [];
+    if (event != null) {
+      _orgsLoading = true;
+      Future.microtask(() => _loadOrgs(event.eventId));
+    } else {
+      _loadedSponsorIds = {};
+      _loadedPartnerIds = {};
+    }
     
     // Initialize fees
     _fees = [];
@@ -1200,6 +1264,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         _buildSectionHeader('Sponsors'),
         const SizedBox(height: 16),
         _buildSponsorsSection(),
+
+        const SizedBox(height: 28),
+        // ── Partners Section ──
+        _buildSectionHeader('Partners'),
+        const SizedBox(height: 16),
+        _buildPartnersSection(),
         
         const SizedBox(height: 28),
         // ── Speakers Section ──
@@ -1752,21 +1822,132 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  Widget _buildSponsorsSection() {
+  Future<void> _loadOrgs(int eventId) async {
+    final token = ref.read(authControllerProvider).session?.accessToken;
+    if (token == null) return;
+    final repo = ref.read(eventsRepositoryProvider);
+    try {
+      final results = await Future.wait([
+        repo.listEventOrgs(eventId, _sponsorKind.apiPath, token),
+        repo.listEventOrgs(eventId, _partnerKind.apiPath, token),
+      ]);
+      List<Map<String, String>> toRows(List<Map<String, dynamic>> raw, _OrgKind kind) {
+        final rows = [...raw]
+          ..sort((a, b) => ((a['display_order'] as num?) ?? 0)
+              .compareTo((b['display_order'] as num?) ?? 0));
+        return rows
+            .map((r) => <String, String>{
+                  kind.idKey: '${r[kind.idKey]}',
+                  'name': r['name']?.toString() ?? '',
+                  kind.typeKey: r[kind.typeKey]?.toString() ?? kind.types.first,
+                  'logo_url': r['logo_url']?.toString() ?? '',
+                  'website_url': r['website_url']?.toString() ?? '',
+                })
+            .toList();
+      }
+
+      if (!mounted) return;
+      setState(() {
+        _sponsors = toRows(results[0], _sponsorKind);
+        _partners = toRows(results[1], _partnerKind);
+        _loadedSponsorIds = _sponsors.map((r) => r[_sponsorKind.idKey]!).toSet();
+        _loadedPartnerIds = _partners.map((r) => r[_partnerKind.idKey]!).toSet();
+        _orgsLoading = false;
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error('Could not load sponsors and partners', error, stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _orgsLoading = false;
+        _orgsLoadFailed = true;
+      });
+    }
+  }
+
+  /// Saves sponsors and partners through their endpoints after the event
+  /// itself is saved. Returns false if any change failed.
+  Future<bool> _saveOrgs(int eventId, String token) async {
+    if (_orgsLoadFailed) return true; // nothing was loaded, so nothing changed
+    final repo = ref.read(eventsRepositoryProvider);
+    var ok = true;
+    Future<void> sync(
+      List<Map<String, String>> rows,
+      Set<String>? loaded,
+      _OrgKind kind,
+    ) async {
+      final kept = <String>{};
+      for (var i = 0; i < rows.length; i++) {
+        final row = rows[i];
+        final body = <String, dynamic>{
+          'name': row['name'],
+          kind.typeKey: row[kind.typeKey],
+          'logo_url': (row['logo_url'] ?? '').isEmpty ? null : row['logo_url'],
+          'website_url': (row['website_url'] ?? '').isEmpty ? null : row['website_url'],
+          'display_order': i,
+        };
+        final id = row[kind.idKey];
+        try {
+          if (id != null && id.isNotEmpty) {
+            kept.add(id);
+            await repo.updateEventOrg(eventId, kind.apiPath, int.parse(id), body, token);
+          } else {
+            await repo.createEventOrg(eventId, kind.apiPath, body, token);
+          }
+        } catch (error, stackTrace) {
+          ok = false;
+          AppLogger.error('Saving ${kind.noun.toLowerCase()} failed', error, stackTrace);
+        }
+      }
+      for (final id in (loaded ?? const <String>{}).difference(kept)) {
+        try {
+          await repo.deleteEventOrg(eventId, kind.apiPath, int.parse(id), token);
+        } catch (error, stackTrace) {
+          ok = false;
+          AppLogger.error('Removing ${kind.noun.toLowerCase()} failed', error, stackTrace);
+        }
+      }
+    }
+
+    await sync(_sponsors, _loadedSponsorIds, _sponsorKind);
+    await sync(_partners, _loadedPartnerIds, _partnerKind);
+    return ok;
+  }
+
+  Widget _buildSponsorsSection() => _buildOrgSection(_sponsors, _sponsorKind);
+
+  Widget _buildPartnersSection() => _buildOrgSection(_partners, _partnerKind);
+
+  Widget _buildOrgSection(List<Map<String, String>> items, _OrgKind kind) {
+    if (_orgsLoading) {
+      return const Padding(
+        padding: EdgeInsets.symmetric(vertical: 12),
+        child: LinearProgressIndicator(minHeight: 2),
+      );
+    }
+    if (_orgsLoadFailed) {
+      return Padding(
+        padding: const EdgeInsets.symmetric(vertical: 12),
+        child: Text(
+          "Couldn't load ${kind.noun.toLowerCase()}s, so they can't be changed "
+          'right now. Saving the event leaves them as they are.',
+          style: TextStyle(fontSize: 13, color: context.palette.error),
+        ),
+      );
+    }
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_sponsors.isEmpty)
+        if (items.isEmpty)
           Padding(
             padding: const EdgeInsets.symmetric(vertical: 12),
             child: Text(
-              'No sponsors added yet',
+              'No ${kind.noun.toLowerCase()}s added yet',
               style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
             ),
           )
         else
-          ...List.generate(_sponsors.length, (index) {
-            final sponsor = _sponsors[index];
+          ...List.generate(items.length, (index) {
+            final item = items[index];
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Container(
@@ -1777,55 +1958,53 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
-                    // Up/Down buttons
                     Column(
                       children: [
                         IconButton(
                           icon: const Icon(Icons.arrow_upward, size: 16),
-                          onPressed: index > 0 ? () {
-                            setState(() {
-                              final temp = _sponsors[index];
-                              _sponsors[index] = _sponsors[index - 1];
-                              _sponsors[index - 1] = temp;
-                            });
-                          } : null,
+                          onPressed: index > 0
+                              ? () => setState(() {
+                                    final temp = items[index];
+                                    items[index] = items[index - 1];
+                                    items[index - 1] = temp;
+                                  })
+                              : null,
                           constraints: const BoxConstraints(minWidth: 24, minHeight: 16),
                           padding: EdgeInsets.zero,
                         ),
                         IconButton(
                           icon: const Icon(Icons.arrow_downward, size: 16),
-                          onPressed: index < _sponsors.length - 1 ? () {
-                            setState(() {
-                              final temp = _sponsors[index];
-                              _sponsors[index] = _sponsors[index + 1];
-                              _sponsors[index + 1] = temp;
-                            });
-                          } : null,
+                          onPressed: index < items.length - 1
+                              ? () => setState(() {
+                                    final temp = items[index];
+                                    items[index] = items[index + 1];
+                                    items[index + 1] = temp;
+                                  })
+                              : null,
                           constraints: const BoxConstraints(minWidth: 24, minHeight: 16),
                           padding: EdgeInsets.zero,
                         ),
                       ],
                     ),
                     const SizedBox(width: 8),
-                    // Sponsor info
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            sponsor['name'] ?? '',
+                            item['name'] ?? '',
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _sponsorTypeLabel(sponsor['sponsor_type'] ?? ''),
+                            _orgTypeLabel(item[kind.typeKey] ?? ''),
                             style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                           ),
-                          if ((sponsor['logo_url'] ?? '').isNotEmpty)
+                          if ((item['logo_url'] ?? '').isNotEmpty)
                             Padding(
                               padding: const EdgeInsets.only(top: 2),
                               child: Text(
-                                'Logo: ${sponsor['logo_url']}',
+                                'Logo: ${item['logo_url']}',
                                 style: TextStyle(fontSize: 11, color: context.palette.textMuted),
                                 maxLines: 1,
                                 overflow: TextOverflow.ellipsis,
@@ -1834,18 +2013,17 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                         ],
                       ),
                     ),
-                    // Edit/Delete buttons
                     Row(
                       children: [
                         IconButton(
+                          tooltip: 'Edit',
                           icon: const Icon(Icons.edit, size: 18),
-                          onPressed: () => _showSponsorDialog(index),
+                          onPressed: () => _showOrgDialog(items, kind, index),
                         ),
                         IconButton(
+                          tooltip: 'Remove',
                           icon: Icon(Icons.delete, size: 18, color: context.palette.error),
-                          onPressed: () {
-                            setState(() => _sponsors.removeAt(index));
-                          },
+                          onPressed: () => setState(() => items.removeAt(index)),
                         ),
                       ],
                     ),
@@ -1856,44 +2034,34 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           }),
         const SizedBox(height: 12),
         FilledButton.tonalIcon(
-          onPressed: () => _showSponsorDialog(null),
+          onPressed: () => _showOrgDialog(items, kind, null),
           icon: const Icon(Icons.add),
-          label: const Text('Add Sponsor'),
+          label: Text('Add ${kind.noun}'),
         ),
       ],
     );
   }
 
-  String _sponsorTypeLabel(String type) {
-    switch (type) {
-      case 'TITLE_SPONSOR': return 'Title Sponsor';
-      case 'GOLD_SPONSOR': return 'Gold Sponsor';
-      case 'SILVER_SPONSOR': return 'Silver Sponsor';
-      case 'BRONZE_SPONSOR': return 'Bronze Sponsor';
-      case 'ASSOCIATE_SPONSOR': return 'Associate Sponsor';
-      default: return type.split('_').map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}').join(' ');
-    }
-  }
+  /// "TITLE_SPONSOR" → "Title Sponsor", "COMMUNITY_PARTNER" → "Community Partner".
+  String _orgTypeLabel(String type) => type
+      .split('_')
+      .map((w) => w.isEmpty ? w : '${w[0].toUpperCase()}${w.substring(1).toLowerCase()}')
+      .join(' ');
 
-  void _showSponsorDialog(int? editIndex) {
-    final nameCtrl = TextEditingController(
-      text: editIndex != null ? _sponsors[editIndex]['name'] ?? '' : '',
-    );
-    final logoUrlCtrl = TextEditingController(
-      text: editIndex != null ? _sponsors[editIndex]['logo_url'] ?? '' : '',
-    );
-    final websiteUrlCtrl = TextEditingController(
-      text: editIndex != null ? _sponsors[editIndex]['website_url'] ?? '' : '',
-    );
-    var selectedType = editIndex != null ? _sponsors[editIndex]['sponsor_type'] ?? 'TITLE_SPONSOR' : 'TITLE_SPONSOR';
+  void _showOrgDialog(List<Map<String, String>> items, _OrgKind kind, int? editIndex) {
+    final existing = editIndex != null ? items[editIndex] : null;
+    final nameCtrl = TextEditingController(text: existing?['name'] ?? '');
+    final logoUrlCtrl = TextEditingController(text: existing?['logo_url'] ?? '');
+    final websiteUrlCtrl = TextEditingController(text: existing?['website_url'] ?? '');
+    var selectedType = existing?[kind.typeKey] ?? kind.types.first;
+    if (!kind.types.contains(selectedType)) selectedType = kind.types.first;
 
-    final sponsorTypes = [
-      'TITLE_SPONSOR',
-      'GOLD_SPONSOR',
-      'SILVER_SPONSOR',
-      'BRONZE_SPONSOR',
-      'ASSOCIATE_SPONSOR',
-    ];
+    InputDecoration field(String label, [String? hint]) => InputDecoration(
+          labelText: label,
+          hintText: hint,
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        );
 
     showDialog(
       context: context,
@@ -1901,55 +2069,35 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         builder: (context, setDialogState) {
           final canSave = nameCtrl.text.trim().isNotEmpty;
           return AlertDialog(
-            title: Text(editIndex == null ? 'Add Sponsor' : 'Edit Sponsor'),
+            title: Text('${editIndex == null ? 'Add' : 'Edit'} ${kind.noun}'),
             content: SingleChildScrollView(
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   TextField(
                     controller: nameCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Sponsor Name *',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
+                    decoration: field('${kind.noun} Name *'),
                     onChanged: (_) => setDialogState(() {}),
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedType,
-                    decoration: InputDecoration(
-                      labelText: 'Sponsor Type *',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
-                    items: sponsorTypes.map((type) => DropdownMenuItem(
-                      value: type,
-                      child: Text(_sponsorTypeLabel(type)),
-                    )).toList(),
-                    onChanged: (value) {
-                      setDialogState(() => selectedType = value ?? 'TITLE_SPONSOR');
-                    },
+                    initialValue: selectedType,
+                    decoration: field('${kind.noun} Type *'),
+                    items: kind.types
+                        .map((type) => DropdownMenuItem(value: type, child: Text(_orgTypeLabel(type))))
+                        .toList(),
+                    onChanged: (value) =>
+                        setDialogState(() => selectedType = value ?? kind.types.first),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: logoUrlCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Logo URL',
-                      hintText: 'https://example.com/logo.png',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
+                    decoration: field('Logo URL', 'https://example.com/logo.png'),
                   ),
                   const SizedBox(height: 12),
                   TextField(
                     controller: websiteUrlCtrl,
-                    decoration: InputDecoration(
-                      labelText: 'Website URL',
-                      hintText: 'https://example.com',
-                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                    ),
+                    decoration: field('Website URL', 'https://example.com'),
                   ),
                 ],
               ),
@@ -1960,22 +2108,25 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                 child: const Text('Cancel'),
               ),
               FilledButton(
-                onPressed: canSave ? () {
-                  setState(() {
-                    final sponsor = {
-                      'name': nameCtrl.text.trim(),
-                      'sponsor_type': selectedType,
-                      'logo_url': logoUrlCtrl.text.trim(),
-                      'website_url': websiteUrlCtrl.text.trim(),
-                    };
-                    if (editIndex == null) {
-                      _sponsors.add(sponsor);
-                    } else {
-                      _sponsors[editIndex] = sponsor;
-                    }
-                  });
-                  Navigator.pop(context);
-                } : null,
+                onPressed: canSave
+                    ? () {
+                        setState(() {
+                          final row = <String, String>{
+                            if (existing?[kind.idKey] != null) kind.idKey: existing![kind.idKey]!,
+                            'name': nameCtrl.text.trim(),
+                            kind.typeKey: selectedType,
+                            'logo_url': logoUrlCtrl.text.trim(),
+                            'website_url': websiteUrlCtrl.text.trim(),
+                          };
+                          if (editIndex == null) {
+                            items.add(row);
+                          } else {
+                            items[editIndex] = row;
+                          }
+                        });
+                        Navigator.pop(context);
+                      }
+                    : null,
                 child: const Text('Save'),
               ),
             ],
@@ -2915,14 +3066,6 @@ void _showFeeDialog(int? editIndex) {
           'registration_opens_at': '${_registrationOpensAt.text.trim()}:00$offset',
         if (_registrationClosesAt.text.trim().isNotEmpty)
           'registration_closes_at': '${_registrationClosesAt.text.trim()}:00$offset',
-        // Add sponsors data
-        'sponsors': _sponsors.asMap().entries.map((entry) => {
-          'name': entry.value['name'],
-          'sponsor_type': entry.value['sponsor_type'],
-          'logo_url': entry.value['logo_url']?.isEmpty == true ? null : entry.value['logo_url'],
-          'website_url': entry.value['website_url']?.isEmpty == true ? null : entry.value['website_url'],
-          'display_order': entry.key,
-        }).toList(),
         // Add speakers data
         'speakers': _speakers.map((speaker) => {
           'fullname': speaker['fullname'],
@@ -2946,10 +3089,23 @@ void _showFeeDialog(int? editIndex) {
       };
 
       final repo = ref.read(eventsRepositoryProvider);
-      if (widget.event == null) {
-        await repo.createAdminEvent(data, auth.session!.accessToken);
-      } else {
-        await repo.updateAdminEvent(widget.event!.eventId, data, auth.session!.accessToken);
+      final token = auth.session!.accessToken;
+      final saved = widget.event == null
+          ? await repo.createAdminEvent(data, token)
+          : await repo.updateAdminEvent(widget.event!.eventId, data, token);
+
+      // Sponsors and partners have their own endpoints.
+      final orgsSaved = await _saveOrgs(saved.eventId, token);
+      if (!orgsSaved && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The event was saved, but some sponsors or partners could not be. '
+              'Open the event again to check them.',
+            ),
+            duration: Duration(seconds: 8),
+          ),
+        );
       }
 
       if (mounted) Navigator.pop(context, true);

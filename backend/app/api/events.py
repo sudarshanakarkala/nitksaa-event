@@ -18,13 +18,15 @@ surfaces are kept rather than merged.
 """
 from typing import Any, Dict, Optional
 
-from fastapi import APIRouter, Depends, Query
+import asyncpg
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.database import get_pool
 from app.middleware.admin_auth import require_any_admin, require_event_admin, require_event_creator
 from app.schemas.event_create import EventCreate
 from app.schemas.event_status import EventStatusUpdate
 from app.schemas.event_update import EventUpdate
+from app.services import audit_service
 from app.services.events_service import EventsService
 
 router = APIRouter(prefix="/api/v1", tags=["events"])
@@ -126,3 +128,47 @@ async def update_event(
         svc = EventsService(conn)
         event = await svc.update_event(event_id, body, user)
     return {"status": "ok", "event": event}
+
+
+@router.delete("/events/{event_id}")
+async def delete_event(
+    event_id: int,
+    user: Dict[str, Any] = Depends(require_event_admin),
+) -> Dict[str, Any]:
+    """Delete an event: only a draft that has never had a registration.
+
+    Anything else is refused with 409 (event_not_draft /
+    event_has_registrations); those events should be cancelled instead,
+    which keeps their history. Child rows (sessions, sponsors, partners,
+    people, event admins, payment configuration) go with the event.
+    """
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        async with conn.transaction():
+            event = await conn.fetchrow(
+                "SELECT event_id, title, status FROM events WHERE event_id = $1 FOR UPDATE",
+                event_id,
+            )
+            if not event:
+                raise HTTPException(status_code=404, detail="event_not_found")
+            if event["status"] != "draft":
+                raise HTTPException(status_code=409, detail="event_not_draft")
+            has_registrations = await conn.fetchval(
+                "SELECT EXISTS(SELECT 1 FROM registrations WHERE event_id = $1)", event_id
+            )
+            if has_registrations:
+                raise HTTPException(status_code=409, detail="event_has_registrations")
+            try:
+                await conn.execute("DELETE FROM events WHERE event_id = $1", event_id)
+            except asyncpg.exceptions.ForeignKeyViolationError:
+                # Something still points at the event (e.g. a check-in).
+                raise HTTPException(status_code=409, detail="event_has_registrations")
+
+    await audit_service.emit(
+        actor_uid=user["firebase_uid"],
+        event_type="event_deleted",
+        entity_type="event",
+        entity_id=event_id,
+        context={"title": event["title"]},
+    )
+    return {"status": "ok", "event_id": event_id}

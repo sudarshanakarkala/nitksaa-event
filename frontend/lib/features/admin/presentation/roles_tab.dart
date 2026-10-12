@@ -5,12 +5,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
-import '../../../shared/widgets/list_page.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/services/auth_controller.dart';
 import '../../events/data/events_repository.dart';
 import '../data/admin_api.dart';
+import 'admin_screen.dart' show AdminContainer;
 
 /// Roles tab (overall admins only): search people and switch their
 /// "Overall admin" and "Can create events" flags. Per-event admins are
@@ -214,15 +214,15 @@ class _RolesTabState extends ConsumerState<RolesTab> {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final side = ListPage.sidePadding(context);
     final result = _result;
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(side, 12, side, 12),
-          child: TextField(
+        AdminContainer(
+          child: Padding(
+            padding: const EdgeInsets.only(top: 16, bottom: 12),
+            child: TextField(
             controller: _search,
             onChanged: _onSearchChanged,
             textInputAction: TextInputAction.search,
@@ -231,8 +231,9 @@ class _RolesTabState extends ConsumerState<RolesTab> {
               hintText: 'Search people by name or email',
               prefixIcon: const Icon(Icons.search, size: 20),
               isDense: true,
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+              border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
             ),
+          ),
           ),
         ),
         if (_loading) const LinearProgressIndicator(minHeight: 2),
@@ -250,7 +251,11 @@ class _RolesTabState extends ConsumerState<RolesTab> {
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 900;
                     return ListView.separated(
-                      padding: EdgeInsets.fromLTRB(side, 4, side, 24),
+                      padding: AdminContainer.scrollPadding(
+                        context,
+                        constraints.maxWidth,
+                        top: 4,
+                      ),
                       itemCount: result.users.length + 1,
                       separatorBuilder: (_, _) => const SizedBox(height: 10),
                       itemBuilder: (context, i) {
@@ -276,9 +281,11 @@ class _RolesTabState extends ConsumerState<RolesTab> {
                 ),
         ),
         if (_error != null && result != null)
-          Padding(
-            padding: EdgeInsets.fromLTRB(side, 0, side, 8),
-            child: Text(_error!, style: TextStyle(color: p.error)),
+          AdminContainer(
+            child: Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Text(_error!, style: TextStyle(color: p.error)),
+            ),
           ),
       ],
     );
