@@ -4,12 +4,13 @@ import 'package:go_router/go_router.dart';
 
 import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/page_header.dart';
+import '../../../shared/widgets/site_header.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/domain/admin_access.dart';
 import '../../auth/services/auth_controller.dart';
-import '../../events/presentation/screens/manage_events_screen.dart';
 import '../admin_tabs.dart';
+import 'admin_events_tab.dart';
 import 'roles_tab.dart';
 
 /// `/admin/<tab>`: the one admin area, modelled on the website's Admin page
@@ -41,21 +42,30 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final auth = ref.watch(authControllerProvider);
     final access = auth.session?.access ?? AdminAccess.none;
     final tabs = AdminTab.visibleTabs(access);
-    final side = ListPage.sidePadding(context);
-    final compact = MediaQuery.sizeOf(context).width < 600;
+    final p = context.palette;
 
+    // Website AdminPage: a sticky zone (page header, then the tab row with
+    // a bottom border) and the tab's content scrolling beneath it, both in
+    // the same 1520px container as the site header.
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        Padding(
-          padding: EdgeInsets.fromLTRB(side, compact ? 20 : 28, side, 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const PageHeader(eyebrow: 'NITKSAA Events', title: 'Admin'),
-              const SizedBox(height: 20),
-              _AdminTabBar(tabs: tabs, selected: widget.tab),
-            ],
+        DecoratedBox(
+          decoration: BoxDecoration(
+            border: Border(bottom: BorderSide(color: p.border)),
+          ),
+          child: AdminContainer(
+            child: Padding(
+              padding: const EdgeInsets.only(top: 16, bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  const PageHeader(eyebrow: 'NITKSAA Events', title: 'Admin'),
+                  const SizedBox(height: 16),
+                  _AdminTabBar(tabs: tabs, selected: widget.tab),
+                ],
+              ),
+            ),
           ),
         ),
         Expanded(child: _content(widget.tab)),
@@ -66,8 +76,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   Widget _content(AdminTab tab) {
     switch (tab) {
       case AdminTab.events:
-        // The existing Manage Events screen until step 5 rebuilds this tab.
-        return const ManageEventsScreen();
+        return const AdminEventsTab();
       case AdminTab.roles:
         return const RolesTab();
       case AdminTab.registrations:
@@ -83,7 +92,45 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
   }
 }
 
-/// Website `.tab-btn` pills: bordered, the active one gold.
+/// The website's `.container`: at most [maxWidth] wide (the site header's
+/// width), centred, with the page side padding (40px, 16px on phones).
+class AdminContainer extends StatelessWidget {
+  const AdminContainer({super.key, required this.child});
+
+  static const double maxWidth = SiteHeader.maxContentWidth;
+
+  final Widget child;
+
+  /// Padding for a scroll view that fills the width (so its scrollbar sits
+  /// at the window edge, as on the website) but keeps its content inside
+  /// the container. Website `.mgmt-content`: 28px top, 60px bottom.
+  static EdgeInsets scrollPadding(
+    BuildContext context,
+    double width, {
+    double top = 28,
+    double bottom = 60,
+  }) {
+    final side = ListPage.sidePadding(context);
+    final extra = ((width - maxWidth) / 2).clamp(0.0, double.infinity);
+    return EdgeInsets.fromLTRB(side + extra, top, side + extra, bottom);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: maxWidth),
+        child: Padding(
+          padding: EdgeInsets.symmetric(horizontal: ListPage.sidePadding(context)),
+          child: SizedBox(width: double.infinity, child: child),
+        ),
+      ),
+    );
+  }
+}
+
+/// Website `.adm-tab-group` of `.tab-btn`s: small bordered buttons 6px
+/// apart; the active one gold on a faint gold fill.
 class _AdminTabBar extends StatelessWidget {
   const _AdminTabBar({required this.tabs, required this.selected});
 
@@ -97,8 +144,8 @@ class _AdminTabBar extends StatelessWidget {
       child: Row(
         children: [
           for (var i = 0; i < tabs.length; i++) ...[
-            if (i > 0) const SizedBox(width: 8),
-            _TabPill(tab: tabs[i], active: tabs[i] == selected),
+            if (i > 0) const SizedBox(width: 6),
+            _TabButton(tab: tabs[i], active: tabs[i] == selected),
           ],
         ],
       ),
@@ -106,8 +153,8 @@ class _AdminTabBar extends StatelessWidget {
   }
 }
 
-class _TabPill extends StatelessWidget {
-  const _TabPill({required this.tab, required this.active});
+class _TabButton extends StatelessWidget {
+  const _TabButton({required this.tab, required this.active});
 
   final AdminTab tab;
   final bool active;
@@ -119,22 +166,26 @@ class _TabPill extends StatelessWidget {
       button: true,
       selected: active,
       child: Material(
-        color: active ? p.primary : p.surfaceSubtle,
-        shape: StadiumBorder(
-          side: BorderSide(color: active ? p.primary : p.border),
+        color: active ? p.primary.withValues(alpha: 0.06) : p.surfaceSubtle,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(6),
+          side: BorderSide(
+            color: active ? p.primary.withValues(alpha: 0.4) : p.border,
+          ),
         ),
         clipBehavior: Clip.antiAlias,
         child: InkWell(
           onTap: active ? null : () => context.go(tab.path),
           hoverColor: p.surfaceHover,
           child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
             child: Text(
               tab.label,
-              style: AppTextStyles.labelLarge.copyWith(
-                color: active ? p.onPrimary : p.textSecondary,
-                fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+              style: AppTextStyles.labelMedium.copyWith(
+                fontSize: 12.8,
+                fontWeight: FontWeight.w500,
                 letterSpacing: 0,
+                color: active ? p.primary : p.textSecondary,
               ),
             ),
           ),

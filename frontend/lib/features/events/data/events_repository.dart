@@ -138,6 +138,82 @@ class EventsRepository {
     );
   }
 
+  // ── Sponsors and partners ([kind] is 'sponsors' or 'partners') ────────
+  // The event form saves these through their own endpoints: the event's
+  // create/update body has no sponsor or partner fields.
+
+  Future<List<Map<String, dynamic>>> listEventOrgs(
+    int eventId,
+    String kind,
+    String accessToken,
+  ) async {
+    final response = await _dio.get<List<dynamic>>(
+      '/api/v1/events/$eventId/$kind',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return (response.data ?? const [])
+        .whereType<Map<String, dynamic>>()
+        .toList();
+  }
+
+  Future<void> createEventOrg(
+    int eventId,
+    String kind,
+    Map<String, dynamic> data,
+    String accessToken,
+  ) async {
+    await _dio.post<Map<String, dynamic>>(
+      '/api/v1/events/$eventId/$kind',
+      data: data,
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+  }
+
+  Future<void> updateEventOrg(
+    int eventId,
+    String kind,
+    int id,
+    Map<String, dynamic> data,
+    String accessToken,
+  ) async {
+    await _dio.put<Map<String, dynamic>>(
+      '/api/v1/events/$eventId/$kind/$id',
+      data: data,
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+  }
+
+  Future<void> deleteEventOrg(
+    int eventId,
+    String kind,
+    int id,
+    String accessToken,
+  ) async {
+    await _dio.delete<void>(
+      '/api/v1/events/$eventId/$kind/$id',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+  }
+
+  /// Admin list for the Events tab: every event the caller administers
+  /// (all for an overall admin), any status, past and upcoming.
+  Future<List<AppEvent>> getAllAdminEvents(String accessToken) async {
+    final events = <AppEvent>[];
+    for (var page = 1; page <= 50; page++) {
+      final data = await getAdminEvents(
+        page: page,
+        perPage: 100,
+        period: 'all',
+        accessToken: accessToken,
+      );
+      final rows = data['events'] as List<dynamic>? ?? const [];
+      events.addAll(rows.whereType<Map<String, dynamic>>().map(AppEvent.fromJson));
+      final total = (data['total'] as num?)?.toInt() ?? events.length;
+      if (rows.isEmpty || events.length >= total) break;
+    }
+    return events;
+  }
+
   Future<AppEvent> getPublicEvent(int eventId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/events/public/$eventId',

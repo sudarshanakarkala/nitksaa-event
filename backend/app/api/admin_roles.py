@@ -14,7 +14,7 @@ admin flag. Revoking an event admin sets event_members.status = 'revoked'
 from typing import Any, Dict, List, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, model_validator
 
 from app.config import get_settings
 from app.database import get_pool
@@ -69,7 +69,17 @@ class EventAdminListResponse(BaseModel):
 
 
 class EventAdminGrant(BaseModel):
-    firebase_uid: str = Field(..., min_length=1, max_length=128)
+    """Who to make an event admin: their account id, or the email they sign
+    in with (event admins can't search people, so they add co-organisers by
+    email)."""
+    firebase_uid: Optional[str] = Field(default=None, min_length=1, max_length=128)
+    email: Optional[str] = Field(default=None, min_length=3, max_length=320)
+
+    @model_validator(mode="after")
+    def _one_of(self) -> "EventAdminGrant":
+        if not self.firebase_uid and not self.email:
+            raise ValueError("firebase_uid or email is required")
+        return self
 
 
 # ── Helpers ──────────────────────────────────────────────────────────────────
@@ -219,21 +229,36 @@ async def grant_event_admin(
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
-        target = await conn.fetchrow(
-            "SELECT email, fullname FROM event_users WHERE firebase_uid = $1",
-            body.firebase_uid,
-        )
+        if body.firebase_uid:
+            target = await conn.fetchrow(
+                "SELECT firebase_uid, email, fullname FROM event_users WHERE firebase_uid = $1",
+                body.firebase_uid,
+            )
+        else:
+            # Several accounts can share an email (e.g. Google and password
+            # sign-ins); take the most recently active one.
+            target = await conn.fetchrow(
+                """
+                SELECT firebase_uid, email, fullname FROM event_users
+                WHERE lower(email) = lower($1)
+                ORDER BY last_login DESC NULLS LAST
+                LIMIT 1
+                """,
+                body.email.strip(),
+            )
         if not target:
+            # They need to have signed in to the events app at least once.
             raise HTTPException(status_code=404, detail="user_not_found")
+        uid = target["firebase_uid"]
         repo = PaymentRoleRepository(conn)
-        if await repo.is_event_admin(event_id, body.firebase_uid):
+        if await repo.is_event_admin(event_id, uid):
             raise HTTPException(status_code=409, detail="already_event_admin")
-        row = await repo.grant_event_admin(event_id, body.firebase_uid)
+        row = await repo.grant_event_admin(event_id, uid)
         creator = await conn.fetchval(
             "SELECT created_by_firebase_uid FROM events WHERE event_id = $1", event_id
         )
 
-    await _audit_role(user["firebase_uid"], True, EVENT_ADMIN_ROLE, body.firebase_uid, event_id)
+    await _audit_role(user["firebase_uid"], True, EVENT_ADMIN_ROLE, uid, event_id)
     return {
         "firebase_uid": row["firebase_uid"],
         "email": target["email"],
