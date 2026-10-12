@@ -303,31 +303,41 @@ class _FilterPanel extends StatelessWidget {
         children: [
           Padding(
             padding: const EdgeInsets.fromLTRB(20, 14, 8, 10),
+            // The title side gives way first, so the row never overflows.
             child: Row(
               children: [
-                Text(
-                  'Filters',
-                  style: AppTextStyles.titleLarge.copyWith(fontSize: 17, color: p.textPrimary),
-                ),
-                if (activeCount > 0) ...[
-                  const SizedBox(width: 8),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                    decoration: BoxDecoration(
-                      color: p.primary,
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      '$activeCount',
-                      style: AppTextStyles.labelSmall.copyWith(
-                        color: p.onPrimary,
-                        fontWeight: FontWeight.w700,
-                        letterSpacing: 0,
+                Expanded(
+                  child: Row(
+                    children: [
+                      Flexible(
+                        child: Text(
+                          'Filters',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: AppTextStyles.titleLarge.copyWith(fontSize: 17, color: p.textPrimary),
+                        ),
                       ),
-                    ),
+                      if (activeCount > 0) ...[
+                        const SizedBox(width: 8),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: p.primary,
+                            borderRadius: BorderRadius.circular(20),
+                          ),
+                          child: Text(
+                            '$activeCount',
+                            style: AppTextStyles.labelSmall.copyWith(
+                              color: p.onPrimary,
+                              fontWeight: FontWeight.w700,
+                              letterSpacing: 0,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
-                ],
-                const Spacer(),
+                ),
                 if (activeCount > 0 && onClear != null) _ClearAllLink(onTap: onClear!),
                 IconButton(
                   tooltip: 'Close filters',
