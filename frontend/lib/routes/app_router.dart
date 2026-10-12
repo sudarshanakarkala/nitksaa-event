@@ -10,7 +10,6 @@ import '../features/events/presentation/screens/event_detail_screen.dart';
 import '../features/events/presentation/screens/checkout_screen.dart';
 import '../features/admin/admin_tabs.dart';
 import '../features/admin/presentation/admin_screen.dart';
-import '../features/events/presentation/screens/event_registrations_screen.dart';
 import '../features/events/presentation/screens/my_events_screen.dart';
 import '../features/auth/services/auth_controller.dart';
 import '../features/feedback/feedback_screen.dart';
@@ -68,14 +67,14 @@ abstract class AppRouter {
                 ? '${AppRoutes.adminEvents}?${state.uri.query}'
                 : AppRoutes.adminEvents,
           ),
-          // Before the tab route, so /admin/events/:id/registrations is not
-          // read as a tab.
+          // The old per-event page now lives in the Registrations tab.
           GoRoute(
             path: AppRoutes.eventRegistrations,
-            builder: (context, state) {
-              final idStr = state.pathParameters['id'] ?? '';
-              final eventId = int.tryParse(idStr) ?? 0;
-              return EventRegistrationsScreen(eventId: eventId);
+            redirect: (context, state) {
+              final eventId = int.tryParse(state.pathParameters['id'] ?? '');
+              return eventId == null
+                  ? AppRoutes.adminRegistrations
+                  : '${AppRoutes.adminRegistrations}?event=$eventId';
             },
           ),
           // RouteGuards sends /admin and hidden tabs to a visible tab.

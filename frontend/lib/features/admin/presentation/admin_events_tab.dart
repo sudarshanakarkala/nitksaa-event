@@ -362,7 +362,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     final published = e.status == 'published';
     final live = draft || published;
     final ended = _ended(e);
-    final regs = '/admin/events/${e.eventId}/registrations';
+    final regs = '/admin/registrations?event=${e.eventId}';
     return [
       if (live)
         EventCardAction(label: 'Edit', icon: Icons.edit_outlined, onSelected: () => _edit(e)),
@@ -370,7 +370,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
         EventCardAction(
           label: 'Registrations',
           icon: Icons.people_outline,
-          onSelected: () => context.push(regs),
+          onSelected: () => context.go(regs),
         ),
       if (draft)
         EventCardAction(label: 'Publish', icon: Icons.publish_outlined, onSelected: () => _publish(e)),
