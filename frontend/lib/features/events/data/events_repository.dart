@@ -142,21 +142,21 @@ class EventsRepository {
   // One call each way: the form sends the full lists and the backend adds,
   // changes and removes to match.
 
-  Future<Map<String, dynamic>> getEventContent(int eventId, String accessToken) async {
+  Future<Map<String, dynamic>> getEventDetails(int eventId, String accessToken) async {
     final response = await _dio.get<Map<String, dynamic>>(
-      '/api/v1/admin/events/$eventId/content',
+      '/api/v1/admin/events/$eventId/details',
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
     return response.data ?? <String, dynamic>{};
   }
 
-  Future<Map<String, dynamic>> putEventContent(
+  Future<Map<String, dynamic>> putEventDetails(
     int eventId,
     String accessToken,
     Map<String, dynamic> content,
   ) async {
     final response = await _dio.put<Map<String, dynamic>>(
-      '/api/v1/admin/events/$eventId/content',
+      '/api/v1/admin/events/$eventId/details',
       data: content,
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );

@@ -16,15 +16,15 @@ from tests.test_admin_rbac import (  # noqa: F401  (autouse fixture)
 
 
 def _path(event_id: int) -> str:
-    return f"/api/v1/admin/events/{event_id}/content"
+    return f"/api/v1/admin/events/{event_id}/details"
 
 
-def test_content_denied_to_plain_user(client):
+def test_details_denied_to_plain_user(client):
     event_id = _mk_event(client, uuid.uuid4().hex[:8])
     assert client.get(_path(event_id), headers=_bearer(_ATTENDEE)).status_code == 403
 
 
-def test_content_round_trip_add_change_remove(client):
+def test_details_round_trip_add_change_remove(client):
     event_id = _mk_event(client, uuid.uuid4().hex[:8])
     admin = _bearer(_FIXTURE_ADMIN)
 
@@ -84,7 +84,7 @@ def test_content_round_trip_add_change_remove(client):
     assert read.json() == body
 
 
-def test_content_rejects_bad_fee_type_and_backwards_session(client):
+def test_details_rejects_bad_fee_type_and_backwards_session(client):
     event_id = _mk_event(client, uuid.uuid4().hex[:8])
     admin = _bearer(_FIXTURE_ADMIN)
     bad_fee = client.put(

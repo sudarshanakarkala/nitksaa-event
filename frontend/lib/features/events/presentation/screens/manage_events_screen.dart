@@ -754,8 +754,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
 
   // Speakers, sessions and fee tiers load from (and save to) their own
   // endpoint when editing. If loading failed, saving leaves them alone.
-  bool _contentLoading = false;
-  bool _contentLoadFailed = false;
+  bool _detailsLoading = false;
+  bool _detailsLoadFailed = false;
   
   var _isSaving = false;
   var _currentStep = 0;
@@ -817,9 +817,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _sponsors = [];
     if (event != null) {
       _orgsLoading = true;
-      _contentLoading = true;
+      _detailsLoading = true;
       Future.microtask(() => _loadOrgs(event.eventId));
-      Future.microtask(() => _loadContent(event.eventId));
+      Future.microtask(() => _loadDetails(event.eventId));
     } else {
       _loadedSponsorIds = {};
       _loadedPartnerIds = {};
@@ -1797,11 +1797,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   }
 
   /// Speakers, sessions and fee tiers as saved, with their server ids.
-  Future<void> _loadContent(int eventId) async {
+  Future<void> _loadDetails(int eventId) async {
     final token = ref.read(authControllerProvider).session?.accessToken;
     if (token == null) return;
     try {
-      final data = await ref.read(eventsRepositoryProvider).getEventContent(eventId, token);
+      final data = await ref.read(eventsRepositoryProvider).getEventDetails(eventId, token);
       List<Map<String, dynamic>> list(String key) =>
           (data[key] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>().toList();
       String text(Object? v) => v?.toString() ?? '';
@@ -1822,8 +1822,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               'session_id': text(r['session_id']),
               'title': text(r['title']),
               'speaker': text(r['speaker_name']),
-              'start_time': _contentTime(r['start_datetime']),
-              'end_time': _contentTime(r['end_datetime']),
+              'start_time': _detailsTime(r['start_datetime']),
+              'end_time': _detailsTime(r['end_datetime']),
             },
         ];
         _fees = [
@@ -1834,30 +1834,30 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               'fee_amount': text(r['amount']),
             },
         ];
-        _contentLoading = false;
+        _detailsLoading = false;
       });
     } catch (error, stackTrace) {
       AppLogger.error('Could not load speakers, sessions and fees', error, stackTrace);
       if (!mounted) return;
       setState(() {
-        _contentLoading = false;
-        _contentLoadFailed = true;
+        _detailsLoading = false;
+        _detailsLoadFailed = true;
       });
     }
   }
 
   /// "yyyy-MM-dd HH:mm" in local time, the format the session dialog uses.
-  static String _contentTime(Object? iso) {
+  static String _detailsTime(Object? iso) {
     final d = DateTime.tryParse(iso?.toString() ?? '')?.toLocal();
     return d == null ? '' : _formatDateTimeOnly(d);
   }
 
   /// Saves speakers, sessions and fee tiers after the event is saved.
   /// Returns false if that failed.
-  Future<bool> _saveContent(int eventId, String token, String offset) async {
-    if (_contentLoadFailed || _contentLoading) return true; // nothing loaded, nothing changed
+  Future<bool> _saveDetails(int eventId, String token, String offset) async {
+    if (_detailsLoadFailed || _detailsLoading) return true; // nothing loaded, nothing changed
     try {
-      await ref.read(eventsRepositoryProvider).putEventContent(eventId, token, {
+      await ref.read(eventsRepositoryProvider).putEventDetails(eventId, token, {
         'speakers': [
           for (final sp in _speakers)
             {
@@ -3105,9 +3105,9 @@ void _showFeeDialog(int? editIndex) {
 
       // Speakers, sessions and fee tiers, then sponsors and partners, have
       // their own endpoints.
-      final contentSaved = await _saveContent(saved.eventId, token, offset);
+      final detailsSaved = await _saveDetails(saved.eventId, token, offset);
       final orgsSaved = await _saveOrgs(saved.eventId, token);
-      if (!contentSaved && mounted) {
+      if (!detailsSaved && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(

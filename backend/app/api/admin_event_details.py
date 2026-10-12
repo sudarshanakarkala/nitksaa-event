@@ -1,11 +1,14 @@
-"""Event form content (admin revamp step 5b): speakers, sessions and fee tiers.
+"""Event form details (admin revamp step 5b): speakers, sessions and fee tiers.
+
+(Not to be confused with the event_content table, which holds recordings
+and gallery links.)
 
 The event form edits these as lists. It sends the whole of each list after
 the event itself saves; the backend works out what to add, change and
 remove, in one transaction, so a save never half-applies.
 
-  GET /api/v1/admin/events/{event_id}/content   -> the three lists, with ids
-  PUT /api/v1/admin/events/{event_id}/content   -> replace them
+  GET /api/v1/admin/events/{event_id}/details   -> the three lists, with ids
+  PUT /api/v1/admin/events/{event_id}/details   -> replace them
 
 Speakers are the event's people with a speaker-type role (Speaker,
 Panelist, Chief guest, Guest of honour); other people (hosts, organisers)
@@ -58,7 +61,7 @@ class FeeIn(BaseModel):
         return v
 
 
-class EventContentIn(BaseModel):
+class EventDetailsIn(BaseModel):
     speakers: List[SpeakerIn] = []
     sessions: List[SessionIn] = []
     fees: List[FeeIn] = []
@@ -102,8 +105,8 @@ async def _read(conn, event_id: int) -> Dict[str, Any]:
     }
 
 
-@router.get("/events/{event_id}/content")
-async def get_event_content(
+@router.get("/events/{event_id}/details")
+async def get_event_details(
     event_id: int,
     user: Dict[str, Any] = Depends(require_event_admin),
 ) -> Dict[str, Any]:
@@ -112,10 +115,10 @@ async def get_event_content(
         return await _read(conn, event_id)
 
 
-@router.put("/events/{event_id}/content")
-async def put_event_content(
+@router.put("/events/{event_id}/details")
+async def put_event_details(
     event_id: int,
-    body: EventContentIn,
+    body: EventDetailsIn,
     user: Dict[str, Any] = Depends(require_event_admin),
 ) -> Dict[str, Any]:
     pool = await get_pool()
@@ -218,7 +221,7 @@ async def put_event_content(
 
     await audit_service.emit(
         actor_uid=user["firebase_uid"],
-        event_type="event_content_updated",
+        event_type="event_details_updated",
         entity_type="event",
         entity_id=event_id,
         context={
