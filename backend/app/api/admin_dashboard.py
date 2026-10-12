@@ -50,15 +50,15 @@ async def dashboard(
             SELECT
               (SELECT COUNT(*) FROM events e
                 WHERE {_SCOPE} AND e.status IN ('draft', 'published')
-                  AND COALESCE(e.end_datetime, e.start_datetime) >= $2) AS upcoming_events,
+                  AND COALESCE(e.end_datetime, e.start_datetime) >= $2::timestamptz) AS upcoming_events,
               (SELECT COUNT(*) FROM registrations r JOIN events e ON e.event_id = r.event_id
-                WHERE {_SCOPE} AND ($3::timestamptz IS NULL OR r.registered_at >= $3)) AS registrations,
+                WHERE {_SCOPE} AND ($3::timestamptz IS NULL OR r.registered_at >= $3::timestamptz)) AS registrations,
               (SELECT COUNT(*) FROM registrations r JOIN events e ON e.event_id = r.event_id
                 WHERE {_SCOPE} AND r.status = 'cancelled'
-                  AND ($3::timestamptz IS NULL OR r.cancelled_at >= $3)) AS cancellations,
+                  AND ($3::timestamptz IS NULL OR r.cancelled_at >= $3::timestamptz)) AS cancellations,
               (SELECT COALESCE(SUM(o.amount_paid), 0) FROM payment_orders o JOIN events e ON e.event_id = o.event_id
                 WHERE {_SCOPE} AND o.status = 'paid' AND o.payment_mode = 'live'
-                  AND ($3::timestamptz IS NULL OR o.paid_at >= $3)) AS money_collected
+                  AND ($3::timestamptz IS NULL OR o.paid_at >= $3::timestamptz)) AS money_collected
             """,
             scope, now, since,
         )
@@ -71,12 +71,12 @@ async def dashboard(
                      WHERE r.event_id = e.event_id AND r.status = 'registered') AS registered,
                    (SELECT COUNT(*) FROM registrations r
                      WHERE r.event_id = e.event_id AND r.status = 'registered'
-                       AND r.registered_at >= $2 - INTERVAL '7 days') AS new_7d,
+                       AND r.registered_at >= $2::timestamptz - INTERVAL '7 days') AS new_7d,
                    (SELECT COUNT(DISTINCT c.registration_id) FROM check_ins c
                      WHERE c.event_id = e.event_id) AS checked_in
             FROM events e
             WHERE {_SCOPE} AND e.status IN ('draft', 'published')
-              AND COALESCE(e.end_datetime, e.start_datetime) >= $2
+              AND COALESCE(e.end_datetime, e.start_datetime) >= $2::timestamptz
             ORDER BY e.start_datetime ASC
             LIMIT {_UPCOMING_LIMIT}
             """,
@@ -95,7 +95,7 @@ async def dashboard(
                        AND o.payment_mode = 'live') AS money_collected
             FROM events e
             WHERE {_SCOPE} AND e.status IN ('published', 'completed')
-              AND COALESCE(e.end_datetime, e.start_datetime) < $2
+              AND COALESCE(e.end_datetime, e.start_datetime) < $2::timestamptz
             ORDER BY e.start_datetime DESC
             LIMIT {_RECENT_LIMIT}
             """,
@@ -127,7 +127,7 @@ async def dashboard(
             SELECT (r.batch_year_snapshot / 10) * 10 AS decade, COUNT(*) AS count
             FROM registrations r JOIN events e ON e.event_id = r.event_id
             WHERE {_SCOPE} AND r.status = 'registered' AND r.batch_year_snapshot IS NOT NULL
-              AND ($2::timestamptz IS NULL OR r.registered_at >= $2)
+              AND ($2::timestamptz IS NULL OR r.registered_at >= $2::timestamptz)
             GROUP BY 1
             ORDER BY 1
             """,
