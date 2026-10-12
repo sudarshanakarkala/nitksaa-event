@@ -35,6 +35,10 @@ class AdminAccess {
   /// Shows the Admin badge and may open `/admin`.
   bool get isAnyAdmin => isAdmin || isEventCreator || adminEventIds.isNotEmpty;
 
+  /// Shows the Admin badge and may open `/admin`: any admin, or someone
+  /// with only a payment role (who sees just the Payments tab).
+  bool get hasAdminArea => isAnyAdmin || canSeePayments;
+
   /// May open the Payments tab (scoped by the backend).
   bool get canSeePayments =>
       isAdmin ||

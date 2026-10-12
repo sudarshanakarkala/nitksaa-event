@@ -28,7 +28,7 @@ const List<NavItem> navItems = [
 ];
 
 List<NavItem> visibleNavItems(AuthController auth) {
-  final isAdmin = auth.session?.access.isAnyAdmin ?? false;
+  final isAdmin = auth.session?.access.hasAdminArea ?? false;
   return navItems.where((item) {
     if (item.adminOnly) return auth.isAuthenticated && isAdmin;
     if (item.signedInOnly) return auth.isAuthenticated;

@@ -1,13 +1,11 @@
 import json
 from datetime import datetime, timezone
-from decimal import Decimal
 from typing import Any, Dict, List, Optional, Tuple
 
 import asyncpg
 from fastapi import HTTPException
 
 from app.repositories.events_repository import EventsRepository
-from app.repositories.payment_repository import PaymentRepository
 from app.repositories.payment_role_repository import PaymentRoleRepository
 from app.repositories.people_repository import PeopleRepository
 from app.repositories.sponsors_partners_repository import SponsorsRepository, PartnersRepository
@@ -15,6 +13,7 @@ from app.schemas.event_create import EventCreate
 from app.schemas.event_status import EventStatusUpdate
 from app.schemas.event_update import EventUpdate
 from app.schemas.events import SessionCreate
+from app.services.payment_config_sync import sync_event_payment_configuration
 from app.services.slug_service import SlugService
 
 _VALID_TRANSITIONS: Dict[str, set] = {
@@ -160,6 +159,8 @@ class EventsService:
 
         record = await self.repo.update_event(event_id, fields)
         await self._audit(user["firebase_uid"], "event_updated", event_id)
+        # A price change on a published paid event must reach checkout.
+        await self._ensure_payment_configuration(self._to_dict(record), user)
         return _enrich(self._to_dict(record))
 
     # ── Admin: Status ────────────────────────────────────────────────────────
@@ -218,39 +219,13 @@ class EventsService:
         return _enrich(self._to_dict(record))
 
     async def _ensure_payment_configuration(self, event: Dict[str, Any], user: Dict[str, Any]) -> None:
-        """Auto-provision a baseline Razorpay payment configuration for a
-        newly-published paid event that doesn't have one yet. The admin
-        portal's event form only sets events.ticket_price — it has no UI to
-        create a payment_configurations row — so without this, every
-        admin-created paid event would be unpayable in the payment app.
-        Idempotent (skipped once a published configuration exists) and a
-        no-op for free events."""
-        if event.get("is_free") or not event.get("ticket_price"):
-            return
-        event_id = event["event_id"]
-        pay_repo = PaymentRepository(self.conn)
-        if await pay_repo.get_published_config_for_event(event_id):
-            return
-        await pay_repo.create_new_config_version(
-            configuration_key=f"auto-event-{event_id}",
-            event_id=event_id,
-            base_amount=Decimal(str(event["ticket_price"])),
-            gst_enabled=False,
-            gst_rate=Decimal("0"),
-            gst_mode="exclusive",
-            convenience_fee_enabled=False,
-            convenience_fee_type="fixed",
-            convenience_fee_value=Decimal("0"),
-            seat_hold_minutes=15,
-            payment_session_expiry_minutes=15,
-            created_by=user["firebase_uid"],
-            gateway="razorpay",
-            # Admin-portal-published events must never silently become
-            # Live-charging — LIVE requires an explicit, platform_admin-gated
-            # publish through the payment-config admin API.
-            payment_mode="test",
-        )
-        await self._audit(user["firebase_uid"], "payment_configuration_auto_created", event_id)
+        """Keep a published paid event's payment setup in step with its
+        price and the server's Razorpay mode (see payment_config_sync).
+        The event form is the one place a creator sets the price. No-op for
+        free events, drafts, and when nothing changed."""
+        created = await sync_event_payment_configuration(self.conn, event, user["firebase_uid"])
+        if created is not None:
+            await self._audit(user["firebase_uid"], "payment_configuration_synced", event["event_id"])
 
     # ── Admin: Sessions ──────────────────────────────────────────────────────
 

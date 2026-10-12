@@ -16,9 +16,10 @@ import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../data/registrations_api.dart';
 import '../domain/registration_filters.dart';
+import 'admin_widgets.dart';
 
 /// Value of the event picker meaning "all events".
-const int _allEvents = -1;
+const int _allEvents = adminAllEvents;
 
 /// How many events load at once in the all-events view.
 const int _parallelLoads = 4;
@@ -139,6 +140,8 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       });
     }
   }
+
+  List<AdminEventOption> get _eventOptions => [for (final e in _events) AdminEventOption.of(e)];
 
   AppEvent? _event(int id) {
     for (final e in _events) {
@@ -555,8 +558,8 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       quickFilters: [
         SizedBox(
           width: compact ? 240 : 320,
-          child: _EventPicker(
-            events: _events,
+          child: AdminEventPicker(
+            options: _eventOptions,
             selected: _selected,
             onChanged: _pick,
             width: compact ? 240 : 320,
@@ -674,7 +677,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
         children: [
           const FilterLabel('Event'),
           const SizedBox(height: 8),
-          _EventPicker(events: _events, selected: _selected, onChanged: _pick),
+          AdminEventPicker(options: _eventOptions, selected: _selected, onChanged: _pick),
           const SizedBox(height: 20),
           const FilterLabel('Show'),
           const SizedBox(height: 8),
@@ -849,7 +852,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
           ];
         }
         return [
-          _GridTable<AdminRegistration>(
+          AdminGridTable<AdminRegistration>(
             rows: rows,
             columns: _registrationColumns(cancelled: cancelled),
             sortId: sort.$1,
@@ -878,7 +881,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
         }
         return [
           ...note,
-          _GridTable<CheckInEntry>(
+          AdminGridTable<CheckInEntry>(
             rows: rows,
             columns: _checkInColumns,
             sortId: sort.$1,
@@ -897,7 +900,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       case 'email':
       case 'phone':
         final text = column.text(r);
-        return text.isEmpty ? null : SelectableText(text, style: _cellStyle(context.palette));
+        return text.isEmpty ? null : SelectableText(text, style: adminCellStyle(context.palette));
       default:
         return null;
     }
@@ -921,52 +924,6 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 }
 
 // ── Widgets ──────────────────────────────────────────────────────────────
-
-/// Event picker you can type into: the list narrows to matching events.
-class _EventPicker extends StatelessWidget {
-  const _EventPicker({
-    required this.events,
-    required this.selected,
-    required this.onChanged,
-    this.width,
-  });
-
-  /// Fixed width (in the pill row); null fills the space (in the rail).
-  final double? width;
-
-  /// Newest first.
-  final List<AppEvent> events;
-  final int selected;
-  final ValueChanged<int> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final known = selected == _allEvents || events.any((e) => e.eventId == selected);
-    return DropdownMenu<int>(
-      // Rebuild when the URL changes the selection.
-      key: ValueKey(selected),
-      initialSelection: known ? selected : null,
-      expandedInsets: width == null ? EdgeInsets.zero : null,
-      width: width,
-      enableFilter: true,
-      requestFocusOnTap: true,
-      menuHeight: 380,
-      leadingIcon: const Icon(Icons.event_outlined, size: 20),
-      hintText: 'Type to find an event',
-      dropdownMenuEntries: [
-        const DropdownMenuEntry<int>(value: _allEvents, label: 'All events'),
-        for (final e in events)
-          DropdownMenuEntry<int>(
-            value: e.eventId,
-            label: '${e.title} · ${formatDate(e.startDatetime.toLocal())}',
-          ),
-      ],
-      onSelected: (v) {
-        if (v != null) onChanged(v);
-      },
-    );
-  }
-}
 
 class _Tile {
   const _Tile(this.label, this.value, {this.isError = false});
@@ -1096,106 +1053,6 @@ class _Note extends StatelessWidget {
   }
 }
 
-TextStyle _headStyle(AppPalette p) => AppTextStyles.labelSmall.copyWith(
-      color: p.textMuted,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.6,
-    );
-
-TextStyle _cellStyle(AppPalette p) =>
-    AppTextStyles.bodySmall.copyWith(fontSize: 13, color: p.textPrimary);
-
-/// A table whose every heading sorts (tap it; again to reverse), in a
-/// bordered card that scrolls sideways when it's wider than the page.
-class _GridTable<T> extends StatelessWidget {
-  const _GridTable({
-    required this.rows,
-    required this.columns,
-    required this.sortId,
-    required this.ascending,
-    required this.onSort,
-    this.cell,
-  });
-
-  final List<T> rows;
-  final List<GridColumn<T>> columns;
-  final String sortId;
-  final bool ascending;
-  final void Function(String id, ColumnKind kind) onSort;
-
-  /// Custom cell for a column, or null for plain text.
-  final Widget? Function(GridColumn<T> column, T row)? cell;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final head = _headStyle(p);
-    final text = _cellStyle(p);
-    final sortIndex = columns.indexWhere((c) => c.id == sortId);
-
-    Widget plain(GridColumn<T> c, T row) {
-      final value = c.text(row);
-      if (value.isEmpty) return Text('—', style: text.copyWith(color: p.textMuted));
-      final style = c.id == 'name'
-          ? text.copyWith(fontWeight: FontWeight.w600)
-          : (c.id == 'number' || c.id == 'event')
-          ? text.copyWith(color: p.textSecondary)
-          : text;
-      return ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 240),
-        child: Text(value, maxLines: 2, overflow: TextOverflow.ellipsis, style: style),
-      );
-    }
-
-    final table = DataTable(
-      headingRowHeight: 40,
-      dataRowMinHeight: 48,
-      dataRowMaxHeight: 56,
-      horizontalMargin: 16,
-      columnSpacing: 24,
-      dividerThickness: 0.6,
-      headingRowColor: WidgetStatePropertyAll(p.surfaceSubtle),
-      sortColumnIndex: sortIndex < 0 ? null : sortIndex,
-      sortAscending: ascending,
-      columns: [
-        for (final c in columns)
-          DataColumn(
-            onSort: (_, _) => onSort(c.id, c.kind),
-            label: Text(c.label.toUpperCase(), style: head),
-          ),
-      ],
-      rows: [
-        for (final row in rows)
-          DataRow(
-            cells: [
-              for (final c in columns) DataCell(cell?.call(c, row) ?? plain(c, row)),
-            ],
-          ),
-      ],
-    );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(
-        color: p.card,
-        border: Border.all(color: p.border),
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(12),
-        child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: table,
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
 class _EmailStatus extends StatelessWidget {
   const _EmailStatus({required this.status});
 
@@ -1205,7 +1062,7 @@ class _EmailStatus extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final label = confirmationEmailLabel(status);
-    if (label.isEmpty) return Text('—', style: _cellStyle(p).copyWith(color: p.textMuted));
+    if (label.isEmpty) return Text('—', style: adminCellStyle(p).copyWith(color: p.textMuted));
     final tone = switch (status) {
       'sent' => p.success,
       'failed' => p.error,

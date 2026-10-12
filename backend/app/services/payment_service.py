@@ -47,6 +47,7 @@ from app.schemas.payments import (
     WebhookAckResponse,
 )
 from app.services import audit_service, email_service, pricing_service
+from app.services.payment_config_sync import server_payment_mode, sync_event_payment_configuration
 from app.config import get_settings
 
 _log = logging.getLogger(__name__)
@@ -120,6 +121,17 @@ def _is_hold_expired(registration: Optional[asyncpg.Record]) -> bool:
 
 async def _get_config_or_404(conn: asyncpg.Connection, event_id: int) -> asyncpg.Record:
     config = await PaymentRepository(conn).get_published_config_for_event(event_id)
+    if config is None or _payment_mode_of(config) != server_payment_mode():
+        # Missing, or made before the server's Razorpay mode changed
+        # (e.g. the switch to live keys): bring it in step with the event.
+        event = await conn.fetchrow(
+            "SELECT event_id, status, is_free, ticket_price FROM events WHERE event_id = $1",
+            event_id,
+        )
+        if event is not None:
+            synced = await sync_event_payment_configuration(conn, dict(event), "system:payment-sync")
+            if synced is not None:
+                config = synced
     if not config:
         raise HTTPException(status_code=409, detail="payment_not_configured")
     return config

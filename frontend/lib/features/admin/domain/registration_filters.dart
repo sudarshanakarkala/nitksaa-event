@@ -11,8 +11,8 @@ enum RegistrationView {
 }
 
 /// How a column filters: text columns match what you type, category
-/// columns offer a tick-list of their values, dates only sort.
-enum ColumnKind { text, category, date }
+/// columns offer a tick-list of their values, dates and numbers only sort.
+enum ColumnKind { text, category, date, number }
 
 /// One column of an admin table: what it shows, how it sorts and filters.
 class GridColumn<T> {
@@ -42,7 +42,7 @@ class GridColumn<T> {
     return v.toString();
   }
 
-  bool get filterable => kind != ColumnKind.date;
+  bool get filterable => kind == ColumnKind.text || kind == ColumnKind.category;
 }
 
 /// A column's filter: typed text, ticked values (the cells'
@@ -83,7 +83,7 @@ List<T> applyGrid<T>(
   bool ascending = true,
 }) {
   final q = search.trim().toLowerCase();
-  final searchable = columns.where((c) => c.kind != ColumnKind.date).toList();
+  final searchable = columns.where((c) => c.filterable).toList();
   final active = [
     for (final c in columns)
       if (filters[c.id]?.isActive ?? false) (c, filters[c.id]!),

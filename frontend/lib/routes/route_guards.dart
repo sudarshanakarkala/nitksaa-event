@@ -49,7 +49,7 @@ abstract class RouteGuards {
   static String? _adminRedirect(AuthController auth, String location) {
     if (!auth.isAuthenticated) return AppRoutes.login;
     final access = auth.session?.access ?? AdminAccess.none;
-    if (!access.isAnyAdmin) return AppRoutes.home;
+    if (!access.hasAdminArea) return AppRoutes.home;
 
     final segments = Uri.parse(location).pathSegments;
     // Deeper admin pages, e.g. /admin/events/:id/registrations.
