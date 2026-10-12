@@ -57,7 +57,14 @@ class ListPage extends StatefulWidget {
 
   /// Below this width the panel opens as [onOpenFilters] (a bottom sheet).
   static const double panelBreakpoint = 600;
-  static const double panelWidth = 300;
+
+  /// From this width the Filters rail has its own space on the left, always
+  /// kept free, so opening it covers nothing and moves nothing.
+  static const double railFrom = 900;
+  static const double railWidth = 260;
+
+  /// Gap between the rail and the content.
+  static const double railGap = 32;
 
   /// Horizontal page padding for content aligned with the toolbar.
   static double sidePadding(BuildContext context) =>
@@ -72,7 +79,8 @@ class ListPage extends StatefulWidget {
     double top = 24,
     double bottom = 24,
   }) {
-    final h = PageInsets.horizontal(context, width);
+    final reserved = context.dependOnInheritedWidgetOfExactType<_ReservedLeft>()?.width ?? 0;
+    final h = PageInsets.horizontal(context, width, minLeft: reserved);
     return EdgeInsets.fromLTRB(h.left, top, h.right, bottom);
   }
 
@@ -110,8 +118,13 @@ class _ListPageState extends State<ListPage> {
           )
         : null;
 
-    final toolbar = PageContainer(
-      child: Padding(
+    final reserve = hasFilters && width >= ListPage.railFrom;
+    final reservedLeft = reserve ? ListPage.railWidth + ListPage.railGap : 0.0;
+
+    final toolbar = LayoutBuilder(
+      builder: (context, constraints) => Padding(
+        padding: PageInsets.horizontal(context, constraints.maxWidth, minLeft: reservedLeft),
+        child: Padding(
         padding: EdgeInsets.only(top: compact ? 20 : 28, bottom: 14),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -162,6 +175,7 @@ class _ListPageState extends State<ListPage> {
           ],
         ),
       ),
+    ),
     );
 
     final page = Column(
@@ -171,25 +185,25 @@ class _ListPageState extends State<ListPage> {
           decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
           child: toolbar,
         ),
-        Expanded(child: widget.body),
+        Expanded(
+          child: _ReservedLeft(width: reservedLeft, child: widget.body),
+        ),
       ],
     );
 
     if (!hasFilters || compact) return page;
 
-    // The panel opens where the website's rail was: full height on the
-    // left, in the empty space left of the content. Where that space is
-    // wide enough nothing is covered; otherwise it overlays the edge of the
-    // cards, with a light scrim. The page itself never moves.
-    final gutter = PageInsets.contentLeft(context);
-    final fits = gutter - 12 >= _minPanelWidth;
-    final double panelWidth =
-        fits ? (gutter - 12).clamp(_minPanelWidth, ListPage.panelWidth).toDouble() : 260;
+    // Desktop: the rail has its own strip on the left (kept free even when
+    // closed), so the open panel covers nothing. Tablets: no room for that,
+    // so the panel overlays the edge of the cards with a light scrim.
+    // Either way the page never moves.
+    final overlay = !reserve;
+    const panelWidth = ListPage.railWidth;
 
     return Stack(
       children: [
         Positioned.fill(child: page),
-        if (!fits)
+        if (overlay)
           Positioned.fill(
             child: IgnorePointer(
               ignoring: !panelOpen,
@@ -214,15 +228,26 @@ class _ListPageState extends State<ListPage> {
             activeCount: widget.activeFilterCount,
             onClear: widget.onClearFilters,
             onClose: () => setState(() => _panelOpen = false),
+            elevated: overlay,
             child: widget.filters!(context),
           ),
         ),
       ],
     );
   }
-
-  static const double _minPanelWidth = 240;
 }
+
+/// How much room on the left the page keeps for the Filters rail, for
+/// [ListPage.contentPadding].
+class _ReservedLeft extends InheritedWidget {
+  const _ReservedLeft({required this.width, required super.child});
+
+  final double width;
+
+  @override
+  bool updateShouldNotify(_ReservedLeft old) => old.width != width;
+}
+
 
 /// Filter controls as icons, as on phones: a funnel (with the active count;
 /// gold while the panel is open) and, while any filter is on, a clear-
@@ -304,10 +329,14 @@ class _FilterPanel extends StatelessWidget {
     required this.onClose,
     this.activeCount = 0,
     this.onClear,
+    this.elevated = true,
   });
 
   final Widget child;
   final VoidCallback onClose;
+
+  /// Shadow when it overlays the cards; flat in its own rail.
+  final bool elevated;
   final int activeCount;
   final VoidCallback? onClear;
 
@@ -316,7 +345,7 @@ class _FilterPanel extends StatelessWidget {
     final p = context.palette;
     return Material(
       color: p.card,
-      elevation: 8,
+      elevation: elevated ? 8 : 0,
       shadowColor: p.overlay,
       shape: Border(right: BorderSide(color: p.border)),
       child: Column(

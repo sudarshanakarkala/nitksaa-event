@@ -31,9 +31,14 @@ abstract class PageInsets {
 
   /// Horizontal insets for an area [areaWidth] wide that starts at the
   /// window's left edge.
-  static EdgeInsets horizontal(BuildContext context, double areaWidth) {
-    final left = contentLeft(context);
-    final right = math.max(side(context), areaWidth - left - contentWidth(context));
+  ///
+  /// [minLeft] keeps the content clear of something on the left (the
+  /// Filters rail): content starts under the logo, or just right of that,
+  /// whichever is further right.
+  static EdgeInsets horizontal(BuildContext context, double areaWidth, {double minLeft = 0}) {
+    final logo = contentLeft(context);
+    final left = math.max(logo, minLeft);
+    final right = math.max(side(context), areaWidth - logo - contentWidth(context));
     return EdgeInsets.only(left: left, right: right);
   }
 }
