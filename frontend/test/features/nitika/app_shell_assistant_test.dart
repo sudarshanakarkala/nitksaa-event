@@ -83,6 +83,21 @@ void main() {
     expect(panel, findsOneWidget);
   });
 
+  // Opening NITiKa never moves the page: on wide screens its space is kept;
+  // narrower desktops get the rail over the page.
+  for (final width in [1400.0, 1700.0]) {
+    testWidgets('desktop at ${width.toInt()} px: opening NITiKa does not '
+        'move the page', (tester) async {
+      await pumpShell(tester, width: width);
+      final before = tester.getRect(find.text('Events page'));
+
+      await tester.tap(nitikaButton);
+      await tester.pumpAndSettle();
+      expect(panel, findsOneWidget);
+      expect(tester.getRect(find.text('Events page')), before);
+    });
+  }
+
   testWidgets('tablet: the header button opens the slide-in panel', (
     tester,
   ) async {

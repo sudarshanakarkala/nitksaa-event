@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
+import '../../../shared/widgets/quick_filter_pill.dart';
 import '../../../shared/widgets/segment_toggle.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -483,7 +484,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
                 child: Row(
                   children: [
                     for (final f in _Filter.values) ...[
-                      _FilterPill(
+                      QuickFilterPill(
                         label: f.label,
                         count: searched.where((e) => _matches(e, f)).length,
                         active: f == _filter,
@@ -571,78 +572,6 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
           child: content,
         );
       },
-    );
-  }
-}
-
-/// Filter pill, deliberately unlike the tabs (which navigate): fully
-/// rounded and borderless; the active one solid gold with dark text. The
-/// count sits inside the pill.
-class _FilterPill extends StatelessWidget {
-  const _FilterPill({
-    required this.label,
-    required this.count,
-    required this.active,
-    required this.onTap,
-  });
-
-  final String label;
-  final int count;
-  final bool active;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final fg = active ? p.onPrimary : p.textSecondary;
-    return Semantics(
-      button: true,
-      selected: active,
-      child: Material(
-        color: active ? p.primary : p.surfaceSubtle,
-        shape: const StadiumBorder(),
-        clipBehavior: Clip.antiAlias,
-        child: InkWell(
-          onTap: active ? null : onTap,
-          hoverColor: p.surfaceHover,
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  label,
-                  style: AppTextStyles.labelMedium.copyWith(
-                    fontSize: 12.8,
-                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
-                    letterSpacing: 0,
-                    color: fg,
-                  ),
-                ),
-                const SizedBox(width: 6),
-                Container(
-                  constraints: const BoxConstraints(minWidth: 22),
-                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
-                  decoration: BoxDecoration(
-                    color: active
-                        ? p.onPrimary.withValues(alpha: 0.16)
-                        : p.textPrimary.withValues(alpha: 0.06),
-                    borderRadius: BorderRadius.circular(100),
-                  ),
-                  child: Text(
-                    '$count',
-                    textAlign: TextAlign.center,
-                    style: AppTextStyles.labelSmall.copyWith(
-                      fontWeight: FontWeight.w600,
-                      color: fg,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
-        ),
-      ),
     );
   }
 }

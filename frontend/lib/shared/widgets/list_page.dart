@@ -3,14 +3,17 @@ import 'package:flutter/material.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'page_header.dart';
+import 'site_header.dart';
 
-/// List page frame matching the website's directory / stories / career
-/// pages: a collapsible filter rail on the left (wide screens), a fixed
-/// toolbar block (page header, search, toggle, count and actions) and the
-/// scrolling [body] below it.
+/// List page frame (Events): a fixed toolbar (page header, search, view
+/// toggle, Filters button, quick-filter pills, count and actions) and the
+/// scrolling [body] below it, in the site header's 1520px container.
 ///
-/// Below [railBreakpoint] there is no rail; a Filters button calls
-/// [onOpenFilters] (typically a bottom sheet).
+/// Improves on the website's left rail: the common filters are one-click
+/// [quickFilters] pills, and the rest open in a Filters panel that slides
+/// over the results instead of squeezing them, so the cards never move when
+/// it opens or closes. Phones get the panel as a bottom sheet
+/// ([onOpenFilters]).
 class ListPage extends StatefulWidget {
   const ListPage({
     super.key,
@@ -22,11 +25,11 @@ class ListPage extends StatefulWidget {
     this.toggle,
     this.count,
     this.actions = const [],
+    this.quickFilters = const [],
     this.filters,
     this.onOpenFilters,
     this.activeFilterCount = 0,
     this.onClearFilters,
-    this.resultNote,
   });
 
   final String title;
@@ -37,293 +40,314 @@ class ListPage extends StatefulWidget {
   final Widget? count;
   final List<Widget> actions;
 
-  /// Filter controls shown in the rail on wide screens.
+  /// One-click shortcuts (QuickFilterPill) to the same filters the panel has.
+  final List<Widget> quickFilters;
+
+  /// All filters, shown in the Filters panel.
   final WidgetBuilder? filters;
 
-  /// Opens the filters on narrow screens.
+  /// Opens the filters on phones (typically a bottom sheet).
   final VoidCallback? onOpenFilters;
 
-  /// Number of active filters: badge on the rail title / filter button;
-  /// when above zero, "Clear all" (rail) or a clear-filters icon (narrow).
+  /// Active filters: badge on the Filters button; above zero, "Clear all".
   final int activeFilterCount;
   final VoidCallback? onClearFilters;
 
-  /// Muted line at the bottom of the rail, e.g. "8 events".
-  final String? resultNote;
-
   final Widget body;
 
-  static const double railBreakpoint = 900;
-  static const double railOpenFrom = 900;
+  /// Below this width the panel opens as [onOpenFilters] (a bottom sheet).
+  static const double panelBreakpoint = 600;
+  static const double panelWidth = 300;
 
   /// Horizontal page padding for content aligned with the toolbar.
   static double sidePadding(BuildContext context) =>
       MediaQuery.sizeOf(context).width < 600 ? 16 : 40;
+
+  /// Padding for a full-width scroll view (scrollbar at the window edge)
+  /// whose content stays inside the 1520px container, lined up with the
+  /// toolbar and the site header.
+  static EdgeInsets contentPadding(
+    BuildContext context,
+    double width, {
+    double top = 24,
+    double bottom = 24,
+  }) {
+    final side = sidePadding(context);
+    final extra = ((width - SiteHeader.maxContentWidth) / 2).clamp(0.0, double.infinity);
+    return EdgeInsets.fromLTRB(side + extra, top, side + extra, bottom);
+  }
 
   @override
   State<ListPage> createState() => _ListPageState();
 }
 
 class _ListPageState extends State<ListPage> {
-  bool? _railOpen;
+  bool _panelOpen = false;
+
+  void _openFilters() {
+    final width = MediaQuery.sizeOf(context).width;
+    if (width < ListPage.panelBreakpoint) {
+      widget.onOpenFilters?.call();
+    } else {
+      setState(() => _panelOpen = !_panelOpen);
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final width = MediaQuery.sizeOf(context).width;
-    final wide = width >= ListPage.railBreakpoint;
     final compact = width < 600;
     final side = ListPage.sidePadding(context);
-    // Open by default; the chevron collapses it.
-    final railOpen = _railOpen ?? width >= ListPage.railOpenFrom;
     final hasFilters = widget.filters != null;
+    // The panel only exists on wider screens.
+    final panelOpen = _panelOpen && !compact && hasFilters;
 
-    final toolbar = Padding(
-      padding: EdgeInsets.fromLTRB(side, compact ? 20 : 28, side, 16),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          PageHeader(
-            eyebrow: widget.eyebrow,
-            title: widget.title,
-            subtitle: compact ? null : widget.subtitle,
+    final filterButton = hasFilters
+        ? _FiltersButton(
+            count: widget.activeFilterCount,
+            open: panelOpen,
+            onPressed: _openFilters,
+          )
+        : null;
+
+    final toolbar = Center(
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: SiteHeader.maxContentWidth),
+        child: Padding(
+          padding: EdgeInsets.fromLTRB(side, compact ? 20 : 28, side, 14),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              PageHeader(
+                eyebrow: widget.eyebrow,
+                title: widget.title,
+                subtitle: compact ? null : widget.subtitle,
+              ),
+              const SizedBox(height: 20),
+              Row(
+                children: [
+                  if (widget.search != null) Expanded(child: widget.search!),
+                  if (widget.toggle != null && !compact) ...[
+                    const SizedBox(width: 12),
+                    widget.toggle!,
+                  ],
+                  if (filterButton != null) ...[const SizedBox(width: 12), filterButton],
+                ],
+              ),
+              if (widget.quickFilters.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                SingleChildScrollView(
+                  scrollDirection: Axis.horizontal,
+                  child: Row(
+                    children: [
+                      for (var i = 0; i < widget.quickFilters.length; i++) ...[
+                        if (i > 0) const SizedBox(width: 6),
+                        widget.quickFilters[i],
+                      ],
+                      if (widget.activeFilterCount > 0 && widget.onClearFilters != null) ...[
+                        const SizedBox(width: 8),
+                        _ClearAllLink(onTap: widget.onClearFilters!),
+                      ],
+                    ],
+                  ),
+                ),
+              ],
+              if (widget.count != null || widget.actions.isNotEmpty) ...[
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    if (widget.count != null) widget.count!,
+                    const Spacer(),
+                    for (var i = 0; i < widget.actions.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      widget.actions[i],
+                    ],
+                  ],
+                ),
+              ],
+            ],
           ),
-          const SizedBox(height: 20),
-          // Phones: search on its own row, toggle and filter icons below
-          // (filter icons stay beside search when there is no toggle).
-          if (compact && widget.toggle != null) ...[
-            if (widget.search != null) widget.search!,
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                if (widget.toggle != null) widget.toggle!,
-                const Spacer(),
-                ..._filterButtons(context, wide),
-              ],
-            ),
-          ] else
-            Row(
-              children: [
-                if (widget.search != null) Expanded(child: widget.search!),
-                if (widget.toggle != null) ...[
-                  const SizedBox(width: 12),
-                  widget.toggle!,
-                ],
-                ..._filterButtons(context, wide),
-              ],
-            ),
-          if (widget.count != null || widget.actions.isNotEmpty) ...[
-            const SizedBox(height: 12),
-            Row(
-              children: [
-                if (widget.count != null) widget.count!,
-                const Spacer(),
-                for (var i = 0; i < widget.actions.length; i++) ...[
-                  if (i > 0) const SizedBox(width: 8),
-                  widget.actions[i],
-                ],
-              ],
-            ),
-          ],
-        ],
+        ),
       ),
     );
 
-    final main = Column(
+    return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: p.border)),
-          ),
+          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
           child: toolbar,
         ),
-        Expanded(child: widget.body),
-      ],
-    );
-
-    return Row(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (wide && hasFilters)
-          _FilterRail(
-            open: railOpen,
-            onToggle: () => setState(() => _railOpen = !railOpen),
-            activeCount: widget.activeFilterCount,
-            onClear: widget.onClearFilters,
-            resultNote: widget.resultNote,
-            child: widget.filters!(context),
-          ),
-        Expanded(child: main),
-      ],
-    );
-  }
-
-  /// Narrow screens: funnel button (with active count) to open the filters,
-  /// plus a clear-filters button while any are active.
-  List<Widget> _filterButtons(BuildContext context, bool wide) {
-    if (wide || widget.filters == null) return const [];
-    final p = context.palette;
-    final count = widget.activeFilterCount;
-    Widget square(Widget child, VoidCallback? onPressed, String tooltip) =>
-        Tooltip(
-          message: tooltip,
-          child: SizedBox(
-            width: 44,
-            height: 44,
-            child: OutlinedButton(
-              onPressed: onPressed,
-              style: OutlinedButton.styleFrom(padding: EdgeInsets.zero),
-              child: child,
-            ),
-          ),
-        );
-    return [
-      const SizedBox(width: 8),
-      square(
-        Badge(
-          isLabelVisible: count > 0,
-          label: Text('$count'),
-          backgroundColor: p.primary,
-          textColor: p.onPrimary,
-          child: Icon(
-            count > 0 ? Icons.filter_alt : Icons.filter_alt_outlined,
-            size: 20,
+        Expanded(
+          // The panel slides over the results; they never move.
+          child: Stack(
+            children: [
+              Positioned.fill(child: widget.body),
+              if (hasFilters && !compact) ...[
+                // Light scrim while open; a tap closes the panel.
+                Positioned.fill(
+                  child: IgnorePointer(
+                    ignoring: !panelOpen,
+                    child: AnimatedOpacity(
+                      duration: const Duration(milliseconds: 200),
+                      opacity: panelOpen ? 1 : 0,
+                      child: GestureDetector(
+                        onTap: () => setState(() => _panelOpen = false),
+                        child: ColoredBox(color: p.overlay.withValues(alpha: 0.25)),
+                      ),
+                    ),
+                  ),
+                ),
+                AnimatedPositioned(
+                  duration: const Duration(milliseconds: 240),
+                  curve: Curves.easeOutCubic,
+                  top: 0,
+                  bottom: 0,
+                  left: panelOpen ? 0 : -(ListPage.panelWidth + 12),
+                  width: ListPage.panelWidth,
+                  child: _FilterPanel(
+                    activeCount: widget.activeFilterCount,
+                    onClear: widget.onClearFilters,
+                    onClose: () => setState(() => _panelOpen = false),
+                    child: widget.filters!(context),
+                  ),
+                ),
+              ],
+            ],
           ),
         ),
-        widget.onOpenFilters,
-        'Filters',
-      ),
-      if (count > 0 && widget.onClearFilters != null) ...[
-        const SizedBox(width: 8),
-        square(
-          const Icon(Icons.filter_alt_off_outlined, size: 20),
-          widget.onClearFilters,
-          'Clear filters',
-        ),
       ],
-    ];
+    );
   }
 }
 
-/// Website left rail: 260px panel with a "Filters" title and a chevron that
-/// collapses it to a 28px strip.
-class _FilterRail extends StatelessWidget {
-  const _FilterRail({
-    required this.open,
-    required this.onToggle,
-    required this.child,
-    this.activeCount = 0,
-    this.onClear,
-    this.resultNote,
-  });
+/// "Filters" button with the active count, like the website's filter badge.
+class _FiltersButton extends StatelessWidget {
+  const _FiltersButton({required this.count, required this.open, required this.onPressed});
 
+  final int count;
   final bool open;
-  final VoidCallback onToggle;
-  final Widget child;
-  final int activeCount;
-  final VoidCallback? onClear;
-  final String? resultNote;
+  final VoidCallback onPressed;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    return AnimatedContainer(
-      duration: const Duration(milliseconds: 250),
-      curve: Curves.easeInOut,
-      width: open ? 260 : 28,
-      decoration: BoxDecoration(
-        color: p.card,
-        border: Border(right: BorderSide(color: p.border)),
-      ),
-      clipBehavior: Clip.hardEdge,
-      child: open
-          ? OverflowBox(
-              alignment: Alignment.topLeft,
-              minWidth: 260,
-              maxWidth: 260,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
-                    child: Row(
-                      children: [
-                        Text(
-                          'Filters',
-                          style: AppTextStyles.titleLarge.copyWith(
-                            fontSize: 17,
-                            color: p.textPrimary,
-                          ),
-                        ),
-                        if (activeCount > 0) ...[
-                          const SizedBox(width: 8),
-                          // Website .filter-badge: gold pill with the count.
-                          Container(
-                            padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
-                            decoration: BoxDecoration(
-                              color: p.primary,
-                              borderRadius: BorderRadius.circular(20),
-                            ),
-                            child: Text(
-                              '$activeCount',
-                              style: AppTextStyles.labelSmall.copyWith(
-                                color: p.onPrimary,
-                                fontWeight: FontWeight.w700,
-                                letterSpacing: 0,
-                              ),
-                            ),
-                          ),
-                        ],
-                        const Spacer(),
-                        if (activeCount > 0 && onClear != null)
-                          _ClearAllLink(onTap: onClear!),
-                        IconButton(
-                          tooltip: 'Hide filters',
-                          iconSize: 18,
-                          color: p.textMuted,
-                          icon: const Icon(Icons.chevron_left),
-                          onPressed: onToggle,
-                        ),
-                      ],
-                    ),
+    final active = open || count > 0;
+    return SizedBox(
+      height: 44,
+      child: OutlinedButton.icon(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          padding: const EdgeInsets.symmetric(horizontal: 14),
+          foregroundColor: active ? p.primary : p.textSecondary,
+          side: BorderSide(color: active ? p.primary.withValues(alpha: 0.5) : p.border),
+          backgroundColor: open ? p.primary.withValues(alpha: 0.06) : null,
+          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(6)),
+        ),
+        icon: Icon(count > 0 ? Icons.filter_alt : Icons.filter_alt_outlined, size: 18),
+        label: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Text('Filters'),
+            if (count > 0) ...[
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                decoration: BoxDecoration(
+                  color: p.primary,
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Text(
+                  '$count',
+                  style: AppTextStyles.labelSmall.copyWith(
+                    color: p.onPrimary,
+                    fontWeight: FontWeight.w700,
+                    letterSpacing: 0,
                   ),
-                  Divider(height: 1, color: p.border, indent: 20, endIndent: 20),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
-                      child: child,
-                    ),
-                  ),
-                  if (resultNote != null) ...[
-                    Divider(height: 1, color: p.border, indent: 20, endIndent: 20),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      child: Text(
-                        resultNote!,
-                        textAlign: TextAlign.center,
-                        style: AppTextStyles.bodySmall.copyWith(color: p.textMuted),
-                      ),
-                    ),
-                  ],
-                ],
-              ),
-            )
-          : Align(
-              alignment: Alignment.topCenter,
-              child: Padding(
-                padding: const EdgeInsets.only(top: 12),
-                child: IconButton(
-                  tooltip: 'Show filters',
-                  iconSize: 16,
-                  padding: EdgeInsets.zero,
-                  constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
-                  color: p.textMuted,
-                  icon: const Icon(Icons.chevron_right),
-                  onPressed: onToggle,
                 ),
               ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+/// The Filters panel: website rail look (card fill, "Filters" title, count
+/// badge, Clear all), sliding over the left of the results.
+class _FilterPanel extends StatelessWidget {
+  const _FilterPanel({
+    required this.child,
+    required this.onClose,
+    this.activeCount = 0,
+    this.onClear,
+  });
+
+  final Widget child;
+  final VoidCallback onClose;
+  final int activeCount;
+  final VoidCallback? onClear;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Material(
+      color: p.card,
+      elevation: 8,
+      shadowColor: p.overlay,
+      shape: Border(right: BorderSide(color: p.border)),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.fromLTRB(20, 14, 8, 10),
+            child: Row(
+              children: [
+                Text(
+                  'Filters',
+                  style: AppTextStyles.titleLarge.copyWith(fontSize: 17, color: p.textPrimary),
+                ),
+                if (activeCount > 0) ...[
+                  const SizedBox(width: 8),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: p.primary,
+                      borderRadius: BorderRadius.circular(20),
+                    ),
+                    child: Text(
+                      '$activeCount',
+                      style: AppTextStyles.labelSmall.copyWith(
+                        color: p.onPrimary,
+                        fontWeight: FontWeight.w700,
+                        letterSpacing: 0,
+                      ),
+                    ),
+                  ),
+                ],
+                const Spacer(),
+                if (activeCount > 0 && onClear != null) _ClearAllLink(onTap: onClear!),
+                IconButton(
+                  tooltip: 'Close filters',
+                  iconSize: 18,
+                  color: p.textMuted,
+                  icon: const Icon(Icons.close),
+                  onPressed: onClose,
+                ),
+              ],
             ),
+          ),
+          Divider(height: 1, color: p.border, indent: 20, endIndent: 20),
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 0),
+              child: child,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -8,6 +8,7 @@ import '../../../../routes/app_routes.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../../../shared/widgets/list_page.dart';
+import '../../../../shared/widgets/quick_filter_pill.dart';
 import '../../../../shared/widgets/segment_toggle.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/created_events_provider.dart';
@@ -153,22 +154,18 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     }
   }
 
+  /// Phones: the filters in a bottom sheet. Wider screens use the Filters
+  /// panel in ListPage, which slides over the cards.
   void _showFilterBottomSheet() {
-    final isWebScreen = MediaQuery.of(context).size.width >= 900;
-    if (isWebScreen) {
-      // Open the scaffold end drawer for a standards-compliant side filter panel
-      _scaffoldKey.currentState?.openEndDrawer();
-    } else {
-      showModalBottomSheet(
-        context: context,
-        isScrollControlled: true,
-        builder: (context) => ProviderScope(
-          child: Consumer(
-            builder: (context, ref, _) => _buildFilterPanel(ref),
-          ),
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (context) => ProviderScope(
+        child: Consumer(
+          builder: (context, ref, _) => _buildFilterPanel(ref),
         ),
-      );
-    }
+      ),
+    );
   }
 
   void _showFilterDialog() {
@@ -1329,9 +1326,18 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         ? allEvents.where((e) => registrations[e.eventId]?.isActive ?? false).toList()
         : allEvents;
     final p = context.palette;
-    final side = ListPage.sidePadding(context);
+    final signedIn = ref.watch(authControllerProvider).isAuthenticated;
+    // Quick "when" pills: shortcuts to the same filters as the panel.
+    final noDates = state.dateRangeStart == null && state.dateRangeEnd == null;
+    void when({required String period, String? timeline}) {
+      final n = ref.read(eventsProvider.notifier);
+      n.setDateRangeStart(null);
+      n.setDateRangeEnd(null);
+      n.setTimeline(timeline);
+      n.setPeriod(period);
+    }
 
-    // Website page frame: filter rail, toolbar, then the card grid.
+    // Toolbar (header, search, Filters, quick pills), then the card grid.
     return Scaffold(
       key: _scaffoldKey,
       body: ListPage(
@@ -1374,7 +1380,35 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ),
                 style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
               ),
-        // Admin tools moved behind the header's Admin badge.
+        quickFilters: [
+          QuickFilterPill(
+            label: 'Upcoming',
+            active: state.period == 'upcoming' && state.timeline == null && noDates,
+            onTap: () => when(period: 'upcoming'),
+          ),
+          QuickFilterPill(
+            label: 'This week',
+            active: state.period == 'upcoming' && state.timeline == 'this_week' && noDates,
+            onTap: () => when(period: 'upcoming', timeline: 'this_week'),
+          ),
+          QuickFilterPill(
+            label: 'This month',
+            active: state.period == 'upcoming' && state.timeline == 'this_month' && noDates,
+            onTap: () => when(period: 'upcoming', timeline: 'this_month'),
+          ),
+          QuickFilterPill(
+            label: 'Past',
+            active: state.period == 'past' && state.timeline == null && noDates,
+            onTap: () => when(period: 'past'),
+          ),
+          if (signedIn)
+            QuickFilterPill(
+              label: 'Registered by me',
+              active: registeredOnly,
+              onTap: () =>
+                  ref.read(_registeredOnlyProvider.notifier).state = !registeredOnly,
+            ),
+        ],
         filters: (context) => _buildFilterPanel(ref, true),
         onOpenFilters: _showFilterBottomSheet,
         activeFilterCount: _activeFilterCount(state) + (registeredOnly ? 1 : 0),
@@ -1384,10 +1418,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           ref.read(eventsProvider.notifier).setPeriod('upcoming');
           _searchController.clear();
         },
-        resultNote: state.isLoading
-            ? null
-            : '${filteredEvents.length} ${filteredEvents.length == 1 ? 'event' : 'events'}',
-        body: state.isLoading
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            final pad = ListPage.contentPadding(context, constraints.maxWidth);
+            final side = pad.left;
+            return state.isLoading
             ? const Center(child: CircularProgressIndicator())
             : state.errorMessage != null
             ? _buildMaterialErrorState(state.errorMessage!)
@@ -1398,7 +1433,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             // Website grid: columns of at least 300px, every card the same
             // height (no intrinsic sizing).
             : EventCardGrid(
-                padding: EdgeInsets.fromLTRB(side, 24, side, 24),
+                padding: pad,
                 itemCount: filteredEvents.length,
                 itemBuilder: (context, index) {
                   final event = filteredEvents[index];
@@ -1420,7 +1455,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                             .isCancelling(registration.registrationId),
                   );
                 },
-              ),
+              );
+          },
+        ),
       ),
     );
   }
