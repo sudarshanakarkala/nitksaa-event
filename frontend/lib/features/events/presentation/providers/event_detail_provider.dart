@@ -1,4 +1,7 @@
+import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/errors/api_error_message.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
@@ -67,9 +70,16 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
     if (!mounted) return;
     state = state.copyWith(isLoading: true, errorMessage: null);
     try {
-      final event = await _repository.getPublicEvent(eventId);
+      final event = await _loadEvent(eventId);
       if (!mounted) return;
       state = state.copyWith(event: event);
+
+      // Not published (draft, cancelled…): only its admins get here, and
+      // there is nothing to register for.
+      if (event.status != 'published') {
+        state = state.copyWith(isLoading: false);
+        return;
+      }
 
       // Check auth for registration details
       final token = _accessToken;
@@ -116,8 +126,34 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
       if (!mounted) return;
       state = state.copyWith(
         isLoading: false,
-        errorMessage: e.toString(),
+        errorMessage: _isNotFound(e)
+            ? notAvailableMessage
+            : apiErrorMessage(e, action: 'load the event'),
       );
+    }
+  }
+
+  /// Shown for an event that doesn't exist or isn't published (and you
+  /// aren't one of its admins).
+  static const notAvailableMessage =
+      'This event isn\'t available. It may not be published yet, or it was '
+      'removed.';
+
+  static bool _isNotFound(Object e) =>
+      e is DioException &&
+      (e.response?.statusCode == 404 || e.response?.statusCode == 403);
+
+  /// The public page only has published events. For anything else, the
+  /// event's admins (and overall admins) get it through the admin API;
+  /// everyone else gets the public API's 404.
+  Future<AppEvent> _loadEvent(int eventId) async {
+    try {
+      return await _repository.getPublicEvent(eventId);
+    } on DioException catch (e) {
+      final token = _accessToken;
+      if (token == null || e.response?.statusCode != 404) rethrow;
+      // A 403/404 here means it isn't theirs to see either.
+      return _repository.getAdminEvent(eventId, token);
     }
   }
 

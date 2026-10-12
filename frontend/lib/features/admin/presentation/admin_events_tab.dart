@@ -575,7 +575,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   }
 }
 
-/// Website filter pill: bordered; the active one gold on a faint gold fill.
+/// Filter pill, deliberately unlike the tabs (which navigate): fully
+/// rounded and borderless; the active one solid gold with dark text. The
+/// count sits inside the pill.
 class _FilterPill extends StatelessWidget {
   const _FilterPill({
     required this.label,
@@ -592,32 +594,51 @@ class _FilterPill extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final color = active ? p.primary : p.textSecondary;
-    return Material(
-      color: active ? p.primary.withValues(alpha: 0.08) : p.surfaceSubtle,
-      shape: StadiumBorder(
-        side: BorderSide(color: active ? p.primary.withValues(alpha: 0.4) : p.border),
-      ),
-      clipBehavior: Clip.antiAlias,
-      child: InkWell(
-        onTap: active ? null : onTap,
-        child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 5),
-          child: Text.rich(
-            TextSpan(
+    final fg = active ? p.onPrimary : p.textSecondary;
+    return Semantics(
+      button: true,
+      selected: active,
+      child: Material(
+        color: active ? p.primary : p.surfaceSubtle,
+        shape: const StadiumBorder(),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: active ? null : onTap,
+          hoverColor: p.surfaceHover,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(14, 6, 6, 6),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
               children: [
-                TextSpan(text: label),
-                TextSpan(
-                  text: '  $count',
-                  style: TextStyle(color: active ? p.primary : p.textMuted),
+                Text(
+                  label,
+                  style: AppTextStyles.labelMedium.copyWith(
+                    fontSize: 12.8,
+                    fontWeight: active ? FontWeight.w600 : FontWeight.w500,
+                    letterSpacing: 0,
+                    color: fg,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Container(
+                  constraints: const BoxConstraints(minWidth: 22),
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                  decoration: BoxDecoration(
+                    color: active
+                        ? p.onPrimary.withValues(alpha: 0.16)
+                        : p.textPrimary.withValues(alpha: 0.06),
+                    borderRadius: BorderRadius.circular(100),
+                  ),
+                  child: Text(
+                    '$count',
+                    textAlign: TextAlign.center,
+                    style: AppTextStyles.labelSmall.copyWith(
+                      fontWeight: FontWeight.w600,
+                      color: fg,
+                    ),
+                  ),
                 ),
               ],
-            ),
-            style: AppTextStyles.labelMedium.copyWith(
-              fontSize: 12.8,
-              fontWeight: FontWeight.w500,
-              letterSpacing: 0,
-              color: color,
             ),
           ),
         ),

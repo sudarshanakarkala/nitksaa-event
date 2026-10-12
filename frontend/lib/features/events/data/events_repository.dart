@@ -214,6 +214,16 @@ class EventsRepository {
     return events;
   }
 
+  /// An event through the admin API: any status (draft, cancelled…), for
+  /// its admins and overall admins only.
+  Future<AppEvent> getAdminEvent(int eventId, String accessToken) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/events/$eventId',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return AppEvent.fromJson(response.data?['event'] as Map<String, dynamic>);
+  }
+
   Future<AppEvent> getPublicEvent(int eventId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/events/public/$eventId',
