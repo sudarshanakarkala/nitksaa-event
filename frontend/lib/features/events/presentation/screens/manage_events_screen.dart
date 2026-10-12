@@ -770,14 +770,18 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _description = TextEditingController(text: event?.description ?? '');
     
     final startDt = event?.startDatetime ?? DateTime.now();
-    final endDt = event?.endDatetime ?? DateTime.now().add(const Duration(hours: 2));
+    var endDt = event?.endDatetime ?? DateTime.now().add(const Duration(hours: 2));
+    // A full-day event is saved ending at midnight after its last day.
+    if ((event?.isFullDay ?? false) && endDt.isAfter(startDt)) {
+      endDt = endDt.subtract(const Duration(days: 1));
+    }
     
     _startDate = TextEditingController(text: _formatDateOnly(startDt));
     _endDate = TextEditingController(text: _formatDateOnly(endDt));
     _startTime = TextEditingController(text: _formatTimeFromDateTime(startDt));
     _endTime = TextEditingController(text: _formatTimeFromDateTime(endDt));
     _timezone = TextEditingController(text: event?.timezone ?? 'Asia/Kolkata');
-    _isFullDay = false;
+    _isFullDay = event?.isFullDay ?? false;
     
     _isVirtual = event?.isVirtual ?? false;
     _location = TextEditingController(text: event?.locationText ?? '');
@@ -1130,10 +1134,17 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         const SizedBox(height: 12),
         
         // Date/time fields
+        // Full day: dates only (an event can run several days).
         if (_isFullDay)
           Column(
             children: [
-              _buildDateField(_startDate, 'Event Date', required: true),
+              Row(
+                children: [
+                  Expanded(child: _buildDateField(_startDate, 'Start Date', required: true)),
+                  const SizedBox(width: 12),
+                  Expanded(child: _buildDateField(_endDate, 'End Date', required: true)),
+                ],
+              ),
               const SizedBox(height: 12),
             ],
           )
@@ -1328,31 +1339,38 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   // and nothing changes unless something is picked. Past dates are allowed
   // (an old draft can be moved to a new date).
 
+  /// True while a picker is open, so extra clicks don't stack more pickers.
+  bool _picking = false;
+
+  Future<T?> _onePicker<T>(Future<T?> Function() open) async {
+    if (_picking) return null;
+    _picking = true;
+    try {
+      return await open();
+    } finally {
+      _picking = false;
+    }
+  }
+
   Widget _buildDateField(TextEditingController controller, String label, {bool required = false}) {
     final displayLabel = required ? '$label *' : label;
     Future<void> pick() async {
-      final picked = await showDatePicker(
+      final picked = await _onePicker(() => showDatePicker(
         context: context,
         initialDate: _parseDate(controller.text) ?? DateTime.now(),
         firstDate: DateTime(2000),
         lastDate: DateTime(2100),
-      );
+      ));
       if (picked == null) return;
       void apply() => controller.text = _formatDateOnly(picked);
       identical(controller, _startDate) ? _moveStart(apply) : apply();
     }
 
-    return TextFormField(
+    return _PickerField(
       controller: controller,
-      readOnly: true,
-      mouseCursor: SystemMouseCursors.click,
-      onTap: pick,
-      decoration: InputDecoration(
-        labelText: displayLabel,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        suffixIcon: const Icon(Icons.calendar_today),
-      ),
+      label: displayLabel,
+      icon: Icons.calendar_today,
+      onPick: pick,
       validator: required
           ? (value) => value == null || value.trim().isEmpty ? '$label is required' : null
           : null,
@@ -1362,26 +1380,20 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   Widget _buildTimeField(TextEditingController controller, String label, {bool required = false}) {
     final displayLabel = required ? '$label *' : label;
     Future<void> pick() async {
-      final picked = await showTimePicker(
+      final picked = await _onePicker(() => showTimePicker(
         context: context,
         initialTime: _parseTime(controller.text) ?? TimeOfDay.now(),
-      );
+      ));
       if (picked == null) return;
       void apply() => controller.text = _formatTimeOfDay(picked);
       identical(controller, _startTime) ? _moveStart(apply) : apply();
     }
 
-    return TextFormField(
+    return _PickerField(
       controller: controller,
-      readOnly: true,
-      mouseCursor: SystemMouseCursors.click,
-      onTap: pick,
-      decoration: InputDecoration(
-        labelText: displayLabel,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        suffixIcon: const Icon(Icons.access_time),
-      ),
+      label: displayLabel,
+      icon: Icons.access_time,
+      onPick: pick,
       validator: required
           ? (value) => value == null || value.trim().isEmpty ? '$label is required' : null
           : null,
@@ -1390,18 +1402,19 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
 
   Widget _buildDateTimeField(TextEditingController controller, String label, {String? hint}) {
     Future<void> pick() async {
+      if (_picking) return;
       final current = DateTime.tryParse(controller.text.trim()) ?? DateTime.now();
-      final date = await showDatePicker(
+      final date = await _onePicker(() => showDatePicker(
         context: context,
         initialDate: current,
         firstDate: DateTime(2000),
         lastDate: DateTime(2100),
-      );
+      ));
       if (date == null || !mounted) return;
-      final time = await showTimePicker(
+      final time = await _onePicker(() => showTimePicker(
         context: context,
         initialTime: TimeOfDay.fromDateTime(current),
-      );
+      ));
       if (time == null) return;
       setState(() {
         controller.text = _formatDateTimeOnly(
@@ -1410,25 +1423,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       });
     }
 
-    return TextFormField(
+    return _PickerField(
       controller: controller,
-      readOnly: true,
-      mouseCursor: SystemMouseCursors.click,
-      onTap: pick,
-      decoration: InputDecoration(
-        labelText: label,
-        hintText: hint,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-        contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-        // These are optional, so they can be cleared.
-        suffixIcon: controller.text.isEmpty
-            ? const Icon(Icons.schedule)
-            : IconButton(
-                tooltip: 'Clear',
-                icon: const Icon(Icons.close, size: 18),
-                onPressed: () => setState(controller.clear),
-              ),
-      ),
+      label: label,
+      hint: hint,
+      icon: Icons.schedule,
+      onPick: pick,
+      // These are optional, so they can be cleared.
+      onClear: () => setState(controller.clear),
     );
   }
 
@@ -3192,6 +3194,67 @@ void _showFeeDialog(int? editIndex) {
     } catch (e) {
       return null;
     }
+  }
+}
+
+/// A date or time field: shows the value, and a click anywhere on it opens
+/// [onPick]. There is no typing, so nothing changes unless something is
+/// picked.
+class _PickerField extends StatelessWidget {
+  const _PickerField({
+    required this.controller,
+    required this.label,
+    required this.icon,
+    required this.onPick,
+    this.hint,
+    this.onClear,
+    this.validator,
+  });
+
+  final TextEditingController controller;
+  final String label;
+  final String? hint;
+  final IconData icon;
+  final Future<void> Function() onPick;
+  final VoidCallback? onClear;
+  final FormFieldValidator<String>? validator;
+
+  @override
+  Widget build(BuildContext context) {
+    return FormField<String>(
+      validator: validator == null ? null : (_) => validator!(controller.text),
+      builder: (field) => ValueListenableBuilder<TextEditingValue>(
+        valueListenable: controller,
+        builder: (context, value, _) {
+          final text = value.text;
+          return InkWell(
+            onTap: () async {
+              await onPick();
+              field.didChange(controller.text);
+            },
+            borderRadius: BorderRadius.circular(8),
+            child: InputDecorator(
+              isEmpty: text.isEmpty,
+              decoration: InputDecoration(
+                labelText: label,
+                hintText: hint,
+                errorText: field.errorText,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                suffixIcon: onClear != null && text.isNotEmpty
+                    ? IconButton(
+                        tooltip: 'Clear',
+                        icon: const Icon(Icons.close, size: 18),
+                        onPressed: onClear,
+                      )
+                    : Icon(icon),
+              ),
+              child: Text(text.isEmpty ? '' : text),
+            ),
+          );
+        },
+      ),
+    );
   }
 }
 

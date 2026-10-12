@@ -127,6 +127,7 @@ class AppEvent {
     this.locationMapsUrl,
     this.virtualUrl,
     required this.isVirtual,
+    this.isFullDay = false,
     this.thumbnailUrl,
     this.bannerUrl,
     this.capacity,
@@ -161,6 +162,9 @@ class AppEvent {
   final String? locationMapsUrl;
   final String? virtualUrl;
   final bool isVirtual;
+
+  /// Runs whole days (dates only, no times).
+  final bool isFullDay;
   final String? thumbnailUrl;
   final String? bannerUrl;
   final int? capacity;
@@ -208,6 +212,7 @@ class AppEvent {
       locationMapsUrl: json['location_maps_url'] as String?,
       virtualUrl: json['virtual_url'] as String?,
       isVirtual: json['is_virtual'] as bool? ?? false,
+      isFullDay: json['is_full_day'] as bool? ?? false,
       thumbnailUrl: json['thumbnail_url'] as String?,
       bannerUrl: json['banner_url'] as String?,
       capacity: json['capacity'] as int?,
