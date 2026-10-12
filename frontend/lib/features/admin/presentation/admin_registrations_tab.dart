@@ -6,6 +6,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
+import '../../../shared/widgets/filter_controls.dart';
+import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/quick_filter_pill.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -14,7 +16,6 @@ import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../data/registrations_api.dart';
 import '../domain/registration_filters.dart';
-import 'admin_screen.dart' show AdminContainer;
 
 /// Value of the event picker meaning "all events".
 const int _allEvents = -1;
@@ -26,8 +27,9 @@ const int _parallelLoads = 4;
 /// for one event or for every event you administer.
 ///
 /// The picked event lives in the URL (`/admin/registrations?event=12`), so
-/// links from the Events tab open it directly and Back works. Every table
-/// column sorts (tap its heading) and filters (its funnel icon).
+/// links from the Events tab open it directly and Back works. Same frame as
+/// the Events page: search, the Filters rail (event first), the list pills,
+/// the count. Table headings sort; all filtering is in the rail.
 class AdminRegistrationsTab extends ConsumerStatefulWidget {
   const AdminRegistrationsTab({super.key});
 
@@ -57,10 +59,11 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   RegistrationView _view = RegistrationView.registered;
 
-  /// Column filters and sort, per list.
-  final Map<RegistrationView, Map<String, ColumnFilter>> _filters = {
-    for (final v in RegistrationView.values) v: <String, ColumnFilter>{},
-  };
+  /// Rail filters: column id → ticked values (none = all). A list only
+  /// applies the ones for columns it has.
+  final Map<String, Set<String>> _rail = {};
+
+  /// Sort, per list.
   final Map<RegistrationView, (String, bool)> _sorts = {
     RegistrationView.registered: ('registered', false),
     RegistrationView.cancelled: ('cancelled', false),
@@ -244,9 +247,20 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   void _resetFilters() {
     _search.clear();
-    for (final f in _filters.values) {
-      f.clear();
-    }
+    _rail.clear();
+  }
+
+  Map<String, ColumnFilter> get _columnFilters => {
+        for (final e in _rail.entries)
+          if (e.value.isNotEmpty) e.key: ColumnFilter(values: e.value),
+      };
+
+  int get _activeFilterCount =>
+      _rail.values.where((v) => v.isNotEmpty).length + (_isAll ? 0 : 1);
+
+  void _clearAll() {
+    setState(_resetFilters);
+    if (!_isAll) _pick(_allEvents);
   }
 
   // ── Columns ──────────────────────────────────────────────────────────────
@@ -352,7 +366,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
         ),
         GridColumn(
           id: 'for',
-          label: 'For',
+          label: 'Checked in for',
           kind: ColumnKind.category,
           value: (c) => c.checkIn.sessionId == null ? 'Event entry' : 'Session ${c.checkIn.sessionId}',
         ),
@@ -383,7 +397,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       cancelled ? _cancelled : _registered,
       _registrationColumns(cancelled: cancelled),
       search: _search.text,
-      filters: _filters[view]!,
+      filters: _columnFilters,
       sortId: sort.$1,
       ascending: sort.$2,
     );
@@ -395,7 +409,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       _checkIns,
       _checkInColumns,
       search: _search.text,
-      filters: _filters[RegistrationView.checkIns]!,
+      filters: _columnFilters,
       sortId: sort.$1,
       ascending: sort.$2,
     );
@@ -406,8 +420,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       : _registrationRows(view).length;
 
   bool get _anyFilter =>
-      _search.text.trim().isNotEmpty ||
-      _filters.values.any((m) => m.values.any((f) => f.isActive));
+      _search.text.trim().isNotEmpty || _rail.values.any((v) => v.isNotEmpty);
 
   /// Tapping a heading: same column flips the order; a new column starts
   /// A–Z, or newest first for dates.
@@ -417,26 +430,6 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       _sorts[_view] = current.$1 == id
           ? (id, !current.$2)
           : (id, kind != ColumnKind.date);
-    });
-  }
-
-  Future<void> _editFilter<T>(GridColumn<T> column, List<T> allRows) async {
-    final current = _filters[_view]![column.id] ?? const ColumnFilter();
-    final result = await showDialog<ColumnFilter>(
-      context: context,
-      builder: (context) => _ColumnFilterDialog(
-        title: column.label,
-        values: column.kind == ColumnKind.category ? distinctValues(allRows, column) : null,
-        current: current,
-      ),
-    );
-    if (result == null || !mounted) return;
-    setState(() {
-      if (result.isActive) {
-        _filters[_view]![column.id] = result;
-      } else {
-        _filters[_view]!.remove(column.id);
-      }
     });
   }
 
@@ -490,7 +483,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < 600;
+    final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
 
     if (_eventsLoading && _events.isEmpty) {
       return const Center(child: CircularProgressIndicator());
@@ -511,35 +504,44 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       );
     }
 
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        _toolbar(compact),
-        if (_loading) const LinearProgressIndicator(minHeight: 2),
-        Expanded(child: _body(compact)),
-      ],
-    );
-  }
+    final shown = _count(_view);
+    final (one, many) = switch (_view) {
+      RegistrationView.registered => ('registration', 'registrations'),
+      RegistrationView.cancelled => ('cancelled registration', 'cancelled registrations'),
+      RegistrationView.checkIns => ('check-in', 'check-ins'),
+    };
 
-  Widget _toolbar(bool compact) {
-    final p = context.palette;
-    final picker = _EventPicker(
-      events: _events,
-      selected: _selected,
-      onChanged: _pick,
-    );
-    final search = TextField(
-      controller: _search,
-      decoration: InputDecoration(
-        hintText: 'Search name, email, phone or number…',
-        prefixIcon: const Icon(Icons.search, size: 20),
-        isDense: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
+    // Same frame as the Events page: search and Filters; the list pills;
+    // then the count and Export CSV.
+    return ListPage(
+      search: SizedBox(
+        height: 44,
+        child: TextField(
+          controller: _search,
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search, size: 20),
+            hintText: 'Search name, email, phone or number…',
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          ),
+        ),
       ),
-    );
-    final export = _isAll
-        ? null
-        : OutlinedButton.icon(
+      quickFilters: [
+        for (final v in RegistrationView.values)
+          QuickFilterPill(
+            label: v.label,
+            count: _count(v),
+            active: v == _view,
+            onTap: () => setState(() => _view = v),
+          ),
+        if (compact) _compactSortMenu(),
+      ],
+      count: _loadedFor == _selected && _error == null
+          ? ResultCount(count: shown, one: one, many: many)
+          : null,
+      actions: [
+        if (!_isAll)
+          OutlinedButton.icon(
             onPressed: _exporting || _loading ? null : _export,
             icon: _exporting
                 ? const SizedBox(
@@ -549,65 +551,67 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
                   )
                 : const Icon(Icons.download_outlined, size: 18),
             label: const Text('Export CSV'),
-          );
-    final refresh = IconButton(
-      tooltip: 'Refresh',
-      onPressed: _loading ? null : _refresh,
-      icon: const Icon(Icons.refresh),
-    );
-
-    return DecoratedBox(
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
-      child: AdminContainer(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 16, bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (compact) ...[
-                Row(children: [Expanded(child: picker), refresh]),
-                const SizedBox(height: 10),
-                search,
-                if (export != null) ...[
-                  const SizedBox(height: 10),
-                  Align(alignment: Alignment.centerLeft, child: export),
-                ],
-              ] else
-                Row(
-                  children: [
-                    SizedBox(width: 380, child: picker),
-                    const SizedBox(width: 12),
-                    Expanded(child: search),
-                    if (export != null) ...[const SizedBox(width: 12), export],
-                    const SizedBox(width: 4),
-                    refresh,
-                  ],
-                ),
-              const SizedBox(height: 12),
-              Wrap(
-                spacing: 6,
-                runSpacing: 8,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
-                  for (final v in RegistrationView.values)
-                    QuickFilterPill(
-                      label: v.label,
-                      count: _count(v),
-                      active: v == _view,
-                      onTap: () => setState(() => _view = v),
-                    ),
-                  if (compact) _compactSortMenu(),
-                  if (_anyFilter)
-                    TextButton.icon(
-                      onPressed: () => setState(_resetFilters),
-                      icon: const Icon(Icons.filter_alt_off_outlined, size: 18),
-                      label: const Text('Clear filters'),
-                    ),
-                ],
-              ),
-            ],
           ),
+      ],
+      filters: (context) => _filterRail(),
+      onOpenFilters: () => showFilterSheet(
+        context,
+        builder: (_) => _filterRail(),
+        onClear: _clearAll,
+      ),
+      activeFilterCount: _activeFilterCount,
+      onClearFilters: _clearAll,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_loading) const LinearProgressIndicator(minHeight: 2),
+          Expanded(child: _body(compact)),
+        ],
+      ),
+    );
+  }
+
+  /// The Filters rail: the event first, then the values of the current
+  /// list's filterable columns.
+  Widget _filterRail() {
+    final sections = <Widget>[];
+    void section<T>(String id, String label, List<T> rows, GridColumn<T> column) {
+      final values = distinctValues(rows, column);
+      if (values.isEmpty || (values.length == 1 && values.first.isEmpty)) return;
+      sections.add(
+        FilterChipSection(
+          label: label,
+          options: {for (final v in values) v: v.isEmpty ? '(blank)' : v},
+          selected: _rail[id] ?? const {},
+          onChanged: (v) => setState(() => _rail[id] = v),
         ),
+      );
+    }
+
+    if (_view == RegistrationView.checkIns) {
+      final columns = _checkInColumns;
+      for (final c in columns.where((c) => c.kind == ColumnKind.category && c.id != 'event')) {
+        section(c.id, c.label, _checkIns, c);
+      }
+    } else {
+      final cancelled = _view == RegistrationView.cancelled;
+      final rows = cancelled ? _cancelled : _registered;
+      final columns = _registrationColumns(cancelled: cancelled);
+      for (final c in columns.where((c) => c.kind == ColumnKind.category && c.id != 'event')) {
+        section(c.id, c.label, rows, c);
+      }
+    }
+
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const FilterLabel('Event'),
+          const SizedBox(height: 8),
+          _EventPicker(events: _events, selected: _selected, onChanged: _pick),
+          const SizedBox(height: 20),
+          ...sections,
+        ],
       ),
     );
   }
@@ -677,7 +681,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final padding = AdminContainer.scrollPadding(context, constraints.maxWidth, top: 20);
+        final padding = ListPage.contentPadding(context, constraints.maxWidth, top: 20);
         final children = <Widget>[
           _summary(),
           if (_failedEvents > 0) ...[
@@ -745,7 +749,6 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   }
 
   List<Widget> _list(bool compact) {
-    final filters = _filters[_view]!;
     final sort = _sorts[_view]!;
     switch (_view) {
       case RegistrationView.registered:
@@ -764,22 +767,18 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
             ],
           ];
         }
-        final all = cancelled ? _cancelled : _registered;
         return [
           _GridTable<AdminRegistration>(
             rows: rows,
             columns: _registrationColumns(cancelled: cancelled),
             sortId: sort.$1,
             ascending: sort.$2,
-            filters: filters,
             onSort: _sortBy,
-            onFilter: (c) => _editFilter(c, all),
             cell: _registrationCell,
           ),
         ];
       case RegistrationView.checkIns:
         final rows = _checkInRows;
-        final all = _checkIns;
         const note = [
           _Note(
             text: 'Check-ins scanned at the door. Rejected scans aren\'t recorded, so they don\'t appear here.',
@@ -803,9 +802,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
             columns: _checkInColumns,
             sortId: sort.$1,
             ascending: sort.$2,
-            filters: filters,
             onSort: _sortBy,
-            onFilter: (c) => _editFilter(c, all),
           ),
         ];
     }
@@ -881,136 +878,6 @@ class _EventPicker extends StatelessWidget {
       onSelected: (v) {
         if (v != null) onChanged(v);
       },
-    );
-  }
-}
-
-/// Filter for one column: a text box for text columns, a tick-list for
-/// the others. Returns the new filter, or null when cancelled.
-class _ColumnFilterDialog extends StatefulWidget {
-  const _ColumnFilterDialog({
-    required this.title,
-    required this.values,
-    required this.current,
-  });
-
-  final String title;
-
-  /// The column's values for a tick-list; null for a text filter.
-  final List<String>? values;
-  final ColumnFilter current;
-
-  @override
-  State<_ColumnFilterDialog> createState() => _ColumnFilterDialogState();
-}
-
-class _ColumnFilterDialogState extends State<_ColumnFilterDialog> {
-  late final _text = TextEditingController(text: widget.current.query);
-  final _find = TextEditingController();
-  late final Set<String> _ticked = {...widget.current.values};
-
-  @override
-  void initState() {
-    super.initState();
-    _find.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _text.dispose();
-    _find.dispose();
-    super.dispose();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final values = widget.values;
-    final Widget content;
-    if (values == null) {
-      content = TextField(
-        controller: _text,
-        autofocus: true,
-        decoration: const InputDecoration(
-          hintText: 'Contains…',
-          isDense: true,
-          border: OutlineInputBorder(),
-        ),
-        onSubmitted: (_) => Navigator.pop(context, ColumnFilter(query: _text.text)),
-      );
-    } else {
-      final q = _find.text.trim().toLowerCase();
-      final shown = values.where((v) => q.isEmpty || v.toLowerCase().contains(q)).toList();
-      content = SizedBox(
-        width: 320,
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (values.length > 8) ...[
-              TextField(
-                controller: _find,
-                decoration: const InputDecoration(
-                  hintText: 'Find a value…',
-                  prefixIcon: Icon(Icons.search, size: 20),
-                  isDense: true,
-                  border: OutlineInputBorder(),
-                ),
-              ),
-              const SizedBox(height: 8),
-            ],
-            Flexible(
-              child: ListView(
-                shrinkWrap: true,
-                children: [
-                  for (final v in shown)
-                    CheckboxListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      controlAffinity: ListTileControlAffinity.leading,
-                      value: _ticked.contains(v),
-                      title: Text(
-                        v.isEmpty ? '(blank)' : v,
-                        style: v.isEmpty ? TextStyle(color: p.textMuted) : null,
-                      ),
-                      onChanged: (on) => setState(() {
-                        if (on ?? false) {
-                          _ticked.add(v);
-                        } else {
-                          _ticked.remove(v);
-                        }
-                      }),
-                    ),
-                ],
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    return AlertDialog(
-      title: Text('Filter: ${widget.title}'),
-      content: ConstrainedBox(
-        constraints: const BoxConstraints(maxHeight: 420),
-        child: content,
-      ),
-      actions: [
-        TextButton(
-          onPressed: () => Navigator.pop(context, const ColumnFilter()),
-          child: const Text('Clear'),
-        ),
-        TextButton(
-          onPressed: () => Navigator.pop(context),
-          child: const Text('Cancel'),
-        ),
-        FilledButton(
-          onPressed: () => Navigator.pop(
-            context,
-            values == null ? ColumnFilter(query: _text.text) : ColumnFilter(values: {..._ticked}),
-          ),
-          child: const Text('Apply'),
-        ),
-      ],
     );
   }
 }
@@ -1152,17 +1019,15 @@ TextStyle _headStyle(AppPalette p) => AppTextStyles.labelSmall.copyWith(
 TextStyle _cellStyle(AppPalette p) =>
     AppTextStyles.bodySmall.copyWith(fontSize: 13, color: p.textPrimary);
 
-/// A table whose every heading sorts (tap it) and filters (funnel icon),
-/// in a bordered card that scrolls sideways when it's wider than the page.
+/// A table whose every heading sorts (tap it; again to reverse), in a
+/// bordered card that scrolls sideways when it's wider than the page.
 class _GridTable<T> extends StatelessWidget {
   const _GridTable({
     required this.rows,
     required this.columns,
     required this.sortId,
     required this.ascending,
-    required this.filters,
     required this.onSort,
-    required this.onFilter,
     this.cell,
   });
 
@@ -1170,9 +1035,7 @@ class _GridTable<T> extends StatelessWidget {
   final List<GridColumn<T>> columns;
   final String sortId;
   final bool ascending;
-  final Map<String, ColumnFilter> filters;
   final void Function(String id, ColumnKind kind) onSort;
-  final void Function(GridColumn<T> column) onFilter;
 
   /// Custom cell for a column, or null for plain text.
   final Widget? Function(GridColumn<T> column, T row)? cell;
@@ -1212,19 +1075,7 @@ class _GridTable<T> extends StatelessWidget {
         for (final c in columns)
           DataColumn(
             onSort: (_, _) => onSort(c.id, c.kind),
-            label: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(c.label.toUpperCase(), style: head),
-                if (c.filterable) ...[
-                  const SizedBox(width: 2),
-                  _FilterButton(
-                    active: filters[c.id]?.isActive ?? false,
-                    onPressed: () => onFilter(c),
-                  ),
-                ],
-              ],
-            ),
+            label: Text(c.label.toUpperCase(), style: head),
           ),
       ],
       rows: [
@@ -1253,32 +1104,6 @@ class _GridTable<T> extends StatelessWidget {
               child: table,
             ),
           ),
-        ),
-      ),
-    );
-  }
-}
-
-class _FilterButton extends StatelessWidget {
-  const _FilterButton({required this.active, required this.onPressed});
-
-  final bool active;
-  final VoidCallback onPressed;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return SizedBox(
-      width: 26,
-      height: 26,
-      child: IconButton(
-        tooltip: active ? 'Change filter' : 'Filter',
-        padding: EdgeInsets.zero,
-        iconSize: 16,
-        onPressed: onPressed,
-        icon: Icon(
-          active ? Icons.filter_alt : Icons.filter_alt_outlined,
-          color: active ? p.primary : p.textMuted,
         ),
       ),
     );

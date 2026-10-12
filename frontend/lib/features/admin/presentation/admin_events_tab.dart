@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
+import '../../../shared/widgets/filter_controls.dart';
+import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/quick_filter_pill.dart';
 import '../../../shared/widgets/segment_toggle.dart';
 import '../../../theme/app_palette.dart';
@@ -17,7 +19,6 @@ import '../../events/presentation/providers/created_events_provider.dart';
 import '../../events/presentation/providers/events_provider.dart';
 import '../../events/presentation/screens/manage_events_screen.dart' show showEventFormDialog;
 import '../../events/presentation/widgets/event_card.dart';
-import 'admin_screen.dart' show AdminContainer;
 import 'event_admins_dialog.dart';
 
 /// Status filters, website pill style.
@@ -52,6 +53,11 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   String? _error;
   _Filter _filter = _Filter.all;
   _View _view = _View.cards;
+
+  // Filters rail (the pills are the status shortcuts).
+  Set<String> _modes = const {};
+  Set<String> _registration = const {};
+  bool _mine = false;
 
   /// Events with an action in flight; their actions are disabled.
   final Set<int> _busy = {};
@@ -144,9 +150,38 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     }).toList();
   }
 
+  /// The rail's filters (mode, registration, created by me).
+  bool _railMatches(AppEvent e) {
+    if (_modes.isNotEmpty && !_modes.contains(e.isVirtual ? 'online' : 'in_person')) {
+      return false;
+    }
+    if (_registration.isNotEmpty) {
+      final open = e.status == 'published' && e.registrationStatus == 'open' && !_ended(e);
+      if (!_registration.contains(open ? 'open' : 'closed')) return false;
+    }
+    if (_mine && (e.createdByUid == null || e.createdByUid != _myUid)) return false;
+    return true;
+  }
+
+  int get _activeFilterCount =>
+      [_modes.isNotEmpty, _registration.isNotEmpty, _mine].where((on) => on).length;
+
+  void _clearFilters() {
+    setState(() {
+      _modes = const {};
+      _registration = const {};
+      _mine = false;
+      _filter = _Filter.all;
+      _search.clear();
+    });
+  }
+
+  /// Search and rail filters; the pills apply on top.
+  List<AppEvent> get _filtered => _searched.where(_railMatches).toList();
+
   /// Upcoming first (soonest at the top), then past (most recent first).
   List<AppEvent> get _visible {
-    final rows = _searched.where((e) => _matches(e, _filter)).toList();
+    final rows = _filtered.where((e) => _matches(e, _filter)).toList();
     final upcoming = rows.where((e) => !_ended(e)).toList()
       ..sort((a, b) => a.startDatetime.compareTo(b.startDatetime));
     final past = rows.where(_ended).toList()
@@ -418,96 +453,100 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    final width = MediaQuery.sizeOf(context).width;
-    final compact = width < 600;
+    final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
     final visible = _visible;
-    final searched = _searched;
+    final filtered = _filtered;
+    final canCreate = ref.watch(authControllerProvider).session?.access.isEventCreator ?? false;
 
-    final search = TextField(
-      controller: _search,
-      decoration: InputDecoration(
-        hintText: 'Search events…',
-        prefixIcon: const Icon(Icons.search, size: 20),
-        isDense: true,
-        border: OutlineInputBorder(borderRadius: BorderRadius.circular(6)),
-      ),
-    );
-    final toggle = SegmentToggle<_View>(
-      options: const [
-        SegmentOption(_View.cards, 'Cards', icon: Icons.grid_view_outlined),
-        SegmentOption(_View.table, 'Table', icon: Icons.table_rows_outlined),
-      ],
-      selected: compact ? _View.cards : _view,
-      onChanged: (v) => setState(() => _view = v),
-    );
-    final create = ref.watch(authControllerProvider).session?.access.isEventCreator ?? false
-        ? FilledButton.icon(
-            onPressed: _create,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Create Event'),
-          )
-        : null;
-
-    // Toolbar: fixed above the scrolling results, like the website's
-    // topbar (search, view toggle, action; then the filter pills).
-    final toolbar = DecoratedBox(
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
-      child: AdminContainer(
-        child: Padding(
-          padding: const EdgeInsets.only(top: 16, bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (compact) ...[
-                search,
-                const SizedBox(height: 10),
-                if (create != null) Align(alignment: Alignment.centerLeft, child: create),
-              ] else
-                Row(
-                  children: [
-                    Expanded(child: search),
-                    const SizedBox(width: 12),
-                    toggle,
-                    if (create != null) ...[const SizedBox(width: 12), create],
-                    const SizedBox(width: 4),
-                    IconButton(
-                      tooltip: 'Refresh',
-                      onPressed: _loading ? null : _load,
-                      icon: const Icon(Icons.refresh),
-                    ),
-                  ],
-                ),
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (final f in _Filter.values) ...[
-                      QuickFilterPill(
-                        label: f.label,
-                        count: searched.where((e) => _matches(e, f)).length,
-                        active: f == _filter,
-                        onTap: () => setState(() => _filter = f),
-                      ),
-                      const SizedBox(width: 6),
-                    ],
-                  ],
-                ),
-              ),
-            ],
+    // Same frame as the Events page: search, Cards/Table, Filters; the
+    // status pills; then the count and Create Event.
+    return ListPage(
+      search: SizedBox(
+        height: 44,
+        child: TextField(
+          controller: _search,
+          decoration: const InputDecoration(
+            prefixIcon: Icon(Icons.search, size: 20),
+            hintText: 'Search events…',
+            isDense: true,
+            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
         ),
       ),
-    );
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        toolbar,
-        if (_loading && _events.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
-        Expanded(child: _body(visible, compact)),
+      toggle: compact
+          ? null
+          : SegmentToggle<_View>(
+              options: const [
+                SegmentOption(_View.cards, 'Cards', icon: Icons.grid_view),
+                SegmentOption(_View.table, 'Table', icon: Icons.table_rows_outlined),
+              ],
+              selected: _view,
+              onChanged: (v) => setState(() => _view = v),
+            ),
+      quickFilters: [
+        for (final f in _Filter.values)
+          QuickFilterPill(
+            label: f.label,
+            count: filtered.where((e) => _matches(e, f)).length,
+            active: f == _filter,
+            onTap: () => setState(() => _filter = f),
+          ),
       ],
+      count: _loading && _events.isEmpty
+          ? null
+          : ResultCount(count: visible.length, one: 'event', many: 'events'),
+      actions: [
+        if (canCreate)
+          FilledButton.icon(
+            onPressed: _create,
+            icon: const Icon(Icons.add, size: 18),
+            label: const Text('Create Event'),
+          ),
+      ],
+      filters: (context) => _filterRail(),
+      onOpenFilters: () => showFilterSheet(
+        context,
+        builder: (_) => _filterRail(),
+        onClear: _clearFilters,
+      ),
+      activeFilterCount: _activeFilterCount,
+      onClearFilters: _clearFilters,
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (_loading && _events.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
+          Expanded(child: _body(visible, compact)),
+        ],
+      ),
+    );
+  }
+
+  Widget _filterRail() {
+    return SingleChildScrollView(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FilterChipSection(
+            label: 'Event mode',
+            options: const {'in_person': 'In person', 'online': 'Online'},
+            selected: _modes,
+            onChanged: (v) => setState(() => _modes = v),
+          ),
+          FilterChipSection(
+            label: 'Registration',
+            options: const {'open': 'Open', 'closed': 'Closed'},
+            selected: _registration,
+            onChanged: (v) => setState(() => _registration = v),
+          ),
+          const FilterLabel('Created by'),
+          const SizedBox(height: 8),
+          FilterChipToggle(
+            label: 'Created by me',
+            selected: _mine,
+            onChanged: (on) => setState(() => _mine = on),
+          ),
+        ],
+      ),
     );
   }
 
@@ -529,7 +568,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       return _Message(
         icon: searching ? Icons.search_off : Icons.event_note_outlined,
         title: searching ? 'No events match your search' : 'No ${_filter.label.toLowerCase()} events',
-        body: _filter == _Filter.all && !searching
+        body: _filter == _Filter.all && !searching && _activeFilterCount == 0
             ? (_access.isEventCreator
                 ? 'Create an event to get started.'
                 : 'You\'re not an admin of any events yet.')
@@ -539,7 +578,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
 
     return LayoutBuilder(
       builder: (context, constraints) {
-        final padding = AdminContainer.scrollPadding(context, constraints.maxWidth);
+        final padding = ListPage.contentPadding(context, constraints.maxWidth);
         final table = !compact && _view == _View.table;
         final content = table
             ? _EventsTable(
