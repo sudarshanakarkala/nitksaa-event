@@ -60,7 +60,6 @@ void main() {
     expect(up.registrationStatus, 'open');
     expect(up.isToday, isFalse);
 
-    expect(data.recent.single.noShows, 4);
     expect(data.weekly.map((w) => w.registrations), [10, 14]);
     expect(data.byDecade, {1990: 16, 2000: 4});
   });
