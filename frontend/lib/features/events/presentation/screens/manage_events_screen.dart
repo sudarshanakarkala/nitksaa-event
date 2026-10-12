@@ -749,12 +749,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   bool _orgsLoading = false;
   bool _orgsLoadFailed = false;
   
-  // Fees
+  // Fee tiers: they break down the ticket price, which is their total.
   late List<Map<String, String>> _fees;
 
-  // Registration fees — overall quantity limits (attached to the event)
-  late final TextEditingController _regMinQuantity;
-  late final TextEditingController _regMaxQuantity;
+  // Speakers, sessions and fee tiers load from (and save to) their own
+  // endpoint when editing. If loading failed, saving leaves them alone.
+  bool _contentLoading = false;
+  bool _contentLoadFailed = false;
   
   var _isSaving = false;
   var _currentStep = 0;
@@ -816,7 +817,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _sponsors = [];
     if (event != null) {
       _orgsLoading = true;
+      _contentLoading = true;
       Future.microtask(() => _loadOrgs(event.eventId));
+      Future.microtask(() => _loadContent(event.eventId));
     } else {
       _loadedSponsorIds = {};
       _loadedPartnerIds = {};
@@ -824,14 +827,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     
     // Initialize fees
     _fees = [];
-    
-    // Initialize registration fee quantity limits (event level)
-    _regMinQuantity = TextEditingController(
-      text: event?.registrationMinQuantity?.toString() ?? '',
-    );
-    _regMaxQuantity = TextEditingController(
-      text: event?.registrationMaxQuantity?.toString() ?? '',
-    );
     
     // Initialize sessions (convert EventSession to Map)
     _sessions = event?.sessions.map((sess) {
@@ -904,8 +899,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _bannerUrl.dispose();
     _capacity.dispose();
     _ticketPrice.dispose();
-    _regMinQuantity.dispose();
-    _regMaxQuantity.dispose();
     super.dispose();
   }
 
@@ -1244,7 +1237,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         }),
         const SizedBox(height: 12),
         
-        if (!_isFree)
+        if (!_isFree && _fees.isNotEmpty)
+          Text(
+            'Ticket price: ${_formatFeeAmount(_feesTotal.toString())}, the total of '
+            'the fee tiers in the next step.',
+            style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
+          )
+        else if (!_isFree)
           _buildTextField(
             _ticketPrice, 
             'Ticket Price', 
@@ -1290,39 +1289,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Registration Fees Section (main form — attached to event) ──
-        _buildSectionHeader('Registration Fees'),
-        const SizedBox(height: 16),
-        Text(
-          'Quantity limits below apply to the event registration as a whole.',
-          style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
-        ),
-        const SizedBox(height: 12),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _buildTextField(
-                _regMinQuantity,
-                'Min Count Per Registration',
-                hint: 'e.g., 1',
-                keyboardType: TextInputType.number,
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildTextField(
-                _regMaxQuantity,
-                'Max Count Per Registration',
-                hint: 'e.g., 5',
-                keyboardType: TextInputType.number,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 28),
         // ── Fee Tiers Section ──
         _buildSectionHeader('Fee Tiers'),
+        const SizedBox(height: 8),
+        Text(
+          'Optional. Tiers break down the ticket price (for example participation '
+          'and food pass); the ticket price becomes their total.',
+          style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+        ),
         const SizedBox(height: 16),
         _buildFeesSection(),
       ],
@@ -1822,6 +1796,105 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
+  /// Speakers, sessions and fee tiers as saved, with their server ids.
+  Future<void> _loadContent(int eventId) async {
+    final token = ref.read(authControllerProvider).session?.accessToken;
+    if (token == null) return;
+    try {
+      final data = await ref.read(eventsRepositoryProvider).getEventContent(eventId, token);
+      List<Map<String, dynamic>> list(String key) =>
+          (data[key] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>().toList();
+      String text(Object? v) => v?.toString() ?? '';
+      if (!mounted) return;
+      setState(() {
+        _speakers = [
+          for (final r in list('speakers'))
+            {
+              'person_id': text(r['person_id']),
+              'fullname': text(r['fullname']),
+              'title': text(r['title']),
+              'organisation': text(r['organisation']),
+            },
+        ];
+        _sessions = [
+          for (final r in list('sessions'))
+            {
+              'session_id': text(r['session_id']),
+              'title': text(r['title']),
+              'speaker': text(r['speaker_name']),
+              'start_time': _contentTime(r['start_datetime']),
+              'end_time': _contentTime(r['end_datetime']),
+            },
+        ];
+        _fees = [
+          for (final r in list('fees'))
+            {
+              'fee_name': text(r['name']),
+              'fee_type': text(r['fee_type']).toUpperCase(),
+              'fee_amount': text(r['amount']),
+            },
+        ];
+        _contentLoading = false;
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error('Could not load speakers, sessions and fees', error, stackTrace);
+      if (!mounted) return;
+      setState(() {
+        _contentLoading = false;
+        _contentLoadFailed = true;
+      });
+    }
+  }
+
+  /// "yyyy-MM-dd HH:mm" in local time, the format the session dialog uses.
+  static String _contentTime(Object? iso) {
+    final d = DateTime.tryParse(iso?.toString() ?? '')?.toLocal();
+    return d == null ? '' : _formatDateTimeOnly(d);
+  }
+
+  /// Saves speakers, sessions and fee tiers after the event is saved.
+  /// Returns false if that failed.
+  Future<bool> _saveContent(int eventId, String token, String offset) async {
+    if (_contentLoadFailed || _contentLoading) return true; // nothing loaded, nothing changed
+    try {
+      await ref.read(eventsRepositoryProvider).putEventContent(eventId, token, {
+        'speakers': [
+          for (final sp in _speakers)
+            {
+              if (int.tryParse(sp['person_id'] ?? '') != null)
+                'person_id': int.parse(sp['person_id']!),
+              'fullname': sp['fullname'] ?? '',
+              'title': sp['title'],
+              'organisation': sp['organisation'],
+            },
+        ],
+        'sessions': [
+          for (final se in _sessions)
+            {
+              if (int.tryParse(se['session_id'] ?? '') != null)
+                'session_id': int.parse(se['session_id']!),
+              'title': se['title'] ?? '',
+              'speaker_name': se['speaker'],
+              'start_datetime': '${(se['start_time'] ?? '').replaceFirst(' ', 'T')}:00$offset',
+              'end_datetime': '${(se['end_time'] ?? '').replaceFirst(' ', 'T')}:00$offset',
+            },
+        ],
+        'fees': [
+          for (final f in _fees)
+            {
+              'name': f['fee_name'] ?? '',
+              'fee_type': (f['fee_type'] ?? 'PARTICIPATION').toLowerCase(),
+              'amount': double.tryParse((f['fee_amount'] ?? '').trim()) ?? 0,
+            },
+        ],
+      });
+      return true;
+    } catch (error, stackTrace) {
+      AppLogger.error('Could not save speakers, sessions and fees', error, stackTrace);
+      return false;
+    }
+  }
+
   Future<void> _loadOrgs(int eventId) async {
     final token = ref.read(authControllerProvider).session?.accessToken;
     if (token == null) return;
@@ -2221,7 +2294,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                     if (editIndex == null) {
                       _speakers.add(speaker);
                     } else {
-                      _speakers[editIndex] = speaker;
+                      _speakers[editIndex] = {..._speakers[editIndex], ...speaker};
                     }
                   });
                   Navigator.pop(context);
@@ -2477,7 +2550,7 @@ void _showFeeDialog(int? editIndex) {
                     if (editIndex == null) {
                       _sessions.add(session);
                     } else {
-                      _sessions[editIndex] = session;
+                      _sessions[editIndex] = {..._sessions[editIndex], ...session};
                     }
                   });
                   Navigator.pop(context);
@@ -2981,57 +3054,10 @@ void _showFeeDialog(int? editIndex) {
       return;
     }
 
-    if (!_isFree && _ticketPrice.text.trim().isEmpty) {
+    if (!_isFree && _fees.isEmpty && _ticketPrice.text.trim().isEmpty) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text('Please enter ticket price for paid events')),
-        );
-      }
-      return;
-    }
-
-    // Validate registration fee quantity limits (event level)
-    final regMinQtyText = _regMinQuantity.text.trim();
-    final regMaxQtyText = _regMaxQuantity.text.trim();
-    final regMinQty = regMinQtyText.isEmpty ? null : int.tryParse(regMinQtyText);
-    final regMaxQty = regMaxQtyText.isEmpty ? null : int.tryParse(regMaxQtyText);
-
-    if (regMinQtyText.isNotEmpty && regMinQty == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Min count must be a whole number')),
-        );
-      }
-      return;
-    }
-    if (regMinQty != null && regMinQty < 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Min count must be 0 or more')),
-        );
-      }
-      return;
-    }
-    if (regMaxQtyText.isNotEmpty && regMaxQty == null) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Max count must be a whole number')),
-        );
-      }
-      return;
-    }
-    if (regMaxQty != null && regMaxQty < 0) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Max count must be 0 or more')),
-        );
-      }
-      return;
-    }
-    if (regMinQty != null && regMaxQty != null && regMaxQty < regMinQty) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Max count cannot be less than min count')),
         );
       }
       return;
@@ -3057,35 +3083,18 @@ void _showFeeDialog(int? editIndex) {
         'is_full_day': _isFullDay,
         'capacity': parseCapacity(_capacity.text),
         'is_free': _isFree,
-        'ticket_price': _isFree ? null : double.tryParse(_ticketPrice.text.trim()),
-        'registration_min_quantity': regMinQty,
-        'registration_max_quantity': regMaxQty,
+        // With fee tiers, the price is their total (what checkout charges).
+        'ticket_price': _isFree
+            ? null
+            : _fees.isNotEmpty
+            ? _feesTotal
+            : double.tryParse(_ticketPrice.text.trim()),
         'thumbnail_url': _thumbnailUrl.text.trim().isEmpty ? null : _thumbnailUrl.text.trim(),
         'banner_url': _bannerUrl.text.trim().isEmpty ? null : _bannerUrl.text.trim(),
         if (_registrationOpensAt.text.trim().isNotEmpty)
           'registration_opens_at': '${_registrationOpensAt.text.trim()}:00$offset',
         if (_registrationClosesAt.text.trim().isNotEmpty)
           'registration_closes_at': '${_registrationClosesAt.text.trim()}:00$offset',
-        // Add speakers data
-        'speakers': _speakers.map((speaker) => {
-          'fullname': speaker['fullname'],
-          'title': speaker['title'],
-          'organisation': speaker['organisation'],
-          'role': 'SPEAKER',
-        }).toList(),
-        // Add sessions data
-        'sessions': _sessions.map((session) => {
-          'title': session['title'],
-          'speaker_name': session['speaker'],
-          'start_datetime': '${session['start_time']}:00$offset',
-          'end_datetime': '${session['end_time']}:00$offset',
-        }).toList(),
-        // Add fees data
-        'fees': _fees.map((fee) => {
-          'fee_name': fee['fee_name'],
-          'fee_type': fee['fee_type'],
-          'fee_amount': double.tryParse((fee['fee_amount'] ?? '').trim()) ?? 0,
-        }).toList(),
       };
 
       final repo = ref.read(eventsRepositoryProvider);
@@ -3094,9 +3103,21 @@ void _showFeeDialog(int? editIndex) {
           ? await repo.createAdminEvent(data, token)
           : await repo.updateAdminEvent(widget.event!.eventId, data, token);
 
-      // Sponsors and partners have their own endpoints.
+      // Speakers, sessions and fee tiers, then sponsors and partners, have
+      // their own endpoints.
+      final contentSaved = await _saveContent(saved.eventId, token, offset);
       final orgsSaved = await _saveOrgs(saved.eventId, token);
-      if (!orgsSaved && mounted) {
+      if (!contentSaved && mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text(
+              'The event was saved, but its speakers, sessions or fee tiers could not be. '
+              'Open the event again to check them.',
+            ),
+            duration: Duration(seconds: 8),
+          ),
+        );
+      } else if (!orgsSaved && mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(
             content: Text(

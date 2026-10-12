@@ -460,7 +460,19 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           const SizedBox(height: 24),
                           const Divider(),
                           const SizedBox(height: 16),
-                          _buildAgendaSection(event),
+                          if (event.fees.isNotEmpty) ...[
+                            _buildFeesSection(event),
+                            const SizedBox(height: 24),
+                            const Divider(),
+                            const SizedBox(height: 16),
+                          ],
+                          if (event.fees.isNotEmpty) ...[
+                  _buildFeesSection(event),
+                  const SizedBox(height: 24),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                ],
+                _buildAgendaSection(event),
                           const SizedBox(height: 24),
                           const Divider(),
                           const SizedBox(height: 16),
@@ -1040,6 +1052,42 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       );
     }
     return card;
+  }
+
+  /// Fee tiers: what the ticket price covers. Their total is the price.
+  Widget _buildFeesSection(AppEvent event) {
+    final p = context.palette;
+    String rupees(double v) =>
+        '₹${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2)}';
+    final total = event.fees.fold<double>(0, (sum, f) => sum + f.amount);
+    final rowStyle = TextStyle(fontSize: 14, color: p.textPrimary);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(
+          'What the price covers',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: p.primary),
+        ),
+        const SizedBox(height: 12),
+        for (final f in event.fees)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 8),
+            child: Row(
+              children: [
+                Expanded(child: Text(f.name, style: rowStyle)),
+                Text(rupees(f.amount), style: rowStyle),
+              ],
+            ),
+          ),
+        Divider(height: 16, color: p.border),
+        Row(
+          children: [
+            Expanded(child: Text('Total', style: rowStyle.copyWith(fontWeight: FontWeight.w600))),
+            Text(rupees(total), style: rowStyle.copyWith(fontWeight: FontWeight.w600)),
+          ],
+        ),
+      ],
+    );
   }
 
   Widget _buildAgendaSection(AppEvent event) {

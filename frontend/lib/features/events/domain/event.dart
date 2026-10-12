@@ -145,6 +145,7 @@ class AppEvent {
     this.speakers = const [],
     this.sponsors = const [],
     this.partners = const [],
+    this.fees = const [],
   });
 
   final int eventId;
@@ -186,6 +187,9 @@ class AppEvent {
   final List<EventPerson> speakers;
   final List<EventSponsor> sponsors;
   final List<EventPartner> partners;
+
+  /// Fee tiers: what the ticket price covers (their total is the price).
+  final List<EventFee> fees;
 
   factory AppEvent.fromJson(Map<String, dynamic> json) {
     return AppEvent(
@@ -239,6 +243,10 @@ class AppEvent {
       partners: (json['partners'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(EventPartner.fromJson)
+          .toList(),
+      fees: (json['fees'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(EventFee.fromJson)
           .toList(),
     );
   }
@@ -344,4 +352,21 @@ class EventPerson {
       linkedinUrl: json['linkedin_url'] as String?,
     );
   }
+}
+/// One fee tier on an event (participation, accommodation, food pass ...).
+class EventFee {
+  const EventFee({required this.name, required this.feeType, required this.amount});
+
+  final String name;
+
+  /// participation / accommodation / contributions / food_pass /
+  /// merchandise / other.
+  final String feeType;
+  final double amount;
+
+  factory EventFee.fromJson(Map<String, dynamic> json) => EventFee(
+        name: json['name']?.toString() ?? '',
+        feeType: json['fee_type']?.toString() ?? 'other',
+        amount: (json['amount'] as num?)?.toDouble() ?? 0,
+      );
 }
