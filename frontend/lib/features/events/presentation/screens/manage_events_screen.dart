@@ -3153,50 +3153,6 @@ class _PickerField extends StatelessWidget {
   }
 }
 
-class _SidebarItem extends StatelessWidget {
-  const _SidebarItem({
-    required this.icon,
-    required this.label,
-    required this.active,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final activeBg = context.palette.surfaceHover;
-    final activeText = context.palette.primary;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      decoration: BoxDecoration(
-        color: active ? activeBg : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListTile(
-        visualDensity: VisualDensity.compact,
-        leading: Icon(
-          icon,
-          size: 20,
-          color: active ? activeText : context.palette.textSecondary,
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: active ? activeText : context.palette.textSecondary,
-            fontSize: 13,
-            fontWeight: active ? FontWeight.bold : FontWeight.w500,
-          ),
-        ),
-        onTap: onTap,
-      ),
-    );
-  }
-}
-
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
 

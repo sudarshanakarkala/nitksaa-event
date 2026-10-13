@@ -4,7 +4,6 @@ import 'package:go_router/go_router.dart';
 
 import '../../../core/app_state.dart';
 import '../../../routes/app_routes.dart';
-import '../../../theme/app_palette.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../widgets/shared/shared_screen.dart';
 import '../../../widgets/shared/status_row.dart';
