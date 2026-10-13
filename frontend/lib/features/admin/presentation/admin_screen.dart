@@ -10,6 +10,7 @@ import '../../auth/domain/admin_access.dart';
 import '../../auth/services/auth_controller.dart';
 import '../admin_tabs.dart';
 import 'admin_actions_tab.dart';
+import 'admin_audit_tab.dart';
 import 'admin_dashboard_tab.dart';
 import 'admin_events_tab.dart';
 import 'admin_payments_tab.dart';
@@ -91,7 +92,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       case AdminTab.actions:
         return const AdminActionsTab();
       case AdminTab.audit:
-        return const _ComingSoon();
+        return const AdminAuditTab();
     }
   }
 }
@@ -180,36 +181,6 @@ class _TabButton extends StatelessWidget {
                 color: active ? p.primary : p.textSecondary,
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-}
-
-/// Placeholder for tabs that arrive in later steps.
-class _ComingSoon extends StatelessWidget {
-  const _ComingSoon();
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: ConstrainedBox(
-          constraints: const BoxConstraints(maxWidth: 420),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.construction_outlined, size: 40, color: p.textMuted),
-              const SizedBox(height: 12),
-              Text(
-                'Coming in the next update',
-                textAlign: TextAlign.center,
-                style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
-              ),
-            ],
           ),
         ),
       ),

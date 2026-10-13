@@ -1,6 +1,8 @@
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
+import '../../../shared/widgets/notice.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../events/domain/event.dart';
@@ -221,3 +223,52 @@ class AdminGridTable<T> extends StatelessWidget {
   }
 }
 
+
+/// "Label  value  [copy]" lines for a details window (UI_PATTERNS: details
+/// window for long records). Empty values are left out.
+class AdminDetailRows extends StatelessWidget {
+  const AdminDetailRows({super.key, required this.rows, this.labelWidth = 110});
+
+  /// (label, value, copy button).
+  final List<(String, String?, bool)> rows;
+  final double labelWidth;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        for (final (label, value, copy) in rows)
+          if (value != null && value.isNotEmpty)
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 4),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  SizedBox(
+                    width: labelWidth,
+                    child: Text(label, style: AppTextStyles.bodySmall.copyWith(color: p.textMuted)),
+                  ),
+                  Expanded(
+                    child: Text(value, style: AppTextStyles.bodyMedium.copyWith(color: p.textPrimary)),
+                  ),
+                  if (copy)
+                    IconButton(
+                      tooltip: 'Copy $label',
+                      icon: const Icon(Icons.copy, size: 16),
+                      visualDensity: VisualDensity.compact,
+                      padding: EdgeInsets.zero,
+                      constraints: const BoxConstraints(minWidth: 28, minHeight: 20),
+                      onPressed: () async {
+                        await Clipboard.setData(ClipboardData(text: value));
+                        if (context.mounted) showNotice(context, '$label copied', kind: NoticeKind.success);
+                      },
+                    ),
+                ],
+              ),
+            ),
+      ],
+    );
+  }
+}
