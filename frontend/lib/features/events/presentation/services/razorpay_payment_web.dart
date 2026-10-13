@@ -69,13 +69,26 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
     );
   }).toJS;
 
-  // Dismissed modal (user pressed ESC / closed overlay) => cancellation.
+  // The last failure Razorpay reported while its window stayed open. A
+  // failed payment does NOT end the checkout: Razorpay keeps the window
+  // open so the person can try again, and a retry there can still succeed
+  // (the success handler above). So a failure is only remembered here, and
+  // reported if the window is then closed without a success.
+  String? lastFailure;
+
+  // Window closed (ESC / close button). After a failure: that failure.
+  // Otherwise: a cancellation.
   final modal = JSObject();
   modal['ondismiss'] = ((JSAny? _) {
     if (completer.isCompleted) return;
-    completer.completeError(
-      const RazorpayCheckoutCancelledException('Payment was cancelled.'),
-    );
+    final failure = lastFailure;
+    if (failure != null && !failure.toLowerCase().contains('cancel')) {
+      completer.completeError(RazorpayCheckoutFailureException(failure));
+    } else {
+      completer.completeError(
+        const RazorpayCheckoutCancelledException('Payment was cancelled.'),
+      );
+    }
   }).toJS;
   optionsObj['modal'] = modal;
 
@@ -93,7 +106,9 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
   }
 
   // Failure: Razorpay emits `payment.failed` with
-  // {error: {code, description, source, step, reason, metadata}}.
+  // {error: {code, description, source, step, reason, metadata}} and keeps
+  // its window open for another try. Remember it; don't finish yet (see
+  // lastFailure above).
   instance.callMethodVarArgs<JSAny?>(
     'on'.toJS,
     <JSAny?>[
@@ -108,20 +123,9 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
         final message = description.isEmpty
             ? reason
             : (reason.isEmpty ? description : '$description ($reason)');
-        final cancelled = message.toLowerCase().contains('cancel');
-        if (cancelled) {
-          completer.completeError(
-            const RazorpayCheckoutCancelledException('Payment was cancelled.'),
-          );
-        } else {
-          completer.completeError(
-            RazorpayCheckoutFailureException(
-              message.trim().isEmpty
-                  ? 'Payment failed. Please try again.'
-                  : message.trim(),
-            ),
-          );
-        }
+        lastFailure = message.trim().isEmpty
+            ? 'Payment failed. Please try again.'
+            : message.trim();
       }).toJS,
     ],
   );
