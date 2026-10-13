@@ -2,6 +2,8 @@ import 'package:dio/dio.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'audit_api.dart';
+
 int _int(Object? v) => v is int ? v : (v is num ? v.toInt() : int.tryParse('$v') ?? 0);
 double _num(Object? v) => v is num ? v.toDouble() : double.tryParse('$v') ?? 0;
 String? _text(Object? v) {
@@ -28,6 +30,7 @@ class AdminOrder {
     this.email,
     this.registrationNumber,
     this.paidAt,
+    this.providerRefs = const [],
   });
 
   final String orderNumber;
@@ -50,7 +53,16 @@ class AdminOrder {
   /// Pending for over 30 minutes.
   final bool stuck;
 
+  /// Razorpay ids for this order (order_…, pay_…, rfnd_…), for search.
+  final List<String> providerRefs;
+
   String get displayName => fullname ?? email ?? registrationNumber ?? orderNumber;
+
+  /// What the Orders search matches: name, email, numbers, event, Razorpay ids.
+  String get searchText => [fullname, email, registrationNumber, orderNumber, eventTitle, ...providerRefs]
+      .whereType<String>()
+      .join(' ')
+      .toLowerCase();
 
   factory AdminOrder.fromJson(Map<String, dynamic> j) => AdminOrder(
         orderNumber: j['public_order_number']?.toString() ?? '',
@@ -66,7 +78,56 @@ class AdminOrder {
         createdAt: _date(j['created_at']) ?? DateTime.fromMillisecondsSinceEpoch(0),
         paidAt: _date(j['paid_at']),
         stuck: j['stuck'] == true,
+        providerRefs: [for (final r in j['provider_refs'] as List<dynamic>? ?? const []) r.toString()],
       );
+}
+
+/// One payment try on an order (order details window).
+@immutable
+class OrderAttempt {
+  const OrderAttempt({
+    required this.number,
+    required this.status,
+    this.method,
+    this.instrument,
+    this.failureText,
+    this.orderRef,
+    this.paymentRef,
+    this.bankReference,
+  });
+
+  final int number;
+  final String status;
+  final String? method;
+  final String? instrument;
+  final String? failureText;
+
+  /// Razorpay order_… and pay_… ids.
+  final String? orderRef;
+  final String? paymentRef;
+  final String? bankReference;
+
+  factory OrderAttempt.fromJson(Map<String, dynamic> j) => OrderAttempt(
+        number: _int(j['attempt_number']),
+        status: j['status']?.toString() ?? '',
+        method: _text(j['payment_method']),
+        instrument: _text(j['payment_instrument']),
+        failureText: _text(j['failure_text']),
+        orderRef: _text(j['gateway_order_ref']),
+        paymentRef: _text(j['gateway_payment_ref']),
+        bankReference: _text(j['bank_reference']),
+      );
+}
+
+/// An order's payment tries, refunds and history
+/// (`GET /api/v1/admin/payments/orders/{order number}`).
+@immutable
+class OrderDetails {
+  const OrderDetails({required this.attempts, required this.refunds, required this.timeline});
+
+  final List<OrderAttempt> attempts;
+  final List<AdminRefund> refunds;
+  final List<AuditEntry> timeline;
 }
 
 /// One refund (`GET /api/v1/admin/payments/refunds`).
@@ -273,6 +334,25 @@ class PaymentsApi {
 
   Future<List<AdminOrder>> orders(String token) =>
       _allPages('/api/v1/admin/payments/orders', 'orders', token, AdminOrder.fromJson);
+
+  Future<OrderDetails> orderDetails(String token, String orderNumber) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/admin/payments/orders/${Uri.encodeComponent(orderNumber)}',
+      options: _auth(token),
+    );
+    final data = response.data ?? const <String, dynamic>{};
+    final order = data['order'] as Map<String, dynamic>? ?? const {};
+    List<Map<String, dynamic>> list(String key) =>
+        (data[key] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>().toList();
+    return OrderDetails(
+      attempts: [for (final a in list('attempts')) OrderAttempt.fromJson(a)],
+      refunds: [
+        for (final r in list('refunds'))
+          AdminRefund.fromJson({...r, 'event_id': order['event_id'], 'event_title': order['event_title']}),
+      ],
+      timeline: [for (final t in list('timeline')) AuditEntry.fromJson(t)],
+    );
+  }
 
   Future<List<AdminRefund>> refunds(String token) =>
       _allPages('/api/v1/admin/payments/refunds', 'refunds', token, AdminRefund.fromJson);

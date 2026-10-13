@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.database import get_pool
 from app.middleware.auth import get_current_user
 from app.services.access import load_access
+from app.api.admin_audit import ORDER_TIMELINE_SQL, format_rows
 from app.services.refund_service import REASON_ADMIN
 
 router = APIRouter(prefix="/api/v1/admin/payments", tags=["admin"])
@@ -62,7 +63,12 @@ async def list_orders(
                    o.registration_id, r.registration_number,
                    r.fullname_snapshot AS fullname, r.email,
                    o.final_amount, o.amount_paid, o.currency, o.status,
-                   o.payment_mode, o.gateway, o.created_at, o.paid_at, o.expires_at
+                   o.payment_mode, o.gateway, o.created_at, o.paid_at, o.expires_at,
+                   ARRAY(SELECT v FROM (
+                       SELECT a.gateway_order_ref AS v FROM payment_attempts a WHERE a.order_id = o.id
+                       UNION SELECT a.gateway_payment_ref FROM payment_attempts a WHERE a.order_id = o.id
+                       UNION SELECT f.provider_refund_id FROM payment_refunds f WHERE f.payment_order_id = o.id
+                   ) refs WHERE v IS NOT NULL) AS provider_refs
             FROM payment_orders o
             JOIN events e ON e.event_id = o.event_id
             LEFT JOIN registrations r ON r.registration_id = o.registration_id
@@ -83,6 +89,67 @@ async def list_orders(
         orders.append(d)
     return {"orders": orders, "total": total, "page": page, "per_page": per_page}
 
+
+
+@router.get("/orders/{order_number}")
+async def order_details(
+    order_number: str,
+    scope: Optional[List[int]] = Depends(payment_list_scope),
+) -> Dict[str, Any]:
+    """One order: its facts, payment tries, refunds and history (step 10b)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        order = await conn.fetchrow(
+            f"""
+            SELECT o.id, o.public_order_number, o.event_id, e.title AS event_title,
+                   o.registration_id, r.registration_number, r.fullname_snapshot AS fullname, r.email,
+                   o.final_amount, o.amount_paid, o.status, o.payment_mode, o.created_at, o.paid_at
+            FROM payment_orders o
+            JOIN events e ON e.event_id = o.event_id
+            LEFT JOIN registrations r ON r.registration_id = o.registration_id
+            WHERE {_SCOPE} AND o.public_order_number = $2::text
+            """,
+            scope, order_number,
+        )
+        if order is None:
+            raise HTTPException(status_code=404, detail="order_not_found")
+        attempts = await conn.fetch(
+            """
+            SELECT attempt_number, status, payment_method, payment_instrument, failure_reason,
+                   gateway_order_ref, gateway_payment_ref, bank_reference, provider_fee,
+                   initiated_at, captured_at, failed_at, cancelled_at
+            FROM payment_attempts WHERE order_id = $1::bigint ORDER BY attempt_number
+            """,
+            order["id"],
+        )
+        refunds = await conn.fetch(
+            """
+            SELECT public_refund_number, status, amount, failure_reason, provider_refund_id,
+                   bank_reference, speed_processed, attempt_count, requested_at, finalized_at
+            FROM payment_refunds WHERE payment_order_id = $1::bigint ORDER BY requested_at
+            """,
+            order["id"],
+        )
+        history = await conn.fetch(ORDER_TIMELINE_SQL, order["id"], order["registration_id"])
+        timeline = await format_rows(conn, history)
+
+    d = dict(order)
+    d.pop("id")
+    d["final_amount"] = _money(d["final_amount"])
+    d["amount_paid"] = _money(d["amount_paid"])
+    tries = []
+    for a in attempts:
+        t = dict(a)
+        t["provider_fee"] = float(t["provider_fee"]) if t["provider_fee"] is not None else None
+        t["failure_text"] = (t["failure_reason"] or "").replace("_", " ") or None
+        tries.append(t)
+    refs = []
+    for f in refunds:
+        x = dict(f)
+        x["amount"] = _money(x["amount"])
+        x["reason_text"] = REASON_ADMIN.get(x["failure_reason"] or "") if x["failure_reason"] else None
+        refs.append(x)
+    return {"order": d, "attempts": tries, "refunds": refs, "timeline": timeline}
 
 @router.get("/refunds")
 async def list_refunds(

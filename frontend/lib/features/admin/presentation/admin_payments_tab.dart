@@ -18,6 +18,7 @@ import '../../events/domain/event.dart';
 import '../../events/presentation/screens/manage_events_screen.dart' show showEventFormDialog;
 import '../data/payments_api.dart';
 import '../domain/registration_filters.dart';
+import 'admin_audit_tab.dart' show AuditTimeline;
 import 'admin_widgets.dart';
 
 enum _View {
@@ -362,6 +363,18 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     await _load();
   }
 
+  /// One order: its facts, payment tries, refunds (with Razorpay ids to
+  /// copy) and its history, oldest first.
+  Future<void> _showOrderDetails(AdminOrder o) async {
+    final token = _token;
+    if (token == null) return;
+    final details = ref.read(paymentsApiProvider).orderDetails(token, o.orderNumber);
+    await showDialog<void>(
+      context: context,
+      builder: (context) => _OrderDetailsDialog(order: o, details: details),
+    );
+  }
+
   /// Everything about one refund, with copy buttons on the references and
   /// Retry now when allowed. Opened by tapping a row.
   Future<void> _showRefundDetails(AdminRefund r) async {
@@ -383,10 +396,15 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
 
   List<AdminOrder> get _orderRows {
     final sort = _sorts[_View.orders]!;
+    // Search also matches email, registration number and Razorpay ids,
+    // which aren't columns.
+    final q = _search.text.trim().toLowerCase();
     return applyGrid(
-      [for (final o in _orders) if (_isAll || o.eventId == _event) o],
+      [
+        for (final o in _orders)
+          if ((_isAll || o.eventId == _event) && (q.isEmpty || o.searchText.contains(q))) o,
+      ],
       _orderColumns,
-      search: _search.text,
       filters: _filters,
       sortId: sort.$1,
       ascending: sort.$2,
@@ -482,7 +500,11 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           controller: _search,
           decoration: InputDecoration(
             prefixIcon: const Icon(Icons.search, size: 20),
-            hintText: _view == _View.pricing ? 'Search events…' : 'Search name, email or number…',
+            hintText: switch (_view) {
+              _View.pricing => 'Search events…',
+              _View.orders => 'Search name, email, number or Razorpay id…',
+              _View.refunds => 'Search name, email or number…',
+            },
             isDense: true,
             contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
@@ -623,6 +645,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                 AdminGridTable<AdminOrder>(
                   rows: rows,
                   columns: _orderColumns,
+                  onRowTap: _showOrderDetails,
                   sortId: sort.$1,
                   ascending: sort.$2,
                   onSort: _sortBy,
@@ -941,6 +964,98 @@ class _RefundDetailsDialog extends StatelessWidget {
           child: const Text('Close'),
         ),
       ],
+    );
+  }
+}
+
+class _OrderDetailsDialog extends StatelessWidget {
+  const _OrderDetailsDialog({required this.order, required this.details});
+
+  final AdminOrder order;
+  final Future<OrderDetails> details;
+
+  @override
+  Widget build(BuildContext context) {
+    final o = order;
+    final p = context.palette;
+    Widget heading(String text) => Padding(
+          padding: const EdgeInsets.only(top: 16, bottom: 4),
+          child: Text(text, style: AppTextStyles.titleSmall.copyWith(color: p.textPrimary)),
+        );
+    return AlertDialog(
+      title: const Text('Order details'),
+      content: SizedBox(
+        width: 560,
+        child: SingleChildScrollView(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              AdminDetailRows(rows: [
+                ('Name', o.fullname, false),
+                ('Email', o.email, true),
+                ('Event', o.eventTitle, false),
+                ('Amount', _money(o.amount), false),
+                ('Status', o.stuck ? 'Pending · stuck' : (_orderStatus[o.status] ?? o.status), false),
+                ('Mode', _modeLabel(o.mode), false),
+                ('Order #', o.orderNumber, true),
+                ('Registration', o.registrationNumber, true),
+              ]),
+              FutureBuilder<OrderDetails>(
+                future: details,
+                builder: (context, snap) {
+                  if (snap.hasError) {
+                    return Padding(
+                      padding: const EdgeInsets.only(top: 16),
+                      child: Text(
+                        apiErrorMessage(snap.error!, action: 'load this order\'s history'),
+                        style: AppTextStyles.bodySmall.copyWith(color: p.error),
+                      ),
+                    );
+                  }
+                  final d = snap.data;
+                  if (d == null) {
+                    return const Padding(padding: EdgeInsets.all(24), child: Center(child: CircularProgressIndicator()));
+                  }
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      for (final a in d.attempts) ...[
+                        heading('Payment try ${a.number}'),
+                        AdminDetailRows(rows: [
+                          ('Status', a.status.replaceAll('_', ' '), false),
+                          ('Method', a.method == null ? null : [a.method, a.instrument].whereType<String>().join(' · '), false),
+                          ('Why it failed', a.failureText, false),
+                          ('Razorpay order id', a.orderRef, true),
+                          ('Razorpay payment id', a.paymentRef, true),
+                          ('Bank ref', a.bankReference, true),
+                        ]),
+                      ],
+                      for (final r in d.refunds) ...[
+                        heading('Refund ${r.refundNumber}'),
+                        AdminDetailRows(rows: [
+                          ('Status', _refundStatus[r.status] ?? r.status, false),
+                          ('Amount', _money(r.amount), false),
+                          ('Reason', r.reasonText ?? r.failureReason, false),
+                          ('Tries', '${r.attemptCount}', false),
+                          ('Razorpay refund id', r.providerRef, true),
+                          ('Bank ref', r.bankReference, true),
+                        ]),
+                      ],
+                      heading('History'),
+                      if (d.timeline.isEmpty)
+                        Text('Nothing recorded yet.', style: AppTextStyles.bodySmall.copyWith(color: p.textMuted))
+                      else
+                        AuditTimeline(entries: d.timeline),
+                    ],
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('Close'))],
     );
   }
 }
