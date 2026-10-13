@@ -472,34 +472,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
-        decoration: BoxDecoration(
-          color: isActive ? context.palette.primary : Colors.transparent,
-          border: Border.all(
-            color: isActive
-                ? context.palette.primary
-                : Theme.of(context).colorScheme.outlineVariant,
-            width: 2,
-          ),
-          borderRadius: BorderRadius.circular(8),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.w600,
-            color: isActive ? context.palette.onPrimary : null,
-            fontSize: 13,
-          ),
-        ),
-      ),
-    );
-  }
-
   Widget _buildDatePickerButton({required String label, required VoidCallback onTap}) {
     return OutlinedButton.icon(
       onPressed: onTap,
@@ -1287,34 +1259,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-) {
-    return GestureDetector(
-      onTap: onTap,
-      child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
-        decoration: BoxDecoration(
-          color: isActive ? context.palette.primary : Colors.transparent,
-          border: Border.all(
-            color: isActive
-                ? context.palette.primary
-                : context.palette.border,
-            width: 1.5,
-          ),
-          borderRadius: BorderRadius.circular(6),
-        ),
-        child: Text(
-          label,
-          textAlign: TextAlign.center,
-          style: TextStyle(
-            fontWeight: FontWeight.w500,
-            color: isActive ? context.palette.onPrimary : context.palette.textPrimary,
-            fontSize: 12,
           ),
         ),
       ),
