@@ -125,9 +125,9 @@ class AuditApi {
       queryParameters: {
         'page': page,
         'page_size': pageSize,
-        if (category != null) 'category': category,
-        if (who != null) 'who': who,
-        if (eventId != null) 'event_id': eventId,
+        'category': ?category,
+        'who': ?who,
+        'event_id': ?eventId,
         if (from != null)
           'from': '${from.year}-${from.month.toString().padLeft(2, '0')}-${from.day.toString().padLeft(2, '0')}',
         if (q != null && q.trim().isNotEmpty) 'q': q.trim(),

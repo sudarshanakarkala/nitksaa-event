@@ -227,9 +227,9 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
       FilterChipSection(
         label: label,
         options: options,
-        selected: {if (selected != null) selected},
+        selected: {?selected},
         onChanged: (picked) {
-          final added = picked.difference({if (selected != null) selected});
+          final added = picked.difference({?selected});
           onChanged(added.isEmpty ? null : added.first);
         },
       );
