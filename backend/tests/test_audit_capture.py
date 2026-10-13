@@ -273,6 +273,9 @@ def test_close_registration_counts_as_closed_when_the_admins_clock_runs_ahead(cl
                      headers=_bearer(_FIXTURE_ADMIN))
     assert r.status_code == 200, r.text
     assert _event_audit("event_updated", event_id)["registration"] == "closed"
+    # Saved with the server's clock (not 5 s ahead), so it is closed already.
+    saved = datetime.fromisoformat(r.json()["registration_closes_at"])
+    assert saved <= datetime.now(timezone.utc)
 
 
 def test_a_closing_date_further_ahead_is_not_a_close(client):
