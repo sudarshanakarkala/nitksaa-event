@@ -252,22 +252,91 @@ async def cancel_registration(
         )
         return _view(registration_id, updated)
 
-    internal_status, finalized = _NORMALIZED_TO_INTERNAL.get(result.status, ("processing", False))
+    if result.status not in _NORMALIZED_TO_INTERNAL:
+        # The provider accepted the call but didn't say how it went:
+        # treat as in progress, as before.
+        from dataclasses import replace
+        result = replace(result, status=NormalizedRefundStatus.REFUND_PENDING)
     async with pool.acquire() as conn:
-        updated = await RefundRepository(conn).mark(
-            refund_row["id"],
-            status=internal_status,
-            provider_refund_id=result.provider_refund_id or None,
-            failure_reason=result.failure_reason if internal_status == "failed" else None,
-            finalized=finalized,
+        updated = await apply_refund_result(conn, refund_row, result, source="refund_call")
+    return _view(registration_id, updated)
+
+
+_STATUS_RANK = {"pending": 0, "processing": 0, "failed": 1, "processed": 2}
+
+_REFUND_AUDIT_TYPE = {"processed": "payment_refund_processed", "failed": "payment_refund_failed"}
+
+
+async def apply_refund_result(
+    conn: asyncpg.Connection,
+    refund_row: asyncpg.Record,
+    result,
+    *,
+    source: str,
+    provider_event: Optional[str] = None,
+) -> asyncpg.Record:
+    """Apply what the provider says about a refund (the refund call's own
+    answer, a status check, or a refund webhook) to our row. One place, so
+    the status, the bank reference (ARN) and the audit entry are handled the
+    same way whichever way the news arrives.
+
+    A refund never moves backwards: a late "pending" after "processed" (or
+    after "failed") is ignored for the status, though a new bank reference
+    is still kept. Writes an audit entry only when something changed."""
+    async with conn.transaction():
+        row = await conn.fetchrow(
+            "SELECT * FROM payment_refunds WHERE id = $1 FOR UPDATE", refund_row["id"]
         )
+        current = row["status"]
+        mapped = _NORMALIZED_TO_INTERNAL.get(result.status)
+        new_status, finalized = mapped if mapped else (current, False)
+        if _STATUS_RANK.get(new_status, 0) < _STATUS_RANK.get(current, 0):
+            new_status, finalized = current, False
+        if new_status == "failed":
+            failure_reason = result.failure_reason or row["failure_reason"] or "provider_failed"
+        elif new_status == "processed":
+            failure_reason = None
+        else:
+            failure_reason = row["failure_reason"]
+
+        bank_ref = getattr(result, "bank_reference", None)
+        speed = getattr(result, "speed_processed", None)
+        changed = (
+            new_status != current
+            or (bank_ref and bank_ref != (row["bank_reference"] if "bank_reference" in row else None))
+            or (result.provider_refund_id and not row["provider_refund_id"])
+        )
+        if not changed:
+            return row
+        updated = await RefundRepository(conn).mark(
+            row["id"],
+            status=new_status,
+            provider_refund_id=result.provider_refund_id or None,
+            failure_reason=failure_reason,
+            finalized=finalized,
+            bank_reference=bank_ref,
+            speed_processed=speed,
+        )
+
+    context = {
+        "status": new_status,
+        "source": source,
+        "order_id": updated["payment_order_id"],
+        "provider": updated["gateway"],
+        "provider_event": provider_event,
+        "provider_refund_id": updated["provider_refund_id"],
+        "bank_reference": updated["bank_reference"] if "bank_reference" in updated else None,
+        "speed": speed,
+        "amount": str(updated["amount"]),
+        "reason": failure_reason if new_status == "failed" else None,
+    }
     await audit_service.emit(
         actor_uid="system",
-        event_type="payment_refund_processed" if internal_status == "processed" else "payment_refund_updated",
-        entity_type="payment_refund", entity_id=refund_row["id"],
-        context={"status": internal_status},
+        event_type=_REFUND_AUDIT_TYPE.get(new_status, "payment_refund_updated"),
+        entity_type="payment_refund", entity_id=updated["id"],
+        context={k: v for k, v in context.items() if v is not None},
     )
-    return _view(registration_id, updated)
+    return updated
 
 
 async def _refresh_and_view(
@@ -291,13 +360,7 @@ async def _refresh_and_view(
         except GatewayError:
             result = None
         if result is not None:
-            internal_status, finalized = _NORMALIZED_TO_INTERNAL.get(
-                result.status, (refund["status"], False)
-            )
-            if internal_status != refund["status"]:
-                refund = await RefundRepository(conn).mark(
-                    refund["id"], status=internal_status, finalized=finalized
-                )
+            refund = await apply_refund_result(conn, refund, result, source="status_check")
     return _view(registration_id, refund)
 
 

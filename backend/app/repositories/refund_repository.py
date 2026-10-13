@@ -101,6 +101,8 @@ class RefundRepository:
         provider_refund_id: Optional[str] = None,
         failure_reason: Optional[str] = None,
         finalized: bool = False,
+        bank_reference: Optional[str] = None,
+        speed_processed: Optional[str] = None,
     ) -> asyncpg.Record:
         return await self.conn.fetchrow(
             """
@@ -109,11 +111,34 @@ class RefundRepository:
                 provider_refund_id = COALESCE($3, provider_refund_id),
                 failure_reason = $4,
                 updated_at = now(),
-                finalized_at = CASE WHEN $5 THEN now() ELSE finalized_at END
+                finalized_at = CASE WHEN $5 THEN COALESCE(finalized_at, now()) ELSE finalized_at END,
+                bank_reference = COALESCE($6::text, bank_reference),
+                speed_processed = COALESCE($7::text, speed_processed)
             WHERE id = $1
             RETURNING *
             """,
             refund_id, status, provider_refund_id, failure_reason, finalized,
+            bank_reference, speed_processed,
+        )
+
+    async def get_by_provider_refund_id(self, gateway: str, provider_refund_id: str) -> Optional[asyncpg.Record]:
+        return await self.conn.fetchrow(
+            "SELECT * FROM payment_refunds WHERE gateway = $1 AND provider_refund_id = $2 "
+            "ORDER BY id DESC LIMIT 1",
+            gateway, provider_refund_id,
+        )
+
+    async def get_awaiting_provider_id(self, gateway: str, provider_payment_id: str) -> Optional[asyncpg.Record]:
+        """A refund we created whose provider id we haven't stored yet — a
+        refund webhook can arrive before the refund call returns."""
+        return await self.conn.fetchrow(
+            """
+            SELECT * FROM payment_refunds
+            WHERE gateway = $1 AND provider_payment_id = $2
+              AND provider_refund_id IS NULL AND status IN ('pending', 'processing')
+            ORDER BY requested_at DESC LIMIT 1
+            """,
+            gateway, provider_payment_id,
         )
 
     async def list_all(self, status_filter: Optional[str] = None) -> List[asyncpg.Record]:
