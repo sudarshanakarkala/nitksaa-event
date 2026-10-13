@@ -2,13 +2,11 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter, TextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/api_error_message.dart';
@@ -534,9 +532,6 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
 }
 
 // ── Timezone options for event creation ────────────────────────────────────
-List<String> _getAvailableTimezones() {
-  return tz.timeZoneDatabase.locations.keys.toList()..sort();
-}
 
 // Common timezones for the simple dropdown
 List<String> _getCommonTimezones() {
@@ -881,7 +876,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.event != null;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     
     return Dialog(
       child: SizedBox(
@@ -3159,118 +3153,6 @@ class _PickerField extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: context.palette.success.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: context.palette.success.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label.replaceAll('_', ' '),
-        style: TextStyle(
-          color: context.palette.success,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-}
-
-class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.isDark, required this.auth});
-
-  final bool isDark;
-  final AuthController auth;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: 240,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: context.palette.background,
-        border: Border(
-          right: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.calendar_today_outlined, color: context.palette.primary),
-              SizedBox(width: 8),
-              Text(
-                'NITKSAA',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.serif,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: context.palette.primary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          _SidebarItem(
-            icon: Icons.calendar_month,
-            label: 'Events',
-            active: false,
-            onTap: () => context.go(AppRoutes.home),
-          ),
-          _SidebarItem(
-            icon: Icons.bookmark,
-            label: 'My Events',
-            active: false,
-            onTap: () => context.go(AppRoutes.myEvents),
-          ),
-          const _SidebarItem(
-            icon: Icons.admin_panel_settings,
-            label: 'Manage Events',
-            active: true,
-          ),
-          const Spacer(),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: context.palette.primary,
-                child: Text(
-                  (auth.session?.fullname ?? 'U').substring(0, 1).toUpperCase(),
-                  style: TextStyle(
-                    color: context.palette.onPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  auth.session?.fullname ?? 'Admin User',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
 class _SidebarItem extends StatelessWidget {
   const _SidebarItem({
     required this.icon,
@@ -3338,20 +3220,3 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.event_busy, size: 48),
-          SizedBox(height: 12),
-          Text('No upcoming events to manage.'),
-        ],
-      ),
-    );
-  }
-}

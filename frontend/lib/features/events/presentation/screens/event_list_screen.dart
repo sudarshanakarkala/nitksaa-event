@@ -188,24 +188,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  void _showFilterDialog() {
-    // Left for backward compatibility; prefer using the end-drawer via
-    // `_showFilterBottomSheet` on large screens. Fallback to dialog for
-    // contexts where a drawer isn't available.
-    showDialog(
-      context: context,
-      builder: (context) => Dialog(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: SizedBox(
-            width: 500,
-            child: _buildFilterPanel(),
-          ),
-        ),
-      ),
-    );
-  }
-
   /// Filter section label, website `.filter-label`: small uppercase, 70% gold.
   Widget _filterLabel(String text) => Text(
         text.toUpperCase(),
@@ -261,8 +243,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     final state = rf.watch(eventsProvider);
     final hasActiveFilters = state.dateRangeStart != null ||
       state.dateRangeEnd != null ||
-      !((state.filterModes?['physical'] ?? true) && (state.filterModes?['virtual'] ?? true)) ||
-      !((state.filterRegistrationStatus?['open'] ?? true) && (state.filterRegistrationStatus?['closed'] ?? true)) ||
+      !((state.filterModes['physical'] ?? true) && (state.filterModes['virtual'] ?? true)) ||
+      !((state.filterRegistrationStatus['open'] ?? true) && (state.filterRegistrationStatus['closed'] ?? true)) ||
       !((state.filterPrice['free'] ?? true) && (state.filterPrice['paid'] ?? true)) ||
       state.searchQuery.isNotEmpty ||
       state.timeline != null;
@@ -414,10 +396,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           Wrap(spacing: 6, runSpacing: 6, children: [
           _filterChip(
             'Physical',
-            state.filterModes?['physical'] ?? true,
+            state.filterModes['physical'] ?? true,
             (val) {
               if (val == null) return;
-              final current = state.filterModes?['physical'] ?? true;
+              final current = state.filterModes['physical'] ?? true;
               if (val != current) {
                 rf.read(eventsProvider.notifier).toggleFilterMode('physical');
               }
@@ -425,10 +407,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           ),
           _filterChip(
             'Virtual',
-            state.filterModes?['virtual'] ?? true,
+            state.filterModes['virtual'] ?? true,
             (val) {
               if (val == null) return;
-              final current = state.filterModes?['virtual'] ?? true;
+              final current = state.filterModes['virtual'] ?? true;
               if (val != current) {
                 rf.read(eventsProvider.notifier).toggleFilterMode('virtual');
               }
@@ -443,10 +425,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           Wrap(spacing: 6, runSpacing: 6, children: [
           _filterChip(
             'Open',
-            state.filterRegistrationStatus?['open'] ?? true,
+            state.filterRegistrationStatus['open'] ?? true,
             (val) {
               if (val == null) return;
-              final current = state.filterRegistrationStatus?['open'] ?? true;
+              final current = state.filterRegistrationStatus['open'] ?? true;
               if (val != current) {
                 rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus('open');
               }
@@ -454,10 +436,10 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           ),
           _filterChip(
             'Closed',
-            state.filterRegistrationStatus?['closed'] ?? true,
+            state.filterRegistrationStatus['closed'] ?? true,
             (val) {
               if (val == null) return;
-              final current = state.filterRegistrationStatus?['closed'] ?? true;
+              final current = state.filterRegistrationStatus['closed'] ?? true;
               if (val != current) {
                 rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus('closed');
               }
@@ -490,11 +472,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  Widget _buildFilterToggle({
-    required String label,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
+) {
     return GestureDetector(
       onTap: onTap,
       child: Container(
@@ -1315,11 +1293,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  Widget _buildCupertinoFilterToggle({
-    required String label,
-    required bool isActive,
-    required VoidCallback onTap,
-  }) {
+) {
     return GestureDetector(
       onTap: onTap,
       child: Container(

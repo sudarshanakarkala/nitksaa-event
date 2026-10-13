@@ -347,14 +347,34 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       }
     } on RazorpayCheckoutCancelledException {
       _showMessage('Payment cancelled. Your seat is held for a short time.', kind: NoticeKind.warning);
+      await _backToEvent();
     } on RazorpayCheckoutFailureException catch (e) {
       _showMessage('Payment could not be completed: ${e.message}', kind: NoticeKind.error);
+      await _backToEvent();
     } on DioException catch (e) {
       _showMessage('Payment could not be completed: ${_apiError(e)}', kind: NoticeKind.error);
     } catch (e) {
       _showMessage('Payment could not be completed: $e', kind: NoticeKind.error);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
+    }
+  }
+
+  /// After a cancelled or failed payment, go back to the event page, as a
+  /// successful one does: that's where the person sees where they stand
+  /// ("Complete payment"). The notice stays on screen across the move.
+  Future<void> _backToEvent() async {
+    try {
+      await ref.read(eventDetailProvider(widget.eventId).notifier).fetchEventDetails(widget.eventId);
+    } catch (_) {
+      // The event page loads itself anyway.
+    }
+    if (!mounted) return;
+    // Opened directly (e.g. after a refresh): there's no page to go back to.
+    if (context.canPop()) {
+      context.pop();
+    } else {
+      context.go('/events/${widget.eventId}');
     }
   }
 

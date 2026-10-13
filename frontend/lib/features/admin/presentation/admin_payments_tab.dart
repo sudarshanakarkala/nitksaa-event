@@ -294,6 +294,8 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           value: (r) => r.reasonText ?? r.failureReason,
         ),
         GridColumn(id: 'tries', label: 'Tries', kind: ColumnKind.number, value: (r) => r.attemptCount),
+        // The starting sort (newest first), so the arrow shows like on Orders.
+        GridColumn(id: 'requested', label: 'Requested', kind: ColumnKind.date, value: (r) => r.requestedAt),
         GridColumn(id: 'number', label: 'Refund ID', kind: ColumnKind.text, value: (r) => r.refundNumber),
         GridColumn(
           id: 'retry',

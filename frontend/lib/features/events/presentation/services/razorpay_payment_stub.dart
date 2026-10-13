@@ -9,6 +9,6 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
   RazorpayCheckoutOptions options,
 ) async {
   throw const RazorpayPlatformUnsupportedException(
-    'Payments are supported on Android, iOS, and Web only.',
+    'Payments are available on the website only.',
   );
 }

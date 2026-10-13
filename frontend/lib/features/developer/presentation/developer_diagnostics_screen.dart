@@ -16,8 +16,6 @@ import '../../../routes/app_routes.dart';
 import '../../../theme/theme_provider.dart';
 import '../../auth/services/auth_session_store.dart';
 import '../../auth/services/google_sign_in_initializer.dart';
-import '../../../widgets/shared/shared_screen.dart';
-import '../../../widgets/shared/status_row.dart';
 
 class DeveloperDiagnosticsScreen extends ConsumerStatefulWidget {
   const DeveloperDiagnosticsScreen({super.key});
@@ -4358,16 +4356,6 @@ class _PerformanceDetail extends StatelessWidget {
 // ---------------------------------------------------------------------------
 // Helper widgets (unchanged from original file, kept for completeness)
 // ---------------------------------------------------------------------------
-
-class _SectionLabel extends StatelessWidget {
-  final String title;
-  const _SectionLabel({required this.title});
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 8),
-        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-      );
-}
 
 class _DebugToolsDetail extends StatefulWidget {
   const _DebugToolsDetail();

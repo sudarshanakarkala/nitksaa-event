@@ -1984,25 +1984,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     context.push('/events/${event.eventId}/checkout?notes=$notes');
   }
 
-  Future<void> _submitRegistration() async {
-    final success = await ref
-        .read(eventDetailProvider(widget.eventId).notifier)
-        .register(widget.eventId, _notesController.text);
-
-    if (mounted) {
-      if (success) {
-        showNotice(context, 'Registration confirmed successfully!', kind: NoticeKind.success);
-      } else {
-        final state = ref.read(eventDetailProvider(widget.eventId));
-        showNotice(
-          context,
-          'Registration failed: ${state.errorMessage ?? 'Unknown error'}',
-          kind: NoticeKind.error,
-        );
-      }
-    }
-  }
-
   // ==========================================
   // HELPER FORMATTERS
   // ==========================================
