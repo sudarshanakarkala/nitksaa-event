@@ -515,10 +515,14 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       'amount': finalAmount,
       'currency': 'INR',
       'requested_at': '2098-12-03T10:00:00Z',
-      'finalized_at': status == 'refund_pending' ? null : '2098-12-03T10:00:05Z',
+      'finalized_at': status == 'refund_pending' || status == 'refund_delayed'
+          ? null
+          : '2098-12-03T10:00:05Z',
       'safe_message': _safeMessages[status],
       'payment_mode': 'test',
       'real_money': false,
+      'payment_reference': 'pay_test$registrationId',
+      'bank_reference': status == 'refund_processed' ? 'ARN$registrationId' : null,
       'idempotency_key': key,
     };
   }
@@ -556,6 +560,11 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     'refund_processed':
         'Your cancellation is confirmed and the refund has been processed by '
         'the payment provider.',
+    'refund_delayed':
+        'Your registration is cancelled. Your refund couldn\'t be sent yet '
+        'because of a temporary issue with the payment provider. We\'re '
+        'retrying automatically and will email you as soon as it\'s on its '
+        'way. You don\'t need to do anything.',
     'refund_failed':
         'Your registration is cancelled, but the refund could not be '
         'completed automatically. Our team will follow up.',

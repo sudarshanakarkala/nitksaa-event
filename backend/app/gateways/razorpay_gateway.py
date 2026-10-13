@@ -35,6 +35,7 @@ from app.gateways.base import (
     GatewayCheckout,
     GatewayError,
     GatewayInitiationResult,
+    GatewayRefundRefusedError,
     GatewayWebhookUnparseableError,
     NormalizedGatewayEvent,
     NormalizedRefundResult,
@@ -42,6 +43,7 @@ from app.gateways.base import (
     NormalizedStatus,
     PaymentDetails,
     PaymentGateway,
+    RefundFailureReason,
 )
 
 GATEWAY_NAME = "razorpay"
@@ -167,6 +169,42 @@ def _sdk_base_url(api_base: str) -> str:
     return base[: -len("/v1")] if base.endswith("/v1") else base
 
 
+# Razorpay refund error text -> plain reason. Matched on lowercased text;
+# only the classification survives, never the text itself.
+_REFUND_ERROR_PATTERNS = (
+    (("balance",), RefundFailureReason.INSUFFICIENT_BALANCE),
+    (("older than", "6 months", "six months", "too old"), RefundFailureReason.PAYMENT_TOO_OLD),
+    (("fully refunded", "already been refunded", "already refunded"), RefundFailureReason.ALREADY_REFUNDED),
+    (("greater than", "exceed", "more than the", "invalid amount"), RefundFailureReason.AMOUNT_NOT_ALLOWED),
+    (("not been captured", "not captured", "only captured"), RefundFailureReason.PAYMENT_NOT_CAPTURED),
+)
+
+
+def _classify_refund_error(code: str, text: str) -> RefundFailureReason:
+    if code in ("SERVER_ERROR", "GATEWAY_ERROR", "TIMEOUT", "TRANSPORT_ERROR", "UNEXPECTED_RESPONSE"):
+        return RefundFailureReason.PROVIDER_UNAVAILABLE
+    lowered = (text or "").lower()
+    for needles, reason in _REFUND_ERROR_PATTERNS:
+        if any(n in lowered for n in needles):
+            return reason
+    return RefundFailureReason.DECLINED
+
+
+class RazorpayRefundRefusedError(RazorpayApiError, GatewayRefundRefusedError):
+    """payments.refund refused, with the reason classified. Same safe message
+    as RazorpayApiError (operation + fixed code), never the provider text."""
+
+    def __init__(self, code: str, reason: RefundFailureReason):
+        # Set the fields directly: with two error bases, RazorpayApiError's
+        # super().__init__ would land in GatewayRefundRefusedError.__init__
+        # with the message in place of the reason.
+        self.operation = "payments.refund"
+        self.status_code = None
+        self.code = code
+        self.reason = reason
+        GatewayError.__init__(self, f"razorpay payments.refund failed [{code}]")
+
+
 def _call(operation: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Dict[str, Any]:
     """Run one SDK resource call; translate every provider/transport failure
     into RazorpayApiError with a fixed code. The SDK's own exception text
@@ -174,10 +212,14 @@ def _call(operation: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> 
     error is raised outside the except block so it isn't chained into
     logged tracebacks either."""
     failure: Optional[str] = None
+    refusal: Optional[RefundFailureReason] = None
     try:
         result = fn(*args, **kwargs)
-    except BadRequestError:
+    except BadRequestError as exc:
         failure = "BAD_REQUEST_ERROR"
+        if operation == "payments.refund":
+            # Classify now, inside the handler; the text itself is dropped.
+            refusal = _classify_refund_error(failure, str(exc))
     except RazorpaySdkGatewayError:
         failure = "GATEWAY_ERROR"
     except ServerError:
@@ -188,6 +230,9 @@ def _call(operation: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> 
         # connection/TLS failures and non-JSON responses
         failure = "TRANSPORT_ERROR"
     if failure is not None:
+        if operation == "payments.refund":
+            raise RazorpayRefundRefusedError(
+                failure, refusal or _classify_refund_error(failure, ""))
         raise RazorpayApiError(operation, code=failure)
     if not isinstance(result, dict):  # the SDK returns '{}' (a str) for a 204
         raise RazorpayApiError(operation, code="UNEXPECTED_RESPONSE")
@@ -524,6 +569,21 @@ class RazorpayGateway(PaymentGateway):
             provider_refund_id, timeout=settings.razorpay_http_timeout_seconds,
         )
         return self._refund_to_result(data)
+
+    def list_refunds(
+        self, *, provider_payment_id: str, payment_mode: Optional[str] = None
+    ) -> list:
+        """Every refund the provider holds for a payment (ours or made in
+        the dashboard), so a retry never refunds twice."""
+        from app.config import get_settings
+
+        settings = get_settings()
+        client = _build_client(settings, payment_mode)
+        data = _call(
+            "payments.refunds", client.payment.fetch_multiple_refund,
+            provider_payment_id, timeout=settings.razorpay_http_timeout_seconds,
+        )
+        return [self._refund_to_result(item) for item in (data.get("items") or [])]
 
     @staticmethod
     def _refund_to_result(data: Dict[str, Any]) -> NormalizedRefundResult:

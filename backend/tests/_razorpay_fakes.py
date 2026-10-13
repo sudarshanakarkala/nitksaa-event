@@ -15,7 +15,7 @@ import json
 import uuid
 from typing import Any, Dict, List, Optional
 
-from razorpay.errors import ServerError
+from razorpay.errors import BadRequestError, ServerError
 from razorpay.utility.utility import Utility
 
 
@@ -33,6 +33,7 @@ STATE: Dict[str, Any] = {
     "payments_amount_override": None,  # force a mismatched amount (paise)
     "refund_status": "processed",   # what payment.refund / refund.fetch report
     "refund_raises": False,         # payment.refund raises the SDK's ServerError
+    "refund_refused_text": None,    # payment.refund raises BadRequestError with this text
     "orders_create_raises": False,  # order.create raises the SDK's ServerError
     "payments_empty": False,        # order.payments returns no items
     "payment_id": None,             # fixed id for the order.payments item (else random)
@@ -53,6 +54,7 @@ def reset() -> None:
         payments_amount_override=None,
         refund_status="processed",
         refund_raises=False,
+        refund_refused_text=None,
         orders_create_raises=False,
         payments_empty=False,
         payment_id=None,
@@ -106,11 +108,19 @@ class _Payment:
         _record("payment.refund", (payment_id,), data, kwargs)
         if STATE["refund_raises"]:
             raise ServerError(SDK_ERROR_TEXT)
+        if STATE["refund_refused_text"]:
+            raise BadRequestError(STATE["refund_refused_text"] + " — " + SDK_ERROR_TEXT)
         rid = _uid("rfnd")
         rec = {"id": rid, "payment_id": payment_id, "amount": int(data["amount"]),
                "currency": "INR", "status": STATE["refund_status"]}
         _REFUNDS[rid] = rec
         return rec
+
+
+    def fetch_multiple_refund(self, payment_id, data=None, **kwargs):
+        _record("payment.fetch_multiple_refund", (payment_id,), data, kwargs)
+        items = [r for r in _REFUNDS.values() if r.get("payment_id") == payment_id]
+        return {"entity": "collection", "count": len(items), "items": items}
 
 
 class _Refund:

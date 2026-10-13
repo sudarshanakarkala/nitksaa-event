@@ -388,6 +388,45 @@ def test_refund_provider_error_propagates_as_gateway_error():
                      idempotency_key="k", payment_mode="test")
 
 
+@pytest.mark.parametrize("text,reason", [
+    ("The balance in your account is insufficient to process this refund", "insufficient_balance"),
+    ("Payment is older than 6 months and cannot be refunded", "payment_too_old"),
+    ("The payment has been fully refunded already", "already_refunded"),
+    ("The refund amount provided is greater than amount captured", "amount_not_allowed"),
+    ("Something entirely new went wrong", "declined"),
+])
+def test_refund_refusal_is_classified_and_text_dropped(text, reason):
+    from app.gateways.base import GatewayRefundRefusedError
+    fakes.STATE["refund_refused_text"] = text
+    with pytest.raises(GatewayRefundRefusedError) as info:
+        _gw().refund(provider_payment_id="pay_1", amount_minor=100, currency="INR",
+                     idempotency_key="k", payment_mode="test")
+    assert info.value.reason.value == reason
+    # The provider's own text (which can hold card/contact data) never surfaces.
+    assert fakes.SDK_ERROR_TEXT not in str(info.value)
+    assert text not in str(info.value)
+
+
+def test_refund_outage_is_temporary():
+    from app.gateways.base import GatewayRefundRefusedError, TEMPORARY_REFUND_FAILURES
+    fakes.STATE["refund_raises"] = True
+    with pytest.raises(GatewayRefundRefusedError) as info:
+        _gw().refund(provider_payment_id="pay_1", amount_minor=100, currency="INR",
+                     idempotency_key="k", payment_mode="test")
+    assert info.value.reason.value == "provider_unavailable"
+    assert info.value.reason in TEMPORARY_REFUND_FAILURES
+
+
+def test_list_refunds_returns_what_the_provider_holds():
+    _gw().refund(provider_payment_id="pay_L", amount_minor=5000, currency="INR",
+                 idempotency_key="k1", payment_mode="test")
+    _gw().refund(provider_payment_id="pay_other", amount_minor=100, currency="INR",
+                 idempotency_key="k2", payment_mode="test")
+    found = _gw().list_refunds(provider_payment_id="pay_L", payment_mode="test")
+    assert [r.amount_minor for r in found] == [5000]
+    assert found[0].status.value == "REFUND_PROCESSED"
+
+
 def test_query_refund_mapping():
     fakes._REFUNDS["rfnd_q"] = {"id": "rfnd_q", "amount": 100, "currency": "INR", "status": "processed"}
     fakes.STATE["refund_status"] = "processed"

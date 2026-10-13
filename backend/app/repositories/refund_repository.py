@@ -4,7 +4,7 @@ The "one logical refund per order" guarantee is enforced by two database
 indexes, not by the checks here:
   * uq_payment_refunds_idempotency      (idempotency_key)
   * uq_payment_refunds_active_per_order  (payment_order_id) WHERE status in
-                                         ('pending','processing','processed')
+                                         ('pending','processing','processed','delayed')
 Application-level lookups are a fast path; the UniqueViolationError handler in
 refund_service is the real serialisation point (same pattern as
 payment_orders / payment_attempts).
@@ -60,7 +60,7 @@ class RefundRepository:
         return await self.conn.fetchrow(
             """
             SELECT * FROM payment_refunds
-            WHERE payment_order_id = $1 AND status IN ('pending','processing','processed')
+            WHERE payment_order_id = $1 AND status IN ('pending','processing','processed','delayed')
             ORDER BY requested_at DESC LIMIT 1
             """,
             payment_order_id,
@@ -135,7 +135,7 @@ class RefundRepository:
             """
             SELECT * FROM payment_refunds
             WHERE gateway = $1 AND provider_payment_id = $2
-              AND provider_refund_id IS NULL AND status IN ('pending', 'processing')
+              AND provider_refund_id IS NULL AND status IN ('pending', 'processing', 'delayed')
             ORDER BY requested_at DESC LIMIT 1
             """,
             gateway, provider_payment_id,

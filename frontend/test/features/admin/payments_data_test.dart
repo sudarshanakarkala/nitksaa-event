@@ -69,6 +69,39 @@ void main() {
     expect(r.failureReason, 'Gateway timeout');
   });
 
+  test('reads a delayed refund: reason in words, tries, references', () {
+    final r = AdminRefund.fromJson({
+      'public_refund_number': 'RF-4',
+      'event_id': 2,
+      'event_title': 'Dinner',
+      'amount': '100.00',
+      'status': 'delayed',
+      'payment_mode': 'test',
+      'failure_reason': 'insufficient_balance',
+      'reason_text': 'Razorpay balance too low to send the refund yet.',
+      'provider_payment_id': 'pay_abc',
+      'bank_reference': null,
+      'attempt_count': 2,
+      'can_retry': true,
+      'requested_at': '2026-10-12T05:00:00+00:00',
+    });
+    expect(r.status, 'delayed');
+    expect(r.reasonText, startsWith('Razorpay balance too low'));
+    expect(r.paymentRef, 'pay_abc');
+    expect(r.bankReference, isNull);
+    expect(r.attemptCount, 2);
+    expect(r.canRetry, isTrue);
+  });
+
+  test('older refund rows without the new fields still read', () {
+    final r = AdminRefund.fromJson({
+      'public_refund_number': 'RF-5', 'event_id': 1, 'amount': 1, 'status': 'processed',
+      'requested_at': '2026-10-12T05:00:00+00:00',
+    });
+    expect(r.attemptCount, 1);
+    expect(r.canRetry, isFalse);
+  });
+
   group('what the attendee pays', () {
     test('just the price', () => expect(_pricing().finalAmount, 1000));
     test('GST added on top', () => expect(_pricing(gst: true).finalAmount, 1180));

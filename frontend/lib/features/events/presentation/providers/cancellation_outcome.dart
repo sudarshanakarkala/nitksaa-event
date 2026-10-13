@@ -22,8 +22,13 @@ class CancellationOutcome {
     final message = switch (refund.status) {
       RefundStatus.pending ||
       RefundStatus.processed => '$cancelled Your refund has been initiated.',
-      // The backend's wording for a failed refund already says that the
-      // registration is cancelled.
+      // The backend's wording for a delayed or failed refund already says
+      // that the registration is cancelled.
+      RefundStatus.delayed =>
+        safeMessage.isNotEmpty
+            ? safeMessage
+            : '$cancelled Your refund is delayed. We\'re retrying '
+                  'automatically and will email you.',
       RefundStatus.failed =>
         safeMessage.isNotEmpty
             ? safeMessage

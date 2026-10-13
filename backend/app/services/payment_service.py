@@ -915,6 +915,10 @@ async def _apply_gateway_outcome(
             )
 
             await mark_processed("processed")
+            # Money just came in: delayed refunds (e.g. refused for a low
+            # balance) are worth trying again now.
+            from app.services import refund_service
+            refund_service._spawn(refund_service.retry_delayed_refunds(source="payment_captured"))
             await audit_service.emit(
                 actor_uid="system", event_type="payment_captured",
                 entity_type="payment_attempt", entity_id=attempt["id"],
@@ -1186,9 +1190,15 @@ def _cancellation_and_refund_entries(
                 "refund_processed", "payment_refund", "Refund processed",
                 refund["finalized_at"] or refund["updated_at"],
             )
+        elif status == "delayed":
+            add(
+                "refund_delayed", "payment_refund", "Refund delayed — retrying automatically",
+                refund["last_attempt_at"] if "last_attempt_at" in refund and refund["last_attempt_at"]
+                else refund["updated_at"],
+            )
         elif status == "failed":
             add(
-                "refund_failed", "payment_refund", "Refund failed",
+                "refund_failed", "payment_refund", "Refund couldn't be sent automatically — NITKSAA will contact you",
                 refund["finalized_at"] or refund["updated_at"],
             )
     return entries

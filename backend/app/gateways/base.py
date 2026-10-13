@@ -48,6 +48,29 @@ class NormalizedRefundStatus(str, Enum):
     UNKNOWN = "UNKNOWN"
 
 
+class RefundFailureReason(str, Enum):
+    """Why a provider refused or couldn't process a refund, in plain,
+    provider-neutral terms. Adapters classify their own errors into these;
+    the provider's raw error text is never kept (it can carry card or
+    contact details)."""
+
+    INSUFFICIENT_BALANCE = "insufficient_balance"   # not enough in the account yet
+    PROVIDER_UNAVAILABLE = "provider_unavailable"   # outage, timeout, network
+    PAYMENT_TOO_OLD = "payment_too_old"
+    ALREADY_REFUNDED = "already_refunded"
+    AMOUNT_NOT_ALLOWED = "amount_not_allowed"
+    PAYMENT_NOT_CAPTURED = "payment_not_captured"
+    REFUNDED_OUTSIDE_APP = "refunded_outside_app"   # found a refund we didn't make
+    DECLINED = "declined"                           # refused, reason not recognised
+
+
+# Worth trying again later on their own; anything else needs a person.
+TEMPORARY_REFUND_FAILURES = frozenset({
+    RefundFailureReason.INSUFFICIENT_BALANCE,
+    RefundFailureReason.PROVIDER_UNAVAILABLE,
+})
+
+
 class GatewayCapability(str, Enum):
     """Operations a gateway may or may not support. See PaymentGateway
     docstring — declared per-adapter in `capabilities`, checked by the
@@ -229,6 +252,16 @@ class GatewayError(Exception):
 class GatewayWebhookUnparseableError(GatewayError):
     """Raised by parse_webhook() when the raw body is not a valid delivery
     for this gateway (e.g. malformed JSON)."""
+
+
+class GatewayRefundRefusedError(GatewayError):
+    """A refund call the provider refused or couldn't complete, with the
+    reason classified (RefundFailureReason). Adapters raise this (or a
+    subclass) from refund(); the refund domain decides retry vs. a person."""
+
+    def __init__(self, reason: "RefundFailureReason", message: str = ""):
+        self.reason = reason
+        super().__init__(message or f"refund refused: {reason.value}")
 
 
 class GatewayCapabilityNotSupportedError(GatewayError):

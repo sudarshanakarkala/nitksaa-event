@@ -124,8 +124,8 @@ class _AdminActionsTabState extends ConsumerState<AdminActionsTab> {
             review: '/admin/payments?view=orders&status=stuck',
           ),
           _Queue(
-            title: 'Refunds failed',
-            description: 'Refunds that didn\'t go through. Those attendees haven\'t been paid back.',
+            title: 'Refunds need attention',
+            description: 'Refunds that couldn\'t be sent automatically. Those attendees haven\'t been paid back.',
             count: c.failedRefunds,
             needsAction: true,
             review: '/admin/payments?view=refunds&status=failed',
@@ -163,6 +163,13 @@ class _AdminActionsTabState extends ConsumerState<AdminActionsTab> {
               ),
           ],
         ),
+        if (access.canSeePayments)
+          _Queue(
+            title: 'Refunds delayed',
+            description: 'Refunds Razorpay couldn\'t take yet for a temporary reason. Retrying automatically.',
+            count: c.delayedRefunds,
+            review: '/admin/payments?view=refunds&status=delayed',
+          ),
       ];
 }
 

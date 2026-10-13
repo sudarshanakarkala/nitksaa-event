@@ -1,6 +1,7 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../../../../theme/app_palette.dart';
@@ -127,7 +128,8 @@ class RefundStatusDialog extends ConsumerWidget {
   }
 
   /// Whether asking again can give a different answer. A processed or failed
-  /// refund is final, and the backend has no way to retry a failed one.
+  /// refund is final for the attendee (a failed one is followed up by
+  /// NITKSAA); a pending or delayed one can still move on.
   static bool _mayChange(RefundStatus refund) {
     return switch (refund.status) {
       RefundStatus.processed || RefundStatus.failed || RefundStatus.none => false,
@@ -137,9 +139,10 @@ class RefundStatusDialog extends ConsumerWidget {
 
   static String _headline(RefundStatus refund) {
     return switch (refund.status) {
-      RefundStatus.pending => 'Refund in progress',
+      RefundStatus.pending => 'Refund on its way',
+      RefundStatus.delayed => 'Refund delayed, retrying',
       RefundStatus.processed => 'Refunded',
-      RefundStatus.failed => 'Refund could not be completed',
+      RefundStatus.failed => 'Refund needs attention',
       RefundStatus.none => 'No refund',
       _ => 'Refund status unavailable',
     };
@@ -152,6 +155,7 @@ class RefundStatusDialog extends ConsumerWidget {
           Text('No payment was taken, so there is nothing to refund.'),
         ];
       case RefundStatus.pending:
+      case RefundStatus.delayed:
       case RefundStatus.processed:
       case RefundStatus.failed:
         break;
@@ -162,6 +166,8 @@ class RefundStatusDialog extends ConsumerWidget {
     final amount = _formatAmount(refund);
     final requestedAt = refund.requestedAt;
     final finalizedAt = refund.finalizedAt;
+    final waiting = refund.status == RefundStatus.pending ||
+        refund.status == RefundStatus.delayed;
     var message = refund.safeMessage?.trim() ?? '';
     if (message.isEmpty && refund.status == RefundStatus.failed) {
       message = 'The refund could not be completed automatically. Please '
@@ -169,10 +175,16 @@ class RefundStatusDialog extends ConsumerWidget {
     }
     return [
       if (amount != null) _DetailRow(label: 'Amount', value: amount),
-      if (refund.status == RefundStatus.pending && requestedAt != null)
+      if (waiting && requestedAt != null)
         _DetailRow(label: 'Requested on', value: _formatDateTime(requestedAt)),
       if (refund.status == RefundStatus.processed && finalizedAt != null)
         _DetailRow(label: 'Refunded on', value: _formatDateTime(finalizedAt)),
+      if (refund.refundId != null)
+        _DetailRow(label: 'Refund reference', value: refund.refundId!, copyable: true),
+      if (refund.paymentReference != null)
+        _DetailRow(label: 'Payment reference', value: refund.paymentReference!, copyable: true),
+      if (refund.bankReference != null)
+        _DetailRow(label: 'Bank reference', value: refund.bankReference!, copyable: true),
       if (message.isNotEmpty) ...[
         if (amount != null) const SizedBox(height: 8),
         Text(message),
@@ -215,10 +227,13 @@ class RefundStatusDialog extends ConsumerWidget {
 }
 
 class _DetailRow extends StatelessWidget {
-  const _DetailRow({required this.label, required this.value});
+  const _DetailRow({required this.label, required this.value, this.copyable = false});
 
   final String label;
   final String value;
+
+  /// Shows a copy button (references people quote to support or their bank).
+  final bool copyable;
 
   @override
   Widget build(BuildContext context) {
@@ -239,6 +254,21 @@ class _DetailRow extends StatelessWidget {
               style: const TextStyle(fontWeight: FontWeight.bold),
             ),
           ),
+          if (copyable)
+            IconButton(
+              tooltip: 'Copy $label',
+              icon: const Icon(Icons.copy, size: 16),
+              visualDensity: VisualDensity.compact,
+              padding: EdgeInsets.zero,
+              constraints: const BoxConstraints(minWidth: 28, minHeight: 20),
+              onPressed: () async {
+                await Clipboard.setData(ClipboardData(text: value));
+                if (!context.mounted) return;
+                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
+                  SnackBar(content: Text('$label copied')),
+                );
+              },
+            ),
         ],
       ),
     );

@@ -249,10 +249,13 @@ def test_provider_refund_failure_leaves_safe_state(client, monkeypatch):
     r = client.post(f"/api/v1/registrations/{rid}/cancel",
                     json={"idempotency_key": f"c-{uuid.uuid4().hex}"}, headers=_bearer())
     assert r.status_code == 200, r.text
-    assert r.json()["status"] == "refund_failed"
-    # registration still cancelled (seat released), refund row is 'failed' and retryable
+    # An outage is temporary (step 10c): the refund is 'delayed' and retried
+    # automatically, not 'failed'. Registration still cancelled (seat released).
+    assert r.json()["status"] == "refund_delayed"
     assert _db("SELECT status FROM registrations WHERE registration_id=$1", rid, val=True) == "cancelled"
-    assert _db("SELECT status FROM payment_refunds WHERE registration_id=$1", rid, val=True) == "failed"
+    assert _db("SELECT status FROM payment_refunds WHERE registration_id=$1", rid, val=True) == "delayed"
+    assert _db("SELECT failure_reason FROM payment_refunds WHERE registration_id=$1", rid,
+               val=True) == "provider_unavailable"
 
 
 # ── free cancellation ────────────────────────────────────────────────
@@ -461,7 +464,7 @@ def test_timeline_cancelled_with_processing_refund(client, monkeypatch):
     monkeypatch.setattr(DeterministicSandboxGateway, "refund", _accepted_not_settled)
     body = _cancel(client, rid)
     assert body["status"] == "refund_pending"
-    assert body["safe_message"] == "Your registration is cancelled. Your refund is being processed."
+    assert body["safe_message"] == "Your registration is cancelled. Your refund is on its way. We'll email you when it's been sent."
 
     refund = _refund_row(rid)
     assert refund["status"] == "processing"
@@ -485,14 +488,14 @@ def test_timeline_cancelled_with_failed_refund_keeps_registration_cancelled(clie
         raise GatewayError("simulated provider outage")
 
     monkeypatch.setattr(DeterministicSandboxGateway, "refund", _boom)
-    assert _cancel(client, rid)["status"] == "refund_failed"
+    assert _cancel(client, rid)["status"] == "refund_delayed"
 
     entries = _timeline(client, order["order_id"])
     assert [e["label"] for e in entries][-5:] == _CONFIRMED_HISTORY + [
-        "Registration cancelled", "Refund requested", "Refund failed",
+        "Registration cancelled", "Refund requested", "Refund delayed — retrying automatically",
     ]
     assert "Refund processed" not in [e["label"] for e in entries]
-    assert _at(entries, "refund_failed") == _refund_row(rid)["updated_at"]
+    assert _at(entries, "refund_delayed") == _refund_row(rid)["last_attempt_at"]
 
     # A failed refund never puts the registration back to confirmed.
     view = client.get(f"/api/v1/payment-orders/{order['order_id']}", headers=_bearer()).json()
