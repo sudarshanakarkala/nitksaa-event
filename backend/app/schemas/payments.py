@@ -128,7 +128,9 @@ class VerifyCheckoutResponse(BaseModel):
 
 class RefundStatusResponse(BaseModel):
     """Attendee-safe refund view. `status` is one of:
-    refund_pending | refund_processed | refund_failed | none."""
+    refund_pending | refund_delayed | refund_processed | refund_failed | none.
+    `payment_reference` (the provider's payment id) and `bank_reference`
+    (ARN) are the person's own references for their bank."""
 
     refund_id: Optional[str] = None
     registration_id: int
@@ -140,6 +142,9 @@ class RefundStatusResponse(BaseModel):
     safe_message: str
     payment_mode: Optional[str] = None
     real_money: bool = False
+    payment_reference: Optional[str] = None
+    bank_reference: Optional[str] = None
+    next_retry_at: Optional[datetime] = None
 
 
 class CancelRegistrationRequest(BaseModel):

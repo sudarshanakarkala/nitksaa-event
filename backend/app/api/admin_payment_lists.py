@@ -14,6 +14,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from app.database import get_pool
 from app.middleware.auth import get_current_user
 from app.services.access import load_access
+from app.services.refund_service import REASON_ADMIN
 
 router = APIRouter(prefix="/api/v1/admin/payments", tags=["admin"])
 
@@ -108,7 +109,9 @@ async def list_refunds(
                    f.registration_id, r.registration_number,
                    r.fullname_snapshot AS fullname, r.email,
                    f.amount, f.currency, f.status, f.payment_mode,
-                   f.provider_refund_id, f.failure_reason,
+                   f.provider_refund_id, f.provider_payment_id, f.failure_reason,
+                   f.bank_reference, f.speed_processed,
+                   f.attempt_count, f.last_attempt_at, f.next_retry_at,
                    f.requested_at, f.updated_at, f.finalized_at
             FROM payment_refunds f
             JOIN payment_orders o ON o.id = f.payment_order_id
@@ -125,5 +128,53 @@ async def list_refunds(
     for r in rows:
         d = dict(r)
         d["amount"] = _money(d["amount"])
+        d["reason_text"] = REASON_ADMIN.get(d["failure_reason"] or "") if d["failure_reason"] else None
+        d["can_retry"] = d["status"] in ("delayed", "failed")
         refunds.append(d)
     return {"refunds": refunds, "total": total, "page": page, "per_page": per_page}
+
+
+# Who may press "Retry now": overall admins, finance operators, and the
+# event's own admins. (Auditors and support can look, not act.)
+_RETRY_ROLES = {"platform_admin", "finance_operator"}
+
+
+@router.post("/refunds/{refund_number}/retry")
+async def retry_refund_now(
+    refund_number: str,
+    user: Dict[str, Any] = Depends(get_current_user),
+) -> Dict[str, Any]:
+    """Try a delayed or failed refund again now. Checks the provider first,
+    so it never refunds twice. Returns the refund's new state."""
+    from app.services import refund_service
+
+    access = await load_access(user["firebase_uid"])
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        row = await conn.fetchrow(
+            """
+            SELECT f.id, f.status, o.event_id FROM payment_refunds f
+            JOIN payment_orders o ON o.id = f.payment_order_id
+            WHERE f.public_refund_number = $1
+            """,
+            refund_number,
+        )
+    if not (access.is_admin or access.platform_roles & _RETRY_ROLES or access.admin_event_ids):
+        raise HTTPException(status_code=403, detail="refund_retry_not_allowed")
+    allowed = access.is_admin or bool(access.platform_roles & _RETRY_ROLES) or (
+        row is not None and row["event_id"] in access.admin_event_ids)
+    if row is None or not allowed:
+        # Same answer for "not your event's" and "doesn't exist".
+        raise HTTPException(status_code=404, detail="refund_not_found")
+    if row["status"] not in ("delayed", "failed"):
+        raise HTTPException(status_code=409, detail=f"refund_is_{row['status']}")
+    updated = await refund_service.retry_refund(
+        row["id"], source="admin", actor_uid=user["firebase_uid"], force=True)
+    return {
+        "refund_number": refund_number,
+        "status": updated["status"] if updated else row["status"],
+        "failure_reason": updated["failure_reason"] if updated else None,
+        "reason_text": REASON_ADMIN.get((updated["failure_reason"] or "") if updated else ""),
+        "next_retry_at": updated["next_retry_at"] if updated else None,
+        "attempt_count": updated["attempt_count"] if updated else None,
+    }

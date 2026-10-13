@@ -12,7 +12,9 @@ Queues:
   failed_emails   active registrations whose confirmation email failed, on
                   published events that haven't ended
   stuck_payments  orders still started/pending after 30 minutes
-  failed_refunds  refunds that failed
+  failed_refunds  refunds that need a person (gave up retrying, or refused
+                  for a reason retrying can't fix)
+  delayed_refunds refunds being retried automatically (information only)
 
 `total` is the badge: only the queues that need someone to act (drafts,
 failed emails, stuck payments, failed refunds). Closing soon and nearly
@@ -56,7 +58,11 @@ SELECT
   (SELECT COUNT(*) FROM payment_refunds f
      JOIN payment_orders o ON o.id = f.payment_order_id
      JOIN events e ON e.event_id = o.event_id
-    WHERE {_SCOPE} AND f.status = 'failed') AS failed_refunds
+    WHERE {_SCOPE} AND f.status = 'failed') AS failed_refunds,
+  (SELECT COUNT(*) FROM payment_refunds f
+     JOIN payment_orders o ON o.id = f.payment_order_id
+     JOIN events e ON e.event_id = o.event_id
+    WHERE {_SCOPE} AND f.status = 'delayed') AS delayed_refunds
 """
 
 CLOSING_SOON_SQL = f"""
@@ -125,6 +131,7 @@ async def pending_count(
         "failed_emails": sum(r["failed"] for r in emails),
         "stuck_payments": counts["stuck_payments"],
         "failed_refunds": counts["failed_refunds"],
+        "delayed_refunds": counts["delayed_refunds"],
     }
     return {
         "total": sum(queues[k] for k in BADGE_QUEUES),

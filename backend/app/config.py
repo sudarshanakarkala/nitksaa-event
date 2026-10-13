@@ -146,6 +146,19 @@ class Settings(BaseSettings):
     # NITiKa's own deadline is 20 s; this leaves room for a cold start.
     nitika_timeout_seconds: float = Field(25.0, alias="NITIKA_TIMEOUT_SECONDS")
 
+    # ── Refund reliability (admin revamp step 10c) ───────────────────────
+    # A refund refused for a temporary reason is retried for this many days
+    # after it was requested, then handed to a person.
+    refund_retry_days: int = Field(7, alias="REFUND_RETRY_DAYS")
+    # Where final refund failures are reported, besides the event's admins.
+    # Comma-separated; empty = event admins only.
+    finance_alert_email: str = Field("", alias="FINANCE_ALERT_EMAIL")
+    # Cloud Scheduler → POST /api/v1/internal/maintenance. The call carries a
+    # Google-signed ID token for this audience (the service URL), issued to
+    # this service account. Either empty → only overall admins may call it.
+    maintenance_audience: str = Field("", alias="MAINTENANCE_AUDIENCE")
+    maintenance_invoker_email: str = Field("", alias="MAINTENANCE_INVOKER_EMAIL")
+
     @property
     def nitika_configured(self) -> bool:
         return bool(self.nitika_url.strip() and self.nitika_client_key.strip())

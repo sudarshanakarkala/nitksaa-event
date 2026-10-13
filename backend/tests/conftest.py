@@ -57,3 +57,15 @@ def require_db(client):
             "Ensure PostgreSQL is running and EVENTS_DB_URL is set in backend/.env. "
             "Migration: psql -d events_db -f migrations/events_db/001_create_events_alpha_schema.sql"
         )
+
+
+@pytest.fixture(autouse=True)
+def _no_background_refund_tasks(monkeypatch):
+    """Refund side tasks (emails, retries after a capture) normally run in the
+    background a moment later. In tests they would fire during unrelated
+    tests, so they're switched off; tests call the maintenance run instead."""
+    try:
+        from app.services import refund_service
+    except Exception:  # noqa: BLE001 — app import problems are reported by `client`
+        return
+    monkeypatch.setattr(refund_service, "_spawn", lambda coro, delay_seconds=2.0: coro.close())

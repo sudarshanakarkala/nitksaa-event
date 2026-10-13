@@ -140,3 +140,107 @@ async def send_confirmation_email(
         err = str(exc)
         _log.error("[email] send failed to=%s: %s", email_to, err)
         return EmailResult(status="failed", sent_at=None, error=err)
+
+
+# ── General sending (refund notifications, admin alerts) ────────────────────
+
+async def send_email(email_to: str, subject: str, plain: str, html: str) -> EmailResult:
+    """Send one email (same modes and safety as the confirmation email).
+    Never raises. Addresses ending in example.invalid (demo data) are
+    skipped, so demo people are never emailed."""
+    settings = get_settings()
+    if not email_to or email_to.lower().endswith("example.invalid"):
+        return EmailResult(status="skipped", sent_at=None, error="no deliverable address")
+    if settings.email_mode == "log":
+        _log.info("[email/log] to=%s subject=%r", email_to, subject)
+        return EmailResult(status="sent", sent_at=datetime.now(timezone.utc), error=None)
+    if settings.email_mode != "send":
+        return EmailResult(status="skipped", sent_at=None, error=f"unknown mode: {settings.email_mode}")
+    from_addr = settings.email_from or settings.smtp_user
+    if not from_addr or not settings.smtp_user or not settings.smtp_password:
+        _log.error("[email] smtp credentials not configured")
+        return EmailResult(status="failed", sent_at=None, error="smtp credentials not configured")
+    try:
+        msg = MIMEMultipart("alternative")
+        msg["Subject"] = subject
+        msg["From"] = from_addr
+        msg["To"] = email_to
+        if settings.email_reply_to:
+            msg["Reply-To"] = settings.email_reply_to
+        msg.attach(MIMEText(plain, "plain"))
+        msg.attach(MIMEText(html, "html"))
+        await asyncio.to_thread(
+            _send_smtp_sync, msg.as_string(), settings.smtp_host, settings.smtp_port,
+            settings.smtp_user, settings.smtp_password, from_addr, email_to,
+        )
+        return EmailResult(status="sent", sent_at=datetime.now(timezone.utc), error=None)
+    except Exception as exc:  # noqa: BLE001 — never raise from email
+        _log.error("[email] send failed to=%s: %s", email_to, type(exc).__name__)
+        return EmailResult(status="failed", sent_at=None, error=type(exc).__name__)
+
+
+def _esc(text: str) -> str:
+    import html as _html
+    return _html.escape(str(text or ""))
+
+
+def _refund_lines(d: dict) -> list:
+    lines = [
+        ("Event", d.get("event_title")),
+        ("Amount", d.get("amount")),
+        ("Refund reference", d.get("refund_number")),
+        ("Payment reference", d.get("payment_reference")),
+        ("Bank reference", d.get("bank_reference")),
+    ]
+    return [(k, v) for k, v in lines if v]
+
+
+def _render(greeting: str, paragraphs: list, details: list) -> tuple:
+    plain = "\n\n".join([greeting, *paragraphs]) + "\n\n" + "\n".join(f"{k}: {v}" for k, v in details) \
+        + "\n\n— NITKSAA Team"
+    html_rows = "".join(f"<tr><td>{_esc(k)}</td><td><strong>{_esc(v)}</strong></td></tr>" for k, v in details)
+    html_body = "".join(f"<p>{_esc(p)}</p>" for p in paragraphs)
+    html = (f"<html><body><p>{_esc(greeting)}</p>{html_body}"
+            f"<table cellpadding='4'>{html_rows}</table><p>— NITKSAA Team</p></body></html>")
+    return plain, html
+
+
+async def send_refund_delayed_email(email_to: str, d: dict) -> EmailResult:
+    plain, html = _render(
+        f"Hi {d.get('fullname') or 'there'},",
+        [f"Your registration for {d.get('event_title')} is cancelled. Your refund couldn't be sent yet because "
+         "of a temporary issue with the payment provider.",
+         "We're retrying automatically and will email you as soon as it's on its way. You don't need to do anything."],
+        _refund_lines(d),
+    )
+    return await send_email(email_to, f"Your refund is delayed — {d.get('event_title')}", plain, html)
+
+
+async def send_refund_processed_email(email_to: str, d: dict) -> EmailResult:
+    paragraphs = [f"Your refund for {d.get('event_title')} has been sent. Banks usually show it within 5–7 working days."]
+    if d.get("bank_reference"):
+        paragraphs.append("If it doesn't appear, give your bank the bank reference below.")
+    plain, html = _render(f"Hi {d.get('fullname') or 'there'},", paragraphs, _refund_lines(d))
+    return await send_email(email_to, f"Your refund has been sent — {d.get('event_title')}", plain, html)
+
+
+async def send_refund_failed_email(email_to: str, d: dict) -> EmailResult:
+    plain, html = _render(
+        f"Hi {d.get('fullname') or 'there'},",
+        [f"Your registration for {d.get('event_title')} is cancelled, but we couldn't send your refund automatically.",
+         "Someone from NITKSAA will contact you within 2 working days. Please quote your refund reference."],
+        _refund_lines(d),
+    )
+    return await send_email(email_to, f"About your refund — {d.get('event_title')}", plain, html)
+
+
+async def send_refund_admin_alert(email_to: str, d: dict) -> EmailResult:
+    details = _refund_lines(d) + [("Attendee", d.get("attendee")), ("Reason", d.get("reason_text")),
+                                  ("Tries", d.get("attempts"))]
+    plain, html = _render(
+        "Hello,",
+        [f"A refund for {d.get('event_title')} needs attention: it could not be sent automatically.",
+         "Open Admin → Payments → Refunds to see it and retry, or refund the person another way."],
+        [(k, v) for k, v in details if v],
+    )
+    return await send_email(email_to, f"Refund needs attention — {d.get('event_title')}", plain, html)
