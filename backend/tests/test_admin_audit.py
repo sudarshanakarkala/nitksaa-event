@@ -142,3 +142,23 @@ def test_orders_list_carries_razorpay_ids_for_search(client, provider):
     pay_ref = _db("""SELECT a.gateway_payment_ref FROM payment_attempts a JOIN payment_orders o ON o.id = a.order_id
                      WHERE o.registration_id = $1""", rid, val=True)
     assert pay_ref in order["provider_refs"]
+
+
+def test_search_by_numbers_email_and_razorpay_ids(client, provider):
+    eid, rid, row = _delayed_refund_event(client, provider)
+    reg_no, order_no, email = _db(
+        """SELECT r.registration_number, o.public_order_number, r.email FROM registrations r
+           JOIN payment_orders o ON o.registration_id = r.registration_id WHERE r.registration_id = $1""", rid)[0]
+    pay_ref = _db("""SELECT a.gateway_payment_ref FROM payment_attempts a JOIN payment_orders o ON o.id = a.order_id
+                     WHERE o.registration_id = $1""", rid, val=True)
+
+    by_pay = _get(client, q=pay_ref, page_size=200)["rows"]
+    kinds = {r["event_type"] for r in by_pay}
+    assert {"payment_order_created", "payment_captured", "payment_refund_delayed"} <= kinds   # the whole order
+    assert {r["order_number"] for r in by_pay if r["order_number"]} == {order_no}
+
+    for q in (order_no.lower(), reg_no):
+        found = _get(client, q=q, page_size=200)["rows"]
+        assert found and all(r["event_id"] == eid for r in found), q
+    # An email finds the attendee's history on every event, this one included.
+    assert eid in {r["event_id"] for r in _get(client, q=email.upper(), page_size=200)["rows"]}
