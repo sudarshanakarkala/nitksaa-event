@@ -16,6 +16,7 @@ import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../../events/presentation/widgets/event_card.dart';
 import 'event_admin_actions.dart';
+import 'admin_widgets.dart';
 
 /// Status filters, website pill style.
 enum _Filter {
@@ -496,11 +497,9 @@ class _EventsTableState extends State<_EventsTable> {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                  child: DataTable(
+              builder: (context, constraints) => AdminHScroll(
+                minWidth: constraints.maxWidth,
+                child: DataTable(
                     headingRowHeight: 40,
                     dataRowMinHeight: 52,
                     dataRowMaxHeight: 60,
@@ -560,7 +559,6 @@ class _EventsTableState extends State<_EventsTable> {
                         ),
                     ],
                   ),
-                ),
               ),
             ),
           ),
