@@ -639,6 +639,12 @@ async def process_webhook(
         # the unique (gateway, gateway_event_id) index until this commits,
         # then resolves as a duplicate.
         async with conn.transaction():
+            if getattr(event, "refund", None) is not None:
+                return await _process_refund_webhook(
+                    conn, pay_repo, gateway=gateway, event=event, event_id=event_id,
+                    payload_hash=hash_, signature_valid=signature_valid,
+                    timestamp_error=timestamp_error, payment_mode=payment_mode,
+                )
             attempt = await pay_repo.get_attempt_by_gateway_ref(gateway_order_ref) if gateway_order_ref else None
             order = await pay_repo.get_order_by_id(attempt["order_id"]) if attempt else None
 
@@ -747,6 +753,100 @@ async def process_webhook(
     return WebhookAckResponse(status="ok", processing_status="processed")
 
 
+async def _process_refund_webhook(
+    conn: asyncpg.Connection,
+    pay_repo: PaymentRepository,
+    *,
+    gateway: str,
+    event,
+    event_id: str,
+    payload_hash: str,
+    signature_valid: bool,
+    timestamp_error: Optional[str],
+    payment_mode: Optional[str],
+) -> WebhookAckResponse:
+    """A refund outcome from the provider (Razorpay refund.created /
+    processed / failed). Same gates as a payment webhook, in the same order
+    and inside the caller's transaction: claim the event id (duplicates are
+    a no-op), signature, freshness, a refund we know, the right mode, the
+    right amount. Then the refund domain applies it."""
+    from app.repositories.refund_repository import RefundRepository
+    from app.services import refund_service
+
+    result = event.refund
+    refund_repo = RefundRepository(conn)
+    refund_row = None
+    if result.provider_refund_id:
+        refund_row = await refund_repo.get_by_provider_refund_id(gateway, result.provider_refund_id)
+    if refund_row is None and result.provider_payment_id:
+        refund_row = await refund_repo.get_awaiting_provider_id(gateway, result.provider_payment_id)
+
+    webhook_row = await pay_repo.record_webhook_event(
+        gateway=gateway,
+        gateway_event_id=event_id,
+        event_type=event.raw_event_type,
+        payload_hash=payload_hash,
+        signature_valid=signature_valid,
+        correlated_order_id=refund_row["payment_order_id"] if refund_row else None,
+        correlated_attempt_id=refund_row["payment_attempt_id"] if refund_row else None,
+    )
+    if webhook_row is None:
+        await audit_service.emit(
+            actor_uid="system", event_type="payment_webhook_duplicate",
+            entity_type="payment_webhook", entity_id=0,
+            context={"gateway": gateway, "gateway_event_id": event_id},
+        )
+        return WebhookAckResponse(status="ok", processing_status="duplicate")
+
+    async def reject(code: str, audit_type: str, context: Dict[str, Any]) -> WebhookAckResponse:
+        await pay_repo.mark_webhook_processed(webhook_row["id"], "rejected", code)
+        await audit_service.emit(
+            actor_uid="system", event_type=audit_type,
+            entity_type="payment_webhook", entity_id=webhook_row["id"], context=context,
+        )
+        return WebhookAckResponse(status="rejected", processing_status="rejected")
+
+    if not signature_valid:
+        return await reject("invalid_signature", "payment_webhook_invalid_signature", {"gateway": gateway})
+    if timestamp_error:
+        return await reject(timestamp_error, "payment_webhook_timestamp_rejected",
+                            {"gateway": gateway, "reason": timestamp_error})
+    if refund_row is None:
+        return await reject("unknown_refund", "payment_webhook_unknown_refund",
+                            {"gateway": gateway, "provider_refund_id": result.provider_refund_id or None,
+                             "provider_payment_id": result.provider_payment_id or None})
+    refund_mode = refund_row["payment_mode"] if "payment_mode" in refund_row else "test"
+    if payment_mode is not None and refund_mode != payment_mode:
+        return await reject("webhook_mode_mismatch", "payment_webhook_mode_mismatch",
+                            {"gateway": gateway, "route_mode": payment_mode, "order_mode": refund_mode})
+    expected_minor = int((Decimal(refund_row["amount"]) * 100).to_integral_value())
+    if result.amount_minor and int(result.amount_minor) != expected_minor:
+        return await reject("amount_or_currency_mismatch", "payment_webhook_amount_mismatch",
+                            {"order_id": refund_row["payment_order_id"], "refund_id": refund_row["id"]})
+
+    await refund_service.apply_refund_result(
+        conn, refund_row, result, source="webhook", provider_event=event.raw_event_type,
+    )
+    await pay_repo.mark_webhook_processed(webhook_row["id"], "processed", None)
+    return WebhookAckResponse(status="ok", processing_status="processed")
+
+
+def _provider_context(attempt: asyncpg.Record, event) -> Dict[str, Any]:
+    """Provider-neutral facts for an audit entry: which provider and event
+    reported it, the provider's payment id, and how it was paid / why it
+    failed. Never personal data."""
+    ctx: Dict[str, Any] = {
+        "provider": attempt["gateway"] if "gateway" in attempt else None,
+        "provider_event": getattr(event, "raw_event_type", "") or None,
+        "provider_payment_id": getattr(event, "gateway_payment_ref", "") or None,
+        "amount": getattr(event, "amount_raw", None),
+    }
+    details = getattr(event, "details", None)
+    if details is not None:
+        ctx.update(details.to_context())
+    return {k: v for k, v in ctx.items() if v is not None}
+
+
 async def _apply_gateway_outcome(
     conn: asyncpg.Connection,
     *,
@@ -793,6 +893,7 @@ async def _apply_gateway_outcome(
 
         if event.status == NormalizedStatus.PAYMENT_SUCCESS:
             await pay_repo.update_attempt_captured(attempt["id"], event.gateway_payment_ref)
+            await pay_repo.set_attempt_details(attempt["id"], getattr(event, "details", None))
             # Financial state is preserved unconditionally — the money side of
             # this always happens, regardless of what state the registration/
             # seat is in. What varies below is only whether we're also allowed
@@ -817,7 +918,7 @@ async def _apply_gateway_outcome(
             await audit_service.emit(
                 actor_uid="system", event_type="payment_captured",
                 entity_type="payment_attempt", entity_id=attempt["id"],
-                context={"order_id": order["id"]},
+                context={"order_id": order["id"], **_provider_context(attempt, event)},
             )
 
             if hold_expired:
@@ -859,17 +960,20 @@ async def _apply_gateway_outcome(
             await pay_repo.update_attempt_failed(
                 attempt["id"], event.failure_code, event.failure_message,
             )
+            await pay_repo.set_attempt_details(attempt["id"], getattr(event, "details", None))
             if registration and registration["status"] in ("seat_held", "payment_pending", "payment_verification"):
                 await reg_repo.set_status(registration["registration_id"], "payment_failed")
             await mark_processed("processed")
             await audit_service.emit(
                 actor_uid="system", event_type="payment_failed",
                 entity_type="payment_attempt", entity_id=attempt["id"],
-                context={"order_id": order["id"]},
+                context={"order_id": order["id"], "failure_code": event.failure_code,
+                         **_provider_context(attempt, event)},
             )
 
         elif event.status == NormalizedStatus.PAYMENT_PENDING:
             await pay_repo.update_attempt_status(attempt["id"], "pending")
+            await pay_repo.set_attempt_details(attempt["id"], getattr(event, "details", None))
             if registration and registration["status"] in ("seat_held", "payment_pending"):
                 await reg_repo.set_status(registration["registration_id"], "payment_verification")
                 await reg_repo.extend_hold(
@@ -880,7 +984,7 @@ async def _apply_gateway_outcome(
             await audit_service.emit(
                 actor_uid="system", event_type="payment_pending",
                 entity_type="payment_attempt", entity_id=attempt["id"],
-                context={"order_id": order["id"]},
+                context={"order_id": order["id"], **_provider_context(attempt, event)},
             )
 
         elif event.status == NormalizedStatus.PAYMENT_CANCELLED:
@@ -891,7 +995,7 @@ async def _apply_gateway_outcome(
             await audit_service.emit(
                 actor_uid="system", event_type="payment_cancelled",
                 entity_type="payment_attempt", entity_id=attempt["id"],
-                context={"order_id": order["id"]},
+                context={"order_id": order["id"], **_provider_context(attempt, event)},
             )
         else:
             await mark_processed("rejected", "unknown_event_type")
@@ -1090,6 +1194,15 @@ def _cancellation_and_refund_entries(
     return entries
 
 
+# Internal or provider-side fields kept out of the attendee's own timeline:
+# provider ids, which system reported it, and the association's fees.
+_ATTENDEE_HIDDEN_DETAIL = frozenset({
+    "order_id", "attempt_id", "refund_id", "provider", "provider_event",
+    "provider_payment_id", "provider_refund_id", "source", "fee", "tax", "speed",
+    "failure_code",
+})
+
+
 async def get_timeline(public_order_number: str, user: Dict[str, Any]) -> PaymentTimelineResponse:
     """Attendee-safe view: friendly labels only, internal technical events
     (webhook signature/replay/mismatch rejections, stale-attempt no-ops)
@@ -1110,7 +1223,7 @@ async def get_timeline(public_order_number: str, user: Dict[str, Any]) -> Paymen
             continue  # not attendee-facing (security/internal-only event)
         detail = json.loads(row["context"]) if row["context"] else None
         if isinstance(detail, dict):
-            detail = {k: v for k, v in detail.items() if k not in ("order_id",)}
+            detail = {k: v for k, v in detail.items() if k not in _ATTENDEE_HIDDEN_DETAIL}
             detail = detail or None
         entries.append(
             TimelineEntry(

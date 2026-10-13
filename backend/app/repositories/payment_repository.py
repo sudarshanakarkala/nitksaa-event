@@ -435,6 +435,41 @@ class PaymentRepository:
             sanitized_message,
         )
 
+    async def set_attempt_details(self, attempt_id: int, details) -> None:
+        """Store provider-neutral payment details (gateways.base.PaymentDetails)
+        on the attempt. Only fills what the provider reported; never blanks a
+        value an earlier event set."""
+        if details is None:
+            return
+        def rupees(minor):
+            return None if minor is None else (Decimal(int(minor)) / 100).quantize(Decimal("0.01"))
+        await self.conn.execute(
+            """
+            UPDATE payment_attempts SET
+                payment_method     = COALESCE($2::text, payment_method),
+                payment_instrument = COALESCE($3::text, payment_instrument),
+                is_international   = COALESCE($4::boolean, is_international),
+                provider_fee       = COALESCE($5::numeric, provider_fee),
+                provider_tax       = COALESCE($6::numeric, provider_tax),
+                failure_source     = COALESCE($7::text, failure_source),
+                failure_step       = COALESCE($8::text, failure_step),
+                failure_reason     = COALESCE($9::text, failure_reason),
+                bank_reference     = COALESCE($10::text, bank_reference),
+                updated_at         = now()
+            WHERE id = $1::bigint
+            """,
+            attempt_id,
+            (details.method or None) and details.method[:30],
+            (details.instrument or None) and details.instrument[:60],
+            details.international,
+            rupees(details.fee_minor),
+            rupees(details.tax_minor),
+            (details.failure_source or None) and details.failure_source[:40],
+            (details.failure_step or None) and details.failure_step[:60],
+            (details.failure_reason or None) and details.failure_reason[:80],
+            details.bank_reference,
+        )
+
     async def update_attempt_status(self, attempt_id: int, status: str) -> None:
         await self.conn.execute(
             "UPDATE payment_attempts SET status = $2, updated_at = now() WHERE id = $1",

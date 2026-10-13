@@ -59,6 +59,28 @@ def _with_public_card_metadata(d: Dict[str, Any]) -> Dict[str, Any]:
     return d
 
 
+def _update_context(event_id: int, before: Dict[str, Any], after: Dict[str, Any],
+                    requested: Dict[str, Any]) -> Dict[str, Any]:
+    """What an edit changed: field names only (not their values, which can
+    be long or personal), except the price, the free/paid switch and
+    registration closing, which matter for payments and support."""
+    changed = sorted(k for k in requested if before.get(k) != after.get(k))
+    ctx: Dict[str, Any] = {"event_id": event_id, "fields": changed}
+    if "ticket_price" in changed or "is_free" in changed:
+        def price(row):
+            return "free" if row.get("is_free") else (str(row.get("ticket_price")) if row.get("ticket_price") is not None else None)
+        ctx["price"] = {"from": price(before), "to": price(after)}
+    if "registration_closes_at" in changed:
+        now = datetime.now(timezone.utc)
+        was_closed = before.get("registration_closes_at") is not None and before["registration_closes_at"] <= now
+        is_closed = after.get("registration_closes_at") is not None and after["registration_closes_at"] <= now
+        if is_closed and not was_closed:
+            ctx["registration"] = "closed"
+        elif was_closed and not is_closed:
+            ctx["registration"] = "reopened"
+    return ctx
+
+
 class EventsService:
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
@@ -97,7 +119,8 @@ class EventsService:
             record = await self.repo.create_event(data, slug, creator_uid)
             d = self._to_dict(record)
             event_id = d["event_id"]
-            await self._audit(creator_uid, "event_created", event_id)
+            await self._audit(creator_uid, "event_created", event_id,
+                              {"event_id": event_id, "title": d.get("title"), "status": d.get("status")})
 
             # event_members.firebase_uid references event_users; an
             # env-var-only emergency admin may never have signed in, and
@@ -160,7 +183,8 @@ class EventsService:
             return _enrich(self._to_dict(existing))
 
         record = await self.repo.update_event(event_id, fields)
-        await self._audit(user["firebase_uid"], "event_updated", event_id)
+        await self._audit(user["firebase_uid"], "event_updated", event_id,
+                          _update_context(event_id, dict(existing), dict(record), fields))
         # A price change on a published paid event must reach checkout.
         await self._ensure_payment_configuration(self._to_dict(record), user)
         return _enrich(self._to_dict(record))
@@ -215,7 +239,8 @@ class EventsService:
                 status_code=409,
                 detail=f"status_changed_concurrently_expected_{current}",
             )
-        await self._audit(user["firebase_uid"], audit_type, event_id)
+        await self._audit(user["firebase_uid"], audit_type, event_id,
+                          {"event_id": event_id, "from": current, "to": new_status})
         if new_status == "published":
             await self._ensure_payment_configuration(self._to_dict(record), user)
         return _enrich(self._to_dict(record))
@@ -227,7 +252,12 @@ class EventsService:
         free events, drafts, and when nothing changed."""
         created = await sync_event_payment_configuration(self.conn, event, user["firebase_uid"])
         if created is not None:
-            await self._audit(user["firebase_uid"], "payment_configuration_synced", event["event_id"])
+            await self._audit(user["firebase_uid"], "payment_configuration_synced", event["event_id"], {
+                "event_id": event["event_id"],
+                "price": str(created["base_amount"]),
+                "mode": created["payment_mode"] if "payment_mode" in created else None,
+                "version": created["version"],
+            })
 
     # ── Admin: Sessions ──────────────────────────────────────────────────────
 

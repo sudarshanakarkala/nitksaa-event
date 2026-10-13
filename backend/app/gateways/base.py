@@ -123,6 +123,47 @@ class GatewayInitiationResult:
 
 
 @dataclass(frozen=True)
+class PaymentDetails:
+    """Provider-neutral facts about one payment, for support, finance, Audit
+    and NITiKa. Each adapter maps its own fields into these names; anything a
+    provider doesn't report stays None. Never personal data (no email, phone,
+    UPI id or card details). Amounts are in the smallest currency unit, as
+    the provider reports them."""
+
+    method: Optional[str] = None          # upi / card / netbanking / wallet / emi
+    instrument: Optional[str] = None      # bank or wallet code
+    international: Optional[bool] = None
+    fee_minor: Optional[int] = None       # gateway fee incl. tax
+    tax_minor: Optional[int] = None
+    failure_source: Optional[str] = None  # who/where it failed: customer, bank ...
+    failure_step: Optional[str] = None    # at which step
+    failure_reason: Optional[str] = None  # why, e.g. incorrect_otp
+    bank_reference: Optional[str] = None  # bank/network reference (RRN etc.)
+
+    def to_context(self) -> dict:
+        """Compact, JSON-safe form for audit entries (None values dropped)."""
+        out = {
+            "method": self.method,
+            "instrument": self.instrument,
+            "international": self.international,
+            "fee": _minor_to_str(self.fee_minor),
+            "tax": _minor_to_str(self.tax_minor),
+            "bank_reference": self.bank_reference,
+        }
+        failure = {k: v for k, v in (("source", self.failure_source), ("step", self.failure_step),
+                                     ("reason", self.failure_reason)) if v}
+        if failure:
+            out["failure"] = failure
+        return {k: v for k, v in out.items() if v is not None}
+
+
+def _minor_to_str(minor: Optional[int]) -> Optional[str]:
+    if minor is None:
+        return None
+    return str((Decimal(int(minor)) / 100).quantize(Decimal("0.01")))
+
+
+@dataclass(frozen=True)
 class NormalizedGatewayEvent:
     """Provider-independent webhook/status event. Field names mirror what
     payment_service.process_webhook already needed from the raw sandbox
@@ -153,6 +194,12 @@ class NormalizedGatewayEvent:
     # `status` is still PAYMENT_PENDING for such an event, so a consumer that
     # ignores this flag behaves exactly as before; webhooks never set it.
     no_payment: bool = False
+    # How the payment was made / why it failed, when the provider says.
+    details: Optional[PaymentDetails] = None
+    # Set for a refund event (e.g. Razorpay refund.processed). `status` is
+    # then UNKNOWN: refund events never drive the payment state machine; the
+    # refund domain applies `refund` instead.
+    refund: Optional["NormalizedRefundResult"] = None
 
 
 @dataclass(frozen=True)
@@ -167,6 +214,12 @@ class NormalizedRefundResult:
     currency: str
     raw_status: str = ""
     failure_reason: Optional[str] = None
+    # The reference the customer quotes to their bank (ARN/RRN/UTR), once the
+    # provider has one, and how the refund was actually sent (normal/instant).
+    bank_reference: Optional[str] = None
+    speed_processed: Optional[str] = None
+    # The provider's payment id the refund belongs to (refund webhooks).
+    provider_payment_id: str = ""
 
 
 class GatewayError(Exception):

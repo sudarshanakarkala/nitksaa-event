@@ -40,6 +40,7 @@ from app.gateways.base import (
     NormalizedRefundResult,
     NormalizedRefundStatus,
     NormalizedStatus,
+    PaymentDetails,
     PaymentGateway,
 )
 
@@ -78,6 +79,43 @@ _REFUND_STATUS_MAP = {
     "created": NormalizedRefundStatus.REFUND_PENDING,
     "failed": NormalizedRefundStatus.REFUND_FAILED,
 }
+
+# Razorpay refund webhook `event` -> refund status, used when the refund
+# entity in the body has no status of its own.
+_REFUND_EVENT_STATUS = {
+    "refund.created": "pending",
+    "refund.processed": "processed",
+    "refund.failed": "failed",
+}
+
+
+def _int_or_none(v: Any) -> Optional[int]:
+    try:
+        return int(v) if v is not None else None
+    except (TypeError, ValueError):
+        return None
+
+
+def _payment_details(payment: Dict[str, Any]) -> Optional[PaymentDetails]:
+    """Razorpay payment entity -> provider-neutral details. Deliberately
+    leaves out personal data the entity carries (email, contact, vpa, card)."""
+    if not payment:
+        return None
+    acquirer = payment.get("acquirer_data") if isinstance(payment.get("acquirer_data"), dict) else {}
+    bank_ref = (acquirer.get("rrn") or acquirer.get("bank_transaction_id")
+                or acquirer.get("upi_transaction_id") or None)
+    details = PaymentDetails(
+        method=payment.get("method") or None,
+        instrument=payment.get("bank") or payment.get("wallet") or None,
+        international=payment.get("international") if isinstance(payment.get("international"), bool) else None,
+        fee_minor=_int_or_none(payment.get("fee")),
+        tax_minor=_int_or_none(payment.get("tax")),
+        failure_source=payment.get("error_source") or None,
+        failure_step=payment.get("error_step") or None,
+        failure_reason=payment.get("error_reason") or None,
+        bank_reference=str(bank_ref) if bank_ref else None,
+    )
+    return details if details != PaymentDetails() else None
 
 
 class RazorpayModeCredentialError(GatewayError):
@@ -352,6 +390,7 @@ class RazorpayGateway(PaymentGateway):
             gateway_payment_ref=payment.get("id", ""),
             failure_code=payment.get("error_code") or "UNKNOWN",
             failure_message=payment.get("error_description") or "Payment failed",
+            details=_payment_details(payment),
         )
 
     # ── webhook ──────────────────────────────────────────────────────────
@@ -390,6 +429,26 @@ class RazorpayGateway(PaymentGateway):
         p = payload.get("payload", {}) or {}
         payment_entity = ((p.get("payment") or {}).get("entity")) or {}
         order_entity = ((p.get("order") or {}).get("entity")) or {}
+        refund_entity = ((p.get("refund") or {}).get("entity")) or {}
+
+        if event_type.startswith("refund.") and refund_entity:
+            # Refund outcome (refund.created / processed / failed). Never
+            # drives the payment state machine (status UNKNOWN); the refund
+            # domain applies `refund`.
+            if not refund_entity.get("status"):
+                refund_entity = {**refund_entity, "status": _REFUND_EVENT_STATUS.get(event_type, "")}
+            refund = self._refund_to_result(refund_entity)
+            return NormalizedGatewayEvent(
+                event_id=f"{event_type}:{refund_entity.get('id', '')}",
+                status=NormalizedStatus.UNKNOWN,
+                raw_event_type=event_type,
+                gateway_order_ref=payment_entity.get("order_id") or "",
+                amount_raw=paise_to_rupees_str(refund_entity.get("amount", 0)),
+                currency=refund_entity.get("currency") or "INR",
+                issued_at_raw=payload.get("created_at"),
+                gateway_payment_ref=refund.provider_payment_id,
+                refund=refund,
+            )
 
         gateway_order_ref = payment_entity.get("order_id") or order_entity.get("id") or ""
         amount = payment_entity.get("amount", order_entity.get("amount_paid", 0))
@@ -413,6 +472,7 @@ class RazorpayGateway(PaymentGateway):
             gateway_payment_ref=payment_entity.get("id", ""),
             failure_code=payment_entity.get("error_code") or "UNKNOWN",
             failure_message=payment_entity.get("error_description") or "Payment failed",
+            details=_payment_details(payment_entity),
         )
 
     # ── refunds ──────────────────────────────────────────────────────────
@@ -476,6 +536,10 @@ class RazorpayGateway(PaymentGateway):
             raw_status=raw,
             failure_reason=(data.get("notes") or {}).get("failure_reason")
             if isinstance(data.get("notes"), dict) else None,
+            bank_reference=(acquirer.get("arn") or acquirer.get("rrn") or acquirer.get("utr") or None)
+            if isinstance(acquirer := data.get("acquirer_data"), dict) else None,
+            speed_processed=data.get("speed_processed") or None,
+            provider_payment_id=data.get("payment_id") or "",
         )
 
 
