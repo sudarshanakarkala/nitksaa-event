@@ -40,8 +40,12 @@ const _orderStatus = {
 const _refundStatus = {
   'pending': 'Pending',
   'processing': 'Processing',
+  // Refused for a temporary reason (e.g. low Razorpay balance); retried
+  // automatically.
+  'delayed': 'Delayed',
   'processed': 'Refunded',
-  'failed': 'Failed',
+  // Couldn't be sent automatically: a person must act.
+  'failed': 'Needs attention',
 };
 
 String _modeLabel(String mode) => mode == 'live' ? 'Live' : 'Test';
@@ -106,6 +110,9 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     _View.refunds: ('requested', false),
     _View.pricing: ('event', true),
   };
+
+  /// Refund numbers with a Retry now in flight.
+  final Set<String> _retrying = {};
 
   String? get _token => ref.read(authControllerProvider).session?.accessToken;
   AdminAccess get _access =>
@@ -278,11 +285,65 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           value: (r) => _refundStatus[r.status] ?? r.status,
         ),
         GridColumn(id: 'mode', label: 'Mode', kind: ColumnKind.category, value: (r) => _modeLabel(r.mode)),
-        GridColumn(id: 'reason', label: 'Reason', kind: ColumnKind.text, value: (r) => r.failureReason),
+        GridColumn(
+          id: 'reason',
+          label: 'Reason',
+          kind: ColumnKind.text,
+          value: (r) => r.reasonText ?? r.failureReason,
+        ),
+        GridColumn(id: 'tries', label: 'Tries', kind: ColumnKind.number, value: (r) => r.attemptCount),
+        GridColumn(
+          id: 'next',
+          label: 'Next try',
+          kind: ColumnKind.date,
+          value: (r) => r.status == 'delayed' ? r.nextRetryAt : null,
+        ),
+        GridColumn(id: 'payment', label: 'Payment ref', kind: ColumnKind.text, value: (r) => r.paymentRef),
         GridColumn(id: 'ref', label: 'Gateway ref', kind: ColumnKind.text, value: (r) => r.providerRef),
+        GridColumn(id: 'bank', label: 'Bank ref', kind: ColumnKind.text, value: (r) => r.bankReference),
         GridColumn(id: 'requested', label: 'Requested', kind: ColumnKind.date, value: (r) => r.requestedAt),
         GridColumn(id: 'updated', label: 'Updated', kind: ColumnKind.date, value: (r) => r.updatedAt),
+        GridColumn(
+          id: 'retry',
+          label: 'Action',
+          kind: ColumnKind.text,
+          value: (r) => _mayRetry(r) ? 'Retry now' : '',
+        ),
       ];
+
+  /// Retry now: overall admins, Finance, and the event's own admins
+  /// (same rule as the backend).
+  bool _mayRetry(AdminRefund r) =>
+      r.canRetry &&
+      (_access.isAdmin ||
+          _access.platformRoles.any(const {'platform_admin', 'finance_operator'}.contains) ||
+          _access.canAdminEvent(r.eventId));
+
+  Future<void> _retry(AdminRefund r) async {
+    final token = _token;
+    if (token == null || _retrying.contains(r.refundNumber)) return;
+    setState(() => _retrying.add(r.refundNumber));
+    final messenger = ScaffoldMessenger.maybeOf(context);
+    String message;
+    try {
+      final result = await ref.read(paymentsApiProvider).retryRefund(token, r.refundNumber);
+      message = switch (result.status) {
+        'processed' => 'Refund ${r.refundNumber} sent.',
+        'pending' || 'processing' => 'Refund ${r.refundNumber} accepted by Razorpay; it will finish shortly.',
+        'delayed' => 'Razorpay still can\'t take refund ${r.refundNumber}. '
+            '${result.reasonText ?? ''} Retrying automatically.',
+        'failed' => 'Refund ${r.refundNumber} needs attention. ${result.reasonText ?? ''}',
+        _ => 'Refund ${r.refundNumber}: ${result.status}.',
+      };
+    } catch (error, stackTrace) {
+      AppLogger.error('Payments: retry refund failed', error, stackTrace);
+      message = apiErrorMessage(error, action: 'retry the refund');
+    }
+    if (!mounted) return;
+    setState(() => _retrying.remove(r.refundNumber));
+    messenger?.showSnackBar(SnackBar(content: Text(message.trim())));
+    await _load();
+  }
 
   Map<String, ColumnFilter> get _filters => {
         if (_status.isNotEmpty) 'status': ColumnFilter(values: _status),
@@ -546,19 +607,32 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           case _View.refunds:
             final rows = _refundRows;
             final failed = rows.where((r) => r.status == 'failed').length;
+            final delayed = rows.where((r) => r.status == 'delayed').length;
             children = [
               const _Note(text: 'Refunds start automatically when someone cancels a paid registration.'),
               const SizedBox(height: 8),
               if (failed > 0) ...[
                 _Note(
                   text: failed == 1
-                      ? 'One refund failed. The attendee hasn\'t been paid back.'
-                      : '$failed refunds failed. Those attendees haven\'t been paid back.',
+                      ? 'One refund needs attention: it couldn\'t be sent automatically and the attendee '
+                          'hasn\'t been paid back.'
+                      : '$failed refunds need attention: they couldn\'t be sent automatically and those '
+                          'attendees haven\'t been paid back.',
                   warning: true,
                 ),
-                const SizedBox(height: 12),
-              ] else
-                const SizedBox(height: 4),
+                const SizedBox(height: 8),
+              ],
+              if (delayed > 0) ...[
+                _Note(
+                  text: delayed == 1
+                      ? 'One refund is delayed for a temporary reason and is being retried automatically '
+                          '(for up to 7 days).'
+                      : '$delayed refunds are delayed for a temporary reason and are being retried '
+                          'automatically (for up to 7 days).',
+                ),
+                const SizedBox(height: 8),
+              ],
+              const SizedBox(height: 4),
               if (rows.isEmpty)
                 const _Empty('No refunds match.')
               else
@@ -578,6 +652,16 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                         },
                       ),
                     'mode' => _ModeBadge(mode: r.mode),
+                    'retry' => _mayRetry(r)
+                        ? TextButton(
+                            onPressed: _retrying.contains(r.refundNumber) ? null : () => _retry(r),
+                            style: TextButton.styleFrom(
+                              visualDensity: VisualDensity.compact,
+                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                            ),
+                            child: Text(_retrying.contains(r.refundNumber) ? 'Retrying…' : 'Retry now'),
+                          )
+                        : const SizedBox.shrink(),
                     _ => null,
                   },
                 ),

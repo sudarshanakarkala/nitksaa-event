@@ -13,6 +13,7 @@ void main() {
       'failed_emails': 3,
       'stuck_payments': 2,
       'failed_refunds': 2,
+      'delayed_refunds': 1,
       'events': {
         'closing_soon': [
           {
@@ -39,6 +40,7 @@ void main() {
     expect(c.drafts, 3);
     expect(c.stuckPayments, 2);
     expect(c.failedRefunds, 2);
+    expect(c.delayedRefunds, 1);
     expect(c.closingSoonEvents.single.eventId, 3);
     expect(c.closingSoonEvents.single.closesAt, isNotNull);
     expect(c.nearCapacityEvents.map((e) => e.registered), [10, 9]);

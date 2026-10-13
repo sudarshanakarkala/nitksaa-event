@@ -159,7 +159,7 @@ void main() {
       expect(backend.requests.where((r) => r.method != 'GET'), isEmpty);
     });
 
-    testWidgets('Test B: a pending refund shows "Refund in progress", the '
+    testWidgets('Test B: a pending refund shows "Refund on its way", the '
         "amount, the backend's message and a way to check again", (
       tester,
     ) async {
@@ -173,7 +173,7 @@ void main() {
 
       await _viewRefund(tester);
 
-      expect(_inDialog('Refund in progress'), findsOneWidget);
+      expect(_inDialog('Refund on its way'), findsOneWidget);
       expect(_inDialog('₹123.45'), findsOneWidget);
       expect(_inDialog('Requested on: '), findsOneWidget);
       expect(find.textContaining(_dateAndTime), findsOneWidget);
@@ -193,7 +193,7 @@ void main() {
       );
       await _openApp(tester, backend);
       await _viewRefund(tester);
-      expect(_inDialog('Refund in progress'), findsOneWidget);
+      expect(_inDialog('Refund on its way'), findsOneWidget);
       expect(_inDialog('₹1'), findsOneWidget);
 
       backend.razorpayNowSays = 'refund_processed';
@@ -201,7 +201,7 @@ void main() {
 
       expect(backend.refundStatusRequests, hasLength(2));
       expect(_inDialog('Refunded'), findsOneWidget);
-      expect(_inDialog('Refund in progress'), findsNothing);
+      expect(_inDialog('Refund on its way'), findsNothing);
       expect(_inDialog(_processedMessage), findsOneWidget);
       expect(_inDialog(_checkRefundStatus), findsNothing);
     });
@@ -238,9 +238,31 @@ void main() {
 
       await _viewRefund(tester);
 
-      expect(_inDialog('Refund could not be completed'), findsOneWidget);
+      expect(_inDialog('Refund needs attention'), findsOneWidget);
       expect(_inDialog(_failedMessage), findsOneWidget);
       _expectNoRetry();
+    });
+
+    testWidgets('Test E2: a delayed refund says it is retrying, when the next '
+        'try is, and the references, with a way to check again', (tester) async {
+      final backend = FakeRegistrationBackend(finalAmount: '100.00');
+      final registration = backend.seedRegistration(
+        tokenA,
+        status: 'cancelled',
+        refund: 'refund_delayed',
+      );
+      await _openApp(tester, backend);
+
+      await _viewRefund(tester);
+
+      expect(_inDialog('Refund delayed, retrying'), findsOneWidget);
+      expect(_inDialog('₹100'), findsOneWidget);
+      expect(_inDialog('Next try: '), findsOneWidget);
+      expect(find.textContaining(_dateAndTime), findsNWidgets(2));
+      expect(_inDialog('pay_test${registration['registration_id']}'), findsOneWidget);
+      expect(find.byTooltip('Copy Payment reference'), findsOneWidget);
+      expect(find.textContaining('retrying automatically'), findsOneWidget);
+      expect(_inDialog(_checkRefundStatus), findsOneWidget);
     });
 
     testWidgets('Test F: a cancelled free registration has no refund action', (
@@ -300,7 +322,7 @@ void main() {
         backend.refundStatusRequests.single.path,
         '/api/v1/registrations/${newest['registration_id']}/refund',
       );
-      expect(_inDialog('Refund in progress'), findsOneWidget);
+      expect(_inDialog('Refund on its way'), findsOneWidget);
     });
 
     testWidgets('there is no polling: a pending refund left open for five '
@@ -319,7 +341,7 @@ void main() {
       await settleRequests(tester);
 
       expect(backend.refundStatusRequests, hasLength(1));
-      expect(_inDialog('Refund in progress'), findsOneWidget);
+      expect(_inDialog('Refund on its way'), findsOneWidget);
     });
 
     testWidgets('Test K: each "Check refund status" sends one GET, and '
@@ -337,7 +359,7 @@ void main() {
       for (var taps = 1; taps <= 3; taps++) {
         await _check(tester);
         expect(backend.refundStatusRequests, hasLength(1 + taps));
-        expect(_inDialog('Refund in progress'), findsOneWidget);
+        expect(_inDialog('Refund on its way'), findsOneWidget);
       }
 
       expect(backend.requests.where((r) => r.method != 'GET'), isEmpty);
@@ -383,7 +405,7 @@ void main() {
 
       expect(_inDialog(_notFound), findsOneWidget);
       expect(find.textContaining(_technicalWording), findsNothing);
-      expect(_inDialog('Refund in progress'), findsNothing);
+      expect(_inDialog('Refund on its way'), findsNothing);
     });
 
     testWidgets('Test I: no connection, and the check works once it is back', (
@@ -441,7 +463,7 @@ void main() {
       backend.refundStatusRequestsToDrop = 1;
       await _check(tester);
 
-      expect(_inDialog('Refund in progress'), findsOneWidget);
+      expect(_inDialog('Refund on its way'), findsOneWidget);
       expect(_inDialog('₹250'), findsOneWidget);
       expect(_inDialog(_noConnection), findsOneWidget);
       expect(_inDialog(_checkRefundStatus), findsOneWidget);
@@ -479,7 +501,7 @@ void main() {
         await settleRequests(tester);
 
         expect(backend.refundStatusRequests, isEmpty);
-        expect(_inDialog('Refund in progress'), findsOneWidget);
+        expect(_inDialog('Refund on its way'), findsOneWidget);
         expect(_inDialog('₹123.45'), findsOneWidget);
         expect(_inDialog(_pendingMessage), findsOneWidget);
 
@@ -552,7 +574,7 @@ void main() {
         await tester.tap(find.text('View refund'));
         await settleRequests(tester);
 
-        expect(_inDialog('Refund in progress'), findsOneWidget);
+        expect(_inDialog('Refund on its way'), findsOneWidget);
         expect(_inDialog('₹123.45'), findsOneWidget);
         expect(backend.refundStatusRequests, isEmpty);
         expect(find.byType(SnackBar), findsNothing);
@@ -572,7 +594,7 @@ void main() {
       await _viewRefund(tester);
 
       expect(backend.refundStatusRequests, hasLength(1));
-      expect(_inDialog('Refund in progress'), findsOneWidget);
+      expect(_inDialog('Refund on its way'), findsOneWidget);
     });
 
     testWidgets('after a paid cancellation the card on My Events has "View '
@@ -602,7 +624,7 @@ void main() {
       );
       final app = await _openApp(tester, backend);
       await _viewRefund(tester);
-      expect(_inDialog('Refund in progress'), findsOneWidget);
+      expect(_inDialog('Refund on its way'), findsOneWidget);
       expect(_inDialog('₹777'), findsOneWidget);
       final requestsAsA = backend.requests.length;
 
@@ -612,7 +634,7 @@ void main() {
 
       expect(find.byType(AlertDialog), findsNothing);
       expect(find.textContaining('₹777'), findsNothing);
-      expect(find.text('Refund in progress'), findsNothing);
+      expect(find.text('Refund on its way'), findsNothing);
       expect(find.text(_pendingMessage), findsNothing);
       // B has no registrations, so no card and no refund action.
       expect(find.text(_viewRefundStatus), findsNothing);

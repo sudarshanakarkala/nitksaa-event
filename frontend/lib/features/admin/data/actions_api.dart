@@ -53,6 +53,7 @@ class PendingCounts {
     this.failedEmails = 0,
     this.stuckPayments = 0,
     this.failedRefunds = 0,
+    this.delayedRefunds = 0,
     this.closingSoonEvents = const [],
     this.nearCapacityEvents = const [],
     this.failedEmailEvents = const [],
@@ -65,6 +66,9 @@ class PendingCounts {
   final int failedEmails;
   final int stuckPayments;
   final int failedRefunds;
+
+  /// Refunds being retried automatically. Information only (not in [total]).
+  final int delayedRefunds;
   final List<PendingEvent> closingSoonEvents;
   final List<PendingEvent> nearCapacityEvents;
   final List<PendingEvent> failedEmailEvents;
@@ -83,6 +87,7 @@ class PendingCounts {
       failedEmails: _int(j['failed_emails']),
       stuckPayments: _int(j['stuck_payments']),
       failedRefunds: _int(j['failed_refunds']),
+      delayedRefunds: _int(j['delayed_refunds']),
       closingSoonEvents: list('closing_soon'),
       nearCapacityEvents: list('near_capacity'),
       failedEmailEvents: list('failed_emails'),

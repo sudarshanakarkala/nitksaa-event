@@ -86,6 +86,12 @@ class AdminRefund {
     this.providerRef,
     this.failureReason,
     this.updatedAt,
+    this.paymentRef,
+    this.bankReference,
+    this.reasonText,
+    this.attemptCount = 1,
+    this.nextRetryAt,
+    this.canRetry = false,
   });
 
   final String refundNumber;
@@ -96,13 +102,28 @@ class AdminRefund {
   final String? email;
   final double amount;
 
-  /// pending / processing / processed / failed.
+  /// pending / processing / delayed (retrying automatically) / processed /
+  /// failed (needs a person).
   final String status;
   final String mode;
   final String? providerRef;
   final String? failureReason;
   final DateTime requestedAt;
   final DateTime? updatedAt;
+
+  /// The provider's id for the original payment (Razorpay `pay_…`).
+  final String? paymentRef;
+
+  /// The bank reference (ARN) once the refund has been sent.
+  final String? bankReference;
+
+  /// [failureReason] in plain words, from the backend.
+  final String? reasonText;
+  final int attemptCount;
+  final DateTime? nextRetryAt;
+
+  /// Delayed or failed: Retry now is possible.
+  final bool canRetry;
 
   String get displayName => fullname ?? email ?? refundNumber;
 
@@ -120,6 +141,29 @@ class AdminRefund {
         failureReason: _text(j['failure_reason']),
         requestedAt: _date(j['requested_at']) ?? DateTime.fromMillisecondsSinceEpoch(0),
         updatedAt: _date(j['updated_at']),
+        paymentRef: _text(j['provider_payment_id']),
+        bankReference: _text(j['bank_reference']),
+        reasonText: _text(j['reason_text']),
+        attemptCount: j['attempt_count'] == null ? 1 : _int(j['attempt_count']),
+        nextRetryAt: _date(j['next_retry_at']),
+        canRetry: j['can_retry'] == true,
+      );
+}
+
+/// What Retry now did (`POST …/refunds/{number}/retry`).
+@immutable
+class RefundRetryResult {
+  const RefundRetryResult({required this.status, this.reasonText, this.nextRetryAt});
+
+  /// processed / pending / processing / delayed / failed.
+  final String status;
+  final String? reasonText;
+  final DateTime? nextRetryAt;
+
+  factory RefundRetryResult.fromJson(Map<String, dynamic> j) => RefundRetryResult(
+        status: j['status']?.toString() ?? '',
+        reasonText: _text(j['reason_text']),
+        nextRetryAt: _date(j['next_retry_at']),
       );
 }
 
@@ -237,6 +281,16 @@ class PaymentsApi {
 
   Future<List<AdminRefund>> refunds(String token) =>
       _allPages('/api/v1/admin/payments/refunds', 'refunds', token, AdminRefund.fromJson);
+
+  /// Try a delayed or failed refund again now. The backend first checks
+  /// what Razorpay already holds, so this never refunds twice.
+  Future<RefundRetryResult> retryRefund(String token, String refundNumber) async {
+    final response = await _dio.post<Map<String, dynamic>>(
+      '/api/v1/admin/payments/refunds/${Uri.encodeComponent(refundNumber)}/retry',
+      options: _auth(token),
+    );
+    return RefundRetryResult.fromJson(response.data ?? const <String, dynamic>{});
+  }
 
   /// The event's published payment setup, or null if it has none yet.
   Future<EventPricing?> pricing(String token, int eventId) async {

@@ -12,18 +12,24 @@ class RefundStatus {
     this.safeMessage,
     this.paymentMode,
     this.realMoney = false,
+    this.paymentReference,
+    this.bankReference,
+    this.nextRetryAt,
   });
 
   /// Nothing was paid, so there is nothing to refund.
   static const none = 'none';
   static const pending = 'refund_pending';
+
+  /// The provider couldn't take it yet (temporary); retried automatically.
+  static const delayed = 'refund_delayed';
   static const processed = 'refund_processed';
   static const failed = 'refund_failed';
 
   final String? refundId;
   final int? registrationId;
 
-  /// One of [none], [pending], [processed] or [failed].
+  /// One of [none], [pending], [delayed], [processed] or [failed].
   final String status;
   final double? amount;
   final String? currency;
@@ -36,6 +42,15 @@ class RefundStatus {
   /// `test` or `live`. Null when there is no refund.
   final String? paymentMode;
   final bool realMoney;
+
+  /// The provider's id for the original payment (e.g. Razorpay `pay_…`).
+  final String? paymentReference;
+
+  /// The reference the attendee quotes to their bank (ARN), once sent.
+  final String? bankReference;
+
+  /// When a delayed refund will be tried again.
+  final DateTime? nextRetryAt;
 
   /// A refund exists, in whatever state. False when nothing was paid.
   bool get hasRefund => status != none;
@@ -56,6 +71,9 @@ class RefundStatus {
       safeMessage: json['safe_message']?.toString(),
       paymentMode: json['payment_mode']?.toString(),
       realMoney: json['real_money'] == true,
+      paymentReference: _text(json['payment_reference']),
+      bankReference: _text(json['bank_reference']),
+      nextRetryAt: _parseDate(json['next_retry_at']),
     );
   }
 
@@ -65,6 +83,11 @@ class RefundStatus {
     if (value == null) return null;
     if (value is num) return value.toDouble();
     return double.tryParse(value.toString());
+  }
+
+  static String? _text(dynamic value) {
+    final s = value?.toString().trim();
+    return (s == null || s.isEmpty) ? null : s;
   }
 
   static DateTime? _parseDate(dynamic value) {
