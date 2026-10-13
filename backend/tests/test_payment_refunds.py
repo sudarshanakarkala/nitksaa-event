@@ -465,7 +465,7 @@ def test_timeline_cancelled_with_processing_refund(client, monkeypatch):
     monkeypatch.setattr(DeterministicSandboxGateway, "refund", _accepted_not_settled)
     body = _cancel(client, rid)
     assert body["status"] == "refund_pending"
-    assert body["safe_message"] == "Your registration is cancelled. Your refund is being processed."
+    assert body["safe_message"] == "Your registration is cancelled. Your refund is on its way. We'll email you when it's been sent."
 
     refund = _refund_row(rid)
     assert refund["status"] == "processing"

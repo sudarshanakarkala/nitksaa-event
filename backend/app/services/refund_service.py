@@ -474,10 +474,11 @@ async def record_refusal(
             status, next_retry = "failed", None
         updated = await conn.fetchrow(
             """
-            UPDATE payment_refunds SET status = $2, failure_reason = $3, next_retry_at = $4,
+            UPDATE payment_refunds SET status = $2::text, failure_reason = $3::text,
+                   next_retry_at = $4::timestamptz,
                    last_attempt_at = now(), updated_at = now(),
-                   finalized_at = CASE WHEN $2 = 'failed' THEN now() END
-            WHERE id = $1 RETURNING *
+                   finalized_at = CASE WHEN $2::text = 'failed' THEN now() END
+            WHERE id = $1::bigint RETURNING *
             """,
             row["id"], status, reason.value, next_retry,
         )

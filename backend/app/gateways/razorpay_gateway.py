@@ -195,8 +195,14 @@ class RazorpayRefundRefusedError(RazorpayApiError, GatewayRefundRefusedError):
     as RazorpayApiError (operation + fixed code), never the provider text."""
 
     def __init__(self, code: str, reason: RefundFailureReason):
-        RazorpayApiError.__init__(self, "payments.refund", code=code)
+        # Set the fields directly: with two error bases, RazorpayApiError's
+        # super().__init__ would land in GatewayRefundRefusedError.__init__
+        # with the message in place of the reason.
+        self.operation = "payments.refund"
+        self.status_code = None
+        self.code = code
         self.reason = reason
+        GatewayError.__init__(self, f"razorpay payments.refund failed [{code}]")
 
 
 def _call(operation: str, fn: Callable[..., Any], *args: Any, **kwargs: Any) -> Dict[str, Any]:
