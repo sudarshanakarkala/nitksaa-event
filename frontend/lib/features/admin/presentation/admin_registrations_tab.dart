@@ -93,19 +93,33 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    final param = GoRouterState.of(context).uri.queryParameters['event'];
-    final fromUrl = int.tryParse(param ?? '') ?? _allEvents;
-    if (fromUrl != _selected) {
+    final query = GoRouterState.of(context).uri.queryParameters;
+    final fromUrl = int.tryParse(query['event'] ?? '') ?? _allEvents;
+    // e.g. Actions → "Confirmation emails failed": ?email=failed
+    final email = query['email'];
+    final eventChanged = fromUrl != _selected;
+    final emailChanged = email != _emailFromUrl;
+    if (eventChanged || emailChanged) {
       _selected = fromUrl;
+      _emailFromUrl = email;
       // Another event: start from a clean search. Done after this pass,
       // since clearing the search field rebuilds the tab.
       Future.microtask(() {
         if (!mounted) return;
-        setState(_resetFilters);
-        if (!_eventsLoading) _loadData();
+        setState(() {
+          if (eventChanged) _resetFilters();
+          if (email != null && email.isNotEmpty) {
+            _view = RegistrationView.registered;
+            _rail['emailStatus'] = {confirmationEmailLabel(email)};
+          }
+        });
+        if (eventChanged && !_eventsLoading) _loadData();
       });
     }
   }
+
+  /// The `email` filter last taken from the URL.
+  String? _emailFromUrl;
 
   @override
   void dispose() {

@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../features/admin/data/actions_api.dart';
 import '../../features/auth/services/auth_controller.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_colors.dart';
@@ -51,8 +52,8 @@ class SiteHeader extends ConsumerWidget {
     final items = visibleNavItems(auth);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final gap = compact ? 6.0 : 8.0;
-    // Website Admin badge: shield, only for people with admin rights. The
-    // pending count arrives with the Actions tab.
+    // Website Admin badge: shield, only for people with admin rights, with
+    // the count of things that need attention (Actions tab).
     final showAdmin =
         auth.isAuthenticated && (auth.session?.access.hasAdminArea ?? false);
     final onAdminPage = location == AppRoutes.admin ||
@@ -95,12 +96,7 @@ class SiteHeader extends ConsumerWidget {
                     const Spacer(),
                   ],
                   if (showAdmin) ...[
-                    _HeaderIconButton(
-                      tooltip: 'Admin',
-                      icon: Icons.shield_outlined,
-                      active: onAdminPage,
-                      onPressed: () => context.go(AppRoutes.admin),
-                    ),
+                    _AdminButton(active: onAdminPage),
                     SizedBox(width: gap),
                   ],
                   if (onAssistant != null) ...[
@@ -188,6 +184,84 @@ class _Brand extends StatelessWidget {
               : Image.asset('assets/images/nitksaa-events-logo-on-$tone.png', height: 48),
         ),
       ),
+    );
+  }
+}
+
+/// The Admin shield with the website's gold count badge: how many things
+/// need attention (Actions tab), hidden at zero. Fetched on load and again
+/// whenever the window regains focus; admin changes refresh it too
+/// (refreshEventLists).
+class _AdminButton extends ConsumerStatefulWidget {
+  const _AdminButton({required this.active});
+
+  final bool active;
+
+  @override
+  ConsumerState<_AdminButton> createState() => _AdminButtonState();
+}
+
+class _AdminButtonState extends ConsumerState<_AdminButton> {
+  late final AppLifecycleListener _lifecycle;
+
+  @override
+  void initState() {
+    super.initState();
+    // On the web, "resumed" is the window or tab getting focus back.
+    _lifecycle = AppLifecycleListener(
+      onResume: () => ref.invalidate(pendingCountProvider),
+    );
+  }
+
+  @override
+  void dispose() {
+    _lifecycle.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final count = ref.watch(pendingCountProvider).valueOrNull?.total ?? 0;
+    final label = count > 99 ? '99+' : '$count';
+
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        _HeaderIconButton(
+          tooltip: count > 0 ? 'Admin · $count need attention' : 'Admin',
+          icon: Icons.shield_outlined,
+          active: widget.active,
+          onPressed: () => context.go(AppRoutes.admin),
+        ),
+        if (count > 0)
+          Positioned(
+            top: -6,
+            right: -6,
+            child: IgnorePointer(
+              child: Container(
+                constraints: const BoxConstraints(minWidth: 18),
+                height: 18,
+                padding: const EdgeInsets.symmetric(horizontal: 4),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: p.primary,
+                  borderRadius: BorderRadius.circular(9),
+                ),
+                child: Text(
+                  label,
+                  style: AppTextStyles.labelSmall.copyWith(
+                    fontSize: 10.9,
+                    fontWeight: FontWeight.w700,
+                    height: 1,
+                    letterSpacing: 0,
+                    color: p.onPrimary,
+                  ),
+                ),
+              ),
+            ),
+          ),
+      ],
     );
   }
 }
