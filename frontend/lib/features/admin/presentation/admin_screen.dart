@@ -9,6 +9,7 @@ import '../../../theme/app_text_styles.dart';
 import '../../auth/domain/admin_access.dart';
 import '../../auth/services/auth_controller.dart';
 import '../admin_tabs.dart';
+import 'admin_actions_tab.dart';
 import 'admin_dashboard_tab.dart';
 import 'admin_events_tab.dart';
 import 'admin_payments_tab.dart';
@@ -88,6 +89,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
       case AdminTab.payments:
         return const AdminPaymentsTab();
       case AdminTab.actions:
+        return const AdminActionsTab();
       case AdminTab.audit:
         return const _ComingSoon();
     }

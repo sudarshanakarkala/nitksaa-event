@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
@@ -29,6 +30,8 @@ enum _View {
 const _orderStatus = {
   'created': 'Started',
   'payment_pending': 'Pending',
+  // Not a stored status: started or pending for over 30 minutes.
+  'stuck': 'Stuck',
   'paid': 'Paid',
   'expired': 'Expired',
   'cancelled': 'Cancelled',
@@ -113,6 +116,16 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     super.initState();
     _search.addListener(() => setState(() {}));
     Future.microtask(_load);
+    // Links from Actions, e.g. /admin/payments?view=refunds&status=failed.
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final query = GoRouterState.of(context).uri.queryParameters;
+      final view = _View.values.where((v) => v.name == query['view']).firstOrNull;
+      if (view != null) _setView(view);
+      final statuses = _view == _View.refunds ? _refundStatus : _orderStatus;
+      final status = statuses[query['status']];
+      if (status != null) setState(() => _status = {status});
+    });
   }
 
   @override
@@ -239,7 +252,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           id: 'status',
           label: 'Status',
           kind: ColumnKind.category,
-          value: (o) => _orderStatus[o.status] ?? o.status,
+          value: (o) => o.stuck ? _orderStatus['stuck']! : (_orderStatus[o.status] ?? o.status),
         ),
         GridColumn(id: 'mode', label: 'Mode', kind: ColumnKind.category, value: (o) => _modeLabel(o.mode)),
         GridColumn(id: 'created', label: 'Started', kind: ColumnKind.date, value: (o) => o.createdAt),

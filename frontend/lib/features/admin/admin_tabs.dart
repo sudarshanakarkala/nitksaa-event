@@ -44,9 +44,9 @@ enum AdminTab {
     return null;
   }
 
-  /// Where `/admin` lands. Events until the Actions tab is built (step 8
-  /// makes Actions the default).
-  static const AdminTab landing = AdminTab.events;
+  /// Where `/admin` lands: what needs attention (website pattern). People
+  /// without it (finance only) land on their first visible tab.
+  static const AdminTab landing = AdminTab.actions;
 
   static List<AdminTab> visibleTabs(AdminAccess access) =>
       AdminTab.values.where((t) => t.visibleTo(access)).toList();

@@ -13,14 +13,17 @@ import '../../events/presentation/providers/created_events_provider.dart';
 import '../../events/presentation/providers/events_provider.dart';
 import '../../events/presentation/screens/manage_events_screen.dart' show showEventFormDialog;
 import '../../events/presentation/widgets/event_card.dart' show EventCardAction;
+import '../data/actions_api.dart';
 import 'event_admins_dialog.dart';
 
 /// Refreshes after any admin change to events: the public Events list,
-/// "created by me", and the admin events list behind the drafts link.
+/// "created by me", the admin events list behind the drafts link, and the
+/// Admin badge (Actions counts).
 void refreshEventLists(WidgetRef ref) {
   ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true);
   ref.invalidate(createdEventIdsProvider);
   ref.invalidate(myDraftCountProvider);
+  ref.invalidate(pendingCountProvider);
 }
 
 /// How many drafts the signed-in person can work on (their events; all of
