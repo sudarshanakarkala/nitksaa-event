@@ -1464,6 +1464,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ],
       );
     } else if (paymentDue) {
+      // Red when the payment failed, yellow when it just isn't finished
+      // (same colours as the notices).
+      final tone = registrationStatus == 'payment_failed'
+          ? context.palette.error
+          : context.palette.warning;
       ctaWidget = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1471,16 +1476,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: context.palette.warning.withValues(alpha: 0.14),
+              color: tone.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: context.palette.warning.withValues(alpha: 0.3)),
+              border: Border.all(color: tone.withValues(alpha: 0.3)),
             ),
             child: Text(
               registrationStatus == 'payment_failed'
                   ? 'Your payment didn\'t go through, so you aren\'t registered yet.'
                   : 'Your payment isn\'t complete yet, so you aren\'t registered yet.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: context.palette.warning, fontWeight: FontWeight.bold),
+              style: TextStyle(color: tone, fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 12),
