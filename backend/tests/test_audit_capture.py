@@ -263,6 +263,30 @@ def test_event_edit_lists_fields_price_and_registration_closing(client):
     assert "New venue" not in json.dumps(ctx)  # field names only, not values
 
 
+def test_close_registration_counts_as_closed_when_the_admins_clock_runs_ahead(client):
+    """The app's "Close registration" sends the admin's own clock; a PC a
+    little ahead of the server must still be recorded as "closed"."""
+    from datetime import datetime, timedelta, timezone
+    event_id = _admin_event(client)
+    ahead = (datetime.now(timezone.utc) + timedelta(seconds=5)).isoformat()
+    r = client.patch(f"/api/v1/admin/events/{event_id}", json={"registration_closes_at": ahead},
+                     headers=_bearer(_FIXTURE_ADMIN))
+    assert r.status_code == 200, r.text
+    assert _event_audit("event_updated", event_id)["registration"] == "closed"
+
+
+def test_a_closing_date_further_ahead_is_not_a_close(client):
+    from datetime import datetime, timedelta, timezone
+    event_id = _admin_event(client)
+    later = (datetime.now(timezone.utc) + timedelta(days=3)).isoformat()
+    r = client.patch(f"/api/v1/admin/events/{event_id}", json={"registration_closes_at": later},
+                     headers=_bearer(_FIXTURE_ADMIN))
+    assert r.status_code == 200, r.text
+    ctx = _event_audit("event_updated", event_id)
+    assert ctx["fields"] == ["registration_closes_at"]
+    assert "registration" not in ctx
+
+
 def test_retry_after_failure_in_same_checkout_clears_the_failure(client):
     """The person's first try fails, they retry in the same Razorpay window
     and it succeeds (one attempt row, two Razorpay payments)."""
