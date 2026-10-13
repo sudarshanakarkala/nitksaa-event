@@ -52,6 +52,16 @@ const _refundStatus = {
 
 String _modeLabel(String mode) => mode == 'live' ? 'Live' : 'Test';
 
+const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+/// "13 Oct, 10:29 AM": short enough for the Refunds table; the year is in
+/// the details window.
+String _shortDate(DateTime d) {
+  final hour = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
+  return '${d.day} ${_months[d.month - 1]}, $hour:${d.minute.toString().padLeft(2, '0')} '
+      '${d.hour >= 12 ? 'PM' : 'AM'}';
+}
+
 /// ₹ with Indian digit grouping; paise only when there are any.
 String _money(double amount) {
   final whole = amount.truncate();
@@ -295,7 +305,13 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
         ),
         GridColumn(id: 'tries', label: 'Tries', kind: ColumnKind.number, value: (r) => r.attemptCount),
         // The starting sort (newest first), so the arrow shows like on Orders.
-        GridColumn(id: 'requested', label: 'Requested', kind: ColumnKind.date, value: (r) => r.requestedAt),
+        GridColumn(
+          id: 'requested',
+          label: 'Requested',
+          kind: ColumnKind.date,
+          value: (r) => r.requestedAt,
+          text: (r) => _shortDate(r.requestedAt),
+        ),
         GridColumn(id: 'number', label: 'Refund ID', kind: ColumnKind.text, value: (r) => r.refundNumber),
         GridColumn(
           id: 'retry',
@@ -675,6 +691,19 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                         },
                       ),
                     'mode' => _ModeBadge(mode: r.mode),
+                    // Narrower than other text, so the row fits; the full
+                    // reason is in the details window.
+                    'reason' => (r.reasonText ?? r.failureReason) == null
+                        ? null
+                        : ConstrainedBox(
+                            constraints: const BoxConstraints(maxWidth: 190),
+                            child: Text(
+                              (r.reasonText ?? r.failureReason)!,
+                              maxLines: 2,
+                              overflow: TextOverflow.ellipsis,
+                              style: adminCellStyle(p),
+                            ),
+                          ),
                     'retry' => _mayRetry(r)
                         ? TextButton(
                             onPressed: _retrying.contains(r.refundNumber) ? null : () => _retry(r),
