@@ -12,6 +12,7 @@ import '../../auth/services/auth_controller.dart';
 import '../../events/data/events_repository.dart';
 import '../data/admin_api.dart';
 import '../../../shared/widgets/list_page.dart';
+import '../../../shared/widgets/notice.dart';
 
 /// Roles tab (overall admins only): search people and switch their
 /// "Overall admin", "Can create events" and "Finance" roles. Per-event
@@ -274,16 +275,7 @@ class _RolesTabState extends ConsumerState<RolesTab> {
   }
 
   void _snack(String message, {bool isError = false}) {
-    final p = context.palette;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message, style: TextStyle(color: p.textPrimary)),
-          backgroundColor: p.tinted(isError ? p.error : p.success),
-          duration: Duration(seconds: isError ? 6 : 3),
-        ),
-      );
+    showNotice(context, message, kind: isError ? NoticeKind.error : NoticeKind.success);
   }
 
   @override

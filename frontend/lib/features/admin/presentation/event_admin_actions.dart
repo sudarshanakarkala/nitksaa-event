@@ -15,6 +15,7 @@ import '../../events/presentation/screens/manage_events_screen.dart' show showEv
 import '../../events/presentation/widgets/event_card.dart' show EventCardAction;
 import '../data/actions_api.dart';
 import 'event_admins_dialog.dart';
+import '../../../shared/widgets/notice.dart';
 
 /// Refreshes after any admin change to events: the public Events list,
 /// "created by me", the admin events list behind the drafts link, and the
@@ -163,16 +164,7 @@ class EventAdminActions {
 
   void _snack(String message, {bool isError = false}) {
     if (!context.mounted) return;
-    final p = context.palette;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message, style: TextStyle(color: p.textPrimary)),
-          backgroundColor: p.tinted(isError ? p.error : p.success),
-          duration: Duration(seconds: isError ? 7 : 3),
-        ),
-      );
+    showNotice(context, message, kind: isError ? NoticeKind.error : NoticeKind.success);
   }
 
   Future<void> publish(AppEvent e) => _run(

@@ -12,6 +12,7 @@ import 'nitika_controller.dart';
 import 'widgets/answer_links.dart';
 import 'widgets/answer_table.dart';
 import 'widgets/answer_text.dart';
+import '../../../shared/widgets/notice.dart';
 
 /// The shell's assistant for a signed-in user, or null when signed out.
 Widget? nitikaAssistant({
@@ -448,9 +449,7 @@ class _ErrorBubble extends ConsumerWidget {
           : () async {
               await Clipboard.setData(ClipboardData(text: requestId));
               if (!context.mounted) return;
-              ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                const SnackBar(content: Text('Request ID copied')),
-              );
+              showNotice(context, 'Request ID copied', kind: NoticeKind.success);
             },
       child: _NitikaBubble(
         borderColor: p.error,

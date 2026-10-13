@@ -17,6 +17,7 @@ import '../../events/domain/event.dart';
 import '../data/registrations_api.dart';
 import '../domain/registration_filters.dart';
 import 'admin_widgets.dart';
+import '../../../shared/widgets/notice.dart';
 
 /// Value of the event picker meaning "all events".
 const int _allEvents = adminAllEvents;
@@ -509,16 +510,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   void _snack(String message, {bool isError = false}) {
     if (!mounted) return;
-    final p = context.palette;
-    ScaffoldMessenger.of(context)
-      ..clearSnackBars()
-      ..showSnackBar(
-        SnackBar(
-          content: Text(message, style: TextStyle(color: p.textPrimary)),
-          backgroundColor: p.tinted(isError ? p.error : p.success),
-          duration: Duration(seconds: isError ? 7 : 3),
-        ),
-      );
+    showNotice(context, message, kind: isError ? NoticeKind.error : NoticeKind.success);
   }
 
   // ── Layout ───────────────────────────────────────────────────────────────

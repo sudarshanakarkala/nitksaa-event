@@ -20,6 +20,8 @@ import '../widgets/refund_status_dialog.dart';
 import '../widgets/event_card.dart';
 import '../../domain/event.dart';
 import '../../domain/my_event_registration.dart';
+import '../../../../shared/widgets/notice.dart';
+import '../../domain/refund_status.dart';
 
 /// "Registered by me" filter. UI state only; shared with the phone filter
 /// sheet, which is a separate route.
@@ -124,18 +126,22 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         .read(myEventsProvider.notifier)
         .cancelRegistration(registration.registrationId);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(outcome.message),
-        // A snackbar with an action stays up until it is pressed unless told
-        // otherwise. This one closes after the usual four seconds.
-        persist: false,
-        action: viewRefundAction(
-          context,
-          ref,
-          outcome: outcome,
-          registrationId: registration.registrationId,
-        ),
+    final refundStatus = outcome.refund?.status;
+    showNotice(
+      context,
+      outcome.message,
+      kind: !outcome.cancelled
+          ? NoticeKind.error
+          : (refundStatus == RefundStatus.failed || refundStatus == RefundStatus.delayed)
+              ? NoticeKind.warning
+              : NoticeKind.success,
+      // A notice with an action would otherwise stay up until pressed.
+      persist: outcome.cancelled ? false : null,
+      action: viewRefundAction(
+        context,
+        ref,
+        outcome: outcome,
+        registrationId: registration.registrationId,
       ),
     );
   }
@@ -161,9 +167,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     if (auth.isAuthenticated) {
       await auth.signOut();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Logged out successfully.')),
-        );
+        showNotice(context, 'Logged out successfully.', kind: NoticeKind.success);
       }
     } else {
       context.push(AppRoutes.login);
@@ -966,9 +970,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             return;
           }
           if (!active) {
-            ScaffoldMessenger.of(
-              context,
-            ).showSnackBar(SnackBar(content: Text('$label tab coming soon.')));
+            showNotice(context, '$label tab coming soon.');
           }
         },
         child: Column(

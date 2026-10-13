@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -6,6 +7,7 @@ import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../shared/widgets/filter_controls.dart';
 import '../../../shared/widgets/list_page.dart';
+import '../../../shared/widgets/notice.dart';
 import '../../../shared/widgets/quick_filter_pill.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -244,7 +246,6 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
   bool get _isAll => _event == adminAllEvents;
 
   List<GridColumn<AdminOrder>> get _orderColumns => [
-        GridColumn(id: 'number', label: 'Order', kind: ColumnKind.text, value: (o) => o.orderNumber),
         GridColumn(id: 'name', label: 'Name', kind: ColumnKind.text, value: (o) => o.displayName),
         if (_isAll)
           GridColumn(id: 'event', label: 'Event', kind: ColumnKind.category, value: (o) => o.eventTitle),
@@ -264,10 +265,12 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
         GridColumn(id: 'mode', label: 'Mode', kind: ColumnKind.category, value: (o) => _modeLabel(o.mode)),
         GridColumn(id: 'created', label: 'Started', kind: ColumnKind.date, value: (o) => o.createdAt),
         GridColumn(id: 'paid', label: 'Paid', kind: ColumnKind.date, value: (o) => o.paidAt),
+        GridColumn(id: 'number', label: 'Order #', kind: ColumnKind.text, value: (o) => o.orderNumber),
       ];
 
+  // Refunds: what's needed to scan and act. The references and dates are in
+  // the details window (tap a row).
   List<GridColumn<AdminRefund>> get _refundColumns => [
-        GridColumn(id: 'number', label: 'Refund', kind: ColumnKind.text, value: (r) => r.refundNumber),
         GridColumn(id: 'name', label: 'Name', kind: ColumnKind.text, value: (r) => r.displayName),
         if (_isAll)
           GridColumn(id: 'event', label: 'Event', kind: ColumnKind.category, value: (r) => r.eventTitle),
@@ -284,7 +287,6 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           kind: ColumnKind.category,
           value: (r) => _refundStatus[r.status] ?? r.status,
         ),
-        GridColumn(id: 'mode', label: 'Mode', kind: ColumnKind.category, value: (r) => _modeLabel(r.mode)),
         GridColumn(
           id: 'reason',
           label: 'Reason',
@@ -292,11 +294,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           value: (r) => r.reasonText ?? r.failureReason,
         ),
         GridColumn(id: 'tries', label: 'Tries', kind: ColumnKind.number, value: (r) => r.attemptCount),
-        GridColumn(id: 'payment', label: 'Payment ref', kind: ColumnKind.text, value: (r) => r.paymentRef),
-        GridColumn(id: 'ref', label: 'Gateway ref', kind: ColumnKind.text, value: (r) => r.providerRef),
-        GridColumn(id: 'bank', label: 'Bank ref', kind: ColumnKind.text, value: (r) => r.bankReference),
-        GridColumn(id: 'requested', label: 'Requested', kind: ColumnKind.date, value: (r) => r.requestedAt),
-        GridColumn(id: 'updated', label: 'Updated', kind: ColumnKind.date, value: (r) => r.updatedAt),
+        GridColumn(id: 'number', label: 'Refund ID', kind: ColumnKind.text, value: (r) => r.refundNumber),
         GridColumn(
           id: 'retry',
           label: 'Action',
@@ -317,10 +315,16 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     final token = _token;
     if (token == null || _retrying.contains(r.refundNumber)) return;
     setState(() => _retrying.add(r.refundNumber));
-    final messenger = ScaffoldMessenger.maybeOf(context);
     String message;
+    var kind = NoticeKind.info;
     try {
       final result = await ref.read(paymentsApiProvider).retryRefund(token, r.refundNumber);
+      kind = switch (result.status) {
+        'processed' => NoticeKind.success,
+        'delayed' => NoticeKind.warning,
+        'failed' => NoticeKind.error,
+        _ => NoticeKind.info,
+      };
       message = switch (result.status) {
         'processed' => 'Refund ${r.refundNumber} sent.',
         'pending' || 'processing' => 'Refund ${r.refundNumber} accepted by Razorpay; it will finish shortly.',
@@ -332,11 +336,26 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     } catch (error, stackTrace) {
       AppLogger.error('Payments: retry refund failed', error, stackTrace);
       message = apiErrorMessage(error, action: 'retry the refund');
+      kind = NoticeKind.error;
     }
     if (!mounted) return;
     setState(() => _retrying.remove(r.refundNumber));
-    messenger?.showSnackBar(SnackBar(content: Text(message.trim())));
+    showNotice(context, message.trim(), kind: kind);
     await _load();
+  }
+
+  /// Everything about one refund, with copy buttons on the references and
+  /// Retry now when allowed. Opened by tapping a row.
+  Future<void> _showRefundDetails(AdminRefund r) async {
+    final retry = await showDialog<bool>(
+      context: context,
+      builder: (context) => _RefundDetailsDialog(
+        refund: r,
+        statusLabel: _refundStatus[r.status] ?? r.status,
+        canRetry: _mayRetry(r),
+      ),
+    );
+    if (retry == true && mounted) await _retry(r);
   }
 
   Map<String, ColumnFilter> get _filters => {
@@ -358,11 +377,18 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
 
   List<AdminRefund> get _refundRows {
     final sort = _sorts[_View.refunds]!;
+    // Mode isn't a column here (it's in the details window), so it's applied
+    // directly rather than through the column filters.
     return applyGrid(
-      [for (final r in _refunds) if (_isAll || r.eventId == _event) r],
+      [
+        for (final r in _refunds)
+          if ((_isAll || r.eventId == _event) &&
+              (_mode.isEmpty || _mode.contains(_modeLabel(r.mode))))
+            r,
+      ],
       _refundColumns,
       search: _search.text,
-      filters: _filters,
+      filters: {if (_status.isNotEmpty) 'status': ColumnFilter(values: _status)},
       sortId: sort.$1,
       ascending: sort.$2,
     );
@@ -633,6 +659,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                 AdminGridTable<AdminRefund>(
                   rows: rows,
                   columns: _refundColumns,
+                  onRowTap: _showRefundDetails,
                   sortId: sort.$1,
                   ascending: sort.$2,
                   onSort: _sortBy,
@@ -797,6 +824,92 @@ class _PricingCard extends StatelessWidget {
             ),
         ],
       ),
+    );
+  }
+}
+
+class _RefundDetailsDialog extends StatelessWidget {
+  const _RefundDetailsDialog({required this.refund, required this.statusLabel, required this.canRetry});
+
+  final AdminRefund refund;
+  final String statusLabel;
+  final bool canRetry;
+
+  @override
+  Widget build(BuildContext context) {
+    final r = refund;
+    final rows = <(String, String?, bool)>[
+      ('Name', r.fullname, false),
+      ('Email', r.email, true),
+      ('Event', r.eventTitle, false),
+      ('Amount', _money(r.amount), false),
+      ('Status', statusLabel, false),
+      ('Reason', r.reasonText ?? r.failureReason, false),
+      ('Tries', '${r.attemptCount}', false),
+      ('Mode', _modeLabel(r.mode), false),
+      ('Refund ID', r.refundNumber, true),
+      ('Order #', r.orderNumber, true),
+      ('Payment ref', r.paymentRef, true),
+      ('Gateway ref', r.providerRef, true),
+      ('Bank ref', r.bankReference, true),
+      ('Requested', formatDateTime(r.requestedAt), false),
+      ('Updated', r.updatedAt == null ? null : formatDateTime(r.updatedAt!), false),
+    ];
+    final p = context.palette;
+    return AlertDialog(
+      title: const Text('Refund details'),
+      content: SizedBox(
+        width: 480,
+        child: SingleChildScrollView(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              for (final (label, value, copy) in rows)
+                if (value != null && value.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 4),
+                    child: Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
+                          width: 110,
+                          child: Text(label, style: AppTextStyles.bodySmall.copyWith(color: p.textMuted)),
+                        ),
+                        Expanded(
+                          child: Text(value, style: AppTextStyles.bodyMedium.copyWith(color: p.textPrimary)),
+                        ),
+                        if (copy)
+                          IconButton(
+                            tooltip: 'Copy $label',
+                            icon: const Icon(Icons.copy, size: 16),
+                            visualDensity: VisualDensity.compact,
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(minWidth: 28, minHeight: 20),
+                            onPressed: () async {
+                              await Clipboard.setData(ClipboardData(text: value));
+                              if (context.mounted) {
+                                showNotice(context, '$label copied', kind: NoticeKind.success);
+                              }
+                            },
+                          ),
+                      ],
+                    ),
+                  ),
+            ],
+          ),
+        ),
+      ),
+      actions: [
+        if (canRetry)
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Retry now'),
+          ),
+        TextButton(
+          onPressed: () => Navigator.pop(context, false),
+          child: const Text('Close'),
+        ),
+      ],
     );
   }
 }

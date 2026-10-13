@@ -9,6 +9,7 @@ import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 import '../providers/event_detail_provider.dart';
 import '../services/razorpay_payment.dart';
+import '../../../../shared/widgets/notice.dart';
 
 /// Checkout for one registration: the signed-in attendee's own.
 class CheckoutScreen extends ConsumerStatefulWidget {
@@ -272,6 +273,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           final state = ref.read(eventDetailProvider(widget.eventId));
           _showMessage(
             'Registration failed: ${state.errorMessage ?? 'Unknown error'}',
+            kind: NoticeKind.error,
           );
           return;
         }
@@ -281,7 +283,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // Free event, or registration already confirmed: done.
       final status = registration?['status'] as String?;
       if (!_isPaidEvent(event) || !_payableStatuses.contains(status)) {
-        _showMessage('Registration confirmed successfully!');
+        _showMessage('Registration confirmed successfully!', kind: NoticeKind.success);
         if (mounted) context.pop();
         return;
       }
@@ -289,7 +291,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       // 2. Paid event: order -> attempt -> Razorpay -> verify.
       final token = ref.read(authControllerProvider).session?.accessToken;
       if (token == null) {
-        _showMessage('Your session has expired. Please sign in again.');
+        _showMessage('Your session has expired. Please sign in again.', kind: NoticeKind.warning);
         return;
       }
       final repo = ref.read(eventsRepositoryProvider);
@@ -306,7 +308,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       final attempt = await repo.createPaymentAttempt(orderId, token);
       final checkout = attempt['checkout'] as Map<String, dynamic>?;
       if (checkout == null) {
-        _showMessage('Online payment is not available for this event.');
+        _showMessage('Online payment is not available for this event.', kind: NoticeKind.error);
         return;
       }
 
@@ -334,7 +336,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       await notifier.fetchEventDetails(widget.eventId);
 
       if (verify['payment_confirmed'] == true) {
-        _showMessage('Payment successful - your registration is confirmed!');
+        _showMessage('Payment successful - your registration is confirmed!', kind: NoticeKind.success);
         if (mounted) context.pop();
       } else {
         // e.g. verification still pending; the webhook will finish it.
@@ -344,21 +346,21 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         );
       }
     } on RazorpayCheckoutCancelledException {
-      _showMessage('Payment cancelled. Your seat is held for a short time.');
+      _showMessage('Payment cancelled. Your seat is held for a short time.', kind: NoticeKind.warning);
     } on RazorpayCheckoutFailureException catch (e) {
-      _showMessage('Payment could not be completed: ${e.message}');
+      _showMessage('Payment could not be completed: ${e.message}', kind: NoticeKind.error);
     } on DioException catch (e) {
-      _showMessage('Payment could not be completed: ${_apiError(e)}');
+      _showMessage('Payment could not be completed: ${_apiError(e)}', kind: NoticeKind.error);
     } catch (e) {
-      _showMessage('Payment could not be completed: $e');
+      _showMessage('Payment could not be completed: $e', kind: NoticeKind.error);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
   }
 
-  void _showMessage(String message) {
+  void _showMessage(String message, {NoticeKind kind = NoticeKind.info}) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(message)));
+    showNotice(context, message, kind: kind);
   }
 
   String _apiError(DioException e) {

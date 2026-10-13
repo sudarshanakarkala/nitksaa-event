@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:event_app/theme/app_palette.dart';
+import '../../shared/widgets/notice.dart';
 
 class AppScaffold extends StatelessWidget {
   final PreferredSizeWidget? appBar;
@@ -36,8 +37,6 @@ class AppScaffold extends StatelessWidget {
 
   /// Helper to show a snackbar consistently.
   static void showSnackBar(BuildContext context, String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(content: Text(message)),
-    );
+    showNotice(context, message, kind: NoticeKind.info);
   }
 }

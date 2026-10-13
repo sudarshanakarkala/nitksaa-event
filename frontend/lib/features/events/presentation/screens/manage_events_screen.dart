@@ -23,6 +23,7 @@ import '../../domain/event.dart';
 import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
 import '../widgets/event_card.dart';
+import '../../../../shared/widgets/notice.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
   const ManageEventsScreen({super.key});
@@ -136,12 +137,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       if (!mounted) return;
       
       // Show loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Publishing event...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      showNotice(context, 'Publishing event...', kind: NoticeKind.info);
       
       // Call API to update event status to published using dedicated status endpoint
       await repo.updateEventStatus(
@@ -160,24 +156,13 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${event.title} published successfully'),
-            backgroundColor: context.palette.tinted(context.palette.success),
-          ),
-        );
+        showNotice(context, '${event.title} published successfully', kind: NoticeKind.success);
       }
     } catch (error, stackTrace) {
       AppLogger.error('Failed to publish event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(apiErrorMessage(error, action: 'publish the event')),
-            backgroundColor: context.palette.tinted(context.palette.error),
-            duration: const Duration(seconds: 6),
-          ),
-        );
+        showNotice(context, apiErrorMessage(error, action: 'publish the event'), kind: NoticeKind.error);
       }
     }
   }
@@ -190,12 +175,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       if (!mounted) return;
       
       // Show loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unpublishing event...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      showNotice(context, 'Unpublishing event...', kind: NoticeKind.info);
       
       // Call API to update event status to draft
       await repo.updateEventStatus(
@@ -214,24 +194,13 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${event.title} unpublished successfully'),
-            backgroundColor: context.palette.tinted(context.palette.warning),
-          ),
-        );
+        showNotice(context, '${event.title} unpublished successfully', kind: NoticeKind.success);
       }
     } catch (error, stackTrace) {
       AppLogger.error('Failed to unpublish event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(apiErrorMessage(error, action: 'unpublish the event')),
-            backgroundColor: context.palette.tinted(context.palette.error),
-            duration: const Duration(seconds: 6),
-          ),
-        );
+        showNotice(context, apiErrorMessage(error, action: 'unpublish the event'), kind: NoticeKind.error);
       }
     }
   }
@@ -268,12 +237,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       if (!mounted) return;
       
       // Show loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Deleting event...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      showNotice(context, 'Deleting event...', kind: NoticeKind.info);
       
       // Call API to delete event
       await repo.deleteAdminEvent(
@@ -291,24 +255,13 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${event.title} deleted successfully'),
-            backgroundColor: context.palette.tinted(context.palette.success),
-          ),
-        );
+        showNotice(context, '${event.title} deleted successfully', kind: NoticeKind.success);
       }
     } catch (error, stackTrace) {
       AppLogger.error('Failed to delete event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(apiErrorMessage(error, action: 'delete the event')),
-            backgroundColor: context.palette.tinted(context.palette.error),
-            duration: const Duration(seconds: 6),
-          ),
-        );
+        showNotice(context, apiErrorMessage(error, action: 'delete the event'), kind: NoticeKind.error);
       }
     }
   }
@@ -2546,9 +2499,7 @@ void _showFeeDialog(int? editIndex) {
                     endTimeCtrl.text.trim(),
                   );
                   if (clashError != null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(clashError)),
-                    );
+                    showNotice(context, clashError, kind: NoticeKind.warning);
                     return;
                   }
 
@@ -2921,12 +2872,7 @@ void _showFeeDialog(int? editIndex) {
     if (missing.isNotEmpty) {
       setState(() => _currentStep = 0);
       WidgetsBinding.instance.addPostFrameCallback((_) => _formKey.currentState?.validate());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please fill in: ${missing.join(', ')}'),
-          duration: const Duration(seconds: 6),
-        ),
-      );
+      showNotice(context, 'Please fill in: ${missing.join(', ')}', kind: NoticeKind.warning);
       return;
     }
 
@@ -2938,9 +2884,7 @@ void _showFeeDialog(int? editIndex) {
 
     if (startDate == null || endDate == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter valid dates')),
-        );
+        showNotice(context, 'Please enter valid dates', kind: NoticeKind.warning);
       }
       return;
     }
@@ -2957,9 +2901,7 @@ void _showFeeDialog(int? editIndex) {
 
       if (startTime == null || endTime == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enter valid times')),
-          );
+          showNotice(context, 'Please enter valid times', kind: NoticeKind.warning);
         }
         return;
       }
@@ -2983,9 +2925,7 @@ void _showFeeDialog(int? editIndex) {
 
     if (!endDateTime.isAfter(startDateTime)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('End time must be after start time')),
-        );
+        showNotice(context, 'End time must be after start time', kind: NoticeKind.warning);
       }
       return;
     }
@@ -2997,17 +2937,13 @@ void _showFeeDialog(int? editIndex) {
         final regClose = DateTime.parse(_registrationClosesAt.text.trim());
         if (regClose.isBefore(regOpen)) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Registration closes must be on or after registration opens')),
-            );
+            showNotice(context, 'Registration closes must be on or after registration opens', kind: NoticeKind.warning);
           }
           return;
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid registration date format')),
-          );
+          showNotice(context, 'Invalid registration date format', kind: NoticeKind.warning);
         }
         return;
       }
@@ -3026,31 +2962,21 @@ void _showFeeDialog(int? editIndex) {
 
           if (!sessionEnd.isAfter(sessionStart)) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Session "${session['title']}" end time must be after start time')),
-              );
+              showNotice(context, 'Session "${session['title']}" end time must be after start time', kind: NoticeKind.warning);
             }
             return;
           }
 
           if (sessionStart.isBefore(startDateTime) || sessionEnd.isAfter(endDateTime)) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Session "${session['title']}" must be within event timeframe '
-                    '(${_formatDateTimeOnly(startDateTime)} - ${_formatDateTimeOnly(endDateTime)})',
-                  ),
-                ),
-              );
+              showNotice(context, 'Session "${session['title']}" must be within event timeframe '
+                    '(${_formatDateTimeOnly(startDateTime)} - ${_formatDateTimeOnly(endDateTime)})', kind: NoticeKind.warning);
             }
             return;
           }
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Invalid session date/time format')),
-            );
+            showNotice(context, 'Invalid session date/time format', kind: NoticeKind.warning);
           }
           return;
         }
@@ -3059,20 +2985,14 @@ void _showFeeDialog(int? editIndex) {
 
     if (_isVirtual && _virtualUrl.text.trim().isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter meeting URL for virtual events')),
-        );
+        showNotice(context, 'Please enter meeting URL for virtual events', kind: NoticeKind.warning);
       }
       return;
     }
 
     if (!_isFree && (_fees.isEmpty || _feesTotal <= 0)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('A paid event needs at least one fee with an amount (Pricing step).'),
-          ),
-        );
+        showNotice(context, 'A paid event needs at least one fee with an amount (Pricing step).', kind: NoticeKind.warning);
       }
       return;
     }
@@ -3118,25 +3038,11 @@ void _showFeeDialog(int? editIndex) {
       final detailsSaved = await _saveDetails(saved.eventId, token, offset);
       final orgsSaved = await _saveOrgs(saved.eventId, token);
       if (!detailsSaved && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'The event was saved, but its speakers, sessions or fee tiers could not be. '
-              'Open the event again to check them.',
-            ),
-            duration: Duration(seconds: 8),
-          ),
-        );
+        showNotice(context, 'The event was saved, but its speakers, sessions or fee tiers could not be. '
+              'Open the event again to check them.', kind: NoticeKind.error);
       } else if (!orgsSaved && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'The event was saved, but some sponsors or partners could not be. '
-              'Open the event again to check them.',
-            ),
-            duration: Duration(seconds: 8),
-          ),
-        );
+        showNotice(context, 'The event was saved, but some sponsors or partners could not be. '
+              'Open the event again to check them.', kind: NoticeKind.error);
       }
 
       if (mounted) Navigator.pop(context, true);
@@ -3144,12 +3050,7 @@ void _showFeeDialog(int? editIndex) {
       AppLogger.error('Failed to save event', error, stackTrace);
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(apiErrorMessage(error, action: 'save the event')),
-          duration: const Duration(seconds: 6),
-        ),
-      );
+      showNotice(context, apiErrorMessage(error, action: 'save the event'), kind: NoticeKind.error);
     }
   }
 

@@ -86,6 +86,7 @@ class AdminGridTable<T> extends StatelessWidget {
     required this.ascending,
     required this.onSort,
     this.cell,
+    this.onRowTap,
   });
 
   final List<T> rows;
@@ -96,6 +97,9 @@ class AdminGridTable<T> extends StatelessWidget {
 
   /// Custom cell for a column, or null for plain text.
   final Widget? Function(GridColumn<T> column, T row)? cell;
+
+  /// Tapping a row (e.g. to open its details). Null: rows aren't tappable.
+  final void Function(T row)? onRowTap;
 
   @override
   Widget build(BuildContext context) {
@@ -127,6 +131,7 @@ class AdminGridTable<T> extends StatelessWidget {
       dividerThickness: 0.6,
       headingRowColor: WidgetStatePropertyAll(p.surfaceSubtle),
       sortColumnIndex: sortIndex < 0 ? null : sortIndex,
+      showCheckboxColumn: false,
       sortAscending: ascending,
       columns: [
         for (final c in columns)
@@ -138,6 +143,7 @@ class AdminGridTable<T> extends StatelessWidget {
       rows: [
         for (final row in rows)
           DataRow(
+            onSelectChanged: onRowTap == null ? null : (_) => onRowTap!(row),
             cells: [
               for (final c in columns) DataCell(cell?.call(c, row) ?? plain(c, row)),
             ],

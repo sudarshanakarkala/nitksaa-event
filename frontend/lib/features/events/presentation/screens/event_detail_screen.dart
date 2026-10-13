@@ -15,6 +15,7 @@ import '../../../admin/presentation/event_admin_actions.dart' show EventAdminAct
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
 import '../widgets/venue_section.dart';
+import '../../../../shared/widgets/notice.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -43,16 +44,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     try {
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not launch $urlString')),
-          );
+          showNotice(context, 'Could not launch $urlString', kind: NoticeKind.error);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error launching link: $e')),
-        );
+        showNotice(context, 'Error launching link: $e', kind: NoticeKind.error);
       }
     }
   }
@@ -1134,9 +1131,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             icon: const Icon(Icons.copy, size: 16),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: link));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Meeting link copied')),
-              );
+              showNotice(context, 'Meeting link copied', kind: NoticeKind.success);
             },
           ),
         ],
@@ -1996,13 +1991,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
     if (mounted) {
       if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registration confirmed successfully!')),
-        );
+        showNotice(context, 'Registration confirmed successfully!', kind: NoticeKind.success);
       } else {
         final state = ref.read(eventDetailProvider(widget.eventId));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration failed: ${state.errorMessage ?? 'Unknown error'}')),
+        showNotice(
+          context,
+          'Registration failed: ${state.errorMessage ?? 'Unknown error'}',
+          kind: NoticeKind.error,
         );
       }
     }
