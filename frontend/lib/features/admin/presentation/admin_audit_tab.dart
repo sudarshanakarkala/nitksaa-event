@@ -186,7 +186,7 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
           controller: _search,
           decoration: const InputDecoration(
             prefixIcon: Icon(Icons.search, size: 20),
-            hintText: 'Search name or event…',
+            hintText: 'Search name, event, number, email or Razorpay id…',
             isDense: true,
             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),

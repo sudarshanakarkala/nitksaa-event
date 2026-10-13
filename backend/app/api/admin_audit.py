@@ -3,7 +3,8 @@
 Same contract as the website's GET /api/v1/admin/audit-log (filters
 event_type, actor, entity_type, from, to; paged {rows,total,page,page_size,
 pages}), plus the step-10 decisions: an event filter, category and "who"
-filters, a name/event search, and scoping (overall admins: everything;
+filters, a search (name, event, registration or order number, email or a
+Razorpay id; a Razorpay id finds its whole order), and scoping (overall admins: everything;
 event admins: their events' entries).
 
 The log has no event column, so each entry's event, order and registration
@@ -121,7 +122,7 @@ WITH b AS (
   SELECT b.log_id, b.created_at, b.actor_uid, b.event_type, b.entity_type, b.entity_id, b.context,
          b.order_id, COALESCE(b.reg_direct, o.registration_id) AS registration_id,
          COALESCE(b.ev_direct, b.ev_ctx, r.event_id, o.event_id, b.ev_cfg) AS event_id,
-         o.public_order_number AS order_number, r.registration_number,
+         o.public_order_number AS order_number, r.registration_number, r.email AS attendee_email,
          CASE WHEN b.actor_uid IS NULL OR b.actor_uid = 'system' THEN 'system'
               WHEN b.actor_uid = COALESCE(r.firebase_uid, o.payer_firebase_uid) THEN 'attendee'
               ELSE 'admin' END AS who,
@@ -154,7 +155,13 @@ WHERE ($1::int[] IS NULL OR x.event_id = ANY($1::int[]))
   AND ($7::date IS NULL OR x.created_at < (($7::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'))
   AND ($8::text IS NULL OR x.category = $8::text)
   AND ($9::text IS NULL OR x.who = $9::text)
-  AND ($10::text IS NULL OR u.fullname ILIKE '%' || $10::text || '%' OR e.title ILIKE '%' || $10::text || '%')
+  AND ($10::text IS NULL OR u.fullname ILIKE '%' || $10::text || '%' OR e.title ILIKE '%' || $10::text || '%'
+       OR upper(x.registration_number) = upper($10::text) OR upper(x.order_number) = upper($10::text)
+       OR lower(x.attendee_email) = lower($10::text)
+       OR EXISTS (SELECT 1 FROM payment_attempts a WHERE a.order_id = x.order_id
+                  AND $10::text IN (a.gateway_order_ref, a.gateway_payment_ref))
+       OR EXISTS (SELECT 1 FROM payment_refunds f WHERE f.payment_order_id = x.order_id
+                  AND f.provider_refund_id = $10::text))
 ORDER BY x.created_at DESC, x.log_id DESC
 LIMIT $11::int OFFSET $12::int
 """
@@ -172,7 +179,13 @@ WHERE ($1::int[] IS NULL OR x.event_id = ANY($1::int[]))
   AND ($7::date IS NULL OR x.created_at < (($7::date + 1)::timestamp AT TIME ZONE 'Asia/Kolkata'))
   AND ($8::text IS NULL OR x.category = $8::text)
   AND ($9::text IS NULL OR x.who = $9::text)
-  AND ($10::text IS NULL OR u.fullname ILIKE '%' || $10::text || '%' OR e.title ILIKE '%' || $10::text || '%')
+  AND ($10::text IS NULL OR u.fullname ILIKE '%' || $10::text || '%' OR e.title ILIKE '%' || $10::text || '%'
+       OR upper(x.registration_number) = upper($10::text) OR upper(x.order_number) = upper($10::text)
+       OR lower(x.attendee_email) = lower($10::text)
+       OR EXISTS (SELECT 1 FROM payment_attempts a WHERE a.order_id = x.order_id
+                  AND $10::text IN (a.gateway_order_ref, a.gateway_payment_ref))
+       OR EXISTS (SELECT 1 FROM payment_refunds f WHERE f.payment_order_id = x.order_id
+                  AND f.provider_refund_id = $10::text))
 """
 
 # One order's history: its own entries and its registration's, oldest first.
