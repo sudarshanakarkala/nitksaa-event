@@ -410,10 +410,16 @@ class PaymentRepository:
     async def update_attempt_captured(
         self, attempt_id: int, gateway_payment_ref: str
     ) -> None:
+        # A capture can follow a failed try on the same attempt (the person
+        # retried in the same checkout window). The attempt's failure fields
+        # describe the attempt as it is now, so they are cleared; the
+        # earlier failure stays in the audit log.
         await self.conn.execute(
             """
             UPDATE payment_attempts
-            SET status = 'captured', gateway_payment_ref = $2, captured_at = now(), updated_at = now()
+            SET status = 'captured', gateway_payment_ref = $2, captured_at = now(), updated_at = now(),
+                failure_code = NULL, sanitized_failure_message = NULL,
+                failure_source = NULL, failure_step = NULL, failure_reason = NULL
             WHERE id = $1
             """,
             attempt_id,

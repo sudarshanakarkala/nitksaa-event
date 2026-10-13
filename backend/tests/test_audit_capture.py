@@ -261,3 +261,29 @@ def test_event_edit_lists_fields_price_and_registration_closing(client):
     assert ctx["price"] == {"from": "500.00", "to": "750.00"}
     assert ctx["registration"] == "closed"
     assert "New venue" not in json.dumps(ctx)  # field names only, not values
+
+
+def test_retry_after_failure_in_same_checkout_clears_the_failure(client):
+    """The person's first try fails, they retry in the same Razorpay window
+    and it succeeds (one attempt row, two Razorpay payments)."""
+    reg, order, attempt, order_ref = _paid_setup(client)
+    assert _send(client, _payment_body(
+        "payment.failed", order_ref=order_ref, payment_id=f"pay_{uuid.uuid4().hex[:14]}", status="failed",
+        method="card", error_code="BAD_REQUEST_ERROR", error_description="Card not allowed",
+        error_source="customer", error_step="payment_authorization",
+        error_reason="international_transaction_not_allowed")).status_code == 200
+    payment_id = f"pay_{uuid.uuid4().hex[:14]}"
+    assert _send(client, _payment_body(
+        "payment.captured", order_ref=order_ref, payment_id=payment_id, status="captured",
+        method="card", fee=200, tax=0)).json()["processing_status"] == "processed"
+
+    row = _attempt(attempt)
+    assert row["status"] == "captured" and row["gateway_payment_ref"] == payment_id
+    assert row["failure_code"] is None and row["sanitized_failure_message"] is None
+    assert row["failure_source"] is None and row["failure_step"] is None and row["failure_reason"] is None
+    assert str(row["provider_fee"]) == "2.00"
+    # The failed try is still in the history.
+    failed = _last_audit("payment_failed", "payment_attempt", row["id"])
+    assert failed["failure"]["reason"] == "international_transaction_not_allowed"
+    assert _db_fetchval("SELECT status FROM registrations WHERE registration_id = $1",
+                        reg["registration_id"]) == "registered"
