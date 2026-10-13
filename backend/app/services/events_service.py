@@ -189,6 +189,16 @@ class EventsService:
         if not fields:
             return _enrich(self._to_dict(existing))
 
+        # "Close registration" sends the admin's own clock as the closing
+        # time. A time within a minute of now means "close now": use the
+        # server's clock, so lists reloaded straight away already show it
+        # closed (a PC slightly ahead left cards saying "open").
+        closes_at = fields.get("registration_closes_at")
+        if closes_at is not None:
+            now = datetime.now(timezone.utc)
+            if abs(closes_at - now) <= _CLOSE_NOW_TOLERANCE:
+                fields["registration_closes_at"] = now
+
         record = await self.repo.update_event(event_id, fields)
         await self._audit(user["firebase_uid"], "event_updated", event_id,
                           _update_context(event_id, dict(existing), dict(record), fields))

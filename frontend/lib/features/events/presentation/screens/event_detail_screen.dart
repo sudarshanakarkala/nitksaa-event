@@ -1388,6 +1388,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         state.myRegistration?['status']?.toString().toLowerCase();
     final hasActiveRegistration = registrationStatus == 'registered';
     final hasCancelledRegistration = registrationStatus == 'cancelled';
+    // Started but not paid (or the payment failed): the seat is held, and
+    // checkout picks this registration up again. Not registered yet.
+    final paymentDue = const {'seat_held', 'payment_pending', 'payment_failed'}
+        .contains(registrationStatus);
     // After a cancellation the backend lets the attendee register again. The
     // Register button comes back only when the backend says so.
     final canRegisterAgain = hasCancelledRegistration &&
@@ -1395,8 +1399,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         !isPastEvent;
 
     // Once it's over there is nothing to register for: just say it ended.
-    final isRegistered =
-        hasActiveRegistration || state.eligibilityStatus == 'already_registered';
+    final isRegistered = hasActiveRegistration ||
+        (!paymentDue && state.eligibilityStatus == 'already_registered');
     if (isPastEvent && !isRegistered) return _endedNotice();
 
     Widget ctaWidget;
@@ -1462,6 +1466,36 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
           const SizedBox(height: 16),
           _buildQRBadgeSection(state, event, isIOS),
+        ],
+      );
+    } else if (paymentDue) {
+      ctaWidget = Column(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(12),
+            decoration: BoxDecoration(
+              color: context.palette.warning.withValues(alpha: 0.14),
+              borderRadius: BorderRadius.circular(8),
+              border: Border.all(color: context.palette.warning.withValues(alpha: 0.3)),
+            ),
+            child: Text(
+              registrationStatus == 'payment_failed'
+                  ? 'Your payment didn\'t go through, so you aren\'t registered yet.'
+                  : 'Your payment isn\'t complete yet, so you aren\'t registered yet.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.palette.warning, fontWeight: FontWeight.bold),
+            ),
+          ),
+          const SizedBox(height: 12),
+          SizedBox(
+            width: double.infinity,
+            child: ElevatedButton(
+              onPressed: () => _proceedToCheckout(event),
+              child: const Text('Complete payment'),
+            ),
+          ),
         ],
       );
     } else if (state.eligibilityStatus == 'already_registered') {
