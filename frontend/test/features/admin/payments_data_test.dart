@@ -69,7 +69,7 @@ void main() {
     expect(r.failureReason, 'Gateway timeout');
   });
 
-  test('reads a delayed refund: reason in words, tries, next try, references', () {
+  test('reads a delayed refund: reason in words, tries, references', () {
     final r = AdminRefund.fromJson({
       'public_refund_number': 'RF-4',
       'event_id': 2,
@@ -82,7 +82,6 @@ void main() {
       'provider_payment_id': 'pay_abc',
       'bank_reference': null,
       'attempt_count': 2,
-      'next_retry_at': '2026-10-13T12:00:00+00:00',
       'can_retry': true,
       'requested_at': '2026-10-12T05:00:00+00:00',
     });
@@ -91,7 +90,6 @@ void main() {
     expect(r.paymentRef, 'pay_abc');
     expect(r.bankReference, isNull);
     expect(r.attemptCount, 2);
-    expect(r.nextRetryAt, isNotNull);
     expect(r.canRetry, isTrue);
   });
 

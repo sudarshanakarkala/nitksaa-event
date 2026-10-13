@@ -41,7 +41,7 @@ const _refundStatus = {
   'pending': 'Pending',
   'processing': 'Processing',
   // Refused for a temporary reason (e.g. low Razorpay balance); retried
-  // automatically.
+  // automatically when new payments come in, or with Retry now.
   'delayed': 'Delayed',
   'processed': 'Refunded',
   // Couldn't be sent automatically: a person must act.
@@ -292,12 +292,6 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           value: (r) => r.reasonText ?? r.failureReason,
         ),
         GridColumn(id: 'tries', label: 'Tries', kind: ColumnKind.number, value: (r) => r.attemptCount),
-        GridColumn(
-          id: 'next',
-          label: 'Next try',
-          kind: ColumnKind.date,
-          value: (r) => r.status == 'delayed' ? r.nextRetryAt : null,
-        ),
         GridColumn(id: 'payment', label: 'Payment ref', kind: ColumnKind.text, value: (r) => r.paymentRef),
         GridColumn(id: 'ref', label: 'Gateway ref', kind: ColumnKind.text, value: (r) => r.providerRef),
         GridColumn(id: 'bank', label: 'Bank ref', kind: ColumnKind.text, value: (r) => r.bankReference),
@@ -331,7 +325,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
         'processed' => 'Refund ${r.refundNumber} sent.',
         'pending' || 'processing' => 'Refund ${r.refundNumber} accepted by Razorpay; it will finish shortly.',
         'delayed' => 'Razorpay still can\'t take refund ${r.refundNumber}. '
-            '${result.reasonText ?? ''} Retrying automatically.',
+            '${result.reasonText ?? ''}',
         'failed' => 'Refund ${r.refundNumber} needs attention. ${result.reasonText ?? ''}',
         _ => 'Refund ${r.refundNumber}: ${result.status}.',
       };
@@ -625,10 +619,10 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
               if (delayed > 0) ...[
                 _Note(
                   text: delayed == 1
-                      ? 'One refund is delayed for a temporary reason and is being retried automatically '
-                          '(for up to 7 days).'
-                      : '$delayed refunds are delayed for a temporary reason and are being retried '
-                          'automatically (for up to 7 days).',
+                      ? 'One refund is delayed for a temporary reason. It is retried automatically when '
+                          'new payments come in, or use Retry now.'
+                      : '$delayed refunds are delayed for a temporary reason. They are retried automatically '
+                          'when new payments come in, or use Retry now.',
                 ),
                 const SizedBox(height: 8),
               ],

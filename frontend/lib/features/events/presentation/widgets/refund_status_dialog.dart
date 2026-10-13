@@ -166,7 +166,6 @@ class RefundStatusDialog extends ConsumerWidget {
     final amount = _formatAmount(refund);
     final requestedAt = refund.requestedAt;
     final finalizedAt = refund.finalizedAt;
-    final nextRetryAt = refund.nextRetryAt;
     final waiting = refund.status == RefundStatus.pending ||
         refund.status == RefundStatus.delayed;
     var message = refund.safeMessage?.trim() ?? '';
@@ -178,8 +177,6 @@ class RefundStatusDialog extends ConsumerWidget {
       if (amount != null) _DetailRow(label: 'Amount', value: amount),
       if (waiting && requestedAt != null)
         _DetailRow(label: 'Requested on', value: _formatDateTime(requestedAt)),
-      if (refund.status == RefundStatus.delayed && nextRetryAt != null)
-        _DetailRow(label: 'Next try', value: _formatDateTime(nextRetryAt)),
       if (refund.status == RefundStatus.processed && finalizedAt != null)
         _DetailRow(label: 'Refunded on', value: _formatDateTime(finalizedAt)),
       if (refund.refundId != null)

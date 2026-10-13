@@ -918,8 +918,7 @@ async def _apply_gateway_outcome(
             # Money just came in: delayed refunds (e.g. refused for a low
             # balance) are worth trying again now.
             from app.services import refund_service
-            refund_service._spawn(refund_service.retry_due_refunds(
-                source="payment_captured", ignore_schedule=True))
+            refund_service._spawn(refund_service.retry_delayed_refunds(source="payment_captured"))
             await audit_service.emit(
                 actor_uid="system", event_type="payment_captured",
                 entity_type="payment_attempt", entity_id=attempt["id"],

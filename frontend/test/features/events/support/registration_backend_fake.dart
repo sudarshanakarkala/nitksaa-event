@@ -523,7 +523,6 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       'real_money': false,
       'payment_reference': 'pay_test$registrationId',
       'bank_reference': status == 'refund_processed' ? 'ARN$registrationId' : null,
-      'next_retry_at': status == 'refund_delayed' ? '2098-12-03T16:00:00Z' : null,
       'idempotency_key': key,
     };
   }

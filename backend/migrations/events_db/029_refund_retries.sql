@@ -23,16 +23,12 @@ CREATE UNIQUE INDEX uq_payment_refunds_active_per_order
 ALTER TABLE payment_refunds
     ADD COLUMN attempt_count               INT NOT NULL DEFAULT 1,  -- refund calls made to the provider
     ADD COLUMN last_attempt_at             TIMESTAMPTZ,
-    ADD COLUMN next_retry_at               TIMESTAMPTZ,             -- set while 'delayed'
     ADD COLUMN attendee_notified_delay_at  TIMESTAMPTZ,             -- each email is sent once
     ADD COLUMN attendee_notified_result_at TIMESTAMPTZ,
     ADD COLUMN admins_notified_at          TIMESTAMPTZ;
 
-CREATE INDEX IF NOT EXISTS idx_payment_refunds_retry_due
-    ON payment_refunds (next_retry_at) WHERE status = 'delayed';
-
 -- Existing finished refunds count as already notified, so the first
--- maintenance run doesn't email anyone about old refunds.
+-- retry doesn't email anyone about old refunds.
 UPDATE payment_refunds
    SET attendee_notified_result_at = COALESCE(finalized_at, updated_at, requested_at)
  WHERE status IN ('processed', 'failed');

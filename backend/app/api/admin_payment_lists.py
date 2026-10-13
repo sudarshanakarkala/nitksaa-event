@@ -111,7 +111,7 @@ async def list_refunds(
                    f.amount, f.currency, f.status, f.payment_mode,
                    f.provider_refund_id, f.provider_payment_id, f.failure_reason,
                    f.bank_reference, f.speed_processed,
-                   f.attempt_count, f.last_attempt_at, f.next_retry_at,
+                   f.attempt_count, f.last_attempt_at,
                    f.requested_at, f.updated_at, f.finalized_at
             FROM payment_refunds f
             JOIN payment_orders o ON o.id = f.payment_order_id
@@ -175,6 +175,5 @@ async def retry_refund_now(
         "status": updated["status"] if updated else row["status"],
         "failure_reason": updated["failure_reason"] if updated else None,
         "reason_text": REASON_ADMIN.get((updated["failure_reason"] or "") if updated else ""),
-        "next_retry_at": updated["next_retry_at"] if updated else None,
         "attempt_count": updated["attempt_count"] if updated else None,
     }

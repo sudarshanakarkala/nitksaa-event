@@ -1,16 +1,18 @@
 """Refund reliability (admin revamp step 10c).
 
 A refund the provider refuses for a temporary reason becomes 'delayed' and is
-retried; a final reason (or the retry window running out) makes it 'failed'
-and a person is told. Retries ask the provider what already exists first, so
-a payment is never refunded twice. Emails go out once each.
+retried after each captured payment and on an admin's Retry now; a final
+reason (or a retry after the retry window) makes it 'failed' and a person is
+told. Retries ask the provider what already exists first, so a payment is
+never refunded twice. Emails go out once each.
 
 Driven end-to-end through the ASGI app with the deterministic sandbox
 gateway; its refund() and a list_refunds() are replaced per test. Background
-side tasks are off in tests (conftest), so the maintenance run is what sends
-emails and runs scheduled retries here, as it does in production.
+side tasks are off in tests (conftest); tests that check them switch them on
+with the `background` fixture.
 """
 import asyncio
+import time
 import uuid
 
 import pytest
@@ -52,7 +54,7 @@ class _Provider:
     `refuse`: a RefundFailureReason to refuse with, or None to succeed.
     `existing`: provider_payment_id -> refunds the provider already holds.
     Only payments this test made are refused, so other tests' leftover
-    refunds picked up by a maintenance run are left alone.
+    delayed refunds retried after a capture are left to succeed.
     """
 
     def __init__(self, monkeypatch):
@@ -91,6 +93,18 @@ class _Provider:
 @pytest.fixture
 def provider(monkeypatch):
     return _Provider(monkeypatch)
+
+
+@pytest.fixture
+def background(monkeypatch):
+    """Runs refund side tasks (emails, retries after a capture) for real, at
+    once instead of after the usual short delay."""
+    from app.services import refund_service
+
+    def run_soon(coro, delay_seconds=2.0):
+        asyncio.get_running_loop().create_task(coro)
+
+    monkeypatch.setattr(refund_service, "_spawn", run_soon)
 
 
 @pytest.fixture
@@ -138,18 +152,14 @@ def _refund(rid):
     return _db("SELECT * FROM payment_refunds WHERE registration_id = $1", rid)[0]
 
 
-def _make_due(rid, *, days_old=None):
-    # The earliest possible next try, so this row is first in the run's batch.
-    _db("UPDATE payment_refunds SET next_retry_at = '2000-01-01' WHERE registration_id = $1", rid)
-    if days_old:
-        _db(f"UPDATE payment_refunds SET requested_at = now() - interval '{int(days_old)} days' "
-            "WHERE registration_id = $1", rid)
-
-
-def _maintenance(client, headers=None):
-    r = client.post("/api/v1/internal/maintenance", headers=_bearer(_FIXTURE_ADMIN) if headers is None else headers)
-    assert r.status_code == 200, r.text
-    return r.json()
+def _wait_for(check, seconds=10.0):
+    """Background tasks run on the app's loop; wait for their effect."""
+    deadline = time.monotonic() + seconds
+    while time.monotonic() < deadline:
+        if check():
+            return
+        time.sleep(0.1)
+    raise AssertionError("background task didn't finish in time")
 
 
 def _retry_now(client, refund_number, identity=_FIXTURE_ADMIN):
@@ -162,7 +172,7 @@ def test_low_balance_refusal_delays_the_refund(client, provider):
     rid, row, body = _cancelled_with_refund(client, provider, refuse="insufficient_balance")
     assert row["status"] == "delayed"
     assert row["failure_reason"] == "insufficient_balance"
-    assert row["next_retry_at"] is not None and row["finalized_at"] is None
+    assert row["finalized_at"] is None
     assert body["status"] == "refund_delayed"
     assert "retrying automatically" in body["safe_message"]
     assert body["payment_reference"] == row["provider_payment_id"]
@@ -177,7 +187,7 @@ def test_final_refusal_fails_at_once(client, provider):
     rid, row, body = _cancelled_with_refund(client, provider, refuse="payment_too_old")
     assert row["status"] == "failed"
     assert row["failure_reason"] == "payment_too_old"
-    assert row["next_retry_at"] is None and row["finalized_at"] is not None
+    assert row["finalized_at"] is not None
     assert body["status"] == "refund_failed"
     assert "contact you within 2 working days" in body["safe_message"]
 
@@ -192,13 +202,14 @@ def test_a_delayed_refund_blocks_a_second_refund(client, provider):
 
 # ── retries ──────────────────────────────────────────────────────────
 
-def test_scheduled_retry_sends_the_refund_once_the_balance_is_there(client, provider):
+def test_a_new_payment_retries_delayed_refunds(client, provider, background):
     rid, row, _ = _cancelled_with_refund(client, provider, refuse="insufficient_balance")
     provider.refuse = None
-    _make_due(rid)
-    _maintenance(client)
+    # Someone pays for something: the balance grew, so delayed refunds are retried.
+    other_event = _mk_event(client, uuid.uuid4().hex[:8], is_free=False)
+    _paid_registered(client, other_event)
+    _wait_for(lambda: _refund(rid)["status"] == "processed")
     after = _refund(rid)
-    assert after["status"] == "processed"
     assert after["attempt_count"] == 2
     assert after["provider_refund_id"]
     # A fresh key per try: the provider remembers a refused key's answer.
@@ -206,22 +217,14 @@ def test_scheduled_retry_sends_the_refund_once_the_balance_is_there(client, prov
     assert client.get(f"/api/v1/registrations/{rid}/refund", headers=_bearer()).json()["status"] == "refund_processed"
 
 
-def test_still_refused_stays_delayed_with_a_new_next_try(client, provider):
+def test_still_refused_stays_delayed(client, provider):
     rid, row, _ = _cancelled_with_refund(client, provider, refuse="insufficient_balance")
-    _make_due(rid)
-    _maintenance(client)
+    r = _retry_now(client, row["public_refund_number"])
+    assert r.status_code == 200, r.text
+    assert r.json()["status"] == "delayed"
     after = _refund(rid)
     assert after["status"] == "delayed"
     assert after["attempt_count"] == 2
-    assert after["next_retry_at"].year > 2000
-
-
-def test_a_refund_not_yet_due_is_left_alone(client, provider):
-    rid, row, _ = _cancelled_with_refund(client, provider, refuse="insufficient_balance")
-    provider.refuse = None
-    _maintenance(client)  # next try is 6 hours away
-    after = _refund(rid)
-    assert after["status"] == "delayed" and after["attempt_count"] == 1
 
 
 def test_retry_adopts_a_refund_the_provider_already_made(client, provider):
@@ -251,12 +254,11 @@ def test_retry_stops_when_someone_refunded_outside_the_app(client, provider):
     assert len(provider.refund_calls) == calls_before
 
 
-def test_gives_up_after_the_retry_window(client, provider):
+def test_a_retry_after_the_window_hands_it_to_a_person(client, provider):
     rid, row, _ = _cancelled_with_refund(client, provider, refuse="insufficient_balance")
-    _make_due(rid, days_old=8)
-    _maintenance(client)
+    _db("UPDATE payment_refunds SET requested_at = now() - interval '8 days' WHERE registration_id = $1", rid)
+    assert _retry_now(client, row["public_refund_number"]).json()["status"] == "failed"
     after = _refund(rid)
-    assert after["status"] == "failed"
     assert after["failure_reason"] == "insufficient_balance"
     assert after["finalized_at"] is not None
     gave_up = _db(
@@ -328,43 +330,35 @@ def test_event_admin_may_retry_their_own_events_refund(client, provider):
 
 # ── emails ───────────────────────────────────────────────────────────
 
-def _drain_emails(client, rid, column):
-    # Each run handles a batch of the oldest unsent ones; other tests leave
-    # plenty behind, so run until this refund's turn has come.
-    for _ in range(30):
-        _maintenance(client)
-        if _refund(rid)[column] is not None:
-            return
-    raise AssertionError(f"{column} never set")
-
-
-def test_delayed_then_sent_emails_go_out_once_each(client, provider, mails):
+def test_delayed_then_sent_emails_go_out_once_each(client, provider, mails, background):
     rid, row, _ = _cancelled_with_refund(client, provider, refuse="insufficient_balance")
     number = row["public_refund_number"]
-    _drain_emails(client, rid, "attendee_notified_delay_at")
-    assert [m for m in mails if m[2] == number] == [("delayed", _TEST_ALUMNI["email"], number)]
+    _wait_for(lambda: _refund(rid)["attendee_notified_delay_at"] is not None)
 
-    _maintenance(client)  # nothing new to say
-    assert len([m for m in mails if m[2] == number]) == 1
+    # Still refused: no second "delayed" email.
+    assert _retry_now(client, number).json()["status"] == "delayed"
 
     provider.refuse = None
     assert _retry_now(client, number).json()["status"] == "processed"
-    _drain_emails(client, rid, "attendee_notified_result_at")
-    _maintenance(client)
+    _wait_for(lambda: _refund(rid)["attendee_notified_result_at"] is not None)
+    time.sleep(0.3)  # anything extra would have arrived by now
     assert [m for m in mails if m[2] == number] == [
         ("delayed", _TEST_ALUMNI["email"], number),
         ("processed", _TEST_ALUMNI["email"], number),
     ]
 
 
-def test_final_failure_tells_the_attendee_admins_and_finance(client, provider, mails, monkeypatch):
+def test_final_failure_tells_the_attendee_admins_and_finance(client, provider, mails, background, monkeypatch):
     from app.config import get_settings
     monkeypatch.setattr(get_settings(), "finance_alert_email", "finance.one@nitksaa.dev, finance.two@nitksaa.dev")
 
     rid, row, _ = _cancelled_with_refund(client, provider, refuse="payment_too_old")
     number = row["public_refund_number"]
-    _drain_emails(client, rid, "admins_notified_at")
-    _maintenance(client)
+    _wait_for(lambda: _refund(rid)["admins_notified_at"] is not None)
+
+    # Retry now on it again (still refused): nobody is told twice.
+    assert _retry_now(client, number).json()["status"] == "failed"
+    time.sleep(0.3)
 
     mine = [m for m in mails if m[2] == number]
     assert ("failed", _TEST_ALUMNI["email"], number) in mine
@@ -380,47 +374,6 @@ def test_demo_addresses_are_never_emailed():
     assert result.status == "skipped"
 
 
-# ── maintenance endpoint ─────────────────────────────────────────────
-
-def test_maintenance_needs_an_overall_admin_or_the_scheduler(client):
-    assert client.post("/api/v1/internal/maintenance").status_code == 401
-    assert client.post("/api/v1/internal/maintenance",
-                       headers={"Authorization": "Bearer not-a-token"}).status_code == 401
-    _ensure_user(_PLAIN_USER)
-    assert client.post("/api/v1/internal/maintenance", headers=_bearer(_PLAIN_USER)).status_code == 403
-    body = _maintenance(client)
-    assert body["run_by"] == "admin"
-    for key in ("refunds_retried", "refunds_handed_to_a_person", "refunds_checked_with_provider",
-                "orders_expired", "holds_expired", "refund_emails_sent"):
-        assert key in body and body[key] != "error", body
-
-
-def test_maintenance_accepts_the_schedulers_google_token(client, monkeypatch):
-    from app.api import maintenance
-    from app.config import get_settings
-
-    settings = get_settings()
-    monkeypatch.setattr(settings, "maintenance_audience", "https://events-api.test")
-    monkeypatch.setattr(settings, "maintenance_invoker_email", "scheduler@project.iam.gserviceaccount.com")
-
-    def verify(token, audience):
-        assert audience == "https://events-api.test"
-        if token == "google-ok":
-            return {"email": "scheduler@project.iam.gserviceaccount.com", "email_verified": True}
-        if token == "google-other":
-            return {"email": "someone.else@gmail.com", "email_verified": True}
-        raise ValueError("not a google token")
-
-    monkeypatch.setattr(maintenance, "_verify_google_token", verify)
-    r = client.post("/api/v1/internal/maintenance", headers={"Authorization": "Bearer google-ok"})
-    assert r.status_code == 200 and r.json()["run_by"] == "scheduler"
-    # A valid Google token for anyone else isn't enough.
-    assert client.post("/api/v1/internal/maintenance",
-                       headers={"Authorization": "Bearer google-other"}).status_code == 401
-    # An overall admin's app sign-in still works alongside.
-    assert _maintenance(client)["run_by"] == "admin"
-
-
 # ── admin views ──────────────────────────────────────────────────────
 
 def test_refunds_list_explains_the_reason_and_offers_retry(client, provider):
@@ -432,8 +385,9 @@ def test_refunds_list_explains_the_reason_and_offers_retry(client, provider):
     assert item["status"] == "delayed"
     assert item["can_retry"] is True
     assert "balance too low" in item["reason_text"]
-    assert item["attempt_count"] == 1 and item["next_retry_at"]
+    assert item["attempt_count"] == 1 and item["last_attempt_at"]
     assert item["provider_payment_id"] == row["provider_payment_id"]
+    assert "next_retry_at" not in item
 
 
 def test_actions_count_delayed_refunds_as_information_only(client, provider):
@@ -441,7 +395,6 @@ def test_actions_count_delayed_refunds_as_information_only(client, provider):
     r = client.get("/api/v1/admin/pending-count", headers=_bearer(_FIXTURE_ADMIN))
     assert r.status_code == 200, r.text
     body = r.json()
-    queues = body.get("queues", body)
-    assert queues["delayed_refunds"] >= 1
-    badge = sum(queues[k] for k in ("drafts", "failed_emails", "stuck_payments", "failed_refunds"))
+    assert body["delayed_refunds"] >= 1
+    badge = sum(body[k] for k in ("drafts", "failed_emails", "stuck_payments", "failed_refunds"))
     assert body["total"] == badge

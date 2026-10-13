@@ -63,7 +63,7 @@ def require_db(client):
 def _no_background_refund_tasks(monkeypatch):
     """Refund side tasks (emails, retries after a capture) normally run in the
     background a moment later. In tests they would fire during unrelated
-    tests, so they're switched off; tests call the maintenance run instead."""
+    tests, so they're switched off; tests that need them switch them back on."""
     try:
         from app.services import refund_service
     except Exception:  # noqa: BLE001 — app import problems are reported by `client`

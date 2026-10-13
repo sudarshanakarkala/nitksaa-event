@@ -252,7 +252,6 @@ def test_provider_refund_failure_leaves_safe_state(client, monkeypatch):
     # An outage is temporary (step 10c): the refund is 'delayed' and retried
     # automatically, not 'failed'. Registration still cancelled (seat released).
     assert r.json()["status"] == "refund_delayed"
-    assert r.json()["next_retry_at"] is not None
     assert _db("SELECT status FROM registrations WHERE registration_id=$1", rid, val=True) == "cancelled"
     assert _db("SELECT status FROM payment_refunds WHERE registration_id=$1", rid, val=True) == "delayed"
     assert _db("SELECT failure_reason FROM payment_refunds WHERE registration_id=$1", rid,

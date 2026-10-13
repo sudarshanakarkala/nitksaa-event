@@ -243,8 +243,8 @@ void main() {
       _expectNoRetry();
     });
 
-    testWidgets('Test E2: a delayed refund says it is retrying, when the next '
-        'try is, and the references, with a way to check again', (tester) async {
+    testWidgets('Test E2: a delayed refund says it is retrying, with the '
+        'references and a way to check again', (tester) async {
       final backend = FakeRegistrationBackend(finalAmount: '100.00');
       final registration = backend.seedRegistration(
         tokenA,
@@ -257,8 +257,8 @@ void main() {
 
       expect(_inDialog('Refund delayed, retrying'), findsOneWidget);
       expect(_inDialog('₹100'), findsOneWidget);
-      expect(_inDialog('Next try: '), findsOneWidget);
-      expect(find.textContaining(_dateAndTime), findsNWidgets(2));
+      expect(_inDialog('Requested on: '), findsOneWidget);
+      expect(find.textContaining(_dateAndTime), findsOneWidget);
       expect(_inDialog('pay_test${registration['registration_id']}'), findsOneWidget);
       expect(find.byTooltip('Copy Payment reference'), findsOneWidget);
       expect(find.textContaining('retrying automatically'), findsOneWidget);

@@ -71,7 +71,6 @@ REASON_ADMIN = {
     "provider_error": "The refund call to Razorpay failed (recorded before reasons were kept).",
 }
 
-REFUND_RETRY_INTERVAL = timedelta(hours=6)
 
 _NORMALIZED_TO_INTERNAL = {
     NormalizedRefundStatus.REFUND_PROCESSED: ("processed", True),
@@ -116,7 +115,6 @@ def _view(registration_id: int, refund: Optional[asyncpg.Record]) -> RefundStatu
         real_money=payment_mode == "live",
         payment_reference=refund["provider_payment_id"] or None,
         bank_reference=bank_reference,
-        next_retry_at=refund["next_retry_at"] if "next_retry_at" in refund else None,
     )
 
 
@@ -413,8 +411,8 @@ async def get_refund_status(
 #
 # A refund the provider refuses for a TEMPORARY reason (low balance, outage)
 # becomes 'delayed' and is retried: after each captured payment (the balance
-# just grew), on the scheduled maintenance run, and on an admin's Retry now.
-# After REFUND_RETRY_DAYS, or at once for a FINAL reason, it becomes
+# just grew) and on an admin's Retry now. A retry after REFUND_RETRY_DAYS,
+# or a FINAL reason at any time, makes it
 # 'failed' — a person must act — and the attendee and admins are told once.
 # A retry first asks the provider what refunds already exist for the
 # payment, so it can never refund twice.
@@ -429,8 +427,7 @@ def _refusal_reason(exc: Exception) -> RefundFailureReason:
 def _spawn(coro, delay_seconds: float = 2.0) -> None:
     """Run a side task (emails, retries) without holding up the caller. It
     starts after a short delay, so a caller's own transaction (e.g. a
-    webhook's) has committed first. Best effort: the maintenance run picks
-    up anything that didn't happen."""
+    webhook's) has committed first. Best effort."""
     import asyncio
 
     async def _guard():
@@ -459,7 +456,7 @@ async def record_refusal(
     source: str,
 ) -> asyncpg.Record:
     """The provider refused (or couldn't take) a refund call. Temporary and
-    still inside the retry window → 'delayed' with a next try; otherwise →
+    still inside the retry window → 'delayed'; otherwise →
     'failed' (needs a person)."""
     now = datetime.now(timezone.utc)
     async with conn.transaction():
@@ -469,18 +466,17 @@ async def record_refusal(
         temporary = reason in TEMPORARY_REFUND_FAILURES
         within_window = now - row["requested_at"] < _retry_window()
         if temporary and within_window:
-            status, next_retry = "delayed", now + REFUND_RETRY_INTERVAL
+            status = "delayed"
         else:
-            status, next_retry = "failed", None
+            status = "failed"
         updated = await conn.fetchrow(
             """
             UPDATE payment_refunds SET status = $2::text, failure_reason = $3::text,
-                   next_retry_at = $4::timestamptz,
                    last_attempt_at = now(), updated_at = now(),
                    finalized_at = CASE WHEN $2::text = 'failed' THEN now() END
             WHERE id = $1::bigint RETURNING *
             """,
-            row["id"], status, reason.value, next_retry,
+            row["id"], status, reason.value,
         )
     await audit_service.emit(
         actor_uid="system",
@@ -490,7 +486,6 @@ async def record_refusal(
             "status": status, "reason": reason.value, "temporary": temporary,
             "attempt": updated["attempt_count"], "source": source,
             "order_id": updated["payment_order_id"], "amount": str(updated["amount"]),
-            "next_retry_at": next_retry.isoformat() if next_retry else None,
             "gave_up": bool(temporary and not within_window) or None,
         },
     )
@@ -501,8 +496,8 @@ async def record_refusal(
 async def retry_refund(refund_id: int, *, source: str, actor_uid: str = "system",
                        force: bool = False) -> Optional[asyncpg.Record]:
     """Try a delayed refund again (or, with force — an admin's Retry now — a
-    delayed or failed one, ignoring the schedule). Returns the refund row,
-    or None if there was nothing to do."""
+    delayed or failed one). Returns the refund row, or None if there was
+    nothing to do."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -513,13 +508,11 @@ async def retry_refund(refund_id: int, *, source: str, actor_uid: str = "system"
             allowed = ("delayed", "failed") if force else ("delayed",)
             if row["status"] not in allowed:
                 return row
-            if not force and row["next_retry_at"] and row["next_retry_at"] > datetime.now(timezone.utc):
-                return row
             # Claim it: concurrent retries see 'pending' and leave it alone.
             row = await conn.fetchrow(
                 """
                 UPDATE payment_refunds SET status = 'pending', attempt_count = attempt_count + 1,
-                       last_attempt_at = now(), next_retry_at = NULL, finalized_at = NULL,
+                       last_attempt_at = now(), finalized_at = NULL,
                        updated_at = now()
                 WHERE id = $1 RETURNING *
                 """,
@@ -572,18 +565,19 @@ async def retry_refund(refund_id: int, *, source: str, actor_uid: str = "system"
         return await apply_refund_result(conn, row, result, source=source)
 
 
-async def retry_due_refunds(*, source: str, ignore_schedule: bool = False, limit: int = 50) -> Dict[str, int]:
-    """Retry delayed refunds whose next try is due (or all delayed ones, e.g.
-    right after a payment came in and the balance grew)."""
+async def retry_delayed_refunds(*, source: str, limit: int = 50) -> Dict[str, int]:
+    """Retry every delayed refund, oldest first. Called right after a payment
+    is captured: the balance just grew, so a refund refused for a low
+    balance may go through now."""
     pool = await get_pool()
     async with pool.acquire() as conn:
         ids = await conn.fetch(
             """
             SELECT id FROM payment_refunds
-            WHERE status = 'delayed' AND ($1::boolean OR next_retry_at IS NULL OR next_retry_at <= now())
-            ORDER BY next_retry_at NULLS FIRST, id LIMIT $2::int
+            WHERE status = 'delayed'
+            ORDER BY requested_at, id LIMIT $1::int
             """,
-            ignore_schedule, limit,
+            limit,
         )
     counts = {"tried": 0, "processed_or_sent": 0, "still_delayed": 0, "failed": 0}
     for r in ids:
@@ -598,54 +592,6 @@ async def retry_due_refunds(*, source: str, ignore_schedule: bool = False, limit
         else:
             counts["processed_or_sent"] += 1
     return counts
-
-
-async def escalate_overdue_refunds() -> int:
-    """Delayed refunds past the retry window become 'failed' (a person must
-    act), even if no retry happened to run in between."""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            "SELECT * FROM payment_refunds WHERE status = 'delayed' AND requested_at < now() - $1::interval",
-            _retry_window(),
-        )
-        for row in rows:
-            reason = RefundFailureReason(row["failure_reason"]) if row["failure_reason"] in \
-                {r.value for r in RefundFailureReason} else RefundFailureReason.PROVIDER_UNAVAILABLE
-            await record_refusal(conn, row, reason, source="retry_window_over")
-    return len(rows)
-
-
-async def reconcile_open_refunds(limit: int = 50) -> int:
-    """Ask the provider about refunds still in flight for over 30 minutes
-    (a missed webhook must not leave them hanging)."""
-    pool = await get_pool()
-    checked = 0
-    async with pool.acquire() as conn:
-        rows = await conn.fetch(
-            """
-            SELECT * FROM payment_refunds
-            WHERE status IN ('pending', 'processing') AND provider_refund_id IS NOT NULL
-              AND COALESCE(last_attempt_at, requested_at) < now() - interval '30 minutes'
-            ORDER BY requested_at LIMIT $1::int
-            """,
-            limit,
-        )
-        for row in rows:
-            gw = _resolve_gateway(row["gateway"])
-            if gw is None or GatewayCapability.QUERY_REFUND not in gw.capabilities:
-                continue
-            try:
-                result = gw.query_refund(
-                    provider_payment_id=row["provider_payment_id"],
-                    provider_refund_id=row["provider_refund_id"],
-                    payment_mode=row["payment_mode"] if "payment_mode" in row else "test",
-                )
-            except GatewayError:
-                continue
-            await apply_refund_result(conn, row, result, source="reconcile")
-            checked += 1
-    return checked
 
 
 async def _refund_mail_details(conn: asyncpg.Connection, refund_id: int) -> Optional[Dict[str, Any]]:
@@ -713,21 +659,3 @@ async def notify_refund(refund_id: int) -> None:
                 for address in sorted(to):
                     await email_service.send_refund_admin_alert(address, d["mail"])
 
-
-async def send_due_refund_notifications(limit: int = 100) -> int:
-    """Catch-up for emails a background send didn't get to."""
-    pool = await get_pool()
-    async with pool.acquire() as conn:
-        ids = await conn.fetch(
-            """
-            SELECT id FROM payment_refunds
-            WHERE (status = 'delayed' AND attendee_notified_delay_at IS NULL)
-               OR (status IN ('processed', 'failed') AND attendee_notified_result_at IS NULL)
-               OR (status = 'failed' AND admins_notified_at IS NULL)
-            ORDER BY id LIMIT $1::int
-            """,
-            limit,
-        )
-    for r in ids:
-        await notify_refund(r["id"])
-    return len(ids)

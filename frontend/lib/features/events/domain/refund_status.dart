@@ -14,14 +14,14 @@ class RefundStatus {
     this.realMoney = false,
     this.paymentReference,
     this.bankReference,
-    this.nextRetryAt,
   });
 
   /// Nothing was paid, so there is nothing to refund.
   static const none = 'none';
   static const pending = 'refund_pending';
 
-  /// The provider couldn't take it yet (temporary); retried automatically.
+  /// The provider couldn't take it yet (temporary); retried automatically
+  /// when new payments come in, or by an admin.
   static const delayed = 'refund_delayed';
   static const processed = 'refund_processed';
   static const failed = 'refund_failed';
@@ -49,9 +49,6 @@ class RefundStatus {
   /// The reference the attendee quotes to their bank (ARN), once sent.
   final String? bankReference;
 
-  /// When a delayed refund will be tried again.
-  final DateTime? nextRetryAt;
-
   /// A refund exists, in whatever state. False when nothing was paid.
   bool get hasRefund => status != none;
 
@@ -73,7 +70,6 @@ class RefundStatus {
       realMoney: json['real_money'] == true,
       paymentReference: _text(json['payment_reference']),
       bankReference: _text(json['bank_reference']),
-      nextRetryAt: _parseDate(json['next_retry_at']),
     );
   }
 

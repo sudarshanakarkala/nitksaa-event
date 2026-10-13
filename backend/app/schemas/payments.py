@@ -144,7 +144,6 @@ class RefundStatusResponse(BaseModel):
     real_money: bool = False
     payment_reference: Optional[str] = None
     bank_reference: Optional[str] = None
-    next_retry_at: Optional[datetime] = None
 
 
 class CancelRegistrationRequest(BaseModel):

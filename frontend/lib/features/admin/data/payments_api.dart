@@ -90,7 +90,6 @@ class AdminRefund {
     this.bankReference,
     this.reasonText,
     this.attemptCount = 1,
-    this.nextRetryAt,
     this.canRetry = false,
   });
 
@@ -120,7 +119,6 @@ class AdminRefund {
   /// [failureReason] in plain words, from the backend.
   final String? reasonText;
   final int attemptCount;
-  final DateTime? nextRetryAt;
 
   /// Delayed or failed: Retry now is possible.
   final bool canRetry;
@@ -145,7 +143,6 @@ class AdminRefund {
         bankReference: _text(j['bank_reference']),
         reasonText: _text(j['reason_text']),
         attemptCount: j['attempt_count'] == null ? 1 : _int(j['attempt_count']),
-        nextRetryAt: _date(j['next_retry_at']),
         canRetry: j['can_retry'] == true,
       );
 }
@@ -153,17 +150,15 @@ class AdminRefund {
 /// What Retry now did (`POST …/refunds/{number}/retry`).
 @immutable
 class RefundRetryResult {
-  const RefundRetryResult({required this.status, this.reasonText, this.nextRetryAt});
+  const RefundRetryResult({required this.status, this.reasonText});
 
   /// processed / pending / processing / delayed / failed.
   final String status;
   final String? reasonText;
-  final DateTime? nextRetryAt;
 
   factory RefundRetryResult.fromJson(Map<String, dynamic> j) => RefundRetryResult(
         status: j['status']?.toString() ?? '',
         reasonText: _text(j['reason_text']),
-        nextRetryAt: _date(j['next_retry_at']),
       );
 }
 
