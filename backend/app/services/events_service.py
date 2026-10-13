@@ -1,5 +1,5 @@
 import json
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional, Tuple
 
 import asyncpg
@@ -59,6 +59,9 @@ def _with_public_card_metadata(d: Dict[str, Any]) -> Dict[str, Any]:
     return d
 
 
+_CLOSE_NOW_TOLERANCE = timedelta(minutes=1)
+
+
 def _update_context(event_id: int, before: Dict[str, Any], after: Dict[str, Any],
                     requested: Dict[str, Any]) -> Dict[str, Any]:
     """What an edit changed: field names only (not their values, which can
@@ -73,7 +76,11 @@ def _update_context(event_id: int, before: Dict[str, Any], after: Dict[str, Any]
     if "registration_closes_at" in changed:
         now = datetime.now(timezone.utc)
         was_closed = before.get("registration_closes_at") is not None and before["registration_closes_at"] <= now
-        is_closed = after.get("registration_closes_at") is not None and after["registration_closes_at"] <= now
+        # "Close registration" sends the admin's own clock, which can run a
+        # little ahead of the server's: a closing time within a minute
+        # counts as closed now.
+        is_closed = (after.get("registration_closes_at") is not None
+                     and after["registration_closes_at"] <= now + _CLOSE_NOW_TOLERANCE)
         if is_closed and not was_closed:
             ctx["registration"] = "closed"
         elif was_closed and not is_closed:
