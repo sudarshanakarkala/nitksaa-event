@@ -189,9 +189,7 @@ class _TabButton extends StatelessWidget {
 
 /// Placeholder for tabs that arrive in later steps.
 class _ComingSoon extends StatelessWidget {
-  const _ComingSoon({this.note});
-
-  final String? note;
+  const _ComingSoon();
 
   @override
   Widget build(BuildContext context) {
@@ -211,14 +209,6 @@ class _ComingSoon extends StatelessWidget {
                 textAlign: TextAlign.center,
                 style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
               ),
-              if (note != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  note!,
-                  textAlign: TextAlign.center,
-                  style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary),
-                ),
-              ],
             ],
           ),
         ),

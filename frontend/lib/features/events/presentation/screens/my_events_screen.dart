@@ -1,5 +1,4 @@
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -14,6 +13,8 @@ import '../providers/created_events_provider.dart';
 import '../providers/my_events_provider.dart';
 import '../widgets/event_card.dart';
 import '../widgets/refund_status_dialog.dart';
+import '../../domain/refund_status.dart';
+import '../../../../shared/widgets/notice.dart';
 
 class MyEventsScreen extends ConsumerStatefulWidget {
   const MyEventsScreen({super.key});
@@ -283,18 +284,22 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
         .read(myEventsProvider.notifier)
         .cancelRegistration(registration.registrationId);
     if (!mounted) return;
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(outcome.message),
-        // A snackbar with an action stays up until it is pressed unless told
-        // otherwise. This one closes after the usual four seconds.
-        persist: false,
-        action: viewRefundAction(
-          context,
-          ref,
-          outcome: outcome,
-          registrationId: registration.registrationId,
-        ),
+    final refundStatus = outcome.refund?.status;
+    showNotice(
+      context,
+      outcome.message,
+      kind: !outcome.cancelled
+          ? NoticeKind.error
+          : (refundStatus == RefundStatus.failed || refundStatus == RefundStatus.delayed)
+              ? NoticeKind.warning
+              : NoticeKind.success,
+      // A notice with an action would otherwise stay up until pressed.
+      persist: outcome.cancelled ? false : null,
+      action: viewRefundAction(
+        context,
+        ref,
+        outcome: outcome,
+        registrationId: registration.registrationId,
       ),
     );
   }

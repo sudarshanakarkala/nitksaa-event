@@ -1,13 +1,13 @@
 /// Platform-agnostic entry point for opening Razorpay Checkout.
 ///
 /// - Web: drives the global Razorpay Checkout JS (`checkout.razorpay.com/v1/checkout.js`).
-/// - Android / iOS: wraps the `razorpay_flutter` native SDK.
-/// - Any other platform: throws [RazorpayPlatformUnsupportedException].
+/// - Any other platform: throws [RazorpayPlatformUnsupportedException]. The
+///   app is web-only; the phone version was removed (its plugin was never
+///   installed).
 library;
 
 import 'razorpay_payment_models.dart';
 import 'razorpay_payment_stub.dart'
-    if (dart.library.io) 'razorpay_payment_io.dart'
     if (dart.library.js_interop) 'razorpay_payment_web.dart' as impl;
 
 export 'razorpay_payment_models.dart';

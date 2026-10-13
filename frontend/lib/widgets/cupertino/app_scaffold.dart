@@ -1,6 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart'; // for ScaffoldMessenger fallback
 import 'package:event_app/theme/app_palette.dart';
+import '../../shared/widgets/notice.dart';
 
 class AppScaffoldCupertino extends StatelessWidget {
   final ObstructingPreferredSizeWidget? navigationBar;
@@ -31,7 +32,7 @@ class AppScaffoldCupertino extends StatelessWidget {
     // Use ScaffoldMessenger if a Material Scaffold is ancestor, otherwise CupertinoAlertDialog.
     final messenger = ScaffoldMessenger.maybeOf(context);
     if (messenger != null) {
-      messenger.showSnackBar(SnackBar(content: Text(message)));
+      showNotice(context, message);
     } else {
       showCupertinoDialog(
         context: context,

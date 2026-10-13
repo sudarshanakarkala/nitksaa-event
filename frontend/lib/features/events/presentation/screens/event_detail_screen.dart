@@ -15,6 +15,7 @@ import '../../../admin/presentation/event_admin_actions.dart' show EventAdminAct
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
 import '../widgets/venue_section.dart';
+import '../../../../shared/widgets/notice.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -43,16 +44,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     try {
       if (!await launchUrl(url, mode: LaunchMode.externalApplication)) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(content: Text('Could not launch $urlString')),
-          );
+          showNotice(context, 'Could not launch $urlString', kind: NoticeKind.error);
         }
       }
     } catch (e) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Error launching link: $e')),
-        );
+        showNotice(context, 'Error launching link: $e', kind: NoticeKind.error);
       }
     }
   }
@@ -1134,9 +1131,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             icon: const Icon(Icons.copy, size: 16),
             onPressed: () {
               Clipboard.setData(ClipboardData(text: link));
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text('Meeting link copied')),
-              );
+              showNotice(context, 'Meeting link copied', kind: NoticeKind.success);
             },
           ),
         ],
@@ -1469,6 +1464,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ],
       );
     } else if (paymentDue) {
+      // Red when the payment failed, yellow when it just isn't finished
+      // (same colours as the notices).
+      final tone = registrationStatus == 'payment_failed'
+          ? context.palette.error
+          : context.palette.warning;
       ctaWidget = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1476,16 +1476,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             width: double.infinity,
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: context.palette.warning.withValues(alpha: 0.14),
+              color: tone.withValues(alpha: 0.14),
               borderRadius: BorderRadius.circular(8),
-              border: Border.all(color: context.palette.warning.withValues(alpha: 0.3)),
+              border: Border.all(color: tone.withValues(alpha: 0.3)),
             ),
             child: Text(
               registrationStatus == 'payment_failed'
                   ? 'Your payment didn\'t go through, so you aren\'t registered yet.'
                   : 'Your payment isn\'t complete yet, so you aren\'t registered yet.',
               textAlign: TextAlign.center,
-              style: TextStyle(color: context.palette.warning, fontWeight: FontWeight.bold),
+              style: TextStyle(color: tone, fontWeight: FontWeight.bold),
             ),
           ),
           const SizedBox(height: 12),
@@ -1987,25 +1987,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   void _proceedToCheckout(AppEvent event) {
     final notes = Uri.encodeComponent(_notesController.text);
     context.push('/events/${event.eventId}/checkout?notes=$notes');
-  }
-
-  Future<void> _submitRegistration() async {
-    final success = await ref
-        .read(eventDetailProvider(widget.eventId).notifier)
-        .register(widget.eventId, _notesController.text);
-
-    if (mounted) {
-      if (success) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Registration confirmed successfully!')),
-        );
-      } else {
-        final state = ref.read(eventDetailProvider(widget.eventId));
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Registration failed: ${state.errorMessage ?? 'Unknown error'}')),
-        );
-      }
-    }
   }
 
   // ==========================================

@@ -8,6 +8,7 @@ import '../../../../theme/app_palette.dart';
 import '../../domain/refund_status.dart';
 import '../providers/cancellation_outcome.dart';
 import '../providers/refund_status_provider.dart';
+import '../../../../shared/widgets/notice.dart';
 
 /// Opens the refund status of one of the attendee's registrations.
 ///
@@ -264,9 +265,7 @@ class _DetailRow extends StatelessWidget {
               onPressed: () async {
                 await Clipboard.setData(ClipboardData(text: value));
                 if (!context.mounted) return;
-                ScaffoldMessenger.maybeOf(context)?.showSnackBar(
-                  SnackBar(content: Text('$label copied')),
-                );
+                showNotice(context, '$label copied', kind: NoticeKind.success);
               },
             ),
         ],

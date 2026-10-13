@@ -2,13 +2,11 @@
 import 'dart:async';
 import 'dart:convert';
 
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show FilteringTextInputFormatter, TextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
-import 'package:timezone/timezone.dart' as tz;
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../core/errors/api_error_message.dart';
@@ -23,6 +21,7 @@ import '../../domain/event.dart';
 import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
 import '../widgets/event_card.dart';
+import '../../../../shared/widgets/notice.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
   const ManageEventsScreen({super.key});
@@ -136,12 +135,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       if (!mounted) return;
       
       // Show loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Publishing event...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      showNotice(context, 'Publishing event...', kind: NoticeKind.info);
       
       // Call API to update event status to published using dedicated status endpoint
       await repo.updateEventStatus(
@@ -160,24 +154,13 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${event.title} published successfully'),
-            backgroundColor: context.palette.tinted(context.palette.success),
-          ),
-        );
+        showNotice(context, '${event.title} published successfully', kind: NoticeKind.success);
       }
     } catch (error, stackTrace) {
       AppLogger.error('Failed to publish event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(apiErrorMessage(error, action: 'publish the event')),
-            backgroundColor: context.palette.tinted(context.palette.error),
-            duration: const Duration(seconds: 6),
-          ),
-        );
+        showNotice(context, apiErrorMessage(error, action: 'publish the event'), kind: NoticeKind.error);
       }
     }
   }
@@ -190,12 +173,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       if (!mounted) return;
       
       // Show loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Unpublishing event...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      showNotice(context, 'Unpublishing event...', kind: NoticeKind.info);
       
       // Call API to update event status to draft
       await repo.updateEventStatus(
@@ -214,24 +192,13 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${event.title} unpublished successfully'),
-            backgroundColor: context.palette.tinted(context.palette.warning),
-          ),
-        );
+        showNotice(context, '${event.title} unpublished successfully', kind: NoticeKind.success);
       }
     } catch (error, stackTrace) {
       AppLogger.error('Failed to unpublish event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(apiErrorMessage(error, action: 'unpublish the event')),
-            backgroundColor: context.palette.tinted(context.palette.error),
-            duration: const Duration(seconds: 6),
-          ),
-        );
+        showNotice(context, apiErrorMessage(error, action: 'unpublish the event'), kind: NoticeKind.error);
       }
     }
   }
@@ -268,12 +235,7 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       if (!mounted) return;
       
       // Show loading
-      ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Deleting event...'),
-          duration: Duration(seconds: 1),
-        ),
-      );
+      showNotice(context, 'Deleting event...', kind: NoticeKind.info);
       
       // Call API to delete event
       await repo.deleteAdminEvent(
@@ -291,24 +253,13 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
       
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('${event.title} deleted successfully'),
-            backgroundColor: context.palette.tinted(context.palette.success),
-          ),
-        );
+        showNotice(context, '${event.title} deleted successfully', kind: NoticeKind.success);
       }
     } catch (error, stackTrace) {
       AppLogger.error('Failed to delete event ${event.eventId}', error, stackTrace);
       if (mounted) {
         ScaffoldMessenger.of(context).clearSnackBars();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(apiErrorMessage(error, action: 'delete the event')),
-            backgroundColor: context.palette.tinted(context.palette.error),
-            duration: const Duration(seconds: 6),
-          ),
-        );
+        showNotice(context, apiErrorMessage(error, action: 'delete the event'), kind: NoticeKind.error);
       }
     }
   }
@@ -581,9 +532,6 @@ class _ManageEventsScreenState extends ConsumerState<ManageEventsScreen> with Ti
 }
 
 // ── Timezone options for event creation ────────────────────────────────────
-List<String> _getAvailableTimezones() {
-  return tz.timeZoneDatabase.locations.keys.toList()..sort();
-}
 
 // Common timezones for the simple dropdown
 List<String> _getCommonTimezones() {
@@ -928,7 +876,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   Widget build(BuildContext context) {
     final isEditing = widget.event != null;
     final theme = Theme.of(context);
-    final isDark = theme.brightness == Brightness.dark;
     
     return Dialog(
       child: SizedBox(
@@ -2546,9 +2493,7 @@ void _showFeeDialog(int? editIndex) {
                     endTimeCtrl.text.trim(),
                   );
                   if (clashError != null) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      SnackBar(content: Text(clashError)),
-                    );
+                    showNotice(context, clashError, kind: NoticeKind.warning);
                     return;
                   }
 
@@ -2921,12 +2866,7 @@ void _showFeeDialog(int? editIndex) {
     if (missing.isNotEmpty) {
       setState(() => _currentStep = 0);
       WidgetsBinding.instance.addPostFrameCallback((_) => _formKey.currentState?.validate());
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text('Please fill in: ${missing.join(', ')}'),
-          duration: const Duration(seconds: 6),
-        ),
-      );
+      showNotice(context, 'Please fill in: ${missing.join(', ')}', kind: NoticeKind.warning);
       return;
     }
 
@@ -2938,9 +2878,7 @@ void _showFeeDialog(int? editIndex) {
 
     if (startDate == null || endDate == null) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter valid dates')),
-        );
+        showNotice(context, 'Please enter valid dates', kind: NoticeKind.warning);
       }
       return;
     }
@@ -2957,9 +2895,7 @@ void _showFeeDialog(int? editIndex) {
 
       if (startTime == null || endTime == null) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Please enter valid times')),
-          );
+          showNotice(context, 'Please enter valid times', kind: NoticeKind.warning);
         }
         return;
       }
@@ -2983,9 +2919,7 @@ void _showFeeDialog(int? editIndex) {
 
     if (!endDateTime.isAfter(startDateTime)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('End time must be after start time')),
-        );
+        showNotice(context, 'End time must be after start time', kind: NoticeKind.warning);
       }
       return;
     }
@@ -2997,17 +2931,13 @@ void _showFeeDialog(int? editIndex) {
         final regClose = DateTime.parse(_registrationClosesAt.text.trim());
         if (regClose.isBefore(regOpen)) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Registration closes must be on or after registration opens')),
-            );
+            showNotice(context, 'Registration closes must be on or after registration opens', kind: NoticeKind.warning);
           }
           return;
         }
       } catch (e) {
         if (mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Invalid registration date format')),
-          );
+          showNotice(context, 'Invalid registration date format', kind: NoticeKind.warning);
         }
         return;
       }
@@ -3026,31 +2956,21 @@ void _showFeeDialog(int? editIndex) {
 
           if (!sessionEnd.isAfter(sessionStart)) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text('Session "${session['title']}" end time must be after start time')),
-              );
+              showNotice(context, 'Session "${session['title']}" end time must be after start time', kind: NoticeKind.warning);
             }
             return;
           }
 
           if (sessionStart.isBefore(startDateTime) || sessionEnd.isAfter(endDateTime)) {
             if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(
-                  content: Text(
-                    'Session "${session['title']}" must be within event timeframe '
-                    '(${_formatDateTimeOnly(startDateTime)} - ${_formatDateTimeOnly(endDateTime)})',
-                  ),
-                ),
-              );
+              showNotice(context, 'Session "${session['title']}" must be within event timeframe '
+                    '(${_formatDateTimeOnly(startDateTime)} - ${_formatDateTimeOnly(endDateTime)})', kind: NoticeKind.warning);
             }
             return;
           }
         } catch (e) {
           if (mounted) {
-            ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text('Invalid session date/time format')),
-            );
+            showNotice(context, 'Invalid session date/time format', kind: NoticeKind.warning);
           }
           return;
         }
@@ -3059,20 +2979,14 @@ void _showFeeDialog(int? editIndex) {
 
     if (_isVirtual && _virtualUrl.text.trim().isEmpty) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Please enter meeting URL for virtual events')),
-        );
+        showNotice(context, 'Please enter meeting URL for virtual events', kind: NoticeKind.warning);
       }
       return;
     }
 
     if (!_isFree && (_fees.isEmpty || _feesTotal <= 0)) {
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('A paid event needs at least one fee with an amount (Pricing step).'),
-          ),
-        );
+        showNotice(context, 'A paid event needs at least one fee with an amount (Pricing step).', kind: NoticeKind.warning);
       }
       return;
     }
@@ -3118,25 +3032,11 @@ void _showFeeDialog(int? editIndex) {
       final detailsSaved = await _saveDetails(saved.eventId, token, offset);
       final orgsSaved = await _saveOrgs(saved.eventId, token);
       if (!detailsSaved && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'The event was saved, but its speakers, sessions or fee tiers could not be. '
-              'Open the event again to check them.',
-            ),
-            duration: Duration(seconds: 8),
-          ),
-        );
+        showNotice(context, 'The event was saved, but its speakers, sessions or fee tiers could not be. '
+              'Open the event again to check them.', kind: NoticeKind.error);
       } else if (!orgsSaved && mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text(
-              'The event was saved, but some sponsors or partners could not be. '
-              'Open the event again to check them.',
-            ),
-            duration: Duration(seconds: 8),
-          ),
-        );
+        showNotice(context, 'The event was saved, but some sponsors or partners could not be. '
+              'Open the event again to check them.', kind: NoticeKind.error);
       }
 
       if (mounted) Navigator.pop(context, true);
@@ -3144,12 +3044,7 @@ void _showFeeDialog(int? editIndex) {
       AppLogger.error('Failed to save event', error, stackTrace);
       if (!mounted) return;
       setState(() => _isSaving = false);
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: Text(apiErrorMessage(error, action: 'save the event')),
-          duration: const Duration(seconds: 6),
-        ),
-      );
+      showNotice(context, apiErrorMessage(error, action: 'save the event'), kind: NoticeKind.error);
     }
   }
 
@@ -3258,162 +3153,6 @@ class _PickerField extends StatelessWidget {
   }
 }
 
-class _StatusPill extends StatelessWidget {
-  const _StatusPill({required this.label});
-
-  final String label;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-      decoration: BoxDecoration(
-        color: context.palette.success.withValues(alpha: 0.14),
-        borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: context.palette.success.withValues(alpha: 0.3)),
-      ),
-      child: Text(
-        label.replaceAll('_', ' '),
-        style: TextStyle(
-          color: context.palette.success,
-          fontSize: 12,
-          fontWeight: FontWeight.bold,
-        ),
-      ),
-    );
-  }
-}
-
-class _Sidebar extends StatelessWidget {
-  const _Sidebar({required this.isDark, required this.auth});
-
-  final bool isDark;
-  final AuthController auth;
-
-  @override
-  Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Container(
-      width: 240,
-      padding: const EdgeInsets.all(24),
-      decoration: BoxDecoration(
-        color: context.palette.background,
-        border: Border(
-          right: BorderSide(color: theme.colorScheme.outlineVariant),
-        ),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Row(
-            children: [
-              Icon(Icons.calendar_today_outlined, color: context.palette.primary),
-              SizedBox(width: 8),
-              Text(
-                'NITKSAA',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.serif,
-                  fontSize: 20,
-                  fontWeight: FontWeight.w600,
-                  color: context.palette.primary,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 32),
-          _SidebarItem(
-            icon: Icons.calendar_month,
-            label: 'Events',
-            active: false,
-            onTap: () => context.go(AppRoutes.home),
-          ),
-          _SidebarItem(
-            icon: Icons.bookmark,
-            label: 'My Events',
-            active: false,
-            onTap: () => context.go(AppRoutes.myEvents),
-          ),
-          const _SidebarItem(
-            icon: Icons.admin_panel_settings,
-            label: 'Manage Events',
-            active: true,
-          ),
-          const Spacer(),
-          Row(
-            children: [
-              CircleAvatar(
-                radius: 18,
-                backgroundColor: context.palette.primary,
-                child: Text(
-                  (auth.session?.fullname ?? 'U').substring(0, 1).toUpperCase(),
-                  style: TextStyle(
-                    color: context.palette.onPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                  ),
-                ),
-              ),
-              const SizedBox(width: 10),
-              Expanded(
-                child: Text(
-                  auth.session?.fullname ?? 'Admin User',
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: const TextStyle(fontSize: 13, fontWeight: FontWeight.bold),
-                ),
-              ),
-            ],
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _SidebarItem extends StatelessWidget {
-  const _SidebarItem({
-    required this.icon,
-    required this.label,
-    required this.active,
-    this.onTap,
-  });
-
-  final IconData icon;
-  final String label;
-  final bool active;
-  final VoidCallback? onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final activeBg = context.palette.surfaceHover;
-    final activeText = context.palette.primary;
-    return Container(
-      margin: const EdgeInsets.only(bottom: 6),
-      decoration: BoxDecoration(
-        color: active ? activeBg : Colors.transparent,
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: ListTile(
-        visualDensity: VisualDensity.compact,
-        leading: Icon(
-          icon,
-          size: 20,
-          color: active ? activeText : context.palette.textSecondary,
-        ),
-        title: Text(
-          label,
-          style: TextStyle(
-            color: active ? activeText : context.palette.textSecondary,
-            fontSize: 13,
-            fontWeight: active ? FontWeight.bold : FontWeight.w500,
-          ),
-        ),
-        onTap: onTap,
-      ),
-    );
-  }
-}
-
 class _ErrorState extends StatelessWidget {
   const _ErrorState({required this.message, required this.onRetry});
 
@@ -3437,20 +3176,3 @@ class _ErrorState extends StatelessWidget {
   }
 }
 
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return const Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.event_busy, size: 48),
-          SizedBox(height: 12),
-          Text('No upcoming events to manage.'),
-        ],
-      ),
-    );
-  }
-}

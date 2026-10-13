@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 
 import '../../../theme/app_palette.dart';
@@ -77,6 +78,56 @@ TextStyle adminCellStyle(AppPalette p) =>
 
 /// A table whose every heading sorts (tap it; again to reverse), in a
 /// bordered card that scrolls sideways when it's wider than the page.
+/// Sideways scrolling for a wide admin table: a visible scrollbar along the
+/// bottom, and the table can be dragged with the mouse as well as touch or
+/// a trackpad (on a computer there was otherwise no way to tell it scrolls).
+class AdminHScroll extends StatefulWidget {
+  const AdminHScroll({super.key, required this.minWidth, required this.child});
+
+  final double minWidth;
+  final Widget child;
+
+  @override
+  State<AdminHScroll> createState() => _AdminHScrollState();
+}
+
+class _AdminHScrollState extends State<AdminHScroll> {
+  final _controller = ScrollController();
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScrollConfiguration(
+      behavior: ScrollConfiguration.of(context).copyWith(
+        dragDevices: const {
+          PointerDeviceKind.touch,
+          PointerDeviceKind.mouse,
+          PointerDeviceKind.trackpad,
+        },
+      ),
+      child: Scrollbar(
+        controller: _controller,
+        thumbVisibility: true,
+        child: SingleChildScrollView(
+          controller: _controller,
+          scrollDirection: Axis.horizontal,
+          // Room for the scrollbar below the last row.
+          padding: const EdgeInsets.only(bottom: 12),
+          child: ConstrainedBox(
+            constraints: BoxConstraints(minWidth: widget.minWidth),
+            child: widget.child,
+          ),
+        ),
+      ),
+    );
+  }
+}
+
 class AdminGridTable<T> extends StatelessWidget {
   const AdminGridTable({
     super.key,
@@ -86,6 +137,7 @@ class AdminGridTable<T> extends StatelessWidget {
     required this.ascending,
     required this.onSort,
     this.cell,
+    this.onRowTap,
   });
 
   final List<T> rows;
@@ -96,6 +148,9 @@ class AdminGridTable<T> extends StatelessWidget {
 
   /// Custom cell for a column, or null for plain text.
   final Widget? Function(GridColumn<T> column, T row)? cell;
+
+  /// Tapping a row (e.g. to open its details). Null: rows aren't tappable.
+  final void Function(T row)? onRowTap;
 
   @override
   Widget build(BuildContext context) {
@@ -127,6 +182,7 @@ class AdminGridTable<T> extends StatelessWidget {
       dividerThickness: 0.6,
       headingRowColor: WidgetStatePropertyAll(p.surfaceSubtle),
       sortColumnIndex: sortIndex < 0 ? null : sortIndex,
+      showCheckboxColumn: false,
       sortAscending: ascending,
       columns: [
         for (final c in columns)
@@ -138,6 +194,7 @@ class AdminGridTable<T> extends StatelessWidget {
       rows: [
         for (final row in rows)
           DataRow(
+            onSelectChanged: onRowTap == null ? null : (_) => onRowTap!(row),
             cells: [
               for (final c in columns) DataCell(cell?.call(c, row) ?? plain(c, row)),
             ],
@@ -154,12 +211,9 @@ class AdminGridTable<T> extends StatelessWidget {
       child: ClipRRect(
         borderRadius: BorderRadius.circular(12),
         child: LayoutBuilder(
-          builder: (context, constraints) => SingleChildScrollView(
-            scrollDirection: Axis.horizontal,
-            child: ConstrainedBox(
-              constraints: BoxConstraints(minWidth: constraints.maxWidth),
-              child: table,
-            ),
+          builder: (context, constraints) => AdminHScroll(
+            minWidth: constraints.maxWidth,
+            child: table,
           ),
         ),
       ),

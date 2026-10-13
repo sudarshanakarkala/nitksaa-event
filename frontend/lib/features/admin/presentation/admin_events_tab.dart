@@ -16,6 +16,7 @@ import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../../events/presentation/widgets/event_card.dart';
 import 'event_admin_actions.dart';
+import 'admin_widgets.dart';
 
 /// Status filters, website pill style.
 enum _Filter {
@@ -397,8 +398,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
 }
 
 /// Table view: one row per event; the ⋯ menu has the same actions as the
-/// cards. Scrolls sideways on narrower screens.
-class _EventsTable extends StatelessWidget {
+/// cards. Every heading sorts (click again to reverse), like the other admin
+/// tables. Scrolls sideways on narrower screens.
+class _EventsTable extends StatefulWidget {
   const _EventsTable({
     required this.events,
     required this.padding,
@@ -412,6 +414,42 @@ class _EventsTable extends StatelessWidget {
   final String? Function(AppEvent) createdBy;
   final List<EventCardAction> Function(AppEvent) actionsFor;
   final Set<int> busy;
+
+  @override
+  State<_EventsTable> createState() => _EventsTableState();
+}
+
+class _EventsTableState extends State<_EventsTable> {
+  // Column index and direction. Starts as the list arrives (no arrow).
+  int? _sortIndex;
+  bool _ascending = true;
+
+  // Sort keys, in column order (the last column, the ⋯ menu, doesn't sort).
+  static final List<Comparable Function(AppEvent)> _keys = [
+    (e) => e.title.toLowerCase(),
+    (e) => e.startDatetime,
+    (e) => e.status,
+    (e) => e.isVirtual ? 1 : 0,
+    (e) => e.registeredCount,
+    (e) => (e.isFree ?? true) ? -1.0 : (e.ticketPrice ?? 0.0),
+    (e) => (e.createdByName ?? '').toLowerCase(),
+  ];
+
+  List<AppEvent> get _sorted {
+    final i = _sortIndex;
+    if (i == null) return widget.events;
+    final list = [...widget.events];
+    list.sort((a, b) {
+      final c = _keys[i](a).compareTo(_keys[i](b));
+      return _ascending ? c : -c;
+    });
+    return list;
+  }
+
+  void _sortBy(int index, bool ascending) => setState(() {
+        _sortIndex = index;
+        _ascending = ascending;
+      });
 
   static const _months = [
     'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
@@ -441,6 +479,11 @@ class _EventsTable extends StatelessWidget {
       letterSpacing: 0.6,
     );
     final cell = AppTextStyles.bodySmall.copyWith(fontSize: 13, color: p.textPrimary);
+    final events = _sorted;
+    final padding = widget.padding;
+    final createdBy = widget.createdBy;
+    final actionsFor = widget.actionsFor;
+    final busy = widget.busy;
     return ListView(
       padding: padding,
       physics: const AlwaysScrollableScrollPhysics(),
@@ -454,11 +497,9 @@ class _EventsTable extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(12),
             child: LayoutBuilder(
-              builder: (context, constraints) => SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: ConstrainedBox(
-                  constraints: BoxConstraints(minWidth: constraints.maxWidth),
-                  child: DataTable(
+              builder: (context, constraints) => AdminHScroll(
+                minWidth: constraints.maxWidth,
+                child: DataTable(
                     headingRowHeight: 40,
                     dataRowMinHeight: 52,
                     dataRowMaxHeight: 60,
@@ -466,14 +507,16 @@ class _EventsTable extends StatelessWidget {
                     columnSpacing: 24,
                     dividerThickness: 0.6,
                     headingRowColor: WidgetStatePropertyAll(p.surfaceSubtle),
+                    sortColumnIndex: _sortIndex,
+                    sortAscending: _ascending,
                     columns: [
-                      DataColumn(label: Text('EVENT', style: head)),
-                      DataColumn(label: Text('STARTS', style: head)),
-                      DataColumn(label: Text('STATUS', style: head)),
-                      DataColumn(label: Text('MODE', style: head)),
-                      DataColumn(label: Text('CAPACITY', style: head)),
-                      DataColumn(label: Text('PRICE', style: head)),
-                      DataColumn(label: Text('CREATED BY', style: head)),
+                      DataColumn(label: Text('EVENT', style: head), onSort: _sortBy),
+                      DataColumn(label: Text('STARTS', style: head), onSort: _sortBy),
+                      DataColumn(label: Text('STATUS', style: head), onSort: _sortBy),
+                      DataColumn(label: Text('MODE', style: head), onSort: _sortBy),
+                      DataColumn(label: Text('CAPACITY', style: head), onSort: _sortBy),
+                      DataColumn(label: Text('PRICE', style: head), onSort: _sortBy),
+                      DataColumn(label: Text('CREATED BY', style: head), onSort: _sortBy),
                       const DataColumn(label: SizedBox.shrink()),
                     ],
                     rows: [
@@ -516,7 +559,6 @@ class _EventsTable extends StatelessWidget {
                         ),
                     ],
                   ),
-                ),
               ),
             ),
           ),

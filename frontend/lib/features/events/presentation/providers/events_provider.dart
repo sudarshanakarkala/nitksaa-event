@@ -266,8 +266,8 @@ final filteredEventsProvider = Provider<List<AppEvent>>((ref) {
   }
 
   // Apply mode filter (Physical/Virtual)
-  final hasPhysical = state.filterModes?['physical'] ?? true;
-  final hasVirtual = state.filterModes?['virtual'] ?? true;
+  final hasPhysical = state.filterModes['physical'] ?? true;
+  final hasVirtual = state.filterModes['virtual'] ?? true;
   
   if (!(hasPhysical && hasVirtual)) {
     filtered = filtered.where((event) {
@@ -278,8 +278,8 @@ final filteredEventsProvider = Provider<List<AppEvent>>((ref) {
   }
 
   // Apply registration status filter
-  final hasOpen = state.filterRegistrationStatus?['open'] ?? true;
-  final hasClosed = state.filterRegistrationStatus?['closed'] ?? true;
+  final hasOpen = state.filterRegistrationStatus['open'] ?? true;
+  final hasClosed = state.filterRegistrationStatus['closed'] ?? true;
   
   if (!(hasOpen && hasClosed)) {
     filtered = filtered.where((event) {

@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/app_state.dart';
-import '../../../core/logger/app_logger.dart';
 import '../../../routes/app_routes.dart';
-import '../../../theme/app_palette.dart';
 import '../../../theme/theme_provider.dart';
 import '../../../widgets/shared/shared_screen.dart';
 import '../../../widgets/shared/status_row.dart';
@@ -65,34 +63,3 @@ class FoundationReadyScreen extends ConsumerWidget {
       };
 }
 
-class _StatusRow extends StatelessWidget {
-  const _StatusRow({
-    required this.label,
-    required this.value,
-    required this.ok,
-    required this.colorScheme,
-    required this.textTheme,
-  });
-
-  final String label;
-  final String value;
-  final bool ok;
-  final ColorScheme colorScheme;
-  final TextTheme textTheme;
-
-  @override
-  Widget build(BuildContext context) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(
-          ok ? Icons.check_circle_outline : Icons.error_outline,
-          color: ok ? context.palette.success : colorScheme.error,
-          size: 18,
-        ),
-        const SizedBox(width: 8),
-        Text('$label: $value', style: textTheme.bodyMedium),
-      ],
-    );
-  }
-}
