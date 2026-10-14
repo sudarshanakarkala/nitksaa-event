@@ -306,7 +306,7 @@ def test_retry_after_failure_in_same_checkout_clears_the_failure(client):
 
     row = _attempt(attempt)
     assert row["status"] == "captured" and row["gateway_payment_ref"] == payment_id
-    assert row["failure_code"] is None and row["sanitized_failure_message"] is None
+    assert row["failure_code"] is None and row["gateway_failure_message"] is None
     assert row["failure_source"] is None and row["failure_step"] is None and row["failure_reason"] is None
     assert str(row["provider_fee"]) == "2.00"
     # The failed try is still in the history.

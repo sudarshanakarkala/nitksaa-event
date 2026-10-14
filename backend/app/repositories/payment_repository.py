@@ -418,7 +418,7 @@ class PaymentRepository:
             """
             UPDATE payment_attempts
             SET status = 'captured', gateway_payment_ref = $2, captured_at = now(), updated_at = now(),
-                failure_code = NULL, sanitized_failure_message = NULL,
+                failure_code = NULL, gateway_failure_message = NULL,
                 failure_source = NULL, failure_step = NULL, failure_reason = NULL
             WHERE id = $1
             """,
@@ -427,18 +427,23 @@ class PaymentRepository:
         )
 
     async def update_attempt_failed(
-        self, attempt_id: int, failure_code: str, sanitized_message: str
+        self, attempt_id: int, failure_code: str, gateway_message: str
     ) -> None:
+        # gateway_message is the gateway's own error text (Razorpay's
+        # error_description), kept for troubleshooting. Never show it to
+        # attendees, put it in emails or API responses, or let NITiKa read it
+        # (its database role has no access to the column). Screens use
+        # failure_reason, turned into words.
         await self.conn.execute(
             """
             UPDATE payment_attempts
-            SET status = 'failed', failure_code = $2, sanitized_failure_message = $3,
+            SET status = 'failed', failure_code = $2, gateway_failure_message = $3,
                 failed_at = now(), updated_at = now()
             WHERE id = $1
             """,
             attempt_id,
             failure_code,
-            sanitized_message,
+            gateway_message,
         )
 
     async def set_attempt_details(self, attempt_id: int, details) -> None:
