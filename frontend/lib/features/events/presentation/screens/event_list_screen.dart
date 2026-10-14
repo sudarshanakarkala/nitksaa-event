@@ -527,7 +527,16 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         ? _adminActions.actionsFor(event)
                         : const [],
                     onUnregister: registered && registration!.canCancel
-                        ? () => confirmAndUnregister(context, ref, registration: registration, eventTitle: event.title)
+                        ? () => confirmAndUnregister(
+                            // The page's context, not the card's: with
+                            // "Registered by me" on, the card goes away once
+                            // cancelled, and the notice (View refund) needs
+                            // something that stays.
+                            this.context,
+                            ref,
+                            registration: registration,
+                            eventTitle: event.title,
+                          )
                         : null,
                     unregistering: registration != null &&
                         ref
