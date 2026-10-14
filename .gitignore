@@ -175,12 +175,6 @@ backend/reports/
 *.sqlite
 *.sqlite3
 
-# Database dumps (backups hold real attendee data)
-*.dump
-
-# Local maintenance scripts and seeds (Padmanand's utils, never in git)
-utils/
-
 # =========================================================
 # TEST / REPORTS
 # =========================================================
@@ -231,3 +225,4 @@ sentry-debug.log
 *_implementation_report.txt
 *_review_report.txt
 *_action_items.txt
+utils/
