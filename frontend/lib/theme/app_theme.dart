@@ -140,8 +140,8 @@ abstract class AppTheme {
       colorScheme: scheme,
       fontFamily: AppTextStyles.sans,
       textTheme: textTheme,
-      // iOS layouts (also used by Safari on iPhone) default to Apple's system
-      // font, which web builds don't have; use the website fonts there too.
+      // Adaptive widgets in Safari on an iPhone take Apple's system font,
+      // which web builds don't have; use the website fonts there too.
       cupertinoOverrideTheme: CupertinoThemeData(
         primaryColor: p.primary,
         textTheme: CupertinoTextThemeData(

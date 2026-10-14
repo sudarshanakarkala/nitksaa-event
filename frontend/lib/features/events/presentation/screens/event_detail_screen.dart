@@ -1,5 +1,3 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart' show Clipboard, ClipboardData;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -46,18 +44,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final isIOS = !kIsWeb && defaultTargetPlatform == TargetPlatform.iOS;
     final state = ref.watch(eventDetailProvider(widget.eventId));
     final auth = ref.watch(authControllerProvider);
     final isAdmin = auth.session?.access.canAdminEvent(widget.eventId) ?? false;
 
     if (state.isLoading && state.event == null) {
-      return Scaffold(
-        body: Center(
-          child: isIOS
-              ? const CupertinoActivityIndicator(radius: 16)
-              : const CircularProgressIndicator(),
-        ),
+      return const Scaffold(
+        body: Center(child: CircularProgressIndicator()),
       );
     }
 
@@ -112,268 +105,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       );
     }
 
-    if (isIOS) {
-      return _buildCupertinoLayout(event, state, isAdmin: isAdmin);
-    } else {
-      return _buildMaterialLayout(event, state, isAdmin: isAdmin);
-    }
+    return _buildMaterialLayout(event, state, isAdmin: isAdmin);
   }
 
   // ==========================================
-  // CUPERTINO LAYOUT (iOS)
-  // ==========================================
-  Widget _buildCupertinoLayout(AppEvent event, EventDetailState state, {required bool isAdmin}) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final bg = context.palette.background;
-    final cardBg = context.palette.card;
-    final textPrimary = context.palette.textPrimary;
-    final textSecondary = context.palette.textSecondary;
-    final accentGold = context.palette.primary;
-
-    return CupertinoPageScaffold(
-      backgroundColor: bg,
-      navigationBar: CupertinoNavigationBar(
-        leading: CupertinoButton(
-          padding: EdgeInsets.zero,
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(CupertinoIcons.left_chevron, size: 20, color: context.palette.primary),
-              Text('Back', style: TextStyle(color: context.palette.primary)),
-            ],
-          ),
-          onPressed: () => context.pop(),
-        ),
-        middle: Text(
-          event.title,
-          style: TextStyle(color: textPrimary, fontWeight: FontWeight.bold),
-        ),
-      ),
-      child: SafeArea(
-        child: Column(
-          children: [
-            Expanded(
-              child: SingleChildScrollView(
-                padding: const EdgeInsets.all(16.0),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    if (event.bannerUrl != null || event.thumbnailUrl != null)
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(14),
-                        child: Image.network(
-                          event.bannerUrl ?? event.thumbnailUrl!,
-                          height: 180,
-                          width: double.infinity,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Container(
-                            height: 180,
-                            color: context.palette.textMuted.withOpacity(0.2),
-                            child: const Icon(CupertinoIcons.photo, size: 48),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 16),
-                    Text(
-                      event.title,
-                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600, color: textPrimary),
-                    ),
-                    if (event.tagline != null) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        event.tagline!,
-                        style: TextStyle(fontSize: 14, color: textSecondary, fontStyle: FontStyle.italic),
-                      ),
-                    ],
-                    const SizedBox(height: 16),
-                    _buildCupertinoMetaRow(CupertinoIcons.calendar, _eventDateLabel(event), textSecondary),
-                    _buildCupertinoMetaRow(CupertinoIcons.clock, _eventTimeLabel(event), textSecondary),
-                    _buildCupertinoMetaRow(
-                      event.isVirtual ? CupertinoIcons.videocam : CupertinoIcons.location,
-                      event.locationText ?? (event.isVirtual ? 'Virtual Zoom Link' : 'To Be Decided'),
-                      textSecondary,
-                      onTap: (event.locationMapsUrl != null && event.locationMapsUrl!.isNotEmpty)
-                          ? () => _launchUrl(event.locationMapsUrl!)
-                          : null,
-                    ),
-                    _buildCupertinoMetaRow(
-                      CupertinoIcons.money_dollar,
-                      _eventFeeLabel(event),
-                      textSecondary,
-                    ),
-                    const SizedBox(height: 16),
-                    _buildCupertinoDivider(isDark),
-                    if (isAdmin) ...[
-                      const SizedBox(height: 8),
-                      _buildCupertinoSectionHeader('Capacity Status', textSecondary),
-                      const SizedBox(height: 8),
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          Text('Registered', style: TextStyle(color: textSecondary, fontSize: 13)),
-                          Text(
-                            event.capacity != null
-                                ? '${event.registeredCount} / ${event.capacity}'
-                                : '${event.registeredCount} Registered',
-                            style: TextStyle(fontWeight: FontWeight.bold, color: textPrimary, fontSize: 13),
-                          ),
-                        ],
-                      ),
-                      const SizedBox(height: 6),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(4),
-                        child: SizedBox(
-                          height: 6,
-                          child: LinearProgressIndicator(
-                            value: event.capacity != null && event.capacity! > 0
-                                ? event.registeredCount / event.capacity!
-                                : 0,
-                            backgroundColor: context.palette.surfaceHover,
-                            valueColor: AlwaysStoppedAnimation<Color>(accentGold),
-                          ),
-                        ),
-                      ),
-                      const SizedBox(height: 16),
-                      _buildCupertinoDivider(isDark),
-                    ],
-                    const SizedBox(height: 8),
-                    _buildCupertinoSectionHeader('Sponsors', textSecondary),
-                    const SizedBox(height: 8),
-                    _buildCupertinoSponsorChips(event, cardBg, textPrimary, textSecondary),
-                    const SizedBox(height: 16),
-                    _buildCupertinoDivider(isDark),
-                    const SizedBox(height: 8),
-                    _buildCupertinoSectionHeader('About', textSecondary),
-                    const SizedBox(height: 6),
-                    Text(
-                      event.description ?? 'No description provided for this event.',
-                      style: TextStyle(fontSize: 14, color: textPrimary, height: 1.4),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildCupertinoDivider(isDark),
-                    const SizedBox(height: 8),
-                    _buildCupertinoSectionHeader('Agenda', textSecondary),
-                    const SizedBox(height: 8),
-                    if (event.sessions.isEmpty)
-                      Text('Agenda will be updated soon.', style: TextStyle(color: textSecondary, fontSize: 13))
-                    else
-                      ...event.sessions.map((item) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 8.0),
-                        child: Row(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              _formatSessionTime(item),
-                              style: TextStyle(color: accentGold, fontSize: 13, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Text(_formatSessionTitle(item), style: TextStyle(color: textPrimary, fontSize: 13)),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                    const SizedBox(height: 16),
-                    _buildCupertinoDivider(isDark),
-                    const SizedBox(height: 8),
-                    _buildCupertinoSectionHeader('Speakers', textSecondary),
-                    const SizedBox(height: 8),
-                    if (event.speakers.isEmpty)
-                      Text('Speaker details will be updated soon.', style: TextStyle(color: textSecondary, fontSize: 13))
-                    else
-                      ...event.speakers.map((sp) {
-                      return Padding(
-                        padding: const EdgeInsets.only(bottom: 10.0),
-                        child: Row(
-                          children: [
-                            _buildSpeakerAvatar(
-                              sp,
-                              radius: 16,
-                              accentColor: accentGold,
-                              initialsStyle: TextStyle(color: accentGold, fontSize: 12, fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(sp.fullname, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: textPrimary)),
-                                  Text(sp.subtitle, style: TextStyle(fontSize: 11, color: textSecondary)),
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      );
-                    }),
-                  ],
-                ),
-              ),
-            ),
-            Container(
-              padding: const EdgeInsets.all(16.0),
-              decoration: BoxDecoration(
-                color: cardBg,
-                border: Border(top: BorderSide(color: textSecondary.withOpacity(0.15), width: 0.5)),
-              ),
-              child: _buildRegistrationCTA(state, isIOS: true),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildCupertinoMetaRow(IconData icon, String text, Color color, {VoidCallback? onTap}) {
-    final textWidget = Text(
-      text,
-      style: TextStyle(
-        fontSize: 13,
-        color: onTap != null ? context.palette.primary : color,
-        decoration: onTap != null ? TextDecoration.underline : null,
-      ),
-    );
-
-    final row = Row(
-      children: [
-        Icon(icon, size: 16, color: context.palette.primary),
-        const SizedBox(width: 8),
-        Expanded(
-          child: textWidget,
-        ),
-      ],
-    );
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 8.0),
-      child: onTap != null
-          ? GestureDetector(
-              onTap: onTap,
-              behavior: HitTestBehavior.opaque,
-              child: row,
-            )
-          : row,
-    );
-  }
-
-  Widget _buildCupertinoDivider(bool isDark) {
-    return Container(
-      height: 0.5,
-      color: context.palette.border,
-    );
-  }
-
-  Widget _buildCupertinoSectionHeader(String title, Color color) {
-    return Text(
-      title.toUpperCase(),
-      style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: color, letterSpacing: 0.5),
-    );
-  }
-
-  // ==========================================
-  // MATERIAL LAYOUT (WEB / ANDROID)
+  // LAYOUT
   // ==========================================
   Widget _buildMaterialLayout(AppEvent event, EventDetailState state, {required bool isAdmin}) {
     final isWebScreen = MediaQuery.of(context).size.width >= 900;
@@ -495,7 +231,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                   style: TextStyle(color: context.palette.textSecondary),
                                 )
                               else
-                                _buildRegistrationCTA(state, isIOS: false),
+                                _buildRegistrationCTA(state),
                             ],
                           ),
                         ),
@@ -568,7 +304,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   _buildCapacityBar(event, isDark),
                   const SizedBox(height: 16),
                 ],
-                if (!unpublished) _buildRegistrationCTA(state, isIOS: false),
+                if (!unpublished) _buildRegistrationCTA(state),
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
@@ -798,93 +534,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ),
       ],
     );
-  }
-
-  Widget _buildCupertinoSponsorChips(AppEvent event, Color cardBg, Color textPrimary, Color textSecondary) {
-    if (event.sponsors.isEmpty && event.partners.isEmpty) {
-      return Text('Sponsor details will be updated soon.',
-          style: TextStyle(color: textSecondary, fontSize: 13));
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        if (event.sponsors.isNotEmpty) ...[
-          Text('SPONSORS',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: textSecondary, letterSpacing: 0.5)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: event.sponsors.map((sp) {
-              return _buildCupertinoSponsorChip(sp.name, sp.sponsorTypeLabel, sp.logoUrl, sp.websiteUrl,
-                  cardBg, textPrimary, textSecondary);
-            }).toList(),
-          ),
-          const SizedBox(height: 12),
-        ],
-        if (event.partners.isNotEmpty) ...[
-          Text('PARTNERS',
-              style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: textSecondary, letterSpacing: 0.5)),
-          const SizedBox(height: 6),
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: event.partners.map((pt) {
-              return _buildCupertinoSponsorChip(pt.name, pt.partnerTypeLabel, pt.logoUrl, pt.websiteUrl,
-                  cardBg, textPrimary, textSecondary);
-            }).toList(),
-          ),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildCupertinoSponsorChip(String name, String typeLabel, String? logoUrl, String? websiteUrl,
-      Color cardBg, Color textPrimary, Color textSecondary) {
-    final chipContent = Container(
-      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-      decoration: BoxDecoration(
-        color: cardBg,
-        borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: textSecondary.withOpacity(0.1)),
-      ),
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          if (logoUrl != null && logoUrl.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(4),
-              child: Image.network(
-                logoUrl,
-                width: 20,
-                height: 20,
-                fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) => Icon(Icons.business, size: 16, color: context.palette.primary),
-              ),
-            )
-          else
-            Icon(Icons.business, size: 16, color: context.palette.primary),
-          const SizedBox(width: 6),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(name, style: TextStyle(fontSize: 12, color: textPrimary, fontWeight: FontWeight.w500)),
-              Text(typeLabel, style: TextStyle(fontSize: 9, color: textSecondary)),
-            ],
-          ),
-        ],
-      ),
-    );
-
-    if (websiteUrl != null && websiteUrl.isNotEmpty) {
-      return GestureDetector(
-        onTap: () => _launchUrl(websiteUrl),
-        child: chipContent,
-      );
-    }
-    return chipContent;
   }
 
   Widget _buildSponsorsSection(AppEvent event, bool isDark) {
@@ -1333,7 +982,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   // ==========================================
   // REGISTRATION BUTTONS & DIALOG FLOWS
   // ==========================================
-  Widget _buildRegistrationCTA(EventDetailState state, {required bool isIOS}) {
+  Widget _buildRegistrationCTA(EventDetailState state) {
     final event = state.event;
     if (event == null) return const SizedBox.shrink();
 
@@ -1355,7 +1004,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         countdown: _formatRemainingTime(event.registrationClosesAt!),
         dateLabel: 'Last date to register',
         dateValue: _formatDateTime(event.registrationClosesAt!),
-        isIOS: isIOS,
       );
     } else if (event.registrationStatus != 'open' &&
         event.registrationOpensAt != null &&
@@ -1365,7 +1013,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         countdown: _formatRemainingTime(event.registrationOpensAt!),
         dateLabel: 'Registration opening on',
         dateValue: _formatDateTime(event.registrationOpensAt!),
-        isIOS: isIOS,
       );
     }
 
@@ -1450,7 +1097,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildQRBadgeSection(state, event, isIOS),
+          _buildQRBadgeSection(state, event),
         ],
       );
     } else if (paymentDue) {
@@ -1508,7 +1155,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             ),
           ),
           const SizedBox(height: 16),
-          _buildQRBadgeSection(state, event, isIOS),
+          _buildQRBadgeSection(state, event),
         ],
       );
     } else if (state.eligibilityStatus == 'full') {
@@ -1593,30 +1240,19 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       );
     } else {
       // Default eligible: show Register button
-      if (isIOS) {
-        ctaWidget = SizedBox(
-          width: double.infinity,
-          child: CupertinoButton(
-            color: context.palette.primary,
-            onPressed: () => _showRegistrationForm(event, state),
-            child: Text('Register', style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.onPrimary)),
+      ctaWidget = SizedBox(
+        width: double.infinity,
+        child: ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: context.palette.primary,
+            foregroundColor: context.palette.onPrimary,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-        );
-      } else {
-        ctaWidget = SizedBox(
-          width: double.infinity,
-          child: ElevatedButton(
-            style: ElevatedButton.styleFrom(
-              backgroundColor: context.palette.primary,
-              foregroundColor: context.palette.onPrimary,
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-            ),
-            onPressed: () => _showRegistrationForm(event, state),
-            child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold)),
-          ),
-        );
-      }
+          onPressed: () => _showRegistrationForm(event, state),
+          child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold)),
+        ),
+      );
       if (canRegisterAgain) {
         ctaWidget = Column(
           mainAxisSize: MainAxisSize.min,
@@ -1905,7 +1541,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     required String countdown,
     required String dateLabel,
     required String dateValue,
-    required bool isIOS,
   }) {
     final cardBg = context.palette.surfaceSubtle;
     final borderColor = context.palette.primary.withOpacity(0.3);
@@ -1960,7 +1595,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   );
 }
 
-  Widget _buildQRBadgeSection(EventDetailState state, AppEvent event, bool isIOS) {
+  Widget _buildQRBadgeSection(EventDetailState state, AppEvent event) {
     final infoBg = context.palette.info.withValues(alpha: 0.08);
     final infoTextColor = context.palette.textSecondary;
     final regNo = state.myRegistration?['registration_number'] ?? '';
@@ -1969,93 +1604,50 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       builder: (context, constraints) {
         final useVerticalLayout = constraints.maxWidth < 340;
 
-        final viewButton = isIOS
-            ? CupertinoButton(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                color: context.palette.primary,
-                borderRadius: BorderRadius.circular(10),
-                onPressed: () => _showQRBadgeDialog(event, regNo, state),
-                child: Text(
-                  'View QR badge',
-                  style: TextStyle(
-                    color: context.palette.onPrimary,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              )
-            : ElevatedButton(
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: context.palette.primary,
-                  foregroundColor: context.palette.onPrimary,
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  elevation: 0,
-                ),
-                onPressed: () => _showQRBadgeDialog(event, regNo, state),
-                child: const Text(
-                  'View QR badge',
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 14,
-                  ),
-                ),
-              );
+        final viewButton = ElevatedButton(
+          style: ElevatedButton.styleFrom(
+            backgroundColor: context.palette.primary,
+            foregroundColor: context.palette.onPrimary,
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            elevation: 0,
+          ),
+          onPressed: () => _showQRBadgeDialog(event, regNo, state),
+          child: const Text(
+            'View QR badge',
+            style: TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 14,
+            ),
+          ),
+        );
 
-        final eventsButton = isIOS
-            ? CupertinoButton(
-                padding: const EdgeInsets.symmetric(vertical: 14),
-                color: Colors.transparent,
-                borderRadius: BorderRadius.circular(10),
-                onPressed: () {
-                  context.go(AppRoutes.home);
-                },
-                child: Container(
-                  width: double.infinity,
-                  alignment: Alignment.center,
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: context.palette.textMuted,
-                      width: 1,
-                    ),
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  child: Text(
-                    'Go to My Events',
-                    style: TextStyle(
-                      color: context.palette.textPrimary,
-                      fontWeight: FontWeight.w600,
-                      fontSize: 14,
-                    ),
-                  ),
-                ),
-              )
-            : OutlinedButton(
-                style: OutlinedButton.styleFrom(
-                  foregroundColor: context.palette.textPrimary,
-                  side: BorderSide(
-                    color: context.palette.textMuted,
-                    width: 1,
-                  ),
-                  padding: const EdgeInsets.symmetric(vertical: 16),
-                  shape: RoundedRectangleBorder(
-                    borderRadius: BorderRadius.circular(10),
-                  ),
-                  elevation: 0,
-                ),
-                onPressed: () {
-                  context.go(AppRoutes.myEvents);
-                },
-                child: const Text(
-                  'Go to My Events',
-                  style: TextStyle(
-                    fontWeight: FontWeight.w600,
-                    fontSize: 14,
-                  ),
-                ),
-              );
+        final eventsButton = OutlinedButton(
+          style: OutlinedButton.styleFrom(
+            foregroundColor: context.palette.textPrimary,
+            side: BorderSide(
+              color: context.palette.textMuted,
+              width: 1,
+            ),
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(10),
+            ),
+            elevation: 0,
+          ),
+          onPressed: () {
+            context.go(AppRoutes.myEvents);
+          },
+          child: const Text(
+            'Go to My Events',
+            style: TextStyle(
+              fontWeight: FontWeight.w600,
+              fontSize: 14,
+            ),
+          ),
+        );
 
         Widget buttonsWidget;
         if (useVerticalLayout) {

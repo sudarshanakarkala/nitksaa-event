@@ -15,7 +15,6 @@ abstract class RouteGuards {
 
     final isSplash = location == AppRoutes.splash;
     final isLogin = location == AppRoutes.login;
-    final isFoundation = location == AppRoutes.foundation;
     final isDeveloper = location == AppRoutes.developer;
     final isProtected = location.startsWith('/events/');
 
@@ -44,7 +43,7 @@ abstract class RouteGuards {
 
     if (isProtected) return AppRoutes.login;
     if (isSplash) return null;
-    if (isLogin || isFoundation || isDeveloper) return null;
+    if (isLogin || isDeveloper) return null;
 
     return null;
   }
