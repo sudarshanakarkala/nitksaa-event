@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 
+import '../format.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 
@@ -380,6 +381,105 @@ class _FilterYearRangeState extends State<FilterYearRange> {
                 ),
               ),
             ],
+          ),
+        ],
+      ),
+    );
+  }
+}
+
+/// A date range in the Filters rail: preset chips for the common windows,
+/// then a slider with two handles over the dates that occur, and the chosen
+/// range in words. Null means any date.
+///
+/// The handles snap to days, or to weeks on phones, where a finger can't
+/// land on one day. Each handle shows its date while dragged.
+class FilterDateRange extends StatelessWidget {
+  const FilterDateRange({
+    super.key,
+    required this.label,
+    required this.first,
+    required this.last,
+    required this.value,
+    required this.onChanged,
+    this.presets = const [],
+  });
+
+  final String label;
+
+  /// The slider's ends (e.g. the earliest and latest event).
+  final DateTime first;
+  final DateTime last;
+
+  final DateTimeRange? value;
+  final ValueChanged<DateTimeRange?> onChanged;
+
+  /// One-tap windows, e.g. ('Next 30 days', range). Tap the lit one to clear.
+  final List<(String, DateTimeRange)> presets;
+
+  static DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
+
+  static bool _same(DateTimeRange a, DateTimeRange b) =>
+      DateUtils.isSameDay(a.start, b.start) && DateUtils.isSameDay(a.end, b.end);
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final step = MediaQuery.sizeOf(context).width < 600 ? 7 : 1;
+
+    final lo = _day(first.isBefore(last) ? first : last);
+    final steps = ((_day(last).difference(lo).inDays.abs()) / step).ceil().clamp(1, 100000);
+    final hi = lo.add(Duration(days: steps * step));
+    DateTime at(double v) => lo.add(Duration(days: v.round()));
+    double pos(DateTime d) =>
+        _day(d).difference(lo).inDays.clamp(0, steps * step).toDouble();
+
+    final range = value;
+    final values = range == null
+        ? RangeValues(0, (steps * step).toDouble())
+        : RangeValues(pos(range.start), pos(range.end));
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FilterLabel(label),
+          const SizedBox(height: 8),
+          if (presets.isNotEmpty)
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: [
+                for (final (name, window) in presets)
+                  FilterChipToggle(
+                    label: name,
+                    selected: range != null && _same(range, window),
+                    onChanged: (on) => onChanged(on ? window : null),
+                  ),
+              ],
+            ),
+          RangeSlider(
+            values: values,
+            min: 0,
+            max: (steps * step).toDouble(),
+            divisions: steps,
+            labels: RangeLabels(formatShortDate(at(values.start)), formatShortDate(at(values.end))),
+            onChanged: (v) {
+              final start = at(v.start);
+              final end = at(v.end);
+              // Both handles at the ends: any date again.
+              final all = !start.isAfter(lo) && !end.isBefore(hi);
+              onChanged(all ? null : DateTimeRange(start: start, end: end));
+            },
+          ),
+          Text(
+            range == null
+                ? 'Any date'
+                : DateUtils.isSameDay(range.start, range.end)
+                    ? formatDate(range.start)
+                    : '${formatDate(range.start)} – ${formatDate(range.end)}',
+            style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
           ),
         ],
       ),

@@ -39,6 +39,22 @@ enum _Filter {
 
 enum _View { cards, table }
 
+/// Card order (the table sorts by its headings).
+enum _Order {
+  date('Date'),
+  mostFull('Most full'),
+  leastFull('Least full');
+
+  const _Order(this.label);
+  final String label;
+}
+
+/// Share of seats taken; null with no capacity set (sorted last).
+double? _fillOf(AppEvent e) {
+  final capacity = e.capacity;
+  return capacity == null || capacity <= 0 ? null : e.registeredCount / capacity;
+}
+
 /// Admin → Events: every event you administer (all of them for an overall
 /// admin), any status, past and upcoming, as cards or a table, with the
 /// status filters and the per-event actions.
@@ -56,12 +72,16 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   String? _error;
   _Filter _filter = _Filter.all;
   _View _view = _View.cards;
+  _Order _order = _Order.date;
 
   // Filters rail (the pills are the status shortcuts).
   Set<String> _modes = const {};
   Set<String> _registration = const {};
   Set<String> _price = const {};
   bool _mine = false;
+
+  /// Events starting in this range; null for any date.
+  DateTimeRange? _dates;
 
   /// Events with an action in flight; their actions are disabled.
   final Set<int> _busy = {};
@@ -161,6 +181,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     }
     if (_price.isNotEmpty && !_price.contains(e.isPaid ? 'paid' : 'free')) return false;
     if (_mine && (e.createdByUid == null || e.createdByUid != _myUid)) return false;
+    final dates = _dates;
+    if (dates != null) {
+      final start = e.startDatetime.toLocal();
+      final to = DateTime(dates.end.year, dates.end.month, dates.end.day + 1);
+      if (start.isBefore(dates.start) || !start.isBefore(to)) return false;
+    }
     return true;
   }
 
@@ -170,6 +196,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
         _registration.isNotEmpty,
         _price.isNotEmpty,
         _mine,
+        _dates != null,
       ].where((on) => on).length;
 
   void _clearFilters() {
@@ -178,6 +205,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       _registration = const {};
       _price = const {};
       _mine = false;
+      _dates = null;
       _filter = _Filter.all;
       _search.clear();
     });
@@ -186,14 +214,23 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   /// Search and rail filters; the pills apply on top.
   List<AppEvent> get _filtered => _searched.where(_railMatches).toList();
 
-  /// Upcoming first (soonest at the top), then past (most recent first).
+  /// By date: upcoming first (soonest at the top), then past (most recent
+  /// first). By fullness: share of seats taken, no capacity last; ties by
+  /// that date order.
   List<AppEvent> get _visible {
     final rows = _filtered.where((e) => _matches(e, _filter)).toList();
     final upcoming = rows.where((e) => !_ended(e)).toList()
       ..sort((a, b) => a.startDatetime.compareTo(b.startDatetime));
     final past = rows.where(_ended).toList()
       ..sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
-    return [...upcoming, ...past];
+    final byDate = [...upcoming, ...past];
+    if (_order == _Order.date) return byDate;
+    final indexed = [for (var i = 0; i < byDate.length; i++) (i, byDate[i])];
+    indexed.sort((a, b) {
+      final r = compareCells(_fillOf(a.$2), _fillOf(b.$2), ascending: _order == _Order.leastFull);
+      return r != 0 ? r : a.$1.compareTo(b.$1);
+    });
+    return [for (final e in indexed) e.$2];
   }
 
   String? _createdBy(AppEvent e) => e.createdByLabel(_myUid);
@@ -252,7 +289,17 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       ],
       count: _loading && _events.isEmpty
           ? null
-          : ResultCount(count: visible.length, one: 'event', many: 'events'),
+          : Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ResultCount(count: visible.length, one: 'event', many: 'events'),
+                // Cards only; the table sorts by its headings.
+                if (compact || _view == _View.cards) ...[
+                  const SizedBox(width: 16),
+                  _OrderMenu(order: _order, onChanged: (o) => setState(() => _order = o)),
+                ],
+              ],
+            ),
       action: canCreate
           ? FilledButton.icon(
               onPressed: _create,
@@ -270,6 +317,28 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       onClearFilters: _clearFilters,
       loading: _loading && _events.isNotEmpty,
       body: _body(visible, compact),
+    );
+  }
+
+  /// Starting between two dates: presets, then the slider over the events'
+  /// own dates.
+  Widget _dateFilter() {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final starts = [for (final e in _events) DateUtils.dateOnly(e.startDatetime.toLocal())]..sort();
+    DateTime min(DateTime a, DateTime b) => a.isBefore(b) ? a : b;
+    DateTime max(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
+    final presets = <(String, DateTimeRange)>[
+      ('Next 30 days', DateTimeRange(start: today, end: today.add(const Duration(days: 30)))),
+      ('Next 90 days', DateTimeRange(start: today, end: today.add(const Duration(days: 90)))),
+      ('This year', DateTimeRange(start: DateTime(today.year), end: DateTime(today.year, 12, 31))),
+    ];
+    return FilterDateRange(
+      label: 'Starts',
+      first: min(starts.first, today),
+      last: max(starts.last, today.add(const Duration(days: 90))),
+      value: _dates,
+      presets: presets,
+      onChanged: (v) => setState(() => _dates = v),
     );
   }
 
@@ -294,6 +363,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
             ],
           ),
           const SizedBox(height: 20),
+          if (_events.isNotEmpty) _dateFilter(),
           FilterChipSection(
             label: 'Event mode',
             options: const {'in_person': 'In person', 'online': 'Online'},
@@ -444,7 +514,9 @@ class _EventsTableState extends State<_EventsTable> {
           id: 'capacity',
           label: 'Capacity',
           kind: ColumnKind.number,
-          value: (e) => e.registeredCount,
+          // Sorts by share of seats taken; no capacity goes last.
+          value: _fillOf,
+          text: (e) => e.capacity == null ? '${e.registeredCount}' : '${e.registeredCount} / ${e.capacity}',
           width: 120,
         ),
         GridColumn(
@@ -567,6 +639,53 @@ class _CapacityCell extends StatelessWidget {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// "Sort by Date ▾" on the count line, the same look as the phone tables.
+class _OrderMenu extends StatelessWidget {
+  const _OrderMenu({required this.order, required this.onChanged});
+
+  final _Order order;
+  final ValueChanged<_Order> onChanged;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Text('Sort by', style: AppTextStyles.bodySmall.copyWith(color: p.textMuted)),
+        const SizedBox(width: 6),
+        PopupMenuButton<_Order>(
+          tooltip: 'Sort',
+          onSelected: onChanged,
+          itemBuilder: (_) => [
+            for (final o in _Order.values)
+              PopupMenuItem(
+                value: o,
+                child: Text(
+                  o.label,
+                  style: TextStyle(
+                    color: o == order ? p.primary : null,
+                    fontWeight: o == order ? FontWeight.w600 : null,
+                  ),
+                ),
+              ),
+          ],
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(
+                order.label,
+                style: AppTextStyles.bodySmall.copyWith(color: p.primary, fontWeight: FontWeight.w600),
+              ),
+              Icon(Icons.arrow_drop_down, color: p.primary, size: 20),
+            ],
+          ),
+        ),
+      ],
     );
   }
 }
