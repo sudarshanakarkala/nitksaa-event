@@ -9,6 +9,9 @@ import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../services/auth_controller.dart';
 
+/// The line under the brand on every splash layout.
+const _tagline = 'EVENTS';
+
 class SplashScreen extends StatefulWidget {
   const SplashScreen({super.key});
 
@@ -93,7 +96,7 @@ class _SplashScreenState extends State<SplashScreen> {
                   ),
                   const SizedBox(height: 12),
                   Text(
-                    'EVENT PLATFORM · ALPHA',
+                    _tagline,
                     style: TextStyle(
                       fontSize: 12,
                       color: secondaryTextColor,
@@ -152,7 +155,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'EVENT PLATFORM · ALPHA',
+                _tagline,
                 style: TextStyle(
                   fontSize: 11,
                   color: p.textSecondary,
@@ -204,7 +207,7 @@ class _SplashScreenState extends State<SplashScreen> {
               ),
               const SizedBox(height: 4),
               Text(
-                'EVENT PLATFORM · ALPHA',
+                _tagline,
                 style: TextStyle(
                   fontSize: 11,
                   color: p.textSecondary,
