@@ -69,6 +69,8 @@ def _format_registration(row: Dict[str, Any]) -> RegistrationResponse:
         event=event,
         updated_at=row.get("updated_at"),
         latest_order_id=row.get("latest_order_id"),
+        # The entry pass: only for a confirmed registration (not a held seat).
+        qr_token=row.get("qr_token") if row.get("status") == "registered" else None,
     )
 
 

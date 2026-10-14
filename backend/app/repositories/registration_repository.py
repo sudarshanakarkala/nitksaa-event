@@ -51,6 +51,7 @@ _REG_WITH_EVENT = """
         r.confirmation_email_sent_at,
         r.hold_expires_at,
         r.updated_at,
+        r.qrtoken        AS qr_token,
         (SELECT po.public_order_number FROM payment_orders po
          WHERE po.registration_id = r.registration_id
          ORDER BY po.created_at DESC LIMIT 1) AS latest_order_id,
