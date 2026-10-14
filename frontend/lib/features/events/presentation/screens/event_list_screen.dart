@@ -1395,7 +1395,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         body: LayoutBuilder(
           builder: (context, constraints) {
             final pad = ListPage.contentPadding(context, constraints.maxWidth);
-            final side = pad.left;
             return state.isLoading
             ? const Center(child: CircularProgressIndicator())
             : state.errorMessage != null
@@ -1403,7 +1402,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             : filteredEvents.isEmpty
             ? _buildMaterialEmptyState()
             : _view == 'table' && MediaQuery.sizeOf(context).width >= 600
-            ? _buildEventTable(filteredEvents, side, registrations)
+            ? _buildEventTable(filteredEvents, pad, registrations)
             // Website grid: columns of at least 300px, every card the same
             // height (no intrinsic sizing).
             : EventCardGrid(
@@ -1443,7 +1442,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   /// opens the event.
   Widget _buildEventTable(
     List<AppEvent> events,
-    double side,
+    EdgeInsets pad,
     Map<int, MyEventRegistration> registrations,
   ) {
     final p = context.palette;
@@ -1470,11 +1469,13 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
 
     return LayoutBuilder(
       builder: (context, constraints) => SingleChildScrollView(
-        padding: EdgeInsets.fromLTRB(side, 24, side, 24),
+        // Left and right insets differ on wide screens (content lines up with
+        // the logo); using the left one on both sides cut the table short.
+        padding: EdgeInsets.fromLTRB(pad.left, 24, pad.right, 24),
         child: SingleChildScrollView(
           scrollDirection: Axis.horizontal,
           child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth - side * 2),
+            constraints: BoxConstraints(minWidth: constraints.maxWidth - pad.horizontal),
             child: Container(
               decoration: BoxDecoration(
                 color: p.card,

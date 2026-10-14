@@ -12,7 +12,8 @@ class SegmentOption<T> {
 }
 
 /// Bordered two-or-more-way switch, like the website's Cards / Table toggle:
-/// the selected segment is gold on a faint gold fill.
+/// the selected segment is gold on a faint gold fill. A two-way switch also
+/// flips when its selected side is clicked.
 class SegmentToggle<T> extends StatelessWidget {
   const SegmentToggle({
     super.key,
@@ -54,7 +55,13 @@ class SegmentToggle<T> extends StatelessWidget {
     return Material(
       color: active ? p.primary.withValues(alpha: 0.08) : Colors.transparent,
       child: InkWell(
-        onTap: active ? null : () => onChanged(option.value),
+        // With two options the active one flips to the other, so clicking
+        // the highlighted side also switches (Table → Cards).
+        onTap: !active
+            ? () => onChanged(option.value)
+            : options.length == 2
+            ? () => onChanged(options.firstWhere((o) => o.value != option.value).value)
+            : null,
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 14),
           child: Row(
