@@ -15,7 +15,29 @@ import '../../checkin/check_in_scanner_screen.dart';
 import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../data/registrations_api.dart';
-import 'admin_widgets.dart';
+import '../domain/registration_filters.dart' show formatDate;
+
+/// When an event ends (start + 4 hours if it has no end time).
+DateTime _endOf(AppEvent e) =>
+    (e.endDatetime ?? e.startDatetime.add(const Duration(hours: 4))).toLocal();
+
+/// Events worth checking people in to: not a draft or cancelled, someone
+/// registered, and on now, coming up, or ended in the last 7 days. On now and
+/// coming up first (soonest first), then the recent ones (latest first).
+List<AppEvent> checkInEvents(List<AppEvent> events, DateTime now) {
+  final relevant = events
+      .where((e) =>
+          e.status != 'draft' &&
+          e.status != 'cancelled' &&
+          e.registeredCount > 0 &&
+          _endOf(e).isAfter(now.subtract(const Duration(days: 7))))
+      .toList();
+  final current = relevant.where((e) => _endOf(e).isAfter(now)).toList()
+    ..sort((a, b) => a.startDatetime.compareTo(b.startDatetime));
+  final recent = relevant.where((e) => !_endOf(e).isAfter(now)).toList()
+    ..sort((a, b) => _endOf(b).compareTo(_endOf(a)));
+  return [...current, ...recent];
+}
 
 /// Which people the list shows.
 enum _Show {
@@ -104,7 +126,7 @@ class _AdminCheckInTabState extends ConsumerState<AdminCheckInTab> {
     try {
       final all = await ref.read(eventsRepositoryProvider).getAllAdminEvents(token);
       if (!mounted) return;
-      final events = all.where((e) => e.status != 'draft').toList()
+      final events = all.where((e) => e.status != 'draft' && e.status != 'cancelled').toList()
         ..sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
       setState(() {
         _events = events;
@@ -126,20 +148,15 @@ class _AdminCheckInTabState extends ConsumerState<AdminCheckInTab> {
     }
   }
 
-  /// The event happening now, else the next one, else the latest.
+  /// Where the tab opens: the first event worth checking in, else the
+  /// latest event anyone registered for, else the latest event.
   static AppEvent? _eventNow(List<AppEvent> events) {
-    if (events.isEmpty) return null;
-    final now = DateTime.now();
-    AppEvent? next;
+    final list = checkInEvents(events, DateTime.now());
+    if (list.isNotEmpty) return list.first;
     for (final e in events) {
-      final start = e.startDatetime.toLocal();
-      final end = (e.endDatetime ?? e.startDatetime.add(const Duration(hours: 4))).toLocal();
-      if (!now.isBefore(start.subtract(const Duration(hours: 3))) && now.isBefore(end)) return e;
-      if (start.isAfter(now) && (next == null || start.isBefore(next.startDatetime.toLocal()))) {
-        next = e;
-      }
+      if (e.registeredCount > 0) return e;
     }
-    return next ?? events.first;
+    return events.isEmpty ? null : events.first;
   }
 
   Future<void> _loadPeople() async {
@@ -298,71 +315,123 @@ class _AdminCheckInTabState extends ConsumerState<AdminCheckInTab> {
         _Show.all => _people.length,
       };
 
+  Future<void> _chooseEvent() async {
+    final picked = await showModalBottomSheet<int>(
+      context: context,
+      isScrollControlled: true,
+      showDragHandle: true,
+      builder: (_) => _EventChooser(
+        all: _events,
+        suggested: checkInEvents(_events, DateTime.now()),
+        selected: _selected,
+      ),
+    );
+    if (picked != null) _pick(picked);
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final compact = MediaQuery.sizeOf(context).width < 600;
     final ready = _loadedFor != null && _loadedFor == _selected && _error == null;
+    final event = _event;
 
-    return ListPage(
-      search: SizedBox(
-        height: 44,
-        child: TextField(
+    return LayoutBuilder(
+      builder: (context, constraints) {
+        final compact = constraints.maxWidth < 600;
+        final pad = ListPage.contentPadding(context, constraints.maxWidth, top: 16, bottom: 0);
+
+        final eventCard = _EventCard(
+          event: event,
+          loading: _eventsLoading,
+          checkedIn: ready ? _checkedInCount : null,
+          total: ready ? _people.length : null,
+          onTap: _eventsLoading || _events.isEmpty ? null : _chooseEvent,
+        );
+        final scan = SizedBox(
+          height: 52,
+          width: compact ? double.infinity : null,
+          child: ElevatedButton.icon(
+            onPressed: ready && _people.isNotEmpty ? _openScanner : null,
+            icon: const Icon(Icons.qr_code_scanner),
+            label: const Text('Scan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+          ),
+        );
+        final pills = Wrap(
+          spacing: 6,
+          runSpacing: 6,
+          children: [
+            for (final s in _Show.values)
+              QuickFilterPill(
+                label: s.label,
+                count: ready ? _countFor(s) : null,
+                active: s == _show,
+                onTap: () => setState(() => _show = s),
+              ),
+          ],
+        );
+        final search = TextField(
           controller: _search,
           decoration: const InputDecoration(
             prefixIcon: Icon(Icons.search, size: 20),
-            hintText: 'Search name, email, phone or number…',
+            hintText: 'Find a person: name, email, phone or number',
             isDense: true,
             contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
           ),
-        ),
-      ),
-      quickFilters: [
-        SizedBox(
-          width: compact ? 240 : 320,
-          child: AdminEventPicker(
-            options: [for (final e in _events) AdminEventOption.of(e)],
-            selected: _selected ?? adminAllEvents,
-            onChanged: _pick,
-            width: compact ? 240 : 320,
-            includeAll: false,
-          ),
-        ),
-        const SizedBox(width: 6),
-        for (final s in _Show.values)
-          QuickFilterPill(
-            label: s.label,
-            count: ready ? _countFor(s) : null,
-            active: s == _show,
-            onTap: () => setState(() => _show = s),
-          ),
-      ],
-      count: ready
-          ? Text.rich(
-              TextSpan(children: [
-                TextSpan(
-                  text: '$_checkedInCount',
-                  style: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
-                ),
-                TextSpan(text: ' of ${_people.length} checked in'),
-              ]),
-              style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
-            )
-          : null,
-      actions: [
-        ElevatedButton.icon(
-          onPressed: ready && _people.isNotEmpty ? _openScanner : null,
-          icon: const Icon(Icons.qr_code_scanner, size: 18),
-          label: const Text('Scan'),
-        ),
-      ],
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loading || _eventsLoading) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: _body()),
-        ],
-      ),
+        );
+
+        return Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Padding(
+              padding: pad,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (compact) ...[
+                    eventCard,
+                    const SizedBox(height: 12),
+                    scan,
+                  ] else
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Align(
+                            alignment: Alignment.centerLeft,
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 560),
+                              child: eventCard,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(width: 16),
+                        SizedBox(width: 160, child: scan),
+                      ],
+                    ),
+                  const SizedBox(height: 16),
+                  pills,
+                  const SizedBox(height: 10),
+                  if (compact)
+                    search
+                  else
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: ConstrainedBox(
+                        constraints: const BoxConstraints(maxWidth: 560),
+                        child: search,
+                      ),
+                    ),
+                  const SizedBox(height: 8),
+                ],
+              ),
+            ),
+            if (_loading || _eventsLoading)
+              const LinearProgressIndicator(minHeight: 2)
+            else
+              Divider(height: 2, thickness: 1, color: p.border),
+            Expanded(child: _body()),
+          ],
+        );
+      },
     );
   }
 
@@ -511,5 +580,182 @@ class _PersonRow extends StatelessWidget {
     final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
     final minute = local.minute.toString().padLeft(2, '0');
     return '$hour:$minute ${local.hour < 12 ? 'AM' : 'PM'}';
+  }
+}
+
+
+/// The chosen event, as a card to tap to change it.
+class _EventCard extends StatelessWidget {
+  const _EventCard({
+    required this.event,
+    required this.loading,
+    required this.checkedIn,
+    required this.total,
+    required this.onTap,
+  });
+
+  final AppEvent? event;
+  final bool loading;
+  final int? checkedIn;
+  final int? total;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final e = event;
+    final title = e?.title ?? (loading ? 'Loading your events…' : 'Choose an event');
+    final when = e == null ? null : formatDate(e.startDatetime.toLocal());
+    final counts = checkedIn == null ? null : '$checkedIn of $total checked in';
+
+    return Material(
+      color: p.surfaceSubtle,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(12),
+        side: BorderSide(color: p.border),
+      ),
+      clipBehavior: Clip.antiAlias,
+      child: InkWell(
+        onTap: onTap,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+          child: Row(
+            children: [
+              Icon(Icons.event_outlined, color: p.primary),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      maxLines: 2,
+                      overflow: TextOverflow.ellipsis,
+                      style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
+                    ),
+                    if (when != null || counts != null) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        [when, counts].whereType<String>().join(' · '),
+                        style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+                      ),
+                    ],
+                  ],
+                ),
+              ),
+              if (onTap != null) ...[
+                const SizedBox(width: 8),
+                Text('Change', style: AppTextStyles.labelMedium.copyWith(color: p.primary)),
+                Icon(Icons.expand_more, color: p.primary),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Bottom sheet to pick the event: the events worth checking in to, and a
+/// search across all of them.
+class _EventChooser extends StatefulWidget {
+  const _EventChooser({required this.all, required this.suggested, required this.selected});
+
+  final List<AppEvent> all;
+  final List<AppEvent> suggested;
+  final int? selected;
+
+  @override
+  State<_EventChooser> createState() => _EventChooserState();
+}
+
+class _EventChooserState extends State<_EventChooser> {
+  final _query = TextEditingController();
+
+  @override
+  void initState() {
+    super.initState();
+    _query.addListener(() => setState(() {}));
+  }
+
+  @override
+  void dispose() {
+    _query.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final q = _query.text.trim().toLowerCase();
+    final searching = q.isNotEmpty;
+    final rows = searching
+        ? widget.all.where((e) => e.title.toLowerCase().contains(q)).toList()
+        : widget.suggested;
+
+    return SafeArea(
+      child: SizedBox(
+        height: MediaQuery.sizeOf(context).height * 0.8,
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              Text('Choose an event',
+                  style: AppTextStyles.titleLarge.copyWith(fontSize: 17, color: p.textPrimary)),
+              const SizedBox(height: 12),
+              TextField(
+                controller: _query,
+                decoration: const InputDecoration(
+                  prefixIcon: Icon(Icons.search, size: 20),
+                  hintText: 'Search all events',
+                  isDense: true,
+                ),
+              ),
+              const SizedBox(height: 12),
+              Text(
+                searching ? 'All events' : 'On now, coming up and last 7 days',
+                style: AppTextStyles.labelMedium.copyWith(color: p.textMuted),
+              ),
+              const SizedBox(height: 4),
+              Expanded(
+                child: rows.isEmpty
+                    ? Center(
+                        child: Text(
+                          searching
+                              ? 'No event matches "${_query.text.trim()}".'
+                              : 'No events with registrations right now. Search to find others.',
+                          textAlign: TextAlign.center,
+                          style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary),
+                        ),
+                      )
+                    : ListView.separated(
+                        itemCount: rows.length,
+                        separatorBuilder: (_, _) => Divider(height: 1, color: p.border),
+                        itemBuilder: (context, i) {
+                          final e = rows[i];
+                          final chosen = e.eventId == widget.selected;
+                          return ListTile(
+                            contentPadding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
+                            title: Text(e.title,
+                                style: AppTextStyles.bodyMedium.copyWith(
+                                  color: p.textPrimary,
+                                  fontWeight: chosen ? FontWeight.w600 : FontWeight.w500,
+                                )),
+                            subtitle: Text(
+                              '${formatDate(e.startDatetime.toLocal())} · ${e.registeredCount} registered',
+                              style: AppTextStyles.bodySmall.copyWith(color: p.textMuted),
+                            ),
+                            trailing: chosen ? Icon(Icons.check, color: p.primary) : null,
+                            onTap: () => Navigator.of(context).pop(e.eventId),
+                          );
+                        },
+                      ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
   }
 }
