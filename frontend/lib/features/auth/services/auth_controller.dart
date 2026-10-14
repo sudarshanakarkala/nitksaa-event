@@ -258,7 +258,7 @@ class AuthController extends ChangeNotifier {
         throw StateError('Firebase login did not return a user.');
       }
 
-      final firebaseToken = await FirebaseAuthService.freshIdToken();
+      final firebaseToken = await FirebaseAuthService.idToken();
       final backendSession = await _backendAuthService.loginWithFirebaseToken(
         firebaseToken,
       );

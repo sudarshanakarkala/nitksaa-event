@@ -1,9 +1,11 @@
 /// Web implementation of Razorpay Checkout.
 ///
-/// Uses the Razorpay Checkout JS SDK loaded in web/index.html
-/// (https://checkout.razorpay.com/v1/checkout.js). The order is created
-/// server-side first; this only opens the checkout and bridges the
-/// success/error callbacks back to Dart.
+/// Uses the Razorpay Checkout JS SDK
+/// (https://checkout.razorpay.com/v1/checkout.js), loaded here the first
+/// time someone pays rather than by web/index.html: on every page load it
+/// pulled in about a hundred Razorpay files nobody needed until Pay. The
+/// order is created server-side first; this only opens the checkout and
+/// bridges the success/error callbacks back to Dart.
 library;
 
 import 'dart:async';
@@ -17,6 +19,7 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
 ) async {
   final completer = Completer<RazorpayCheckoutResult>();
 
+  await _loadRazorpay();
   if (!globalContext.has('Razorpay')) {
     throw const RazorpayCheckoutFailureException(
       'Razorpay checkout could not be loaded. Please refresh and try again.',
@@ -140,4 +143,40 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
 String _strProp(JSObject obj, String key) {
   final value = obj[key];
   return value.isA<JSString>() ? (value as JSString).toDart : '';
+}
+
+const _checkoutScript = 'https://checkout.razorpay.com/v1/checkout.js';
+
+/// The script load in progress or done, shared so a second Pay press
+/// doesn't add the script twice. Reset after a failure, so the next press
+/// tries again.
+Future<void>? _loading;
+
+/// Adds Razorpay's checkout script to the page, once, and waits for it.
+/// Does nothing if `window.Razorpay` is already there (a test's fake, or an
+/// earlier payment). A failed or slow load leaves `window.Razorpay` unset,
+/// and the caller shows its "could not be loaded" message.
+Future<void> _loadRazorpay() {
+  if (globalContext.has('Razorpay')) return Future.value();
+  return _loading ??= _injectScript().catchError((Object _) {
+    _loading = null;
+  });
+}
+
+Future<void> _injectScript() {
+  final done = Completer<void>();
+  final document = globalContext['document'] as JSObject;
+  final script = document.callMethod<JSObject>('createElement'.toJS, 'script'.toJS);
+  script['src'] = _checkoutScript.toJS;
+  script['async'] = true.toJS;
+  script['onload'] = ((JSAny? _) {
+    if (!done.isCompleted) done.complete();
+  }).toJS;
+  script['onerror'] = ((JSAny? _) {
+    // Remove it, so the next press adds a fresh one.
+    script.callMethod<JSAny?>('remove'.toJS);
+    if (!done.isCompleted) done.completeError(StateError('Razorpay script failed to load'));
+  }).toJS;
+  (document['head'] as JSObject).callMethod<JSAny?>('appendChild'.toJS, script);
+  return done.future.timeout(const Duration(seconds: 20));
 }
