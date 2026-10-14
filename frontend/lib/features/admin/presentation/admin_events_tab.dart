@@ -29,7 +29,7 @@ enum _Filter {
   all('All'),
   draft('Draft'),
   published('Published'),
-  open('Registration open'),
+  open('Open'),
   cancelled('Cancelled'),
   past('Past');
 
@@ -39,13 +39,13 @@ enum _Filter {
 
 enum _View { cards, table }
 
-/// Card order (the table sorts by its headings).
-enum _Order {
-  date('Date'),
-  mostFull('Most full'),
-  leastFull('Least full');
+/// Card order by fullness (the table sorts by its headings). None lit:
+/// by date, in the Date button's direction.
+enum _Fill {
+  most('Most full'),
+  least('Least full');
 
-  const _Order(this.label);
+  const _Fill(this.label);
   final String label;
 }
 
@@ -72,7 +72,11 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   String? _error;
   _Filter _filter = _Filter.all;
   _View _view = _View.cards;
-  _Order _order = _Order.date;
+  _Fill? _fill;
+
+  /// Date ↑: soonest first (upcoming, then the most recent past).
+  /// Date ↓: latest first.
+  bool _soonestFirst = true;
 
   // Filters rail (the pills are the status shortcuts).
   Set<String> _modes = const {};
@@ -212,20 +216,23 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   /// Search and rail filters; the pills apply on top.
   List<AppEvent> get _filtered => _searched.where(_railMatches).toList();
 
-  /// By date: upcoming first (soonest at the top), then past (most recent
-  /// first). By fullness: share of seats taken, no capacity last; ties by
-  /// that date order.
+  /// By date: soonest first (upcoming soonest at the top, then past most
+  /// recent first) or latest first. By fullness: share of seats taken, no
+  /// capacity last; ties in date order.
   List<AppEvent> get _visible {
     final rows = _filtered.where((e) => _matches(e, _filter)).toList();
     final upcoming = rows.where((e) => !_ended(e)).toList()
       ..sort((a, b) => a.startDatetime.compareTo(b.startDatetime));
     final past = rows.where(_ended).toList()
       ..sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
-    final byDate = [...upcoming, ...past];
-    if (_order == _Order.date) return byDate;
+    final byDate = _soonestFirst
+        ? [...upcoming, ...past]
+        : (rows.toList()..sort((a, b) => b.startDatetime.compareTo(a.startDatetime)));
+    final fill = _fill;
+    if (fill == null) return byDate;
     final indexed = [for (var i = 0; i < byDate.length; i++) (i, byDate[i])];
     indexed.sort((a, b) {
-      final r = compareCells(_fillOf(a.$2), _fillOf(b.$2), ascending: _order == _Order.leastFull);
+      final r = compareCells(_fillOf(a.$2), _fillOf(b.$2), ascending: fill == _Fill.least);
       return r != 0 ? r : a.$1.compareTo(b.$1);
     });
     return [for (final e in indexed) e.$2];
@@ -284,33 +291,19 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
             active: f == _filter,
             onTap: () => setState(() => _filter = f),
           ),
-        // Quick filters by type, then capacity (the date is on the line
-        // below). The table sorts by its headings; phones use the menu on
-        // the count line, as the pill row scrolls sideways there.
-        if (!compact && _view == _View.cards) ...[
-          const _PillDivider(),
-          const _PillLabel('Sort'),
-          for (final o in _Order.values)
+        // Quick filters by type, then capacity; the date is on the line
+        // below. The table sorts by its headings instead.
+        if (_cardsShown(compact))
+          for (final f in _Fill.values)
             QuickFilterPill(
-              label: o.label,
-              active: o == _order,
-              onTap: () => setState(() => _order = o),
+              label: f.label,
+              active: f == _fill,
+              onTap: () => setState(() => _fill = f == _fill ? null : f),
             ),
-        ],
       ],
       count: _loading && _events.isEmpty
           ? null
-          : Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                ResultCount(count: visible.length, one: 'event', many: 'events'),
-                // Phones: the sort pills would be off-screen in the row.
-                if (compact) ...[
-                  const SizedBox(width: 16),
-                  _OrderMenu(order: _order, onChanged: (o) => setState(() => _order = o)),
-                ],
-              ],
-            ),
+          : ResultCount(count: visible.length, one: 'event', many: 'events'),
       action: canCreate
           ? FilledButton.icon(
               onPressed: _create,
@@ -332,6 +325,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     );
   }
 
+  /// The cards (not the table) are on screen: the sort pills apply.
+  bool _cardsShown(bool compact) => compact || _view == _View.cards;
+
   /// Starting between two dates, on the page under the pills: presets, then
   /// the slider over the events' own dates. Sort by works within it.
   Widget _dateFilter() {
@@ -344,8 +340,23 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       ('Next 90 days', DateTimeRange(start: today, end: today.add(const Duration(days: 90)))),
       ('This year', DateTimeRange(start: DateTime(today.year), end: DateTime(today.year, 12, 31))),
     ];
+    final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
     return FilterDateRange(
       inline: true,
+      leading: _cardsShown(compact)
+          ? QuickFilterPill(
+              label: _soonestFirst ? 'Date ↑' : 'Date ↓',
+              active: _fill == null,
+              onTap: () => setState(() {
+                // From a fullness sort: back to date order; then it flips.
+                if (_fill != null) {
+                  _fill = null;
+                } else {
+                  _soonestFirst = !_soonestFirst;
+                }
+              }),
+            )
+          : null,
       label: 'Starts',
       first: min(starts.first, today),
       last: max(starts.last, today.add(const Duration(days: 90))),
@@ -653,74 +664,4 @@ class _CapacityCell extends StatelessWidget {
       ),
     );
   }
-}
-
-/// "Sort by Date ▾" on the count line, the same look as the phone tables.
-class _OrderMenu extends StatelessWidget {
-  const _OrderMenu({required this.order, required this.onChanged});
-
-  final _Order order;
-  final ValueChanged<_Order> onChanged;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Text('Sort by', style: AppTextStyles.bodySmall.copyWith(color: p.textMuted)),
-        const SizedBox(width: 6),
-        PopupMenuButton<_Order>(
-          tooltip: 'Sort',
-          onSelected: onChanged,
-          itemBuilder: (_) => [
-            for (final o in _Order.values)
-              PopupMenuItem(
-                value: o,
-                child: Text(
-                  o.label,
-                  style: TextStyle(
-                    color: o == order ? p.primary : null,
-                    fontWeight: o == order ? FontWeight.w600 : null,
-                  ),
-                ),
-              ),
-          ],
-          child: Row(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Text(
-                order.label,
-                style: AppTextStyles.bodySmall.copyWith(color: p.primary, fontWeight: FontWeight.w600),
-              ),
-              Icon(Icons.arrow_drop_down, color: p.primary, size: 20),
-            ],
-          ),
-        ),
-      ],
-    );
-  }
-}
-
-/// Thin upright line between the type pills and the sort pills.
-class _PillDivider extends StatelessWidget {
-  const _PillDivider();
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8),
-        child: SizedBox(height: 22, child: VerticalDivider(width: 1, color: context.palette.border)),
-      );
-}
-
-class _PillLabel extends StatelessWidget {
-  const _PillLabel(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Text(
-        text,
-        style: AppTextStyles.bodySmall.copyWith(color: context.palette.textMuted),
-      );
 }

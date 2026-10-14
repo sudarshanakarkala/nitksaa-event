@@ -445,10 +445,14 @@ class FilterDateRange extends StatefulWidget {
     required this.onChanged,
     this.presets = const [],
     this.inline = false,
+    this.leading,
   });
 
   final String label;
   final bool inline;
+
+  /// Inline only: a control at the start of the line (Events: Date ↑/↓).
+  final Widget? leading;
 
   /// The slider's ends (e.g. the earliest and latest event).
   final DateTime first;
@@ -672,6 +676,7 @@ class _FilterDateRangeState extends State<FilterDateRange> {
     if (MediaQuery.sizeOf(context).width >= 900) {
       return Row(
         children: [
+          if (widget.leading != null) ...[widget.leading!, const SizedBox(width: 6)],
           if (widget.presets.isNotEmpty) ...[chips, const SizedBox(width: 12)],
           Expanded(child: slider),
           const SizedBox(width: 8),
@@ -682,7 +687,12 @@ class _FilterDateRangeState extends State<FilterDateRange> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (widget.presets.isNotEmpty) chips,
+        if (widget.leading != null || widget.presets.isNotEmpty)
+          Wrap(
+            spacing: 6,
+            runSpacing: 6,
+            children: [?widget.leading, chips],
+          ),
         slider,
         Align(alignment: Alignment.centerLeft, child: boxes),
       ],
