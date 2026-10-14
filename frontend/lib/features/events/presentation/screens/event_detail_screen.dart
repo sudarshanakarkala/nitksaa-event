@@ -15,6 +15,7 @@ import '../../../admin/presentation/event_admin_actions.dart' show EventAdminAct
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
 import '../widgets/venue_section.dart';
+import '../../../../shared/widgets/form_fields.dart';
 import '../../../../shared/widgets/notice.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
@@ -27,18 +28,6 @@ class EventDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
-  final TextEditingController _notesController = TextEditingController();
-  final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _phoneController = TextEditingController();
-
-  @override
-  void dispose() {
-    _notesController.dispose();
-    _emailController.dispose();
-    _phoneController.dispose();
-    super.dispose();
-  }
-
   Future<void> _launchUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
     try {
@@ -1608,7 +1597,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           width: double.infinity,
           child: CupertinoButton(
             color: context.palette.primary,
-            onPressed: () => _showRegistrationForm(event, state, isIOS: true),
+            onPressed: () => _showRegistrationForm(event, state),
             child: Text('Register', style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.onPrimary)),
           ),
         );
@@ -1622,7 +1611,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               padding: const EdgeInsets.symmetric(vertical: 16),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
             ),
-            onPressed: () => _showRegistrationForm(event, state, isIOS: false),
+            onPressed: () => _showRegistrationForm(event, state),
             child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold)),
           ),
         );
@@ -1670,258 +1659,43 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return ctaWidget;
   }
 
-  void _showRegistrationForm(AppEvent event, EventDetailState state, {required bool isIOS}) {
+  /// The registration form: one dialog for every screen size. Alumni see
+  /// their name from the alumni record; everyone else types it. Phone is
+  /// required for all. The details go to checkout as a draft in the event's
+  /// provider, never in the page address.
+  void _showRegistrationForm(AppEvent event, EventDetailState state) {
     final auth = ref.read(authControllerProvider);
-    _notesController.clear();
-    _emailController.text = state.alumniProfile?['email'] ?? auth.session?.email ?? '';
-    _phoneController.text = state.alumniProfile?['phone'] ?? '';
+    final profile = state.alumniProfile ?? const <String, dynamic>{};
+    final isAlumni = profile.isNotEmpty;
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final isPaid = _isPaidEvent(event);
+    final header = _buildEventHeader(event, isDark);
+    final infoBox = _buildInfoBox(isDark);
+    final notifier = ref.read(eventDetailProvider(widget.eventId).notifier);
 
-    if (isIOS) {
-      showCupertinoModalPopup(
-        context: context,
-        builder: (context) {
-          final isDark = CupertinoTheme.of(context).brightness == Brightness.dark;
-          final bg = context.palette.surface;
-          final barBg = context.palette.background;
-          final textPrimary = context.palette.textPrimary;
-
-          return Material(
-            color: Colors.transparent,
-            child: Container(
-              height: MediaQuery.of(context).size.height * 0.85,
-              decoration: BoxDecoration(
-                color: bg,
-                borderRadius: const BorderRadius.only(
-                  topLeft: Radius.circular(16),
-                  topRight: Radius.circular(16),
-                ),
-              ),
-              child: Column(
-                children: [
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
-                    decoration: BoxDecoration(
-                      color: barBg,
-                      border: Border(bottom: BorderSide(color: context.palette.border, width: 0.5)),
-                      borderRadius: const BorderRadius.only(
-                        topLeft: Radius.circular(16),
-                        topRight: Radius.circular(16),
-                      ),
-                    ),
-                    child: Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        CupertinoButton(
-                          padding: const EdgeInsets.symmetric(horizontal: 8),
-                          child: Row(
-                            mainAxisSize: MainAxisSize.min,
-                            children: [
-                              Icon(CupertinoIcons.left_chevron, size: 18, color: context.palette.primary),
-                              SizedBox(width: 4),
-                              Text('Back', style: TextStyle(color: context.palette.primary, fontSize: 15)),
-                            ],
-                          ),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                        Text(
-                          'Register',
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.bold,
-                            color: textPrimary,
-                          ),
-                        ),
-                        const SizedBox(width: 60),
-                      ],
-                    ),
-                  ),
-                  Expanded(
-                    child: SingleChildScrollView(
-                      padding: const EdgeInsets.all(20.0),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          _buildEventHeader(event, isDark),
-                          _buildReadOnlyField('Badge name', state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? '', isDark),
-                          _buildEditableField('Email', _emailController, 'your@email.com', isDark),
-                          _buildEditableField('Phone', _phoneController, 'Phone number', isDark),
-                          _buildEditableField('Notes (optional)', _notesController, 'Dietary preferences, accessibility needs…', isDark),
-                          const SizedBox(height: 20),
-                          SizedBox(
-                            width: double.infinity,
-                            child: CupertinoButton(
-                              color: context.palette.primary,
-                              onPressed: () {
-                                Navigator.pop(context);
-                                _proceedToCheckout(event);
-                              },
-                              child: Text('Proceed to Checkout', style: TextStyle(fontWeight: FontWeight.bold, color: context.palette.onPrimary)),
-                            ),
-                          ),
-                          const SizedBox(height: 16),
-                          _buildInfoBox(isDark),
-                          const SizedBox(height: 32),
-                        ],
-                      ),
-                    ),
-                  ),
-                ],
-              ),
-            ),
-          );
+    showDialog<void>(
+      context: context,
+      builder: (dialogContext) => _RegistrationFormDialog(
+        eventHeader: header,
+        infoBox: infoBox,
+        alumniName: isAlumni ? (profile['fullname']?.toString() ?? '') : null,
+        email: auth.session?.email ?? '',
+        initialPhone: isAlumni ? (profile['phone']?.toString() ?? '') : '',
+        totalLabel: isPaid ? _formatRupees(event.ticketPrice!) : 'Free',
+        isPaid: isPaid,
+        onContinue: (draft) {
+          notifier.setRegistrationDraft(draft);
+          _proceedToCheckout(event);
         },
-      );
-    } else {
-      showDialog(
-        context: context,
-        builder: (context) {
-          final isDark = Theme.of(context).brightness == Brightness.dark;
-          return Dialog(
-            backgroundColor: context.palette.card,
-            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-            child: Container(
-              constraints: const BoxConstraints(maxWidth: 500),
-              padding: const EdgeInsets.all(24.0),
-              child: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'Register for Event',
-                          style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 20, fontWeight: FontWeight.w600),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.close),
-                          onPressed: () => Navigator.pop(context),
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
-                    _buildEventHeader(event, isDark),
-                    _buildReadOnlyField('Badge name', state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? '', isDark),
-                    _buildEditableField('Email', _emailController, 'your@email.com', isDark),
-                    _buildEditableField('Phone', _phoneController, 'Phone number', isDark),
-                    _buildEditableField('Notes (optional)', _notesController, 'Dietary preferences, accessibility needs…', isDark),
-                    const SizedBox(height: 20),
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: context.palette.primary,
-                          foregroundColor: context.palette.onPrimary,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
-                        ),
-                        onPressed: () {
-                          Navigator.pop(context);
-                          _proceedToCheckout(event);
-                        },
-                        child: const Text('Proceed to Checkout', style: TextStyle(fontWeight: FontWeight.bold)),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    _buildInfoBox(isDark),
-                  ],
-                ),
-              ),
-            ),
-          );
-        },
-      );
-    }
-  }
-
-  Widget _buildReadOnlyField(String label, String value, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: context.palette.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            decoration: BoxDecoration(
-              color: context.palette.surfaceSubtle,
-              borderRadius: BorderRadius.circular(8),
-              border: Border.all(
-                color: context.palette.border,
-              ),
-            ),
-            child: Text(
-              value.isNotEmpty ? value : '—',
-              style: TextStyle(
-                fontSize: 14,
-                color: context.palette.textSecondary,
-              ),
-            ),
-          ),
-        ],
       ),
     );
   }
 
-  Widget _buildEditableField(String label, TextEditingController controller, String hint, bool isDark) {
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 12.0),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            label,
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w500,
-              color: context.palette.textSecondary,
-            ),
-          ),
-          const SizedBox(height: 6),
-          TextField(
-            controller: controller,
-            maxLines: 3,
-            style: TextStyle(fontSize: 14, color: context.palette.textPrimary),
-            decoration: InputDecoration(
-              hintText: hint,
-              hintStyle: TextStyle(fontSize: 13, color: context.palette.textMuted),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-              filled: true,
-              fillColor: context.palette.surfaceSubtle,
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: context.palette.border,
-                ),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: context.palette.border,
-                ),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(8),
-                borderSide: BorderSide(
-                  color: context.palette.primary,
-                  width: 1.5,
-                ),
-              ),
-            ),
-          ),
-        ],
-      ),
-    );
+  String _formatRupees(double amount) {
+    final text = amount == amount.roundToDouble()
+        ? amount.toInt().toString()
+        : amount.toStringAsFixed(2);
+    return '₹$text';
   }
 
   Widget _buildInfoBox(bool isDark) {
@@ -1983,10 +1757,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
-  /// Navigates to the checkout screen with the notes.
+  /// Opens checkout. The form's details travel in the provider's draft.
   void _proceedToCheckout(AppEvent event) {
-    final notes = Uri.encodeComponent(_notesController.text);
-    context.push('/events/${event.eventId}/checkout?notes=$notes');
+    context.push('/events/${event.eventId}/checkout');
   }
 
   // ==========================================
@@ -2438,6 +2211,235 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         );
       },
+    );
+  }
+}
+
+/// The registration form's dialog. Owns its fields and validation; hands a
+/// [RegistrationDraft] to [onContinue] once everything is filled in.
+class _RegistrationFormDialog extends StatefulWidget {
+  const _RegistrationFormDialog({
+    required this.eventHeader,
+    required this.infoBox,
+    required this.alumniName,
+    required this.email,
+    required this.initialPhone,
+    required this.totalLabel,
+    required this.isPaid,
+    required this.onContinue,
+  });
+
+  final Widget eventHeader;
+  final Widget infoBox;
+
+  /// The name from the alumni record, or null for non-alumni (who type it).
+  final String? alumniName;
+  final String email;
+  final String initialPhone;
+  final String totalLabel;
+  final bool isPaid;
+  final ValueChanged<RegistrationDraft> onContinue;
+
+  @override
+  State<_RegistrationFormDialog> createState() => _RegistrationFormDialogState();
+}
+
+class _RegistrationFormDialogState extends State<_RegistrationFormDialog> {
+  static const _noteMaxLength = 500;
+
+  final _formKey = GlobalKey<FormState>();
+  final _name = TextEditingController();
+  late final TextEditingController _phone =
+      TextEditingController(text: widget.initialPhone);
+  final _note = TextEditingController();
+
+  @override
+  void dispose() {
+    _name.dispose();
+    _phone.dispose();
+    _note.dispose();
+    super.dispose();
+  }
+
+  /// Same rule as the server: 10–15 digits once spaces, dashes and a
+  /// leading + are removed.
+  static bool _phoneIsValid(String phone) {
+    var digits = phone.trim();
+    if (digits.startsWith('+')) digits = digits.substring(1);
+    digits = digits.replaceAll(' ', '').replaceAll('-', '');
+    return RegExp(r'^\d{10,15}$').hasMatch(digits);
+  }
+
+  void _continue() {
+    if (!(_formKey.currentState?.validate() ?? false)) return;
+    final draft = RegistrationDraft(
+      fullname: widget.alumniName == null ? _name.text.trim() : null,
+      phone: _phone.text.trim(),
+      note: _note.text.trim(),
+    );
+    Navigator.of(context).pop();
+    widget.onContinue(draft);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final narrow = MediaQuery.sizeOf(context).width < 480;
+    final primaryLabel = widget.isPaid ? 'Continue to payment' : 'Register';
+
+    final cancel = OutlinedButton(
+      onPressed: () => Navigator.of(context).pop(),
+      child: const Text('Cancel'),
+    );
+    final primary = ElevatedButton(
+      onPressed: _continue,
+      child: Text(primaryLabel),
+    );
+
+    return Dialog(
+      backgroundColor: p.card,
+      insetPadding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 40, vertical: 24),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: ConstrainedBox(
+        constraints: const BoxConstraints(maxWidth: 520),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.all(narrow ? 16 : 24),
+          child: Form(
+            key: _formKey,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Register',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.serif,
+                          fontSize: 22,
+                          fontWeight: FontWeight.w600,
+                          color: p.textPrimary,
+                        ),
+                      ),
+                    ),
+                    IconButton(
+                      tooltip: 'Close',
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(context).pop(),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                widget.eventHeader,
+                const FormSectionLabel('Your details'),
+                const SizedBox(height: 16),
+                if (widget.alumniName != null)
+                  LabeledField(
+                    label: 'Name',
+                    helper: 'From your alumni record.',
+                    child: ReadOnlyValue(widget.alumniName!),
+                  )
+                else
+                  LabeledField(
+                    label: 'Name',
+                    child: TextFormField(
+                      key: const ValueKey('registration-name'),
+                      controller: _name,
+                      textCapitalization: TextCapitalization.words,
+                      maxLength: 120,
+                      decoration: const InputDecoration(
+                        hintText: 'Your full name',
+                        counterText: '',
+                      ),
+                      validator: (v) => (v ?? '').trim().isEmpty
+                          ? 'Please enter your name.'
+                          : null,
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                LabeledField(
+                  label: 'Email',
+                  helper: 'Confirmation goes here.',
+                  child: ReadOnlyValue(widget.email),
+                ),
+                const SizedBox(height: 16),
+                LabeledField(
+                  label: 'Phone',
+                  child: TextFormField(
+                    key: const ValueKey('registration-phone'),
+                    controller: _phone,
+                    keyboardType: TextInputType.phone,
+                    maxLength: 20,
+                    decoration: const InputDecoration(
+                      hintText: '+91 98450 12345',
+                      counterText: '',
+                    ),
+                    validator: (v) {
+                      final phone = (v ?? '').trim();
+                      if (phone.isEmpty) {
+                        return 'Please enter a phone number we can reach you on.';
+                      }
+                      if (!_phoneIsValid(phone)) {
+                        return 'Please enter a valid phone number.';
+                      }
+                      return null;
+                    },
+                  ),
+                ),
+                const SizedBox(height: 16),
+                LabeledField(
+                  label: 'Note',
+                  optional: true,
+                  child: TextFormField(
+                    key: const ValueKey('registration-note'),
+                    controller: _note,
+                    minLines: 2,
+                    maxLines: 4,
+                    maxLength: _noteMaxLength,
+                    decoration: const InputDecoration(
+                      hintText: 'Anything the organisers should know',
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Divider(height: 1),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        'Total',
+                        style: AppTextStyles.titleMedium.copyWith(color: p.textSecondary),
+                      ),
+                    ),
+                    Text(
+                      widget.totalLabel,
+                      style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 20),
+                if (narrow) ...[
+                  primary,
+                  const SizedBox(height: 10),
+                  cancel,
+                ] else
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.end,
+                    children: [
+                      cancel,
+                      const SizedBox(width: 12),
+                      primary,
+                    ],
+                  ),
+                const SizedBox(height: 16),
+                widget.infoBox,
+              ],
+            ),
+          ),
+        ),
+      ),
     );
   }
 }

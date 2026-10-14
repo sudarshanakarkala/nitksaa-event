@@ -229,14 +229,15 @@ void main() {
 
       // The reads CheckoutScreen._confirmRegistration makes before paying.
       expect(h.state.myRegistration, isNull);
-      expect(await h.notifier.register(eventX, ''), isTrue);
+      h.notifier.setRegistrationDraft(const RegistrationDraft(phone: '+91 90000 00002'));
+      expect(await h.notifier.register(eventX), isTrue);
       final registrationIdB = h.state.myRegistration?['registration_id'];
       expect(registrationIdB, isNotNull);
       expect(registrationIdB, isNot(registrationIdA));
       expect(h.backend.calls.last, (endpoint: 'register', token: tokenB));
 
       // A notifier captured while A was signed in can no longer act.
-      expect(await notifierA.register(eventX, ''), isFalse);
+      expect(await notifierA.register(eventX), isFalse);
       expect(h.backend.count('register'), 1);
     });
   });
@@ -449,8 +450,9 @@ void main() {
       await tester.tap(find.text('Register'));
       await tester.pumpAndSettle();
 
-      expect(find.text('Register for Event'), findsOneWidget);
-      expect(find.text(sessionB.fullname!), findsOneWidget);
+      expect(find.text('YOUR DETAILS'), findsOneWidget);
+      // B is not an alumnus: B types a name, so the name field starts empty.
+      expect(find.byKey(const ValueKey('registration-name')), findsOneWidget);
       expect(find.text(sessionB.email!), findsOneWidget);
       expect(find.text(sessionA.fullname!), findsNothing);
       expect(find.text(sessionA.email!), findsNothing);

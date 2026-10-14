@@ -8,6 +8,17 @@ import '../../domain/event.dart';
 
 const _kUnsetValue = Object();
 
+/// What the registration form collected, handed to checkout inside the app
+/// (never in the page address). [fullname] is null for alumni: the server
+/// takes their name from the alumni record.
+class RegistrationDraft {
+  const RegistrationDraft({this.fullname, required this.phone, this.note = ''});
+
+  final String? fullname;
+  final String phone;
+  final String note;
+}
+
 class EventDetailState {
   const EventDetailState({
     this.event,
@@ -18,6 +29,7 @@ class EventDetailState {
     this.myRegistration,
     this.isRegistering = false,
     this.alumniProfile,
+    this.registrationDraft,
   });
 
   final AppEvent? event;
@@ -28,6 +40,7 @@ class EventDetailState {
   final Map<String, dynamic>? myRegistration;
   final bool isRegistering;
   final Map<String, dynamic>? alumniProfile;
+  final RegistrationDraft? registrationDraft;
 
   // The user-scoped fields take a sentinel default so that passing null clears
   // them; omitting the argument keeps the current value.
@@ -40,6 +53,7 @@ class EventDetailState {
     dynamic myRegistration = _kUnsetValue,
     bool? isRegistering,
     dynamic alumniProfile = _kUnsetValue,
+    dynamic registrationDraft = _kUnsetValue,
   }) {
     return EventDetailState(
       event: event ?? this.event,
@@ -50,6 +64,9 @@ class EventDetailState {
       myRegistration: identical(myRegistration, _kUnsetValue) ? this.myRegistration : myRegistration as Map<String, dynamic>?,
       isRegistering: isRegistering ?? this.isRegistering,
       alumniProfile: identical(alumniProfile, _kUnsetValue) ? this.alumniProfile : alumniProfile as Map<String, dynamic>?,
+      registrationDraft: identical(registrationDraft, _kUnsetValue)
+          ? this.registrationDraft
+          : registrationDraft as RegistrationDraft?,
     );
   }
 }
@@ -169,15 +186,30 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
     }
   }
 
-  Future<bool> register(int eventId, String attendeeNote) async {
+  /// Keeps what the registration form collected, for checkout.
+  void setRegistrationDraft(RegistrationDraft draft) {
+    if (!mounted) return;
+    state = state.copyWith(registrationDraft: draft);
+  }
+
+  /// Registers with the form's draft. On failure, [EventDetailState.errorMessage]
+  /// holds a plain-words message.
+  Future<bool> register(int eventId) async {
     final token = _accessToken;
-    if (token == null || !mounted) {
+    final draft = state.registrationDraft;
+    if (token == null || draft == null || !mounted) {
       return false;
     }
 
     state = state.copyWith(isRegistering: true);
     try {
-      final regResponse = await _repository.registerForEvent(eventId, token, attendeeNote);
+      final regResponse = await _repository.registerForEvent(
+        eventId,
+        token,
+        attendeeNote: draft.note,
+        fullname: draft.fullname,
+        phone: draft.phone,
+      );
       if (!mounted) return false;
       state = state.copyWith(
         isRegistering: false,
@@ -190,7 +222,7 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
       if (!mounted) return false;
       state = state.copyWith(
         isRegistering: false,
-        errorMessage: e.toString(),
+        errorMessage: apiErrorMessage(e, action: 'register'),
       );
       return false;
     }

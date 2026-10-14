@@ -14,6 +14,13 @@ const _fieldLabels = <String, String>{
 
 const _missingFieldsPrefix = 'missing_fields_for_publish:';
 
+/// Backend codes with their own plain-words message.
+const _codeMessages = <String, String>{
+  'name_required': 'Please enter your name.',
+  'phone_required': 'Please enter a phone number we can reach you on.',
+  'phone_invalid': 'Please enter a valid phone number.',
+};
+
 /// A user-facing message for a failed API call.
 ///
 /// [action] is a short phrase such as 'publish the event'. The message never
@@ -52,6 +59,8 @@ String? _messageFromDetail(Object? data, String action) {
   if (detail is String) {
     final text = detail.trim();
     if (text.isEmpty) return null;
+    final known = _codeMessages[text];
+    if (known != null) return known;
     if (text.startsWith(_missingFieldsPrefix)) {
       final labels = text
           .substring(_missingFieldsPrefix.length)

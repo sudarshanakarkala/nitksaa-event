@@ -11,6 +11,7 @@ library;
 
 import 'package:event_app/features/auth/services/auth_controller.dart';
 import 'package:event_app/features/events/data/events_repository.dart';
+import 'package:event_app/features/events/presentation/providers/event_detail_provider.dart';
 import 'package:event_app/features/events/presentation/screens/checkout_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -45,6 +46,12 @@ void main() {
 
     await auth.signOut();
     auth.logIn(sessionB);
+    // B filled in the registration form (the draft belongs to B's session).
+    ProviderScope.containerOf(tester.element(find.byType(CheckoutScreen)))
+        .read(eventDetailProvider(eventX).notifier)
+        .setRegistrationDraft(
+          const RegistrationDraft(fullname: 'Bob Guest', phone: '+91 90000 00002'),
+        );
     await tester.pumpAndSettle();
     await tester.tap(find.text('Proceed to Payment'));
     await tester.pumpAndSettle();

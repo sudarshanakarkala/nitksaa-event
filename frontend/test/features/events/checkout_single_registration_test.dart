@@ -12,6 +12,7 @@ library;
 
 import 'package:event_app/features/auth/services/auth_controller.dart';
 import 'package:event_app/features/events/data/events_repository.dart';
+import 'package:event_app/features/events/presentation/providers/event_detail_provider.dart';
 import 'package:event_app/features/events/presentation/screens/checkout_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -21,6 +22,8 @@ import 'package:go_router/go_router.dart';
 import 'support/auth_isolation_fakes.dart';
 import 'support/fake_razorpay_web.dart';
 import 'support/registration_backend_fake.dart';
+
+const _phone = '+91 98450 12345';
 
 final _passOrQuantityWording = RegExp(
   r'\bpass(es)?\b|quantity',
@@ -46,10 +49,7 @@ void main() {
         ),
         GoRoute(
           path: '/events/:id/checkout',
-          builder: (context, state) => CheckoutScreen(
-            eventId: eventX,
-            notes: state.uri.queryParameters['notes'] ?? '',
-          ),
+          builder: (context, state) => const CheckoutScreen(eventId: eventX),
         ),
       ],
     );
@@ -65,9 +65,15 @@ void main() {
         child: MaterialApp.router(routerConfig: router),
       ),
     );
-    router.push(
-      '/events/$eventX/checkout?notes=${Uri.encodeComponent(notes)}',
-    );
+    // What the registration form leaves behind: the draft, kept alive by
+    // the event page (here, a listener).
+    final container =
+        ProviderScope.containerOf(tester.element(find.text('event page')));
+    container.listen(eventDetailProvider(eventX), (_, _) {});
+    container
+        .read(eventDetailProvider(eventX).notifier)
+        .setRegistrationDraft(RegistrationDraft(phone: _phone, note: notes));
+    router.push('/events/$eventX/checkout');
     await settleRequests(tester);
     expect(find.text('Fee Summary'), findsOneWidget);
   }
@@ -121,13 +127,13 @@ void main() {
       FakeRazorpay.install();
     });
 
-    testWidgets('Test C: the registration request is attendee_note and '
+    testWidgets('Test C: the registration request is the note and phone, '
         'nothing else', (tester) async {
       await openCheckout(tester, backend, notes: 'Vegetarian meal');
       await confirm(tester);
 
       final request = backend.registerRequests.single;
-      expect(request.json, {'attendee_note': 'Vegetarian meal'});
+      expect(request.json, {'attendee_note': 'Vegetarian meal', 'phone': _phone});
       expect(request.rawBody, isNot(contains('quantity')));
     });
 
@@ -258,7 +264,7 @@ void main() {
       await confirm(tester);
 
       final request = backend.registerRequests.single;
-      expect(request.json, {'attendee_note': 'Wheelchair access'});
+      expect(request.json, {'attendee_note': 'Wheelchair access', 'phone': _phone});
       expect(request.rawBody, isNot(contains('quantity')));
       expect(backend.seatsTaken, 1);
       expect(backend.registrations[tokenA]!['status'], 'registered');
