@@ -80,7 +80,7 @@ class RazorpayCheckoutFailureException implements Exception {
 }
 
 /// Thrown when the current platform cannot host the Razorpay checkout
-/// (Android, iOS, and Web are supported).
+/// (only the web is supported).
 class RazorpayPlatformUnsupportedException implements Exception {
   const RazorpayPlatformUnsupportedException(this.message);
 

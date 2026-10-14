@@ -28,11 +28,6 @@ final _passOrQuantityWording = RegExp(
 
 void main() {
   group('ISSUE-006: registration form', () {
-    const bothForms = TargetPlatformVariant({
-      TargetPlatform.android, // the Material dialog
-      TargetPlatform.iOS, // the Cupertino sheet
-    });
-
     /// Opens the event page on a router that has the app's two event routes,
     /// and returns the list that each visit to checkout is added to.
     Future<List<Uri>> pumpEventPage(
@@ -101,7 +96,7 @@ void main() {
 
       expect(find.text('checkout page'), findsOneWidget);
       expect(visits, hasLength(1));
-    }, variant: bothForms);
+    });
 
     testWidgets('Test B: the checkout route carries nothing in its address; '
         'the note travels in the draft', (tester) async {
@@ -124,7 +119,7 @@ void main() {
       expect(draft?.note, 'Vegetarian meal');
       expect(draft?.phone, isNotEmpty);
       expect(draft?.fullname, isNull); // alumni: the server takes the record's name
-    }, variant: bothForms);
+    });
 
     testWidgets('an empty phone is caught in the form, and nothing is sent',
         (tester) async {
