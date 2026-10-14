@@ -31,7 +31,24 @@ class EntryPassCheck {
   final String? registrationStatus;
 }
 
-/// Check-in by entry pass, for an event's admins (the backend checks).
+/// One check-in just made: what Undo needs.
+@immutable
+class CheckInDone {
+  const CheckInDone({required this.checkinId, required this.registrationId, this.checkedInAt});
+
+  factory CheckInDone.fromJson(Map<String, dynamic> json) => CheckInDone(
+        checkinId: (json['checkin_id'] as num?)?.toInt() ?? 0,
+        registrationId: (json['registration_id'] as num?)?.toInt() ?? 0,
+        checkedInAt: DateTime.tryParse(json['checked_in_at']?.toString() ?? '')?.toLocal(),
+      );
+
+  final int checkinId;
+  final int registrationId;
+  final DateTime? checkedInAt;
+}
+
+/// Check-in for an event's admins (the backend checks): by entry pass
+/// (a scan), by registration (the Check-in list), and Undo.
 class CheckInApi {
   CheckInApi({Dio? dio}) : _dio = dio ?? _createDio();
 
@@ -71,14 +88,37 @@ class CheckInApi {
     return EntryPassCheck.fromJson(response.data ?? const {});
   }
 
-  Future<void> checkIn({
+  Future<CheckInDone> checkIn({
     required int eventId,
     required String qrToken,
     required String accessToken,
-  }) async {
-    await _dio.post<Map<String, dynamic>>(
+  }) =>
+      _create(eventId, {'qr_token': qrToken}, accessToken);
+
+  Future<CheckInDone> checkInRegistration({
+    required int eventId,
+    required int registrationId,
+    required String accessToken,
+  }) =>
+      _create(eventId, {'registration_id': registrationId}, accessToken);
+
+  Future<CheckInDone> _create(int eventId, Map<String, dynamic> body, String accessToken) async {
+    final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/admin/events/$eventId/check-ins',
-      data: {'qr_token': qrToken},
+      data: body,
+      options: _auth(accessToken),
+    );
+    return CheckInDone.fromJson(response.data ?? const {});
+  }
+
+  /// Undoes a mistaken check-in.
+  Future<void> undo({
+    required int eventId,
+    required int checkinId,
+    required String accessToken,
+  }) async {
+    await _dio.delete<void>(
+      '/api/v1/admin/events/$eventId/check-ins/$checkinId',
       options: _auth(accessToken),
     );
   }

@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 
 import '../../core/errors/api_error_message.dart';
 import '../../routes/app_routes.dart';
+import '../../routes/return_after_sign_in.dart';
 import '../../shared/widgets/site_page.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -32,8 +33,13 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
   EntryPassCheck? _pass;
   String? _error;
 
+  /// The check-in made on this page, for Undo.
+  CheckInDone? _done;
+
   /// The session the pass was looked up for; a new sign-in looks it up again.
   String? _loadedFor;
+
+  bool _rememberedForSignIn = false;
 
   Future<void> _load(String accessToken) async {
     _loadedFor = accessToken;
@@ -64,13 +70,16 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
   Future<void> _checkIn(String accessToken) async {
     setState(() => _stage = _Stage.checkingIn);
     try {
-      await ref.read(checkInApiProvider).checkIn(
+      final done = await ref.read(checkInApiProvider).checkIn(
             eventId: widget.eventId,
             qrToken: widget.qrToken,
             accessToken: accessToken,
           );
       if (!mounted) return;
-      setState(() => _stage = _Stage.checkedIn);
+      setState(() {
+        _done = done;
+        _stage = _Stage.checkedIn;
+      });
     } on DioException catch (e) {
       if (!mounted) return;
       if (e.response?.statusCode == 409) {
@@ -85,12 +94,42 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
     }
   }
 
+  /// Undo a mistaken check-in made on this page.
+  Future<void> _undo(String accessToken) async {
+    final done = _done;
+    if (done == null) return;
+    setState(() => _stage = _Stage.checkingIn);
+    try {
+      await ref.read(checkInApiProvider).undo(
+            eventId: widget.eventId,
+            checkinId: done.checkinId,
+            accessToken: accessToken,
+          );
+      if (!mounted) return;
+      _done = null;
+      await _load(accessToken);
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = apiErrorMessage(e, action: 'undo the check-in');
+        _stage = _Stage.failed;
+      });
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
     final token = auth.isAuthenticated ? auth.session?.accessToken : null;
     final canCheckIn =
         token != null && (auth.session?.access.canAdminEvent(widget.eventId) ?? false);
+
+    // Signed out: remember this page, so signing in (even with an emailed
+    // link opened in a new tab) comes back here.
+    if (!auth.isChecking && token == null && !_rememberedForSignIn) {
+      _rememberedForSignIn = true;
+      ReturnAfterSignIn.save('/checkin/${widget.eventId}/${widget.qrToken}');
+    }
 
     if (canCheckIn && _loadedFor != token) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
@@ -104,7 +143,20 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
     } else if (!canCheckIn) {
       body = _EntryPassInfo(signedIn: token != null);
     } else {
-      body = _volunteerView(token);
+      body = Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _volunteerView(token),
+          const SizedBox(height: 16),
+          Center(
+            child: TextButton.icon(
+              onPressed: () => context.go('/admin/checkin?event=${widget.eventId}'),
+              icon: const Icon(Icons.list_alt, size: 18),
+              label: const Text('Check-in list for this event'),
+            ),
+          ),
+        ],
+      );
     }
 
     return SitePage(
@@ -138,6 +190,12 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
           icon: Icons.check_circle,
           name: _pass?.fullName,
           headline: 'Checked in',
+          action: _done == null
+              ? null
+              : OutlinedButton(
+                  onPressed: () => _undo(accessToken),
+                  child: const Text('Undo'),
+                ),
         );
       case _Stage.loaded:
       case _Stage.checkingIn:

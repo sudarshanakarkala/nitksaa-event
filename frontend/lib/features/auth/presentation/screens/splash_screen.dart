@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
 import '../../../../routes/app_routes.dart';
+import '../../../../routes/return_after_sign_in.dart';
 import '../../../../shared/widgets/emblem_ring.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
@@ -48,8 +49,11 @@ class _SplashScreenState extends State<SplashScreen> {
         context.go(AppRoutes.login);
         return;
       }
-      AppLogger.info('Splash screen completed. Navigating to home.');
-      context.go(AppRoutes.home);
+      // Signed in from a page that asked for it (e.g. a check-in link,
+      // then an emailed sign-in link opened in a new tab): back there.
+      final back = auth.isAuthenticated ? ReturnAfterSignIn.take() : null;
+      AppLogger.info('Splash screen completed. Navigating to ${back ?? 'home'}.');
+      context.go(back ?? AppRoutes.home);
     } else {
       Future<void>.delayed(remaining, _navigate);
     }

@@ -34,10 +34,14 @@ class AdminEventPicker extends StatelessWidget {
     required this.selected,
     required this.onChanged,
     this.width,
+    this.includeAll = true,
   });
 
   /// Fixed width (in the pill row); null fills the space (in the rail).
   final double? width;
+
+  /// Offer "All events" (off where only one event makes sense: Check-in).
+  final bool includeAll;
 
   /// Newest first.
   final List<AdminEventOption> options;
@@ -46,7 +50,7 @@ class AdminEventPicker extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final known = selected == adminAllEvents || options.any((e) => e.id == selected);
+    final known = (includeAll && selected == adminAllEvents) || options.any((e) => e.id == selected);
     return DropdownMenu<int>(
       // Rebuild when the URL changes the selection.
       key: ValueKey(selected),
@@ -59,7 +63,7 @@ class AdminEventPicker extends StatelessWidget {
       leadingIcon: const Icon(Icons.event_outlined, size: 20),
       hintText: 'Type to find an event',
       dropdownMenuEntries: [
-        const DropdownMenuEntry<int>(value: adminAllEvents, label: 'All events'),
+        if (includeAll) const DropdownMenuEntry<int>(value: adminAllEvents, label: 'All events'),
         for (final e in options) DropdownMenuEntry<int>(value: e.id, label: e.label),
       ],
       onSelected: (v) {
