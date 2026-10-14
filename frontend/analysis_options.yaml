@@ -33,3 +33,9 @@ analyzer:
     - .dart_tool/**
     - ios/Pods/**
     - ios/.symlinks/**
+    - android/**
+    - ios/**
+    - web/**
+    - windows/**
+    - macos/**
+    - linux/**
