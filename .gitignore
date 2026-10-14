@@ -175,6 +175,12 @@ backend/reports/
 *.sqlite
 *.sqlite3
 
+# Database dumps (backups hold real attendee data)
+*.dump
+
+# Local maintenance scripts and seeds (Padmanand's utils, never in git)
+utils/
+
 # =========================================================
 # TEST / REPORTS
 # =========================================================
