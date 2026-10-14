@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
+import '../features/checkin/check_in_screen.dart';
 import '../features/developer/presentation/developer_diagnostics_screen.dart';
 import '../features/foundation/presentation/foundation_ready_screen.dart';
 import '../features/events/presentation/screens/event_list_screen.dart';
@@ -104,6 +105,13 @@ abstract class AppRouter {
               final eventId = int.tryParse(idStr) ?? 0;
               return CheckoutScreen(eventId: eventId);
             },
+          ),
+          GoRoute(
+            path: AppRoutes.checkIn,
+            builder: (context, state) => CheckInScreen(
+              eventId: int.tryParse(state.pathParameters['eventId'] ?? '') ?? 0,
+              qrToken: state.pathParameters['token'] ?? '',
+            ),
           ),
           GoRoute(
             path: AppRoutes.privacy,

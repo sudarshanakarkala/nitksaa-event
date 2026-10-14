@@ -49,6 +49,7 @@ dependencies:
   file_saver: ^0.2.14
   fl_chart: ^1.0.0
   path_provider: ^2.1.5
+  qr_flutter: ^4.1.0
 
 dev_dependencies:
   flutter_test:

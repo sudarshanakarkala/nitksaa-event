@@ -14,6 +14,7 @@ import '../../../auth/services/auth_controller.dart';
 import '../../../admin/presentation/event_admin_actions.dart' show EventAdminActions;
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
+import '../widgets/entry_pass_qr.dart';
 import '../widgets/venue_section.dart';
 import '../../../../shared/widgets/form_fields.dart';
 import '../../../../shared/widgets/notice.dart';
@@ -2106,8 +2107,15 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
   void _showQRBadgeDialog(AppEvent event, String regNo, EventDetailState state) {
     final auth = ref.read(authControllerProvider);
-    final userName = state.alumniProfile?['fullname'] ?? auth.session?.fullname ?? 'Attendee';
-    final email = state.alumniProfile?['email'] ?? auth.session?.email ?? '';
+    final registration = state.myRegistration;
+    final userName = registration?['fullname_snapshot']?.toString() ??
+        state.alumniProfile?['fullname'] ??
+        auth.session?.fullname ??
+        'Attendee';
+    final email = registration?['email_snapshot']?.toString() ??
+        auth.session?.email ??
+        '';
+    final qrToken = registration?['qr_token']?.toString();
 
     showDialog(
       context: context,
@@ -2160,43 +2168,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                         ),
                       ],
                       const SizedBox(height: 16),
-                      ClipRRect(
-                        borderRadius: BorderRadius.circular(8),
-                        child: Image.network(
-                          'https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${Uri.encodeComponent(regNo.isNotEmpty ? regNo : "Event-${event.eventId}")}',
-                          width: 200,
-                          height: 200,
-                          loadingBuilder: (context, child, loadingProgress) {
-                            if (loadingProgress == null) return child;
-                            return Container(
-                              width: 200,
-                              height: 200,
-                              color: Colors.white,
-                              child: const Center(
-                                child: CircularProgressIndicator(),
-                              ),
-                            );
-                          },
-                          errorBuilder: (context, error, stackTrace) {
-                            return Container(
-                              width: 200,
-                              height: 200,
-                              color: Colors.white,
-                              child: const Column(
-                                mainAxisAlignment: MainAxisAlignment.center,
-                                children: [
-                                  Icon(Icons.qr_code, size: 80, color: Colors.black),
-                                  SizedBox(height: 8),
-                                  Text(
-                                    'QR Code Offline',
-                                    style: TextStyle(color: Colors.black, fontSize: 12),
-                                  ),
-                                ],
-                              ),
-                            );
-                          },
+                      if (qrToken != null && qrToken.isNotEmpty)
+                        EntryPassQr(eventId: event.eventId, qrToken: qrToken)
+                      else
+                        Text(
+                          'Your entry pass appears here once your registration is confirmed.',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
                         ),
-                      ),
                       const SizedBox(height: 16),
                       if (regNo.isNotEmpty)
                         Text(
