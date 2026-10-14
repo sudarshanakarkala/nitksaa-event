@@ -403,9 +403,14 @@ class FilterDateRange extends StatelessWidget {
     required this.value,
     required this.onChanged,
     this.presets = const [],
+    this.inline = false,
   });
 
   final String label;
+
+  /// On the page rather than in the rail (Admin → Events): presets, slider
+  /// and range on one line on wide screens, a clear × once set, no label.
+  final bool inline;
 
   /// The slider's ends (e.g. the earliest and latest event).
   final DateTime first;
@@ -439,6 +444,82 @@ class FilterDateRange extends StatelessWidget {
         ? RangeValues(0, (steps * step).toDouble())
         : RangeValues(pos(range.start), pos(range.end));
 
+    final chips = Wrap(
+      spacing: 6,
+      runSpacing: 6,
+      children: [
+        for (final (name, window) in presets)
+          FilterChipToggle(
+            label: name,
+            selected: range != null && _same(range, window),
+            onChanged: (on) => onChanged(on ? window : null),
+          ),
+      ],
+    );
+    final slider = RangeSlider(
+      values: values,
+      min: 0,
+      max: (steps * step).toDouble(),
+      divisions: steps,
+      labels: RangeLabels(formatShortDate(at(values.start)), formatShortDate(at(values.end))),
+      onChanged: (v) {
+        final start = at(v.start);
+        final end = at(v.end);
+        // Both handles at the ends: any date again.
+        final all = !start.isAfter(lo) && !end.isBefore(hi);
+        onChanged(all ? null : DateTimeRange(start: start, end: end));
+      },
+    );
+    final words = Text(
+      range == null
+          ? 'Any date'
+          : DateUtils.isSameDay(range.start, range.end)
+              ? formatDate(range.start)
+              : '${formatDate(range.start)} – ${formatDate(range.end)}',
+      style: AppTextStyles.bodySmall.copyWith(color: range == null ? p.textMuted : p.textSecondary),
+    );
+    final clear = range == null
+        ? null
+        : IconButton(
+            tooltip: 'Any date',
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            color: p.textMuted,
+            icon: const Icon(Icons.close),
+            onPressed: () => onChanged(null),
+          );
+
+    if (inline) {
+      final wide = MediaQuery.sizeOf(context).width >= 900;
+      final summary = Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(Icons.date_range_outlined, size: 18, color: p.textMuted),
+          const SizedBox(width: 6),
+          words,
+          ?clear,
+        ],
+      );
+      if (wide) {
+        return Row(
+          children: [
+            if (presets.isNotEmpty) ...[chips, const SizedBox(width: 12)],
+            Expanded(child: slider),
+            const SizedBox(width: 8),
+            SizedBox(width: 250, child: Align(alignment: Alignment.centerLeft, child: summary)),
+          ],
+        );
+      }
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (presets.isNotEmpty) chips,
+          slider,
+          Align(alignment: Alignment.centerLeft, child: summary),
+        ],
+      );
+    }
+
     return Padding(
       padding: const EdgeInsets.only(bottom: 20),
       child: Column(
@@ -446,41 +527,9 @@ class FilterDateRange extends StatelessWidget {
         children: [
           FilterLabel(label),
           const SizedBox(height: 8),
-          if (presets.isNotEmpty)
-            Wrap(
-              spacing: 6,
-              runSpacing: 6,
-              children: [
-                for (final (name, window) in presets)
-                  FilterChipToggle(
-                    label: name,
-                    selected: range != null && _same(range, window),
-                    onChanged: (on) => onChanged(on ? window : null),
-                  ),
-              ],
-            ),
-          RangeSlider(
-            values: values,
-            min: 0,
-            max: (steps * step).toDouble(),
-            divisions: steps,
-            labels: RangeLabels(formatShortDate(at(values.start)), formatShortDate(at(values.end))),
-            onChanged: (v) {
-              final start = at(v.start);
-              final end = at(v.end);
-              // Both handles at the ends: any date again.
-              final all = !start.isAfter(lo) && !end.isBefore(hi);
-              onChanged(all ? null : DateTimeRange(start: start, end: end));
-            },
-          ),
-          Text(
-            range == null
-                ? 'Any date'
-                : DateUtils.isSameDay(range.start, range.end)
-                    ? formatDate(range.start)
-                    : '${formatDate(range.start)} – ${formatDate(range.end)}',
-            style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
-          ),
+          if (presets.isNotEmpty) chips,
+          slider,
+          words,
         ],
       ),
     );

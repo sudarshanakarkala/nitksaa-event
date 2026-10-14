@@ -152,10 +152,11 @@ class DashboardApi {
   Future<DashboardData> load({
     required String accessToken,
     required DashboardPeriod period,
+    int? eventId,
   }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/admin/dashboard',
-      queryParameters: {'period': period.value},
+      queryParameters: {'period': period.value, 'event_id': ?eventId},
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
     return DashboardData.fromJson(response.data ?? const {});

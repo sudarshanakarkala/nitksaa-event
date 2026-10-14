@@ -33,7 +33,11 @@ class ListPage extends StatefulWidget {
     this.picker,
     this.reserveRail = true,
     this.wideActionOnPhone = false,
+    this.belowPills,
   });
+
+  /// A full-width line under the pills (Admin → Events: the date slider).
+  final Widget? belowPills;
 
   /// A choice before the pills, such as the event picker. On phones it gets
   /// its own full-width line above them.
@@ -224,8 +228,13 @@ class _ListPageState extends State<ListPage> {
               if (showTopRow || pickerOwnLine) const SizedBox(height: 12),
               pillRow,
             ],
+            if (widget.belowPills != null) ...[
+              if (showTopRow || pickerOwnLine || showPillRow) const SizedBox(height: 8),
+              widget.belowPills!,
+            ],
             if (widget.count != null || widget.actions.isNotEmpty) ...[
-              if (showTopRow || pickerOwnLine || showPillRow) const SizedBox(height: 12),
+              if (showTopRow || pickerOwnLine || showPillRow || widget.belowPills != null)
+                const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(

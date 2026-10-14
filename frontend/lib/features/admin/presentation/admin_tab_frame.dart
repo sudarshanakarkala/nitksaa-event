@@ -30,7 +30,12 @@ class AdminTabFrame extends StatelessWidget {
     this.onClearFilters,
     this.loading = false,
     this.bigActionOnPhone = false,
+    this.belowPills,
   });
+
+  /// A full-width line under the pills, for a tab that needs one (Events:
+  /// the date slider). Written down in ADMIN_LAYOUT_DESIGN.md §4.
+  final Widget? belowPills;
 
   final Widget? search;
   final Widget? toggle;
@@ -68,6 +73,7 @@ class AdminTabFrame extends StatelessWidget {
       count: count,
       actions: [?action],
       wideActionOnPhone: bigActionOnPhone,
+      belowPills: belowPills,
       filters: filters,
       onOpenFilters: onOpenFilters,
       activeFilterCount: activeFilterCount,

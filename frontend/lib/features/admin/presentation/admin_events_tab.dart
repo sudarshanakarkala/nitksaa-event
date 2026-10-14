@@ -196,7 +196,6 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
         _registration.isNotEmpty,
         _price.isNotEmpty,
         _mine,
-        _dates != null,
       ].where((on) => on).length;
 
   void _clearFilters() {
@@ -205,7 +204,6 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       _registration = const {};
       _price = const {};
       _mine = false;
-      _dates = null;
       _filter = _Filter.all;
       _search.clear();
     });
@@ -307,6 +305,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
               label: const Text('Create event'),
             )
           : null,
+      belowPills: _events.isEmpty ? null : _dateFilter(),
       filters: (context) => _filterRail(),
       onOpenFilters: () => showFilterSheet(
         context,
@@ -320,8 +319,8 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     );
   }
 
-  /// Starting between two dates: presets, then the slider over the events'
-  /// own dates.
+  /// Starting between two dates, on the page under the pills: presets, then
+  /// the slider over the events' own dates. Sort by works within it.
   Widget _dateFilter() {
     final today = DateUtils.dateOnly(DateTime.now());
     final starts = [for (final e in _events) DateUtils.dateOnly(e.startDatetime.toLocal())]..sort();
@@ -333,6 +332,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       ('This year', DateTimeRange(start: DateTime(today.year), end: DateTime(today.year, 12, 31))),
     ];
     return FilterDateRange(
+      inline: true,
       label: 'Starts',
       first: min(starts.first, today),
       last: max(starts.last, today.add(const Duration(days: 90))),
@@ -363,7 +363,6 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
             ],
           ),
           const SizedBox(height: 20),
-          if (_events.isNotEmpty) _dateFilter(),
           FilterChipSection(
             label: 'Event mode',
             options: const {'in_person': 'In person', 'online': 'Online'},
@@ -412,7 +411,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       return StateMessage(
         icon: searching ? Icons.search_off : Icons.event_note_outlined,
         title: searching ? 'No events match your search' : 'No ${_filter.label.toLowerCase()} events',
-        body: _filter == _Filter.all && !searching && _activeFilterCount == 0
+        body: _filter == _Filter.all && !searching && _activeFilterCount == 0 && _dates == null
             ? (_access.isEventCreator
                 ? 'Create an event to get started.'
                 : 'You\'re not an admin of any events yet.')

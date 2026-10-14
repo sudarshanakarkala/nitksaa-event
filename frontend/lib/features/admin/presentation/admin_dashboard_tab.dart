@@ -14,7 +14,9 @@ import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/services/auth_controller.dart';
 import '../data/dashboard_api.dart';
+import '../../events/data/events_repository.dart';
 import 'admin_tab_frame.dart';
+import 'admin_widgets.dart';
 import '../domain/registration_filters.dart' show formatDate;
 import '../../../shared/format.dart';
 
@@ -34,6 +36,10 @@ class AdminDashboardTab extends ConsumerStatefulWidget {
 
 class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
   DashboardPeriod _period = DashboardPeriod.days30;
+
+  /// One event ("how is it going?"), or [adminAllEvents] for the overview.
+  int _event = adminAllEvents;
+  List<AdminEventOption> _events = const [];
   DashboardData? _data;
   bool _loading = true;
   String? _error;
@@ -41,27 +47,54 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(_load);
+    Future.microtask(() {
+      _load();
+      _loadEvents();
+    });
+  }
+
+  /// For the picker; best effort (the overview works without it).
+  Future<void> _loadEvents() async {
+    final token = ref.read(authControllerProvider).session?.accessToken;
+    if (token == null) return;
+    try {
+      final all = await ref.read(eventsRepositoryProvider).getAllAdminEvents(token);
+      all.sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
+      if (mounted) setState(() => _events = [for (final e in all) AdminEventOption.of(e)]);
+    } catch (error) {
+      AppLogger.warning('Admin dashboard: events not loaded: $error');
+    }
+  }
+
+  void _setEvent(int id) {
+    if (id == _event) return;
+    setState(() => _event = id);
+    _load();
   }
 
   Future<void> _load() async {
     final token = ref.read(authControllerProvider).session?.accessToken;
     if (token == null) return;
     final period = _period;
+    final event = _event;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final data = await ref.read(dashboardApiProvider).load(accessToken: token, period: period);
-      if (!mounted || period != _period) return;
+      final data = await ref.read(dashboardApiProvider).load(
+            accessToken: token,
+            period: period,
+            eventId: event == adminAllEvents ? null : event,
+          );
+      if (!mounted || period != _period || event != _event) return;
       setState(() {
         _data = data;
         _loading = false;
       });
     } catch (error, stackTrace) {
       AppLogger.error('Admin dashboard: load failed', error, stackTrace);
-      if (!mounted || period != _period) return;
+      if (!mounted || period != _period || event != _event) return;
       setState(() {
         _loading = false;
         _error = apiErrorMessage(error, action: 'load the dashboard');
@@ -88,11 +121,30 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
         ],
       );
 
+  Widget _rail() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const FilterLabel('Event'),
+          const SizedBox(height: 8),
+          AdminEventPicker(options: _events, selected: _event, onChanged: _setEvent),
+          const SizedBox(height: 20),
+          const FilterLabel('Period'),
+          const SizedBox(height: 8),
+          _periodChips(),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
     // No search or count line: an overview. The Filters icon sits at the
     // end of the period pills.
     return AdminTabFrame(
+      picker: AdminEventPicker(
+        options: _events,
+        selected: _event,
+        onChanged: _setEvent,
+        width: AdminTabFrame.pickerWidth(context),
+      ),
       pills: [
         for (final p in DashboardPeriod.values)
           QuickFilterPill(
@@ -101,27 +153,16 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
             onTap: () => _setPeriod(p),
           ),
       ],
-      filters: (context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const FilterLabel('Period'),
-          const SizedBox(height: 8),
-          _periodChips(),
-        ],
-      ),
-      onOpenFilters: () => showFilterSheet(
-        context,
-        builder: (_) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const FilterLabel('Period'),
-            const SizedBox(height: 8),
-            _periodChips(),
-          ],
-        ),
-      ),
-      activeFilterCount: _period == DashboardPeriod.days30 ? 0 : 1,
-      onClearFilters: () => _setPeriod(DashboardPeriod.days30),
+      filters: (context) => _rail(),
+      onOpenFilters: () => showFilterSheet(context, builder: (_) => _rail()),
+      activeFilterCount: [_period != DashboardPeriod.days30, _event != adminAllEvents].where((on) => on).length,
+      onClearFilters: () {
+        setState(() {
+          _period = DashboardPeriod.days30;
+          _event = adminAllEvents;
+        });
+        _load();
+      },
       loading: _loading && _data != null,
       body: _body(),
     );
@@ -180,7 +221,8 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
               _Tiles(
                 width: inner,
                 tiles: [
-                  _TileData('Upcoming events', '${data.upcomingEvents}', 'Not yet ended · see Events',
+                  if (_event == adminAllEvents)
+                    _TileData('Upcoming events', '${data.upcomingEvents}', 'Not yet ended · see Events',
                       onTap: () => context.go('/admin/events')),
                   _TileData('Registrations', '${data.registrations}', _period.label),
                   _TileData('Cancellations', '${data.cancellations}', _period.label),
@@ -233,7 +275,7 @@ class _Tiles extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final perRow = width >= 760 ? 4 : 2;
+    final perRow = width >= 760 ? tiles.length.clamp(1, 4) : 2;
     const gap = 16.0;
     final tileWidth = (width - gap * (perRow - 1)) / perRow;
     return Wrap(
