@@ -97,6 +97,12 @@ class _AdminGridTableState<T> extends State<AdminGridTable<T>> {
   final _horizontal = ScrollController();
   int? _hovered;
 
+  // Column widths, measured over every row and kept until the rows
+  // themselves (not their order) or the available width change, so sorting
+  // never resizes the table.
+  Object? _widthsKey;
+  List<double> _cachedWidths = const [];
+
   @override
   void dispose() {
     _vertical.dispose();
@@ -123,6 +129,17 @@ class _AdminGridTableState<T> extends State<AdminGridTable<T>> {
   /// Column widths from the text they hold (a sample of the rows), capped,
   /// then stretched to fill [available] when the table is narrower.
   List<double> _widths(AppPalette p, double available) {
+    final key = Object.hash(
+      available.round(),
+      Object.hashAll(widget.columns.map((c) => c.id)),
+      Object.hashAllUnordered(widget.rows),
+    );
+    if (key == _widthsKey) return _cachedWidths;
+    _widthsKey = key;
+    return _cachedWidths = _measure(p, available);
+  }
+
+  List<double> _measure(AppPalette p, double available) {
     final head = adminHeadStyle(p);
     final cell = adminCellStyle(p);
     double measure(String s, TextStyle style) {
@@ -134,7 +151,6 @@ class _AdminGridTableState<T> extends State<AdminGridTable<T>> {
       return tp.width;
     }
 
-    final sample = widget.rows.length > 300 ? widget.rows.sublist(0, 300) : widget.rows;
     final widths = <double>[];
     final fixed = <bool>[];
     for (final c in widget.columns) {
@@ -146,7 +162,7 @@ class _AdminGridTableState<T> extends State<AdminGridTable<T>> {
       }
       var widest = headWidth;
       final style = _isFirst(c) ? cell.copyWith(fontWeight: FontWeight.w600) : cell;
-      for (final row in sample) {
+      for (final row in widget.rows) {
         final w = measure(c.text(row), style);
         if (w > widest) widest = w;
         if (widest >= AdminGridTable._maxTextWidth) break;
@@ -433,7 +449,7 @@ class _AdminGridTableState<T> extends State<AdminGridTable<T>> {
 
                     // Visible scrollbars both ways; the table can also be
                     // dragged with the mouse (otherwise nothing says it scrolls).
-                    return ScrollConfiguration(
+                    final scrollable = ScrollConfiguration(
                       behavior: ScrollConfiguration.of(context).copyWith(
                         dragDevices: const {
                           PointerDeviceKind.touch,
@@ -452,6 +468,72 @@ class _AdminGridTableState<T> extends State<AdminGridTable<T>> {
                           child: table,
                         ),
                       ),
+                    );
+                    // Cues that the table scrolls sideways: a fade on the
+                    // right while columns are hidden there, and a shadow
+                    // beside the frozen column once scrolled.
+                    final frozenWidth = widths.take(frozen).fold<double>(0, (a, b) => a + b);
+                    return Stack(
+                      children: [
+                        // Size changes (first layout, a resize) don't move the
+                        // scroll position, so redraw the cues on those too.
+                        Positioned.fill(
+                          child: NotificationListener<ScrollMetricsNotification>(
+                            onNotification: (n) {
+                              if (n.metrics.axis == Axis.horizontal) setState(() {});
+                              return false;
+                            },
+                            child: scrollable,
+                          ),
+                        ),
+                        ListenableBuilder(
+                          listenable: _horizontal,
+                          builder: (context, _) {
+                            final has = _horizontal.hasClients && _horizontal.position.hasContentDimensions;
+                            final after = has ? _horizontal.position.extentAfter : 0.0;
+                            final before = has ? _horizontal.position.extentBefore : 0.0;
+                            return Stack(
+                              children: [
+                                if (after > 1)
+                                  Positioned(
+                                    top: 0,
+                                    bottom: 0,
+                                    right: 0,
+                                    width: 36,
+                                    child: IgnorePointer(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [base.withValues(alpha: 0), base],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                if (before > 1 && frozen > 0)
+                                  Positioned(
+                                    top: 0,
+                                    bottom: 0,
+                                    left: frozenWidth,
+                                    width: 10,
+                                    child: IgnorePointer(
+                                      child: DecoratedBox(
+                                        decoration: BoxDecoration(
+                                          gradient: LinearGradient(
+                                            colors: [
+                                              p.overlay.withValues(alpha: 0.35),
+                                              p.overlay.withValues(alpha: 0),
+                                            ],
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            );
+                          },
+                        ),
+                      ],
                     );
                   },
                 ),

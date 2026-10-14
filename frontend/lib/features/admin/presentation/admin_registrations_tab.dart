@@ -355,7 +355,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
           ),
           GridColumn(
             id: 'emailStatus',
-            label: 'Confirmation email',
+            label: 'Confirmation',
             kind: ColumnKind.category,
             value: (r) => confirmationEmailLabel(r.confirmationEmailStatus),
             width: 110,
