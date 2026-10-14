@@ -5,6 +5,9 @@
       "hosting": {
         "events": [
           "nitksaa-events"
+        ],
+        "beta": [
+          "nitksaa-events-beta"
         ]
       }
     }
