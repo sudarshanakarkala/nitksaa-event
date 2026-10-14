@@ -123,6 +123,46 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
+  /// A rail section of on/off chips over "included" flags: [included] maps
+  /// each option to whether its events are shown (all true = no filter).
+  ///
+  /// A chip is lit only when it narrows the list, so a fresh page shows none
+  /// lit. Clicking one when none is lit shows only that option; clicking a
+  /// lit one takes it off again (the last one off means all again).
+  List<Widget> _includeChips(
+    String label,
+    Map<String, String> options,
+    Map<String, bool> included,
+    void Function(String key) toggle,
+  ) {
+    bool on(String key) => included[key] ?? true;
+    final all = options.keys.every(on);
+    void tap(String key) {
+      final wanted = all
+          ? {key}
+          : {for (final k in options.keys) if (on(k) != (k == key)) k};
+      // Nothing left means no filter: everything shown again.
+      final target = wanted.isEmpty ? options.keys.toSet() : wanted;
+      for (final k in options.keys) {
+        if (on(k) != target.contains(k)) toggle(k);
+      }
+    }
+
+    return [
+      FilterLabel(label),
+      const SizedBox(height: 8),
+      Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final MapEntry(:key, :value) in options.entries)
+          FilterChipToggle(
+            label: value,
+            selected: !all && on(key),
+            onChanged: (_) => tap(key),
+          ),
+      ]),
+      const SizedBox(height: 20),
+    ];
+  }
+
   /// Active filters, for the rail badge (search is not counted).
   int _activeFilterCount(EventsState s) => [
         s.period == 'past',
@@ -286,75 +326,28 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           _buildTimelineDropdown(rf, state, isInDrawer),
           const SizedBox(height: 20),
 
-          // Event Mode Section (website chips)
-          const FilterLabel('Event Mode'),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-          FilterChipToggle(
-            label: 'Physical',
-            selected: state.filterModes['physical'] ?? true,
-            onChanged: (val) {
-              final current = state.filterModes['physical'] ?? true;
-              if (val != current) {
-                rf.read(eventsProvider.notifier).toggleFilterMode('physical');
-              }
-            },
+          // Event mode, registration status and price work like the website's
+          // chips: none lit = all; lit = only those. The provider keeps
+          // "included" flags (all included = no filter); _includeChips maps
+          // between the two.
+          ..._includeChips(
+            'Event Mode',
+            const {'physical': 'Physical', 'virtual': 'Virtual'},
+            state.filterModes,
+            rf.read(eventsProvider.notifier).toggleFilterMode,
           ),
-          FilterChipToggle(
-            label: 'Virtual',
-            selected: state.filterModes['virtual'] ?? true,
-            onChanged: (val) {
-              final current = state.filterModes['virtual'] ?? true;
-              if (val != current) {
-                rf.read(eventsProvider.notifier).toggleFilterMode('virtual');
-              }
-            },
+          ..._includeChips(
+            'Registration Status',
+            const {'open': 'Open', 'closed': 'Closed'},
+            state.filterRegistrationStatus,
+            rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus,
           ),
-          ]),
-          const SizedBox(height: 20),
-
-          // Registration Status Section (website chips)
-          const FilterLabel('Registration Status'),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-          FilterChipToggle(
-            label: 'Open',
-            selected: state.filterRegistrationStatus['open'] ?? true,
-            onChanged: (val) {
-              final current = state.filterRegistrationStatus['open'] ?? true;
-              if (val != current) {
-                rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus('open');
-              }
-            },
+          ..._includeChips(
+            'Price',
+            const {'free': 'Free', 'paid': 'Paid'},
+            state.filterPrice,
+            rf.read(eventsProvider.notifier).toggleFilterPrice,
           ),
-          FilterChipToggle(
-            label: 'Closed',
-            selected: state.filterRegistrationStatus['closed'] ?? true,
-            onChanged: (val) {
-              final current = state.filterRegistrationStatus['closed'] ?? true;
-              if (val != current) {
-                rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus('closed');
-              }
-            },
-          ),
-          ]),
-          const SizedBox(height: 20),
-
-          // Price Section (website chips)
-          const FilterLabel('Price'),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final (key, label) in const [('free', 'Free'), ('paid', 'Paid')])
-              FilterChipToggle(
-                label: label,
-                selected: state.filterPrice[key] ?? true,
-                onChanged: (val) {
-                  if (val != (state.filterPrice[key] ?? true)) {
-                    rf.read(eventsProvider.notifier).toggleFilterPrice(key);
-                  }
-                },
-              ),
-          ]),
           const SizedBox(height: 24),
 
           // Drawer-only clear button removed — top 'Clear All' handles clearing.
