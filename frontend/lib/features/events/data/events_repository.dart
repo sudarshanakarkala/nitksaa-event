@@ -285,22 +285,25 @@ class EventsRepository {
         .map((json) => MyEventRegistration.fromJson(json as Map<String, dynamic>))
         .toList();
 
-    // Each event once, however many of your registrations it has.
-    final events = <int, AppEvent?>{};
-    final hydrated = <MyEventRegistration>[];
-    for (final registration in registrations) {
-      final id = registration.eventId;
-      if (!events.containsKey(id)) {
-        try {
-          events[id] = await getPublicEvent(id);
-        } on DioException {
-          events[id] = null;
-        }
+    // Each event once, however many of your registrations it has, and all
+    // of them at the same time rather than one after another.
+    Future<AppEvent?> fetch(int id) async {
+      try {
+        return await getPublicEvent(id);
+      } on DioException {
+        return null;
       }
-      final event = events[id];
-      hydrated.add(event == null ? registration : registration.copyWith(publicEvent: event));
     }
-    return hydrated;
+
+    final ids = {for (final r in registrations) r.eventId}.toList();
+    final fetched = await Future.wait(ids.map(fetch));
+    final events = {for (var i = 0; i < ids.length; i++) ids[i]: fetched[i]};
+    return [
+      for (final registration in registrations)
+        events[registration.eventId] == null
+            ? registration
+            : registration.copyWith(publicEvent: events[registration.eventId]),
+    ];
   }
 
   /// Cancels one of the attendee's own registrations. If it was paid for, the

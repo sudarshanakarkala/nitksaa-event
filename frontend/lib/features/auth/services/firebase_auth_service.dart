@@ -83,9 +83,13 @@ abstract class FirebaseAuthService {
     return credential.user;
   }
 
-  static Future<String> freshIdToken() async {
+  /// The signed-in user's ID token. Right after a sign-in Firebase has just
+  /// issued it, so it isn't refreshed again (forcing that cost a second
+  /// round trip, 0.6–1 s, on every sign-in); Firebase still renews an
+  /// expired one by itself.
+  static Future<String> idToken() async {
     final user = FirebaseAuth.instance.currentUser;
-    final token = await user?.getIdToken(true);
+    final token = await user?.getIdToken();
     if (user == null || token == null || token.isEmpty) {
       throw StateError('Firebase user or ID token is unavailable.');
     }
