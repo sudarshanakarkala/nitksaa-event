@@ -284,6 +284,19 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
             active: f == _filter,
             onTap: () => setState(() => _filter = f),
           ),
+        // Quick filters by type, then capacity (the date is on the line
+        // below). The table sorts by its headings; phones use the menu on
+        // the count line, as the pill row scrolls sideways there.
+        if (!compact && _view == _View.cards) ...[
+          const _PillDivider(),
+          const _PillLabel('Sort'),
+          for (final o in _Order.values)
+            QuickFilterPill(
+              label: o.label,
+              active: o == _order,
+              onTap: () => setState(() => _order = o),
+            ),
+        ],
       ],
       count: _loading && _events.isEmpty
           ? null
@@ -291,8 +304,8 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
               mainAxisSize: MainAxisSize.min,
               children: [
                 ResultCount(count: visible.length, one: 'event', many: 'events'),
-                // Cards only; the table sorts by its headings.
-                if (compact || _view == _View.cards) ...[
+                // Phones: the sort pills would be off-screen in the row.
+                if (compact) ...[
                   const SizedBox(width: 16),
                   _OrderMenu(order: _order, onChanged: (o) => setState(() => _order = o)),
                 ],
@@ -687,4 +700,27 @@ class _OrderMenu extends StatelessWidget {
       ],
     );
   }
+}
+
+/// Thin upright line between the type pills and the sort pills.
+class _PillDivider extends StatelessWidget {
+  const _PillDivider();
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        child: SizedBox(height: 22, child: VerticalDivider(width: 1, color: context.palette.border)),
+      );
+}
+
+class _PillLabel extends StatelessWidget {
+  const _PillLabel(this.text);
+
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(
+        text,
+        style: AppTextStyles.bodySmall.copyWith(color: context.palette.textMuted),
+      );
 }

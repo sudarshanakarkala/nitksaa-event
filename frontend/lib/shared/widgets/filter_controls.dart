@@ -388,13 +388,54 @@ class _FilterYearRangeState extends State<FilterYearRange> {
   }
 }
 
-/// A date range in the Filters rail: preset chips for the common windows,
-/// then a slider with two handles over the dates that occur, and the chosen
-/// range in words. Null means any date.
+/// Reads a typed date: "15 Nov", "15 November", "15/11", "15-11-26",
+/// "15 Nov 2026" or "15/11/2026" (day first). With no year it takes the next
+/// one on or after [today]. Null when it isn't a date.
+DateTime? parseFilterDate(String text, DateTime today) {
+  final t = text.trim().toLowerCase().replaceAll(',', ' ');
+  if (t.isEmpty) return null;
+  int? day;
+  int? month;
+  int? year;
+  final numeric = RegExp(r'^(\d{1,2})[\/\-. ](\d{1,2})(?:[\/\-. ](\d{2}|\d{4}))?$').firstMatch(t);
+  final named = RegExp(r'^(\d{1,2})\s*([a-z]{3,})\.?(?:\s+(\d{2}|\d{4}))?$').firstMatch(t);
+  if (numeric != null) {
+    day = int.parse(numeric.group(1)!);
+    month = int.parse(numeric.group(2)!);
+    year = numeric.group(3) == null ? null : int.parse(numeric.group(3)!);
+  } else if (named != null) {
+    day = int.parse(named.group(1)!);
+    final name = named.group(2)!;
+    for (var m = 0; m < 12; m++) {
+      if (name.startsWith(monthNames[m].toLowerCase())) month = m + 1;
+    }
+    year = named.group(3) == null ? null : int.parse(named.group(3)!);
+  }
+  if (day == null || month == null || month < 1 || month > 12 || day < 1) return null;
+  if (year != null && year < 100) year += 2000;
+  DateTime make(int y) => DateTime(y, month!, day!);
+  bool real(DateTime d) => d.month == month && d.day == day; // no 31 Feb
+  if (year != null) {
+    final d = make(year);
+    return real(d) ? d : null;
+  }
+  final start = DateTime(today.year, today.month, today.day);
+  var d = make(today.year);
+  if (d.isBefore(start)) d = make(today.year + 1);
+  return real(d) ? d : null;
+}
+
+/// A date range: preset chips for the common windows, a slider with two
+/// handles over the dates that occur, and the range. Null means any date.
+///
+/// In the Filters rail the range shows in words. [inline] (on the page,
+/// Admin → Events) puts it all on one line on wide screens, with From and
+/// To boxes you can type into ("15 Nov") and a clear ×; an empty box means
+/// no limit on that side.
 ///
 /// The handles snap to days, or to weeks on phones, where a finger can't
 /// land on one day. Each handle shows its date while dragged.
-class FilterDateRange extends StatelessWidget {
+class FilterDateRange extends StatefulWidget {
   const FilterDateRange({
     super.key,
     required this.label,
@@ -407,9 +448,6 @@ class FilterDateRange extends StatelessWidget {
   });
 
   final String label;
-
-  /// On the page rather than in the rail (Admin → Events): presets, slider
-  /// and range on one line on wide screens, a clear × once set, no label.
   final bool inline;
 
   /// The slider's ends (e.g. the earliest and latest event).
@@ -422,24 +460,111 @@ class FilterDateRange extends StatelessWidget {
   /// One-tap windows, e.g. ('Next 30 days', range). Tap the lit one to clear.
   final List<(String, DateTimeRange)> presets;
 
+  @override
+  State<FilterDateRange> createState() => _FilterDateRangeState();
+}
+
+class _FilterDateRangeState extends State<FilterDateRange> {
+  final _from = TextEditingController();
+  final _to = TextEditingController();
+  final _fromFocus = FocusNode();
+  final _toFocus = FocusNode();
+  bool _fromBad = false;
+  bool _toBad = false;
+
   static DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static bool _same(DateTimeRange a, DateTimeRange b) =>
       DateUtils.isSameDay(a.start, b.start) && DateUtils.isSameDay(a.end, b.end);
 
+  DateTime get _lo => _day(widget.first.isBefore(widget.last) ? widget.first : widget.last);
+
+  int get _step => MediaQuery.sizeOf(context).width < 600 ? 7 : 1;
+
+  int get _steps => (_day(widget.last).difference(_lo).inDays.abs() / _step).ceil().clamp(1, 100000);
+
+  DateTime get _hi => _lo.add(Duration(days: _steps * _step));
+
+  @override
+  void initState() {
+    super.initState();
+    _fill();
+    _fromFocus.addListener(() {
+      if (!_fromFocus.hasFocus) _typed();
+    });
+    _toFocus.addListener(() {
+      if (!_toFocus.hasFocus) _typed();
+    });
+  }
+
+  @override
+  void didUpdateWidget(FilterDateRange old) {
+    super.didUpdateWidget(old);
+    if (old.value != widget.value) _fill();
+  }
+
+  @override
+  void dispose() {
+    _from.dispose();
+    _to.dispose();
+    _fromFocus.dispose();
+    _toFocus.dispose();
+    super.dispose();
+  }
+
+  /// The boxes show the range (blank for an open end), except while typed in.
+  void _fill() {
+    final v = widget.value;
+    String show(DateTime? d) => d == null ? '' : formatDate(d);
+    if (!_fromFocus.hasFocus) {
+      _from.text = show(v == null || !v.start.isAfter(_loSafe) ? null : v.start);
+      _fromBad = false;
+    }
+    if (!_toFocus.hasFocus) {
+      _to.text = show(v == null || !v.end.isBefore(_hiSafe) ? null : v.end);
+      _toBad = false;
+    }
+  }
+
+  // Bounds without MediaQuery (usable from initState): whole days.
+  DateTime get _loSafe => _lo;
+  DateTime get _hiSafe => _day(widget.last.isAfter(widget.first) ? widget.last : widget.first);
+
+  void _typed() {
+    final today = DateTime.now();
+    final fromText = _from.text.trim();
+    final toText = _to.text.trim();
+    final from = fromText.isEmpty ? null : parseFilterDate(fromText, today);
+    var to = toText.isEmpty ? null : parseFilterDate(toText, today);
+    setState(() {
+      _fromBad = fromText.isNotEmpty && from == null;
+      _toBad = toText.isNotEmpty && to == null;
+    });
+    if (_fromBad || _toBad) return;
+    // "To" with no year before "From": the year after.
+    if (from != null && to != null && to.isBefore(from) && !RegExp(r'\d{4}|[\/\-. ]\d{2}$').hasMatch(toText)) {
+      to = DateTime(to.year + 1, to.month, to.day);
+    }
+    if (from == null && to == null) {
+      widget.onChanged(null);
+      return;
+    }
+    final start = from ?? (to != null && to.isBefore(_loSafe) ? to : _loSafe);
+    final end = to ?? (from != null && from.isAfter(_hiSafe) ? from : _hiSafe);
+    widget.onChanged(start.isAfter(end) ? DateTimeRange(start: end, end: start) : DateTimeRange(start: start, end: end));
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final step = MediaQuery.sizeOf(context).width < 600 ? 7 : 1;
-
-    final lo = _day(first.isBefore(last) ? first : last);
-    final steps = ((_day(last).difference(lo).inDays.abs()) / step).ceil().clamp(1, 100000);
-    final hi = lo.add(Duration(days: steps * step));
+    final step = _step;
+    final steps = _steps;
+    final lo = _lo;
+    final hi = _hi;
     DateTime at(double v) => lo.add(Duration(days: v.round()));
-    double pos(DateTime d) =>
-        _day(d).difference(lo).inDays.clamp(0, steps * step).toDouble();
+    double pos(DateTime d) => _day(d).difference(lo).inDays.clamp(0, steps * step).toDouble();
 
-    final range = value;
+    final range = widget.value;
     final values = range == null
         ? RangeValues(0, (steps * step).toDouble())
         : RangeValues(pos(range.start), pos(range.end));
@@ -448,11 +573,11 @@ class FilterDateRange extends StatelessWidget {
       spacing: 6,
       runSpacing: 6,
       children: [
-        for (final (name, window) in presets)
+        for (final (name, window) in widget.presets)
           FilterChipToggle(
             label: name,
             selected: range != null && _same(range, window),
-            onChanged: (on) => onChanged(on ? window : null),
+            onChanged: (on) => widget.onChanged(on ? window : null),
           ),
       ],
     );
@@ -467,71 +592,100 @@ class FilterDateRange extends StatelessWidget {
         final end = at(v.end);
         // Both handles at the ends: any date again.
         final all = !start.isAfter(lo) && !end.isBefore(hi);
-        onChanged(all ? null : DateTimeRange(start: start, end: end));
+        widget.onChanged(all ? null : DateTimeRange(start: start, end: end));
       },
     );
-    final words = Text(
-      range == null
-          ? 'Any date'
-          : DateUtils.isSameDay(range.start, range.end)
-              ? formatDate(range.start)
-              : '${formatDate(range.start)} – ${formatDate(range.end)}',
-      style: AppTextStyles.bodySmall.copyWith(color: range == null ? p.textMuted : p.textSecondary),
-    );
-    final clear = range == null
-        ? null
-        : IconButton(
+
+    if (!widget.inline) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FilterLabel(widget.label),
+            const SizedBox(height: 8),
+            if (widget.presets.isNotEmpty) chips,
+            slider,
+            Text(
+              range == null
+                  ? 'Any date'
+                  : DateUtils.isSameDay(range.start, range.end)
+                      ? formatDate(range.start)
+                      : '${formatDate(range.start)} – ${formatDate(range.end)}',
+              style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+            ),
+          ],
+        ),
+      );
+    }
+
+    Widget box(TextEditingController c, FocusNode f, String hint, bool bad) => SizedBox(
+          width: 118,
+          child: TextField(
+            controller: c,
+            focusNode: f,
+            onSubmitted: (_) => _typed(),
+            textInputAction: TextInputAction.done,
+            style: AppTextStyles.bodySmall.copyWith(color: p.textPrimary),
+            decoration: InputDecoration(
+              hintText: hint,
+              isDense: true,
+              contentPadding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+              enabledBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide(color: bad ? p.error : p.border),
+              ),
+              focusedBorder: OutlineInputBorder(
+                borderRadius: BorderRadius.circular(6),
+                borderSide: BorderSide(color: bad ? p.error : p.primary),
+              ),
+            ),
+          ),
+        );
+    final boxes = Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Tooltip(
+          message: 'Type a date, e.g. 15 Nov',
+          child: box(_from, _fromFocus, 'From', _fromBad),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text('–', style: TextStyle(color: p.textMuted)),
+        ),
+        Tooltip(
+          message: 'Type a date, e.g. 31 Dec',
+          child: box(_to, _toFocus, 'To', _toBad),
+        ),
+        if (range != null)
+          IconButton(
             tooltip: 'Any date',
             visualDensity: VisualDensity.compact,
             iconSize: 16,
             color: p.textMuted,
             icon: const Icon(Icons.close),
-            onPressed: () => onChanged(null),
-          );
+            onPressed: () => widget.onChanged(null),
+          ),
+      ],
+    );
 
-    if (inline) {
-      final wide = MediaQuery.sizeOf(context).width >= 900;
-      final summary = Row(
-        mainAxisSize: MainAxisSize.min,
+    if (MediaQuery.sizeOf(context).width >= 900) {
+      return Row(
         children: [
-          Icon(Icons.date_range_outlined, size: 18, color: p.textMuted),
-          const SizedBox(width: 6),
-          words,
-          ?clear,
-        ],
-      );
-      if (wide) {
-        return Row(
-          children: [
-            if (presets.isNotEmpty) ...[chips, const SizedBox(width: 12)],
-            Expanded(child: slider),
-            const SizedBox(width: 8),
-            SizedBox(width: 250, child: Align(alignment: Alignment.centerLeft, child: summary)),
-          ],
-        );
-      }
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (presets.isNotEmpty) chips,
-          slider,
-          Align(alignment: Alignment.centerLeft, child: summary),
+          if (widget.presets.isNotEmpty) ...[chips, const SizedBox(width: 12)],
+          Expanded(child: slider),
+          const SizedBox(width: 8),
+          boxes,
         ],
       );
     }
-
-    return Padding(
-      padding: const EdgeInsets.only(bottom: 20),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          FilterLabel(label),
-          const SizedBox(height: 8),
-          if (presets.isNotEmpty) chips,
-          slider,
-          words,
-        ],
-      ),
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (widget.presets.isNotEmpty) chips,
+        slider,
+        Align(alignment: Alignment.centerLeft, child: boxes),
+      ],
     );
   }
 }
