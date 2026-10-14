@@ -14,8 +14,8 @@ class AnswerTable extends StatelessWidget {
   final NitikaTable table;
 
   static const previewRows = 20;
-  static const truncatedNote =
-      'First 200 rows. Use Manage Events or ask an admin SQL query for more.';
+  /// Shown when NITiKa cut the list short (it sends at most 20 or 200 rows).
+  static String truncatedNote(int rows) => 'First $rows rows.';
 
   @override
   Widget build(BuildContext context) {
@@ -71,7 +71,7 @@ class AnswerTable extends StatelessWidget {
             ),
           ],
         ),
-        if (table.truncated) Text(truncatedNote, style: muted),
+        if (table.truncated) Text(truncatedNote(table.rows.length), style: muted),
       ],
     );
   }
@@ -128,7 +128,7 @@ class _FullTable extends StatelessWidget {
             Padding(
               padding: const EdgeInsets.all(12),
               child: Text(
-                AnswerTable.truncatedNote,
+                AnswerTable.truncatedNote(table.rows.length),
                 style: TextStyle(color: p.textMuted, fontSize: 12),
               ),
             ),
