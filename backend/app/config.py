@@ -21,6 +21,9 @@ class Settings(BaseSettings):
     app_name: str = Field("NITKSAA Event API", alias="APP_NAME")
     app_version: str = Field("0.1.0-alpha", alias="APP_VERSION")
     allowed_origins: str = Field("http://localhost:5173", alias="ALLOWED_ORIGINS")
+    # API docs (/docs, /redoc, /openapi.json): on everywhere except
+    # production. DOCS_ENABLED=true turns them on in production for a while.
+    docs_enabled_raw: Optional[bool] = Field(None, alias="DOCS_ENABLED")
 
     # Database
     db_host: str = Field("127.0.0.1", alias="DB_HOST")
@@ -182,6 +185,12 @@ class Settings(BaseSettings):
             for uid in self.platform_admin_firebase_uids_raw.split(",")
             if uid.strip()
         ]
+
+    @property
+    def docs_enabled(self) -> bool:
+        if self.docs_enabled_raw is not None:
+            return self.docs_enabled_raw
+        return self.app_env != "production"
 
     def _postgres_url(self, database: str) -> str:
         user = quote(self.db_user, safe="")
