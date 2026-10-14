@@ -23,6 +23,9 @@ abstract class RouteGuards {
     // Policy and feedback pages open directly, even while sign-in is still
     // being checked, so links and page refreshes land on the right page.
     if (AppRoutes.publicPages.contains(location)) return null;
+    // An entry pass link (often opened by a phone camera, from a cold start)
+    // stays on its page; the page waits for sign-in itself.
+    if (location.startsWith(AppRoutes.checkInPrefix)) return null;
 
     if (auth.isChecking) {
       return isSplash ? null : AppRoutes.splash;

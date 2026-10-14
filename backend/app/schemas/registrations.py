@@ -57,6 +57,8 @@ class RegistrationResponse(BaseModel):
       hold_expires_at  — only meaningful while status is a hold-bearing state
                          (seat_held/payment_pending/payment_verification/payment_failed);
                          None once registered/cancelled
+      qr_token         — the attendee's own check-in token (their entry pass QR);
+                         only present while status is 'registered'
       latest_order_id  — the most recent payment_orders.public_order_number for this
                          registration, any order status (created/payment_pending/paid/
                          expired/cancelled). None if no order was ever created (e.g. a
@@ -89,6 +91,7 @@ class RegistrationResponse(BaseModel):
     event: Optional[EventSummary] = None
     updated_at: Optional[datetime] = None
     latest_order_id: Optional[str] = None
+    qr_token: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
