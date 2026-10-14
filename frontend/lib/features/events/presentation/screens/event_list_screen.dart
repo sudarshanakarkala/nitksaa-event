@@ -72,7 +72,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   @override
   void didChangeDependencies() {
     super.didChangeDependencies();
-    // Account menu "My Events" links to /home?mine=1. Applied once per URL,
+    // /home?mine=1 opens with "Registered by me" on. Applied once per URL,
     // so resizing (which also lands here) doesn't re-apply it.
     final uri = GoRouterState.of(context).uri;
     if (uri.toString() == _appliedUri) return;

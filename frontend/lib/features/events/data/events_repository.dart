@@ -285,14 +285,20 @@ class EventsRepository {
         .map((json) => MyEventRegistration.fromJson(json as Map<String, dynamic>))
         .toList();
 
+    // Each event once, however many of your registrations it has.
+    final events = <int, AppEvent?>{};
     final hydrated = <MyEventRegistration>[];
     for (final registration in registrations) {
-      try {
-        final event = await getPublicEvent(registration.eventId);
-        hydrated.add(registration.copyWith(publicEvent: event));
-      } on DioException {
-        hydrated.add(registration);
+      final id = registration.eventId;
+      if (!events.containsKey(id)) {
+        try {
+          events[id] = await getPublicEvent(id);
+        } on DioException {
+          events[id] = null;
+        }
       }
+      final event = events[id];
+      hydrated.add(event == null ? registration : registration.copyWith(publicEvent: event));
     }
     return hydrated;
   }

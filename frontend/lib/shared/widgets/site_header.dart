@@ -349,8 +349,9 @@ class _AccountButton extends ConsumerWidget {
       offset: const Offset(0, 44),
       onSelected: (value) async {
         if (value == 'my-events') {
-          // Events with the "Registered by me" filter on.
-          context.go('${AppRoutes.home}?mine=1');
+          // Your registrations, cancelled ones and refunds included. The
+          // Events page keeps "Registered by me" as a quick filter.
+          context.go(AppRoutes.myEvents);
         } else if (value == 'sign-out') {
           await ref.read(authControllerProvider.notifier).signOut();
           if (context.mounted) context.go(AppRoutes.login);

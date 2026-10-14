@@ -49,8 +49,7 @@ enum _Screen {
   /// The My Events page.
   myEvents('My Events', AppRoutes.myEvents, Size(1400, 2400)),
 
-  /// The event list narrowed to "Registered by me", as the account menu's
-  /// "My Events" link opens it.
+  /// The event list narrowed to "Registered by me" (`/home?mine=1`).
   eventList(
     'the event list "Registered by me" card',
     '${AppRoutes.home}?mine=1',
@@ -204,7 +203,7 @@ void _expectNotRegistered(WidgetTester tester, _Screen screen) {
   switch (screen) {
     case _Screen.myEvents:
       expect(find.text('Unregistered'), findsWidgets);
-      expect(find.text('0 active registrations'), findsOneWidget);
+      expect(find.textContaining('0 registered'), findsOneWidget);
     case _Screen.eventList:
       // "Registered by me" is on, and nothing is registered any more.
       expect(find.text('No Events Found'), findsOneWidget);

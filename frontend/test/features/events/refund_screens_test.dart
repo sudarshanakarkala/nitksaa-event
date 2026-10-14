@@ -298,7 +298,8 @@ void main() {
       backend.seedRegistration(tokenA, status: 'registered', paid: true);
       await _openApp(tester, backend);
 
-      expect(find.text('View Details'), findsNWidgets(2));
+      // One card per event (ISSUE-011): the registered one.
+      expect(find.text('View Details'), findsOneWidget);
       expect(find.text(_viewRefundStatus), findsNothing);
     });
 
@@ -311,11 +312,12 @@ void main() {
       final newest = backend.registrations[tokenA]!;
       await _openApp(tester, backend);
 
-      expect(find.text(_viewRefundStatus), findsNWidgets(3));
+      // One card per event (ISSUE-011); its refund link is the newest
+      // registration's.
+      expect(find.text(_viewRefundStatus), findsOneWidget);
       expect(backend.refundStatusRequests, isEmpty);
 
-      // The newest registration is listed first.
-      await tester.tap(find.text(_viewRefundStatus).first);
+      await tester.tap(find.text(_viewRefundStatus));
       await settleRequests(tester);
 
       expect(

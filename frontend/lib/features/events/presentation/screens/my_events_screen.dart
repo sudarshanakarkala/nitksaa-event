@@ -1,21 +1,27 @@
-
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../shared/widgets/filter_controls.dart';
+import '../../../../shared/widgets/list_page.dart';
+import '../../../../shared/widgets/notice.dart';
+import '../../../../shared/widgets/quick_filter_pill.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../domain/my_event_registration.dart';
+import '../../domain/my_events_view.dart';
+import '../../domain/refund_status.dart';
 import '../providers/created_events_provider.dart';
 import '../providers/my_events_provider.dart';
 import '../widgets/event_card.dart';
 import '../widgets/refund_status_dialog.dart';
-import '../../domain/refund_status.dart';
-import '../../../../shared/widgets/notice.dart';
 
+/// Your registrations, one card per event, in the Events page's layout
+/// (`ListPage`): search, Filters rail, quick-filter pills and a count line.
+/// Cancelled registrations stay here, so their refunds can be looked up.
 class MyEventsScreen extends ConsumerStatefulWidget {
   const MyEventsScreen({super.key});
 
@@ -26,13 +32,23 @@ class MyEventsScreen extends ConsumerStatefulWidget {
 class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
   final TextEditingController _searchController = TextEditingController();
 
+  /// Rail filters; none selected = all.
+  Set<String> _when = {};
+  Set<String> _status = {};
+
+  static const _whenOptions = {'upcoming': 'Upcoming', 'past': 'Past'};
+  // "Active", not "Registered": that word is the card's badge.
+  static const _statusOptions = {'registered': 'Active', 'cancelled': 'Cancelled'};
+
   @override
   void initState() {
     super.initState();
-    _searchController.addListener(() {
-      setState(() {}); // Trigger rebuild when search text changes
+    _searchController.addListener(() => setState(() {}));
+    Future.microtask(() {
+      if (ref.read(authControllerProvider).isAuthenticated) {
+        ref.read(myEventsProvider.notifier).fetchMyEvents();
+      }
     });
-    Future.microtask(() => ref.read(myEventsProvider.notifier).fetchMyEvents());
   }
 
   @override
@@ -41,185 +57,206 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     super.dispose();
   }
 
+  void _set(VoidCallback change) => setState(change);
+
+  void _clearAll() => setState(() {
+        _when = {};
+        _status = {};
+        _searchController.clear();
+      });
+
+  /// Quick pill: exactly these filters, nothing else.
+  void _quick({Set<String> when = const {}, Set<String> status = const {}}) =>
+      setState(() {
+        _when = {...when};
+        _status = {...status};
+      });
+
+  bool _isQuick({Set<String> when = const {}, Set<String> status = const {}}) =>
+      _setEquals(_when, when) && _setEquals(_status, status);
+
+  static bool _setEquals(Set<String> a, Set<String> b) =>
+      a.length == b.length && a.containsAll(b);
+
+  List<MyEventEntry> _visible(List<MyEventEntry> all) {
+    final now = DateTime.now();
+    final query = _searchController.text.trim().toLowerCase();
+    return all.where((e) {
+      if (_when.isNotEmpty && !_when.contains(e.isUpcoming(now) ? 'upcoming' : 'past')) {
+        return false;
+      }
+      if (_status.isNotEmpty &&
+          !_status.contains(e.registration.isActive ? 'registered' : 'cancelled')) {
+        return false;
+      }
+      if (query.isEmpty) return true;
+      final r = e.registration;
+      final text = [
+        e.title,
+        r.publicEvent?.tagline ?? '',
+        r.event?.locationText ?? r.publicEvent?.locationText ?? '',
+      ].join(' ').toLowerCase();
+      return text.contains(query);
+    }).toList();
+  }
+
+  Widget _filterRail() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          FilterChipSection(
+            label: 'When',
+            options: _whenOptions,
+            selected: _when,
+            onChanged: (v) => _set(() => _when = v),
+          ),
+          FilterChipSection(
+            label: 'Status',
+            options: _statusOptions,
+            selected: _status,
+            onChanged: (v) => _set(() => _status = v),
+          ),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
     final auth = ref.watch(authControllerProvider);
+    if (!auth.isAuthenticated) return const _SignedOut();
+
     final state = ref.watch(myEventsProvider);
     // Events you created get the "mine" tint.
     final created =
         ref.watch(createdEventIdsProvider).valueOrNull ?? const <int>{};
-    final theme = Theme.of(context);
-    final isWebScreen = MediaQuery.of(context).size.width >= 900;
+    final entries = myEventEntries(state.registrations);
+    final visible = _visible(entries);
+    final activeCount = entries.where((e) => e.registration.isActive).length;
+    final p = context.palette;
 
-    // Get search query and filter registrations
-    final searchQuery = _searchController.text.toLowerCase();
-    final filteredRegistrations = searchQuery.isEmpty
-        ? state.registrations
-        : state.registrations.where((r) {
-            final title = (r.event?.title ?? r.publicEvent?.title ?? '').toLowerCase();
-            final tagline = (r.publicEvent?.tagline ?? '').toLowerCase();
-            final location = (r.event?.locationText ?? r.publicEvent?.locationText ?? '').toLowerCase();
-            return title.contains(searchQuery) || tagline.contains(searchQuery) || location.contains(searchQuery);
-          }).toList();
-
-    if (!auth.isAuthenticated) {
-      return Scaffold(
-        body: SafeArea(
-          child: Center(
-            child: ConstrainedBox(
-              constraints: const BoxConstraints(maxWidth: 420),
-              child: Padding(
-                padding: const EdgeInsets.all(24),
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    const Icon(Icons.bookmark_border, size: 56),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Log in to view My Events',
-                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 22, fontWeight: FontWeight.w600),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      'Your registered events and join details appear here.',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 20),
-                    ElevatedButton(
-                      onPressed: () => context.push(AppRoutes.login),
-                      child: const Text('Log In'),
-                    ),
-                  ],
-                ),
-              ),
+    return Scaffold(
+      body: ListPage(
+        title: 'My Events',
+        subtitle: 'Events you have registered for, and the ones you cancelled '
+            'with their refunds.',
+        search: SizedBox(
+          height: 44,
+          child: TextField(
+            controller: _searchController,
+            decoration: const InputDecoration(
+              prefixIcon: Icon(Icons.search, size: 20),
+              hintText: 'Search my events…',
+              isDense: true,
+              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             ),
           ),
         ),
-      );
-    }
-
-    return Scaffold(
-      body: SafeArea(
-        child: Row(
-          children: [
-            Expanded(
-              child: Padding(
-                padding: EdgeInsets.symmetric(
-                  horizontal: isWebScreen ? 32 : 20,
-                  vertical: 24,
-                ),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
+        quickFilters: [
+          QuickFilterPill(label: 'All', active: _isQuick(), onTap: () => _quick()),
+          QuickFilterPill(
+            label: 'Upcoming',
+            active: _isQuick(when: {'upcoming'}),
+            onTap: () => _quick(when: {'upcoming'}),
+          ),
+          QuickFilterPill(
+            label: 'Past',
+            active: _isQuick(when: {'past'}),
+            onTap: () => _quick(when: {'past'}),
+          ),
+          QuickFilterPill(
+            label: 'Cancelled',
+            active: _isQuick(status: {'cancelled'}),
+            onTap: () => _quick(status: {'cancelled'}),
+          ),
+        ],
+        count: state.isLoading
+            ? null
+            : Text.rich(
+                TextSpan(
                   children: [
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        const Text(
-                          'My Events',
-                          style: TextStyle(
-                            fontFamily: AppTextStyles.serif,
-                            fontSize: 26,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        ),
-                        IconButton.filledTonal(
-                          tooltip: 'Refresh',
-                          onPressed: state.isLoading
-                              ? null
-                              : () => ref
-                                  .read(myEventsProvider.notifier)
-                                  .fetchMyEvents(),
-                          icon: const Icon(Icons.refresh),
-                        ),
-                      ],
+                    TextSpan(
+                      text: '${visible.length}',
+                      style: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
                     ),
-                    const SizedBox(height: 8),
-                    Text(
-                      '${state.registrations.where((r) => r.isActive).length} active registrations',
-                      style: TextStyle(color: theme.colorScheme.onSurfaceVariant),
-                    ),
-                    const SizedBox(height: 16),
-                    // Search box
-                    TextField(
-                      controller: _searchController,
-                      decoration: InputDecoration(
-                        hintText: 'Search my events...',
-                        prefixIcon: const Icon(Icons.search, size: 20),
-                        isDense: true,
-                        contentPadding: const EdgeInsets.symmetric(
-                          horizontal: 12,
-                          vertical: 10,
-                        ),
-                        border: OutlineInputBorder(
-                          borderRadius: BorderRadius.circular(8),
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
-                    Expanded(
-                      child: state.isLoading
-                          ? const Center(child: CircularProgressIndicator())
-                          : state.errorMessage != null
-                              ? _ErrorState(
-                                  message: state.errorMessage!,
-                                  onRetry: () => ref
-                                      .read(myEventsProvider.notifier)
-                                      .fetchMyEvents(),
-                                )
-                              : filteredRegistrations.isEmpty
-                                  ? searchQuery.isNotEmpty
-                                      ? const _SearchEmptyState()
-                                      : const _EmptyState()
-                                  : RefreshIndicator(
-                                      onRefresh: () => ref
-                                          .read(myEventsProvider.notifier)
-                                          .fetchMyEvents(),
-                                      child: EventCardGrid(
-                                        physics:
-                                            const AlwaysScrollableScrollPhysics(),
-                                        itemCount: filteredRegistrations.length,
-                                        itemBuilder: (context, index) {
-                                          final registration =
-                                              filteredRegistrations[index];
-                                          return _registrationCard(
-                                            registration,
-                                            isCancelling: state.isCancelling(
-                                              registration.registrationId,
-                                            ),
-                                            created: created,
-                                          );
-                                        },
-                                      ),
-                                    ),
-                    ),
+                    TextSpan(text: visible.length == 1 ? ' event' : ' events'),
+                    TextSpan(text: ' · $activeCount registered'),
                   ],
                 ),
+                style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
               ),
-            ),
-          ],
+        filters: (context) => _filterRail(),
+        onOpenFilters: () =>
+            showFilterSheet(context, builder: (_) => _filterRail(), onClear: _clearAll),
+        activeFilterCount: _when.length + _status.length,
+        onClearFilters: _clearAll,
+        body: LayoutBuilder(
+          builder: (context, constraints) {
+            if (state.isLoading && state.registrations.isEmpty) {
+              return const Center(child: CircularProgressIndicator());
+            }
+            if (state.errorMessage != null) {
+              return _Message(
+                icon: Icons.error_outline,
+                title: 'Could not load your registrations',
+                detail: state.errorMessage!,
+                action: TextButton(
+                  onPressed: () => ref.read(myEventsProvider.notifier).fetchMyEvents(),
+                  child: const Text('Try again'),
+                ),
+              );
+            }
+            if (entries.isEmpty) {
+              return _Message(
+                icon: Icons.event_available_outlined,
+                title: 'No registrations yet',
+                action: TextButton(
+                  onPressed: () => context.go(AppRoutes.home),
+                  child: const Text('Browse events'),
+                ),
+              );
+            }
+            if (visible.isEmpty) {
+              return _Message(
+                icon: Icons.search_off,
+                title: 'No events match',
+                detail: 'Try another search or filter.',
+                action: TextButton(onPressed: _clearAll, child: const Text('Clear filters')),
+              );
+            }
+            return EventCardGrid(
+              padding: ListPage.contentPadding(context, constraints.maxWidth),
+              itemCount: visible.length,
+              itemBuilder: (context, index) {
+                final entry = visible[index];
+                return _registrationCard(
+                  entry,
+                  isCancelling: state.isCancelling(entry.registration.registrationId),
+                  created: created,
+                );
+              },
+            );
+          },
         ),
       ),
     );
   }
 
-  /// The shared event card for one of your registrations.
+  /// The shared event card for one event you registered for.
   Widget _registrationCard(
-    MyEventRegistration registration, {
+    MyEventEntry entry, {
     required bool isCancelling,
     required Set<int> created,
   }) {
+    final registration = entry.registration;
     final summary = registration.event;
     final event = registration.publicEvent;
     final active = registration.isActive;
     final when = active ? registration.registeredAt : registration.cancelledAt;
-    final end = summary?.endDatetime ?? event?.endDatetime ?? summary?.startDatetime ?? event?.startDatetime;
     final joinUrl = registration.joinUrl?.trim() ?? '';
-    final canJoin = active && joinUrl.isNotEmpty && (end == null || end.isAfter(DateTime.now()));
+    final canJoin = active && joinUrl.isNotEmpty && entry.isUpcoming(DateTime.now());
+    final refundFrom = entry.refundFrom;
     return EventCard(
-      title: summary?.title ?? event?.title ?? 'Registered event',
+      title: entry.title,
       tagline: event?.tagline,
-      start: summary?.startDatetime ?? event?.startDatetime,
+      start: entry.start,
       end: summary?.endDatetime ?? event?.endDatetime,
       isVirtual: summary?.isVirtual ?? event?.isVirtual ?? false,
       location: summary?.locationText ?? event?.locationText,
@@ -241,13 +278,13 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       onJoin: canJoin
           ? () => launchUrl(Uri.parse(joinUrl), mode: LaunchMode.externalApplication)
           : null,
-      onViewRefund: registration.mayHaveRefund
-          ? () => showRefundStatus(
+      onViewRefund: refundFrom == null
+          ? null
+          : () => showRefundStatus(
                 context,
                 ref,
-                registrationId: registration.registrationId,
-              )
-          : null,
+                registrationId: refundFrom.registrationId,
+              ),
     );
   }
 
@@ -305,79 +342,61 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
   }
 }
 
+/// Centred icon, title, optional detail and action (empty and error states).
+class _Message extends StatelessWidget {
+  const _Message({required this.icon, required this.title, this.detail, this.action});
 
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
+  final IconData icon;
+  final String title;
+  final String? detail;
+  final Widget? action;
 
   @override
   Widget build(BuildContext context) {
+    final p = context.palette;
     return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.error_outline, size: 48, color: context.palette.error),
-          const SizedBox(height: 12),
-          const Text('Could not load registrations'),
-          const SizedBox(height: 8),
-          Text(message, textAlign: TextAlign.center),
-          const SizedBox(height: 16),
-          OutlinedButton(onPressed: onRetry, child: const Text('Retry')),
-        ],
+      child: Padding(
+        padding: const EdgeInsets.all(24),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(icon, size: 56, color: p.textMuted),
+            const SizedBox(height: 16),
+            Text(
+              title,
+              textAlign: TextAlign.center,
+              style: const TextStyle(
+                fontFamily: AppTextStyles.serif,
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            if (detail != null) ...[
+              const SizedBox(height: 6),
+              Text(detail!, textAlign: TextAlign.center, style: TextStyle(color: p.textMuted)),
+            ],
+            if (action != null) ...[const SizedBox(height: 12), action!],
+          ],
+        ),
       ),
     );
   }
 }
 
-class _SearchEmptyState extends StatelessWidget {
-  const _SearchEmptyState();
+class _SignedOut extends StatelessWidget {
+  const _SignedOut();
 
   @override
   Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.search_off, size: 64, color: context.palette.textMuted),
-          const SizedBox(height: 16),
-          const Text(
-            'No events match your search',
-            style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          Text(
-            'Try a different search term',
-            style: TextStyle(color: context.palette.textMuted),
-          ),
-        ],
-      ),
-    );
-  }
-}
-
-class _EmptyState extends StatelessWidget {
-  const _EmptyState();
-
-  @override
-  Widget build(BuildContext context) {
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.event_available_outlined, size: 64, color: context.palette.textMuted),
-          const SizedBox(height: 16),
-          const Text(
-            'No registered events yet',
-            style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
-          ),
-          const SizedBox(height: 8),
-          TextButton(
-            onPressed: () => context.go(AppRoutes.home),
-            child: const Text('Browse events'),
-          ),
-        ],
+    return Scaffold(
+      body: _Message(
+        icon: Icons.bookmark_border,
+        title: 'Sign in to see My Events',
+        detail: 'Your registrations, join links and refunds appear here.',
+        action: FilledButton(
+          onPressed: () => context.push(AppRoutes.login),
+          child: const Text('Sign in'),
+        ),
       ),
     );
   }
