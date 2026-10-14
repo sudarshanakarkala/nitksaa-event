@@ -72,20 +72,66 @@ def _format_registration(row: Dict[str, Any]) -> RegistrationResponse:
     )
 
 
+def _clean(value: Optional[str]) -> str:
+    return (value or "").strip()
+
+
+def _phone_is_valid(phone: str) -> bool:
+    """10–15 digits once spaces, dashes and a leading + are removed."""
+    digits = phone.lstrip("+").replace(" ", "").replace("-", "")
+    return digits.isdigit() and 10 <= len(digits) <= 15
+
+
+async def _attendee_details(user: Dict[str, Any], body: RegisterRequest) -> Dict[str, Any]:
+    """The details saved on a registration, for alumni and everyone else.
+
+    Alumni (linked to a record that still exists, whatever its status): name,
+    batch and branch from the record; phone as typed, else from the record.
+    Everyone else: typed name and phone; no batch, branch or link. The email is
+    always the sign-in email. The alumni list is never written to.
+    """
+    profile = None
+    ref_id = user.get("ref_id")
+    if user.get("user_type") == "alumni" and ref_id:
+        profile = await alumni_service.get_alumni_profile_by_ref_id(ref_id)
+
+    email = user.get("email") or (profile or {}).get("email")
+
+    if profile:
+        phone = _clean(body.phone) or _clean(profile.get("phone"))
+        details = {
+            "ref_id": ref_id,
+            "email": email,
+            "fullname": profile.get("fullname"),
+            "batch_year": profile.get("graduationyear"),
+            "branch": profile.get("branch"),
+        }
+    else:
+        name = _clean(body.fullname)
+        if not name:
+            raise HTTPException(status_code=422, detail="name_required")
+        phone = _clean(body.phone)
+        details = {
+            "ref_id": None,
+            "email": email,
+            "fullname": name,
+            "batch_year": None,
+            "branch": None,
+        }
+
+    if not phone:
+        raise HTTPException(status_code=422, detail="phone_required")
+    if not _phone_is_valid(phone):
+        raise HTTPException(status_code=422, detail="phone_invalid")
+    details["phone"] = phone
+    return details
+
+
 async def register_for_event(
     event_id: int, user: Dict[str, Any], body: RegisterRequest
 ) -> RegistrationResponse:
     firebase_uid = user["firebase_uid"]
-    ref_id = user.get("ref_id")
-
-    if user.get("user_type") != "alumni" or not ref_id:
-        raise HTTPException(status_code=403, detail="alumni_only")
-
-    profile = await alumni_service.get_alumni_profile_by_ref_id(ref_id)
-    if not profile:
-        raise HTTPException(status_code=403, detail="alumni_not_found")
-    if not alumni_service.is_alumni_active(profile.get("registrationstatus")):
-        raise HTTPException(status_code=403, detail="alumni_not_active")
+    attendee = await _attendee_details(user, body)
 
     pool = await get_pool()
     registration_id: int
@@ -160,12 +206,12 @@ async def register_for_event(
                 registration_id = await repo.insert(
                     event_id=event_id,
                     firebase_uid=firebase_uid,
-                    ref_id=ref_id,
-                    email=profile["email"],
-                    phone=profile.get("phone"),
-                    fullname_snapshot=profile.get("fullname"),
-                    batch_year_snapshot=profile.get("graduationyear"),
-                    branch_snapshot=profile.get("branch"),
+                    ref_id=attendee["ref_id"],
+                    email=attendee["email"],
+                    phone=attendee["phone"],
+                    fullname_snapshot=attendee["fullname"],
+                    batch_year_snapshot=attendee["batch_year"],
+                    branch_snapshot=attendee["branch"],
                     notes=body.attendee_note,
                     status="seat_held" if is_paid_event else "registered",
                     hold_expires_at=(
@@ -214,8 +260,8 @@ async def register_for_event(
     )
 
     email_result = await email_service.send_confirmation_email(
-        email_to=profile["email"],
-        fullname=profile.get("fullname", ""),
+        email_to=full_row.get("email_snapshot") or attendee["email"],
+        fullname=full_row.get("fullname_snapshot") or "",
         event_title=full_row.get("event_title", ""),
         registration_number=reg_number,
         join_url=_resolve_join_url(full_row),
@@ -276,7 +322,6 @@ async def get_registration_eligibility(
     event_id: int, user: Dict[str, Any]
 ) -> RegistrationEligibilityResponse:
     firebase_uid = user["firebase_uid"]
-    ref_id = user.get("ref_id")
 
     def _ineligible(msg: str) -> RegistrationEligibilityResponse:
         return RegistrationEligibilityResponse(
@@ -285,13 +330,6 @@ async def get_registration_eligibility(
             eligibility_status="ineligible",
             message=msg,
         )
-
-    if user.get("user_type") != "alumni" or not ref_id:
-        return _ineligible("Only alumni can register for events.")
-
-    profile = await alumni_service.get_alumni_profile_by_ref_id(ref_id)
-    if not profile or not alumni_service.is_alumni_active(profile.get("registrationstatus")):
-        return _ineligible("Alumni account is not active.")
 
     pool = await get_pool()
     async with pool.acquire() as conn:
