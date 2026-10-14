@@ -31,6 +31,9 @@ dependencies:
   flutter:
     sdk: flutter
 
+  # Icon font Flutter's own widgets use in Safari on an iPhone (text
+  # selection, adaptive icons). Not used by our code directly; keep it.
+  cupertino_icons: ^1.0.8
   firebase_core: ^4.8.0
   firebase_auth: ^6.5.0
   flutter_riverpod: 2.6.1
