@@ -4,6 +4,7 @@
 import 'package:dio/dio.dart';
 import 'package:event_app/features/auth/domain/admin_access.dart';
 import 'package:event_app/features/auth/services/auth_controller.dart';
+import 'package:event_app/features/checkin/check_in_scanner_screen.dart';
 import 'package:event_app/features/checkin/check_in_screen.dart';
 import 'package:event_app/features/checkin/data/check_in_api.dart';
 import 'package:event_app/features/events/presentation/widgets/entry_pass_qr.dart';
@@ -31,12 +32,13 @@ class _FakeCheckInApi extends CheckInApi {
       pass;
 
   @override
-  Future<void> checkIn({
+  Future<CheckInDone> checkIn({
     required int eventId,
     required String qrToken,
     required String accessToken,
   }) async {
     checkIns++;
+    return const CheckInDone(checkinId: 1, registrationId: 1);
   }
 }
 
@@ -126,5 +128,14 @@ void main() {
 
   test('the QR holds a check-in link for this event and person', () {
     expect(entryPassUrl(_eventId, _token), endsWith('/#/checkin/42/tok-abc'));
+  });
+
+  test('the scanner reads the event and token back out of the QR', () {
+    final pass = parseEntryPass(entryPassUrl(_eventId, 'Ab_9-xY'));
+    expect(pass?.eventId, _eventId);
+    expect(pass?.token, 'Ab_9-xY');
+    expect(parseEntryPass('https://nitksaa-events-beta.web.app/#/checkin/7/tok')?.eventId, 7);
+    expect(parseEntryPass('NITKSAA-2026-000123'), isNull); // an old badge number
+    expect(parseEntryPass('https://example.com/'), isNull);
   });
 }

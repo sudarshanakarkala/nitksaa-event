@@ -58,6 +58,7 @@ LABELS = {
     "registration_cancelled": "Registration cancelled",
     "registration_hold_expired": "Seat hold expired",
     "check_in_created": "Checked in",
+    "check_in_undone": "Check-in undone",
     "payment_configuration_synced": "Payment setup updated",
     "payment_configuration_draft_created": "Payment setup drafted",
     "payment_configuration_published": "Payment setup published",
@@ -128,7 +129,7 @@ WITH b AS (
               ELSE 'admin' END AS who,
          CASE WHEN b.event_type IN ({_ROLES_SQL}) THEN 'roles'
               WHEN b.event_type LIKE 'payment%' THEN 'payments'
-              WHEN b.event_type LIKE 'registration%' OR b.event_type = 'check_in_created' THEN 'registrations'
+              WHEN b.event_type LIKE 'registration%' OR b.event_type IN ('check_in_created', 'check_in_undone') THEN 'registrations'
               ELSE 'events' END AS category
   FROM b
   LEFT JOIN payment_orders o ON o.id = b.order_id

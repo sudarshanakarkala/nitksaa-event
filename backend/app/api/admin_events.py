@@ -12,7 +12,7 @@ import csv
 import io
 from typing import List, Dict, Any, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, Response
 from fastapi.responses import StreamingResponse
 
 from app.database import get_pool
@@ -287,6 +287,26 @@ async def check_in(
         context={"event_id": event_id, "checkin_id": checkin["checkin_id"]},
     )
     return dict(checkin)
+
+
+@router.delete("/events/{event_id}/check-ins/{checkin_id}", status_code=204)
+async def undo_check_in(
+    event_id: int,
+    checkin_id: int,
+    user: Dict[str, Any] = Depends(require_event_admin),
+):
+    """Undo a mistaken check-in (e.g. the wrong QR was scanned)."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        removed = await CheckInService(conn).undo_checkin(event_id, checkin_id)
+    await audit_service.emit(
+        actor_uid=user["firebase_uid"],
+        event_type="check_in_undone",
+        entity_type="registration",
+        entity_id=removed["registration_id"],
+        context={"event_id": event_id, "checkin_id": checkin_id},
+    )
+    return Response(status_code=204)
 
 
 @router.get("/events/{event_id}/check-ins", response_model=List[CheckInResponse])

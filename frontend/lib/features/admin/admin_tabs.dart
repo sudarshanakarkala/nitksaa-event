@@ -6,6 +6,7 @@ enum AdminTab {
   dashboard('dashboard', 'Dashboard'),
   events('events', 'Events'),
   registrations('registrations', 'Registrations'),
+  checkIn('checkin', 'Check-in'),
   payments('payments', 'Payments'),
   audit('audit', 'Audit'),
   roles('roles', 'Roles');
@@ -32,6 +33,7 @@ enum AdminTab {
       case AdminTab.dashboard:
       case AdminTab.events:
       case AdminTab.registrations:
+      case AdminTab.checkIn:
       case AdminTab.audit:
         return true;
     }

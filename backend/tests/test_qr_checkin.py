@@ -56,3 +56,42 @@ def test_attendee_cannot_check_themselves_in(client):
     token = _register(client, eid, who, fullname="Asha Rao", phone="9845012345").json()["qr_token"]
     r = client.post(f"/api/v1/admin/events/{eid}/check-ins", json={"qr_token": token}, headers=_bearer(who))
     assert r.status_code in (401, 403)
+
+
+def test_check_in_by_registration_and_undo(client):
+    """The admin Check-in list checks someone in without their QR; a mistaken
+    check-in can be undone and done again."""
+    who = _non_alumnus()
+    _seed_user(who)
+    eid = _mk_free_event(client)
+    reg = _register(client, eid, who, fullname="Asha Rao", phone="9845012345").json()
+    admin = _bearer(_FIXTURE_ADMIN)
+
+    c = client.post(f"/api/v1/admin/events/{eid}/check-ins",
+                    json={"registration_id": reg["registration_id"]}, headers=admin)
+    assert c.status_code == 201, c.text
+    checkin_id = c.json()["checkin_id"]
+
+    # An attendee can't undo it.
+    r = client.delete(f"/api/v1/admin/events/{eid}/check-ins/{checkin_id}", headers=_bearer(who))
+    assert r.status_code in (401, 403)
+
+    r = client.delete(f"/api/v1/admin/events/{eid}/check-ins/{checkin_id}", headers=admin)
+    assert r.status_code == 204, r.text
+    assert client.get(f"/api/v1/admin/events/{eid}/check-ins", headers=admin).json() == []
+    r = client.delete(f"/api/v1/admin/events/{eid}/check-ins/{checkin_id}", headers=admin)
+    assert r.status_code == 404
+
+    # Checked in again by scanning the pass.
+    c = client.post(f"/api/v1/admin/events/{eid}/check-ins",
+                    json={"qr_token": reg["qr_token"]}, headers=admin)
+    assert c.status_code == 201, c.text
+
+
+def test_check_in_needs_exactly_one_way(client):
+    eid = _mk_free_event(client)
+    admin = _bearer(_FIXTURE_ADMIN)
+    assert client.post(f"/api/v1/admin/events/{eid}/check-ins", json={}, headers=admin).status_code == 422
+    r = client.post(f"/api/v1/admin/events/{eid}/check-ins",
+                    json={"qr_token": "x", "registration_id": 1}, headers=admin)
+    assert r.status_code == 422

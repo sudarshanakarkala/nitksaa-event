@@ -84,9 +84,14 @@ class CheckInService:
         if not event:
             raise HTTPException(status_code=404, detail="event_not_found")
 
-        registration = await self.reg_repo.get_by_qrtoken(data.qr_token)
-        if not registration:
-            raise HTTPException(status_code=404, detail="invalid_qr_token")
+        if data.qr_token is not None:
+            registration = await self.reg_repo.get_by_qrtoken(data.qr_token)
+            if not registration:
+                raise HTTPException(status_code=404, detail="invalid_qr_token")
+        else:
+            registration = await self.reg_repo.get_by_id(data.registration_id)
+            if not registration:
+                raise HTTPException(status_code=404, detail="registration_not_found")
 
         if registration["event_id"] != event_id:
             raise HTTPException(status_code=400, detail="registration_belongs_to_different_event")
@@ -112,6 +117,13 @@ class CheckInService:
             # not the source of truth. Same clean 409 a sequential
             # duplicate gets, never a 500.
             raise HTTPException(status_code=409, detail="already_checked_in")
+
+    async def undo_checkin(self, event_id: int, checkin_id: int) -> asyncpg.Record:
+        """Removes a mistaken check-in, so the person can be checked in again."""
+        removed = await self.checkin_repo.delete_checkin(event_id, checkin_id)
+        if not removed:
+            raise HTTPException(status_code=404, detail="checkin_not_found")
+        return removed
 
     async def list_checkins(self, event_id: int) -> List[asyncpg.Record]:
         event = await self.event_repo.get_event(event_id)

@@ -44,6 +44,12 @@ class CheckInRepository:
             event_id, registration_id, session_id, scanned_by,
         )
 
+    async def delete_checkin(self, event_id: int, checkin_id: int) -> Optional[asyncpg.Record]:
+        return await self.conn.fetchrow(
+            "DELETE FROM check_ins WHERE event_id = $1 AND checkin_id = $2 RETURNING *",
+            event_id, checkin_id,
+        )
+
     async def list_by_event(self, event_id: int) -> List[asyncpg.Record]:
         return await self.conn.fetch(
             "SELECT * FROM check_ins WHERE event_id = $1 ORDER BY scanned_at ASC",

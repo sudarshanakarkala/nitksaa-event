@@ -11,6 +11,7 @@ import '../../auth/services/auth_controller.dart';
 import '../admin_tabs.dart';
 import 'admin_actions_tab.dart';
 import 'admin_audit_tab.dart';
+import 'admin_check_in_tab.dart';
 import 'admin_dashboard_tab.dart';
 import 'admin_events_tab.dart';
 import 'admin_payments_tab.dart';
@@ -85,6 +86,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         return const RolesTab();
       case AdminTab.registrations:
         return const AdminRegistrationsTab();
+      case AdminTab.checkIn:
+        return const AdminCheckInTab();
       case AdminTab.dashboard:
         return const AdminDashboardTab();
       case AdminTab.payments:

@@ -6,6 +6,7 @@ import '../features/admin/admin_tabs.dart';
 import '../features/auth/domain/admin_access.dart';
 import '../features/auth/services/auth_controller.dart';
 import 'app_routes.dart';
+import 'return_after_sign_in.dart';
 
 abstract class RouteGuards {
   static String? redirect(BuildContext context, GoRouterState state) {
@@ -36,7 +37,8 @@ abstract class RouteGuards {
     }
 
     if (auth.isAuthenticated) {
-      if (isLogin) return AppRoutes.home;
+      // Just signed in: back to the page that asked for it, else Events.
+      if (isLogin) return ReturnAfterSignIn.take() ?? AppRoutes.home;
       return null;
     }
 
