@@ -69,6 +69,9 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   /// applies the ones for columns it has.
   final Map<String, Set<String>> _rail = {};
 
+  /// Registered / cancelled / checked in within this range; null = any.
+  DateTimeRange? _dates;
+
   /// Batch: a decade, or a From/To year range (website "Graduation era").
   int? _decade;
   int? _yearFrom;
@@ -440,7 +443,10 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     final cancelled = view == RegistrationView.cancelled;
     final sort = _sorts[view]!;
     return applyGrid(
-      cancelled ? _cancelled : _registered,
+      [
+        for (final r in cancelled ? _cancelled : _registered)
+          if (FilterDateRange.contains(_dates, cancelled ? r.cancelledAt : r.registeredAt)) r,
+      ],
       _registrationColumns(cancelled: cancelled),
       search: _search.text,
       filters: _columnFilters,
@@ -452,12 +458,43 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   List<CheckInEntry> get _checkInRows {
     final sort = _sorts[RegistrationView.checkIns]!;
     return applyGrid(
-      _checkIns,
+      [
+        for (final c in _checkIns)
+          if (FilterDateRange.contains(_dates, c.checkIn.checkedInAt)) c,
+      ],
       _checkInColumns,
       search: _search.text,
       filters: _columnFilters,
       sortId: sort.$1,
       ascending: sort.$2,
+    );
+  }
+
+  /// When people registered (Cancelled: when they cancelled; Check-ins:
+  /// when they came in), on the line under the pills.
+  Widget _dateLine() {
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var first = today.subtract(const Duration(days: 30));
+    for (final r in _registered) {
+      final d = r.registeredAt;
+      if (d.year < 2020) continue; // a missing date read as 1970
+      final day = DateTime(d.year, d.month, d.day);
+      if (day.isBefore(first)) first = day;
+    }
+    return FilterDateRange(
+      inline: true,
+      lookBack: true,
+      label: switch (_view) {
+        RegistrationView.registered => 'Registered',
+        RegistrationView.cancelled => 'Cancelled',
+        RegistrationView.checkIns => 'Checked in',
+      },
+      first: first,
+      last: today,
+      value: _dates,
+      presets: FilterDateRange.lookBackPresets(now),
+      onChanged: (v) => setState(() => _dates = v),
     );
   }
 
@@ -469,7 +506,8 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       _search.text.trim().isNotEmpty ||
       _rail.values.any((v) => v.isNotEmpty) ||
       _batchActive ||
-      _branch != null;
+      _branch != null ||
+      _dates != null;
 
   /// Tapping a heading: same column flips the order; a new column starts
   /// A–Z, or newest first for dates.
@@ -598,6 +636,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       ),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearAll,
+      belowPills: _dateLine(),
       loading: _loading,
       body: _body(compact),
     );

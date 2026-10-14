@@ -27,4 +27,11 @@ void main() {
       expect(parseFilterDate(t, _today), isNull, reason: t);
     }
   });
+
+  test('looking back: no year means the latest one on or before today', () {
+    expect(parseFilterDate('14 Oct', _today, past: true), DateTime(2026, 10, 14));
+    expect(parseFilterDate('3 Nov', _today, past: true), DateTime(2025, 11, 3));
+    expect(parseFilterDate('1/10', _today, past: true), DateTime(2026, 10, 1));
+    expect(parseFilterDate('3 Nov 2026', _today, past: true), DateTime(2026, 11, 3));
+  });
 }
