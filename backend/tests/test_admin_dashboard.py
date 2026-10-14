@@ -52,3 +52,71 @@ def test_dashboard_shape_for_overall_admin(client, period):
         assert row["no_shows"] == max(row["registered"] - row["checked_in"], 0)
     for row in body["by_decade"]:
         assert row["decade"] % 10 == 0
+
+
+# ── One event (event_id=) ────────────────────────────────────────────────
+
+def _mk_event(creator_uid: str, *, days: int = 20) -> int:
+    """A published event with no registrations, made directly in the db."""
+    import asyncio
+    import uuid
+
+    import asyncpg
+
+    from app.config import get_settings
+
+    async def _run():
+        conn = await asyncpg.connect(dsn=get_settings().events_db_dsn)
+        try:
+            slug = f"dash-{uuid.uuid4().hex[:10]}"
+            return await conn.fetchval(
+                """
+                INSERT INTO events (slug, title, start_datetime, end_datetime, status,
+                                    capacity, created_by_firebase_uid)
+                VALUES ($1, $1, now() + make_interval(days => $2::int),
+                        now() + make_interval(days => $2::int, hours => 2),
+                        'published', 50, $3)
+                RETURNING event_id
+                """,
+                slug, days, creator_uid,
+            )
+        finally:
+            await conn.close()
+
+    return asyncio.run(_run())
+
+
+def test_dashboard_one_event_narrows_everything(client):
+    from tests.test_admin_rbac import _db_exec
+
+    event_id = _mk_event(_FIXTURE_ADMIN["firebase_uid"])
+    r = client.get(_PATH, params={"event_id": event_id, "period": "all"}, headers=_bearer(_FIXTURE_ADMIN))
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["event_id"] == event_id
+    assert body["tiles"]["upcoming_events"] == 1
+    assert body["tiles"]["registrations"] == 0
+    assert [u["event_id"] for u in body["upcoming"]] == [event_id]
+    assert all(w["registrations"] == 0 for w in body["weekly"])
+    assert body["by_decade"] == []
+    _db_exec("DELETE FROM events WHERE event_id = $1", event_id)
+
+
+def test_dashboard_one_event_refuses_someone_elses_event(client):
+    from tests.test_admin_rbac import _EVENT_ADMIN, _db_exec
+
+    mine = _mk_event(_FIXTURE_ADMIN["firebase_uid"])
+    other = _mk_event(_FIXTURE_ADMIN["firebase_uid"])
+    _db_exec(
+        """
+        INSERT INTO event_members (event_id, firebase_uid, role, status)
+        VALUES ($1, $2, 'event_admin', 'active')
+        """,
+        mine, _EVENT_ADMIN["firebase_uid"],
+    )
+    headers = _bearer(_EVENT_ADMIN)
+    assert client.get(_PATH, params={"event_id": mine}, headers=headers).status_code == 200
+    r = client.get(_PATH, params={"event_id": other}, headers=headers)
+    assert r.status_code == 403
+    _db_exec("DELETE FROM event_members WHERE event_id = $1", mine)
+    _db_exec("DELETE FROM events WHERE event_id = ANY($1::int[])", [mine, other])

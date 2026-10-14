@@ -63,9 +63,12 @@ abstract class RouteGuards {
     if (tab != null && tab.visibleTo(access)) return null;
 
     final visible = AdminTab.visibleTabs(access);
-    final landing = visible.contains(AdminTab.landing)
-        ? AdminTab.landing
-        : visible.first;
-    return landing.path;
+    if (visible.contains(AdminTab.landing)) {
+      // Plain /admin: the page may move on to Check-in on an event day.
+      return segments.length < 2
+          ? '${AdminTab.landing.path}?${AdminTab.landingQuery}'
+          : AdminTab.landing.path;
+    }
+    return visible.first.path;
   }
 }

@@ -14,8 +14,10 @@ import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/services/auth_controller.dart';
 import '../data/dashboard_api.dart';
+import '../../events/data/events_repository.dart';
+import 'admin_tab_frame.dart';
+import 'admin_widgets.dart';
 import '../domain/registration_filters.dart' show formatDate;
-import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/format.dart';
 
 /// Admin → Dashboard: how the events you administer are doing. The
@@ -34,6 +36,10 @@ class AdminDashboardTab extends ConsumerStatefulWidget {
 
 class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
   DashboardPeriod _period = DashboardPeriod.days30;
+
+  /// One event ("how is it going?"), or [adminAllEvents] for the overview.
+  int _event = adminAllEvents;
+  List<AdminEventOption> _events = const [];
   DashboardData? _data;
   bool _loading = true;
   String? _error;
@@ -41,27 +47,54 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
   @override
   void initState() {
     super.initState();
-    Future.microtask(_load);
+    Future.microtask(() {
+      _load();
+      _loadEvents();
+    });
+  }
+
+  /// For the picker; best effort (the overview works without it).
+  Future<void> _loadEvents() async {
+    final token = ref.read(authControllerProvider).session?.accessToken;
+    if (token == null) return;
+    try {
+      final all = await ref.read(eventsRepositoryProvider).getAllAdminEvents(token);
+      all.sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
+      if (mounted) setState(() => _events = [for (final e in all) AdminEventOption.of(e)]);
+    } catch (error) {
+      AppLogger.warning('Admin dashboard: events not loaded: $error');
+    }
+  }
+
+  void _setEvent(int id) {
+    if (id == _event) return;
+    setState(() => _event = id);
+    _load();
   }
 
   Future<void> _load() async {
     final token = ref.read(authControllerProvider).session?.accessToken;
     if (token == null) return;
     final period = _period;
+    final event = _event;
     setState(() {
       _loading = true;
       _error = null;
     });
     try {
-      final data = await ref.read(dashboardApiProvider).load(accessToken: token, period: period);
-      if (!mounted || period != _period) return;
+      final data = await ref.read(dashboardApiProvider).load(
+            accessToken: token,
+            period: period,
+            eventId: event == adminAllEvents ? null : event,
+          );
+      if (!mounted || period != _period || event != _event) return;
       setState(() {
         _data = data;
         _loading = false;
       });
     } catch (error, stackTrace) {
       AppLogger.error('Admin dashboard: load failed', error, stackTrace);
-      if (!mounted || period != _period) return;
+      if (!mounted || period != _period || event != _event) return;
       setState(() {
         _loading = false;
         _error = apiErrorMessage(error, action: 'load the dashboard');
@@ -88,10 +121,31 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
         ],
       );
 
+  Widget _rail() => Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          const FilterLabel('Event'),
+          const SizedBox(height: 8),
+          AdminEventPicker(options: _events, selected: _event, onChanged: _setEvent),
+          const SizedBox(height: 20),
+          const FilterLabel('Period'),
+          const SizedBox(height: 8),
+          _periodChips(),
+        ],
+      );
+
   @override
   Widget build(BuildContext context) {
-    return ListPage(
-      quickFilters: [
+    // No search or count line: an overview. The Filters icon sits at the
+    // end of the period pills.
+    return AdminTabFrame(
+      picker: AdminEventPicker(
+        options: _events,
+        selected: _event,
+        onChanged: _setEvent,
+        width: AdminTabFrame.pickerWidth(context),
+      ),
+      pills: [
         for (final p in DashboardPeriod.values)
           QuickFilterPill(
             label: p.label,
@@ -99,34 +153,18 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
             onTap: () => _setPeriod(p),
           ),
       ],
-      filters: (context) => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          const FilterLabel('Period'),
-          const SizedBox(height: 8),
-          _periodChips(),
-        ],
-      ),
-      onOpenFilters: () => showFilterSheet(
-        context,
-        builder: (_) => Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            const FilterLabel('Period'),
-            const SizedBox(height: 8),
-            _periodChips(),
-          ],
-        ),
-      ),
-      activeFilterCount: _period == DashboardPeriod.days30 ? 0 : 1,
-      onClearFilters: () => _setPeriod(DashboardPeriod.days30),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loading && _data != null) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: _body()),
-        ],
-      ),
+      filters: (context) => _rail(),
+      onOpenFilters: () => showFilterSheet(context, builder: (_) => _rail()),
+      activeFilterCount: [_period != DashboardPeriod.days30, _event != adminAllEvents].where((on) => on).length,
+      onClearFilters: () {
+        setState(() {
+          _period = DashboardPeriod.days30;
+          _event = adminAllEvents;
+        });
+        _load();
+      },
+      loading: _loading && _data != null,
+      body: _body(),
     );
   }
 
@@ -183,31 +221,13 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
               _Tiles(
                 width: inner,
                 tiles: [
-                  _TileData('Upcoming events', '${data.upcomingEvents}', 'Not yet ended'),
+                  if (_event == adminAllEvents)
+                    _TileData('Upcoming events', '${data.upcomingEvents}', 'Not yet ended · see Events',
+                      onTap: () => context.go('/admin/events')),
                   _TileData('Registrations', '${data.registrations}', _period.label),
                   _TileData('Cancellations', '${data.cancellations}', _period.label),
                   _TileData('Money collected', formatMoney(data.money, wholeRupees: true), '${_period.label} · live payments'),
                 ],
-              ),
-              const SizedBox(height: 20),
-              _Card(
-                title: 'Upcoming events',
-                subtitle: 'Soonest first · tap one to see its registrations',
-                child: data.upcoming.isEmpty
-                    ? const _Empty('No upcoming events.')
-                    : Column(
-                        children: [
-                          for (var i = 0; i < data.upcoming.length; i++) ...[
-                            if (i > 0) Divider(height: 1, color: p.border),
-                            _UpcomingRow(
-                              event: data.upcoming[i],
-                              onTap: () => context.go(
-                                '/admin/registrations?event=${data.upcoming[i].eventId}',
-                              ),
-                            ),
-                          ],
-                        ],
-                      ),
               ),
               const SizedBox(height: 20),
               if (wide)
@@ -232,23 +252,17 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
   }
 }
 
-String _daysToGo(DashboardUpcoming e) {
-  if (e.isToday) return 'Today';
-  final today = DateUtils.dateOnly(DateTime.now());
-  final days = DateUtils.dateOnly(e.start).difference(today).inDays;
-  if (days <= 0) return 'Today';
-  if (days == 1) return 'Tomorrow';
-  return 'In $days days';
-}
-
 // ── Pieces ───────────────────────────────────────────────────────────────
 
 class _TileData {
-  const _TileData(this.label, this.value, this.sub);
+  const _TileData(this.label, this.value, this.sub, {this.onTap});
 
   final String label;
   final String value;
   final String sub;
+
+  /// Opens the list behind the number (Upcoming events → Events).
+  final VoidCallback? onTap;
 }
 
 /// Website stat cards: four in a row, two on phones.
@@ -261,7 +275,7 @@ class _Tiles extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final perRow = width >= 760 ? 4 : 2;
+    final perRow = width >= 760 ? tiles.length.clamp(1, 4) : 2;
     const gap = 16.0;
     final tileWidth = (width - gap * (perRow - 1)) / perRow;
     return Wrap(
@@ -269,14 +283,19 @@ class _Tiles extends StatelessWidget {
       runSpacing: gap,
       children: [
         for (final t in tiles)
-          Container(
+          Material(
+            color: p.card,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(12),
+              side: BorderSide(color: p.border),
+            ),
+            clipBehavior: Clip.antiAlias,
+            child: InkWell(
+              onTap: t.onTap,
+              hoverColor: p.surfaceHover,
+              child: Container(
             width: tileWidth,
             padding: const EdgeInsets.all(18),
-            decoration: BoxDecoration(
-              color: p.card,
-              border: Border.all(color: p.border),
-              borderRadius: BorderRadius.circular(12),
-            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -296,6 +315,8 @@ class _Tiles extends StatelessWidget {
                   style: AppTextStyles.bodySmall.copyWith(color: p.textMuted),
                 ),
               ],
+            ),
+              ),
             ),
           ),
       ],
@@ -347,96 +368,6 @@ class _Empty extends StatelessWidget {
           style: AppTextStyles.bodyMedium.copyWith(color: context.palette.textMuted),
         ),
       );
-}
-
-class _UpcomingRow extends StatelessWidget {
-  const _UpcomingRow({required this.event, required this.onTap});
-
-  final DashboardUpcoming event;
-  final VoidCallback onTap;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final e = event;
-    final cap = e.capacity;
-    final fraction = cap != null && cap > 0 ? (e.registered / cap).clamp(0.0, 1.0).toDouble() : null;
-    final tone = fraction == null
-        ? p.primary
-        : fraction >= 1
-        ? p.error
-        : fraction >= 0.9
-        ? p.warning
-        : p.primary;
-    final (statusLabel, statusTone) = switch (e.registrationStatus) {
-      _ when e.status == 'draft' => ('Draft', p.warning),
-      'open' => ('Registration open', p.success),
-      'full' => ('Full', p.error),
-      'closed' => ('Registration closed', p.textMuted),
-      'not_open_yet' => ('Opens later', p.textMuted),
-      _ => ('', p.textMuted),
-    };
-    final secondary = AppTextStyles.bodySmall.copyWith(color: p.textSecondary);
-
-    return InkWell(
-      onTap: onTap,
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Expanded(
-                  child: Text(
-                    e.title,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    style: AppTextStyles.titleSmall.copyWith(color: p.textPrimary),
-                  ),
-                ),
-                if (statusLabel.isNotEmpty) StatusBadge(label: statusLabel, tone: statusTone),
-              ],
-            ),
-            const SizedBox(height: 2),
-            Text('${formatDate(e.start)} · ${_daysToGo(e)}', style: secondary),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(3),
-                    child: LinearProgressIndicator(
-                      value: fraction ?? 0,
-                      minHeight: 6,
-                      backgroundColor: p.surfaceHover,
-                      valueColor: AlwaysStoppedAnimation<Color>(tone),
-                    ),
-                  ),
-                ),
-                const SizedBox(width: 12),
-                Text(
-                  cap == null ? '${e.registered} registered' : '${e.registered} / $cap',
-                  style: AppTextStyles.labelMedium.copyWith(color: p.textPrimary),
-                ),
-              ],
-            ),
-            const SizedBox(height: 4),
-            Text(
-              e.isToday
-                  ? 'Checked in ${e.checkedIn} of ${e.registered}'
-                  : e.newThisWeek > 0
-                  ? '+${e.newThisWeek} this week'
-                  : 'No new registrations this week',
-              style: secondary.copyWith(
-                color: e.isToday || e.newThisWeek > 0 ? p.textSecondary : p.textMuted,
-              ),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 /// Legend entry: a short line in the series colour, then its name.

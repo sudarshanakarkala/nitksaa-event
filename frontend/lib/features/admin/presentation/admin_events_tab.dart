@@ -17,6 +17,7 @@ import '../../events/domain/event.dart';
 import '../../events/presentation/widgets/event_card.dart';
 import 'event_admin_actions.dart';
 import '../domain/registration_filters.dart';
+import 'admin_tab_frame.dart';
 import 'admin_widgets.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/widgets/state_message.dart';
@@ -28,7 +29,7 @@ enum _Filter {
   all('All'),
   draft('Draft'),
   published('Published'),
-  open('Registration open'),
+  open('Open'),
   cancelled('Cancelled'),
   past('Past');
 
@@ -37,6 +38,22 @@ enum _Filter {
 }
 
 enum _View { cards, table }
+
+/// Card order by fullness (the table sorts by its headings). None lit:
+/// by date, in the Date button's direction.
+enum _Fill {
+  most('Most full'),
+  least('Least full');
+
+  const _Fill(this.label);
+  final String label;
+}
+
+/// Share of seats taken; null with no capacity set (sorted last).
+double? _fillOf(AppEvent e) {
+  final capacity = e.capacity;
+  return capacity == null || capacity <= 0 ? null : e.registeredCount / capacity;
+}
 
 /// Admin → Events: every event you administer (all of them for an overall
 /// admin), any status, past and upcoming, as cards or a table, with the
@@ -55,12 +72,20 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   String? _error;
   _Filter _filter = _Filter.all;
   _View _view = _View.cards;
+  _Fill? _fill;
+
+  /// Date ↑: soonest first (upcoming, then the most recent past).
+  /// Date ↓: latest first.
+  bool _soonestFirst = true;
 
   // Filters rail (the pills are the status shortcuts).
   Set<String> _modes = const {};
   Set<String> _registration = const {};
   Set<String> _price = const {};
   bool _mine = false;
+
+  /// Events starting in this range; null for any date.
+  DateTimeRange? _dates;
 
   /// Events with an action in flight; their actions are disabled.
   final Set<int> _busy = {};
@@ -160,6 +185,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     }
     if (_price.isNotEmpty && !_price.contains(e.isPaid ? 'paid' : 'free')) return false;
     if (_mine && (e.createdByUid == null || e.createdByUid != _myUid)) return false;
+    final dates = _dates;
+    if (dates != null) {
+      final start = e.startDatetime.toLocal();
+      final to = DateTime(dates.end.year, dates.end.month, dates.end.day + 1);
+      if (start.isBefore(dates.start) || !start.isBefore(to)) return false;
+    }
     return true;
   }
 
@@ -185,14 +216,26 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   /// Search and rail filters; the pills apply on top.
   List<AppEvent> get _filtered => _searched.where(_railMatches).toList();
 
-  /// Upcoming first (soonest at the top), then past (most recent first).
+  /// By date: soonest first (upcoming soonest at the top, then past most
+  /// recent first) or latest first. By fullness: share of seats taken, no
+  /// capacity last; ties in date order.
   List<AppEvent> get _visible {
     final rows = _filtered.where((e) => _matches(e, _filter)).toList();
     final upcoming = rows.where((e) => !_ended(e)).toList()
       ..sort((a, b) => a.startDatetime.compareTo(b.startDatetime));
     final past = rows.where(_ended).toList()
       ..sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
-    return [...upcoming, ...past];
+    final byDate = _soonestFirst
+        ? [...upcoming, ...past]
+        : (rows.toList()..sort((a, b) => b.startDatetime.compareTo(a.startDatetime)));
+    final fill = _fill;
+    if (fill == null) return byDate;
+    final indexed = [for (var i = 0; i < byDate.length; i++) (i, byDate[i])];
+    indexed.sort((a, b) {
+      final r = compareCells(_fillOf(a.$2), _fillOf(b.$2), ascending: fill == _Fill.least);
+      return r != 0 ? r : a.$1.compareTo(b.$1);
+    });
+    return [for (final e in indexed) e.$2];
   }
 
   String? _createdBy(AppEvent e) => e.createdByLabel(_myUid);
@@ -223,9 +266,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     final filtered = _filtered;
     final canCreate = ref.watch(authControllerProvider).session?.access.isEventCreator ?? false;
 
-    // Same frame as the Events page: search, Cards/Table, Filters; the
-    // status pills; then the count and Create Event.
-    return ListPage(
+    // The admin tab frame: search, Cards/Table, Filters; the status pills;
+    // then the count and Create event.
+    return AdminTabFrame(
       search: ListSearchField(
         controller: _search,
         hint: 'Search events…',
@@ -240,7 +283,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
               selected: _view,
               onChanged: (v) => setState(() => _view = v),
             ),
-      quickFilters: [
+      pills: [
         for (final f in _Filter.values)
           QuickFilterPill(
             label: f.label,
@@ -248,18 +291,27 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
             active: f == _filter,
             onTap: () => setState(() => _filter = f),
           ),
+        // Quick filters by type, then capacity; the date is on the line
+        // below. The table sorts by its headings instead.
+        if (_cardsShown(compact))
+          for (final f in _Fill.values)
+            QuickFilterPill(
+              label: f.label,
+              active: f == _fill,
+              onTap: () => setState(() => _fill = f == _fill ? null : f),
+            ),
       ],
       count: _loading && _events.isEmpty
           ? null
           : ResultCount(count: visible.length, one: 'event', many: 'events'),
-      actions: [
-        if (canCreate)
-          FilledButton.icon(
-            onPressed: _create,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Create Event'),
-          ),
-      ],
+      action: canCreate
+          ? FilledButton.icon(
+              onPressed: _create,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Create event'),
+            )
+          : null,
+      belowPills: _events.isEmpty ? null : _dateFilter(),
       filters: (context) => _filterRail(),
       onOpenFilters: () => showFilterSheet(
         context,
@@ -268,13 +320,49 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       ),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearFilters,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loading && _events.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: _body(visible, compact)),
-        ],
-      ),
+      loading: _loading && _events.isNotEmpty,
+      body: _body(visible, compact),
+    );
+  }
+
+  /// The cards (not the table) are on screen: the sort pills apply.
+  bool _cardsShown(bool compact) => compact || _view == _View.cards;
+
+  /// Starting between two dates, on the page under the pills: presets, then
+  /// the slider over the events' own dates. Sort by works within it.
+  Widget _dateFilter() {
+    final today = DateUtils.dateOnly(DateTime.now());
+    final starts = [for (final e in _events) DateUtils.dateOnly(e.startDatetime.toLocal())]..sort();
+    DateTime min(DateTime a, DateTime b) => a.isBefore(b) ? a : b;
+    DateTime max(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
+    final presets = <(String, DateTimeRange)>[
+      ('Next 30 days', DateTimeRange(start: today, end: today.add(const Duration(days: 30)))),
+      ('Next 90 days', DateTimeRange(start: today, end: today.add(const Duration(days: 90)))),
+      ('This year', DateTimeRange(start: DateTime(today.year), end: DateTime(today.year, 12, 31))),
+    ];
+    final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
+    return FilterDateRange(
+      inline: true,
+      leading: _cardsShown(compact)
+          ? QuickFilterPill(
+              label: _soonestFirst ? 'Date ↑' : 'Date ↓',
+              active: _fill == null,
+              onTap: () => setState(() {
+                // From a fullness sort: back to date order; then it flips.
+                if (_fill != null) {
+                  _fill = null;
+                } else {
+                  _soonestFirst = !_soonestFirst;
+                }
+              }),
+            )
+          : null,
+      label: 'Starts',
+      first: min(starts.first, today),
+      last: max(starts.last, today.add(const Duration(days: 90))),
+      value: _dates,
+      presets: presets,
+      onChanged: (v) => setState(() => _dates = v),
     );
   }
 
@@ -347,7 +435,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       return StateMessage(
         icon: searching ? Icons.search_off : Icons.event_note_outlined,
         title: searching ? 'No events match your search' : 'No ${_filter.label.toLowerCase()} events',
-        body: _filter == _Filter.all && !searching && _activeFilterCount == 0
+        body: _filter == _Filter.all && !searching && _activeFilterCount == 0 && _dates == null
             ? (_access.isEventCreator
                 ? 'Create an event to get started.'
                 : 'You\'re not an admin of any events yet.')
@@ -449,7 +537,9 @@ class _EventsTableState extends State<_EventsTable> {
           id: 'capacity',
           label: 'Capacity',
           kind: ColumnKind.number,
-          value: (e) => e.registeredCount,
+          // Sorts by share of seats taken; no capacity goes last.
+          value: _fillOf,
+          text: (e) => e.capacity == null ? '${e.registeredCount}' : '${e.registeredCount} / ${e.capacity}',
           width: 120,
         ),
         GridColumn(

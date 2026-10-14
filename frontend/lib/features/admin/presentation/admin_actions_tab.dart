@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/errors/api_error_message.dart';
+import '../../../shared/widgets/filter_controls.dart';
 import '../../../shared/widgets/list_page.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -11,6 +12,7 @@ import '../../auth/services/auth_controller.dart';
 import '../data/actions_api.dart';
 import '../domain/registration_filters.dart' show formatDate, formatDateTime;
 import '../../../shared/widgets/state_message.dart';
+import 'admin_tab_frame.dart';
 
 /// Admin → Actions (the default tab): what needs attention, website
 /// "Needs attention" pattern. Each row is a queue with a count and
@@ -43,33 +45,34 @@ class _AdminActionsTabState extends ConsumerState<AdminActionsTab> {
     final access = ref.watch(authControllerProvider).session?.access ?? AdminAccess.none;
     final counts = pending.valueOrNull;
 
-    return ListPage(
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (pending.isLoading && counts != null) const LinearProgressIndicator(minHeight: 2),
-          Expanded(
-            child: counts != null
-                ? _list(counts, access)
-                : pending.hasError
-                ? StateMessage(
-                    icon: Icons.error_outline,
-                    title: 'Couldn\'t load the actions',
-                    body: apiErrorMessage(pending.error!, action: 'load the actions'),
-                    action: TextButton(
-                      onPressed: () => ref.invalidate(pendingCountProvider),
-                      child: const Text('Try again'),
-                    ),
-                  )
-                : const Center(child: CircularProgressIndicator()),
-          ),
-        ],
-      ),
+    final queues = counts == null ? const <_Queue>[] : _queues(counts, access);
+    final toAct = queues.where((q) => q.needsAction).fold(0, (n, q) => n + q.count);
+    final forInfo = queues.where((q) => !q.needsAction).fold(0, (n, q) => n + q.count);
+
+    // No search or filters: a short, fixed list of queues. While the numbers
+    // refresh the old ones stay on screen, with no progress line (it used to
+    // stay stuck part-way across).
+    return AdminTabFrame(
+      count: counts == null
+          ? null
+          : ResultCount(count: toAct, one: 'to act on', many: 'to act on', extra: '$forInfo for information'),
+      body: counts != null
+          ? _list(queues)
+          : pending.hasError
+          ? StateMessage(
+              icon: Icons.error_outline,
+              title: 'Couldn\'t load the actions',
+              body: apiErrorMessage(pending.error!, action: 'load the actions'),
+              action: TextButton(
+                onPressed: () => ref.invalidate(pendingCountProvider),
+                child: const Text('Try again'),
+              ),
+            )
+          : const Center(child: CircularProgressIndicator()),
     );
   }
 
-  Widget _list(PendingCounts c, AdminAccess access) {
-    final queues = _queues(c, access);
+  Widget _list(List<_Queue> queues) {
     final allClear = queues.every((q) => q.count == 0);
 
     return LayoutBuilder(

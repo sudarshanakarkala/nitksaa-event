@@ -76,7 +76,8 @@ abstract class AppRouter {
           // RouteGuards sends /admin and hidden tabs to a visible tab.
           GoRoute(
             path: AppRoutes.admin,
-            redirect: (context, state) => AdminTab.landing.path,
+            redirect: (context, state) =>
+                '${AdminTab.landing.path}?${AdminTab.landingQuery}',
           ),
           GoRoute(
             path: AppRoutes.adminTab,

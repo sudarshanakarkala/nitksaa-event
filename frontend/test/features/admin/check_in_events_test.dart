@@ -35,4 +35,17 @@ void main() {
 
     expect(checkInEvents(events, _now).map((e) => e.eventId), [2, 8, 1, 3]);
   });
+
+  test('smart landing: an event on now or within 3 hours, else none', () {
+    final later = _event(1, DateTime(2026, 10, 31, 11, 30)); // in 2.5 h
+    final onNow = _event(2, DateTime(2026, 10, 31, 8)); // 8–11
+    final tonight = _event(3, DateTime(2026, 10, 31, 19)); // in 10 h
+    final ended = _event(4, DateTime(2026, 10, 31, 5)); // 5–8
+    final empty = _event(5, DateTime(2026, 10, 31, 9), registered: 0);
+    final draft = _event(6, DateTime(2026, 10, 31, 9), status: 'draft');
+
+    expect(eventOnNow([later, onNow, tonight, ended, empty, draft], _now)?.eventId, 2);
+    expect(eventOnNow([later, tonight], _now)?.eventId, 1);
+    expect(eventOnNow([tonight, ended, empty, draft], _now), isNull);
+  });
 }

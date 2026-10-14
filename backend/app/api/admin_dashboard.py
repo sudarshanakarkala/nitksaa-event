@@ -5,11 +5,14 @@ Scoped like the admin event list: overall admins see every event, anyone
 else only the events they administer (Access.scope_event_ids()).
 Cancelled events are left out of the upcoming and recent lists.
 Money counts LIVE payments only (TEST orders are practice runs).
+
+`event_id=` narrows everything to one event (one the caller administers):
+"how is this event going?".
 """
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 
 from app.database import get_pool
 from app.middleware.admin_auth import require_any_admin
@@ -37,9 +40,14 @@ def _since(period: str, now: datetime) -> Optional[datetime]:
 @router.get("/dashboard")
 async def dashboard(
     period: str = Query("30d", pattern="^(30d|90d|year|all)$"),
+    event_id: Optional[int] = Query(None, ge=1, description="Only this event"),
     user: Dict[str, Any] = Depends(require_any_admin),
 ) -> Dict[str, Any]:
     scope = user["access"].scope_event_ids()
+    if event_id is not None:
+        if scope is not None and event_id not in scope:
+            raise HTTPException(status_code=403, detail="not_event_admin")
+        scope = [event_id]
     now = datetime.now(timezone.utc)
     since = _since(period, now)
 
@@ -145,6 +153,7 @@ async def dashboard(
 
     return {
         "period": period,
+        "event_id": event_id,
         "since": since.isoformat() if since else None,
         "tiles": {
             "upcoming_events": tiles["upcoming_events"],

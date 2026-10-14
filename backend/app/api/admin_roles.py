@@ -1,6 +1,6 @@
 """Roles API (admin revamp step 1.6).
 
-  GET    /api/v1/admin/users?query=                 overall admin
+  GET    /api/v1/admin/users?query=&role=           overall admin
   PATCH  /api/v1/admin/users/{uid}/roles            overall admin
   GET    /api/v1/admin/events/{id}/admins           overall admin or this event's admins
   POST   /api/v1/admin/events/{id}/admins           overall admin or this event's admins
@@ -11,7 +11,7 @@ Every change is audited as role_granted / role_revoked with context
 admin flag. Revoking an event admin sets event_members.status = 'revoked'
 (the row is kept for history).
 """
-from typing import Any, Dict, List, Optional
+from typing import Any, Dict, List, Literal, Optional
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field, model_validator
@@ -48,6 +48,10 @@ class AdminUserListResponse(BaseModel):
     total: int
     page: int
     per_page: int
+    # People matching the search in each role (the Roles tab's pills):
+    # overall_admin, event_admin, finance, any (any role, or can create
+    # events) and everyone.
+    counts: Dict[str, int]
 
 
 class UserRolesUpdate(BaseModel):
@@ -118,34 +122,76 @@ async def _audit_role(actor_uid: str, granted: bool, role: str, target_uid: str,
 
 # ── Users and their flags (overall admin only) ───────────────────────────────
 
+# What each `role=` filter means. $1 is the emergency list
+# (PLATFORM_ADMIN_FIREBASE_UIDS). Overall admin follows services/access.py.
+_ROLE_SQL = {
+    "overall_admin": """(
+        u.is_admin OR u.firebase_uid = ANY($1::text[])
+        OR EXISTS (SELECT 1 FROM payment_platform_roles r
+                   WHERE r.firebase_uid = u.firebase_uid
+                     AND r.role = 'platform_admin' AND r.revoked_at IS NULL)
+    )""",
+    "event_admin": """EXISTS (
+        SELECT 1 FROM event_members m
+        WHERE m.firebase_uid = u.firebase_uid
+          AND m.role = 'event_admin' AND m.status = 'active'
+    )""",
+    "finance": """EXISTS (
+        SELECT 1 FROM payment_platform_roles r
+        WHERE r.firebase_uid = u.firebase_uid
+          AND r.role = 'finance_operator' AND r.revoked_at IS NULL
+    )""",
+}
+_ROLE_SQL["any"] = (
+    f"({_ROLE_SQL['overall_admin']} OR u.is_event_creator"
+    f" OR {_ROLE_SQL['event_admin']} OR {_ROLE_SQL['finance']})"
+)
+
+# $2 is the search pattern, or NULL for no search.
+_SEARCH_SQL = "($2::text IS NULL OR u.fullname ILIKE $2::text OR u.email ILIKE $2::text)"
+
+RoleFilter = Literal["overall_admin", "event_admin", "finance", "any"]
+
+
 @router.get("/users", response_model=AdminUserListResponse)
 async def search_users(
     query: Optional[str] = Query(None, description="Name or email, case-insensitive"),
+    role: Optional[RoleFilter] = Query(None, description="Only people with this role"),
     page: int = Query(1, ge=1),
     per_page: int = Query(25, ge=1, le=100),
     user: Dict[str, Any] = Depends(require_overall_admin),
 ):
-    where = ""
-    args: List[Any] = []
-    if query and query.strip():
-        where = "WHERE u.fullname ILIKE $1 OR u.email ILIKE $1"
-        args.append(f"%{query.strip()}%")
+    pattern = f"%{query.strip()}%" if query and query.strip() else None
+    emergency = list(get_settings().platform_admin_firebase_uids)
+    where = f"WHERE {_SEARCH_SQL}" + (f" AND {_ROLE_SQL[role]}" if role else "")
+    counted = ", ".join(
+        f"COUNT(*) FILTER (WHERE {sql})::int AS {name}" for name, sql in _ROLE_SQL.items()
+    )
 
     pool = await get_pool()
     async with pool.acquire() as conn:
-        total = int(await conn.fetchval(f"SELECT COUNT(*) FROM event_users u {where}", *args))
+        counts = dict(await conn.fetchrow(
+            f"""
+            SELECT {counted}, COUNT(*)::int AS everyone
+            FROM event_users u
+            WHERE {_SEARCH_SQL}
+            """,
+            emergency, pattern,
+        ))
         rows = await conn.fetch(
             f"""
             SELECT {_USER_COLUMNS}
             FROM event_users u
             {where}
-            ORDER BY u.is_admin DESC, u.is_event_creator DESC, lower(u.fullname)
-            LIMIT ${len(args) + 1} OFFSET ${len(args) + 2}
+            ORDER BY {_ROLE_SQL['overall_admin']} DESC, u.is_event_creator DESC,
+                     lower(u.fullname), u.firebase_uid
+            LIMIT $3::int OFFSET $4::int
             """,
-            *args, per_page, (page - 1) * per_page,
+            emergency, pattern, per_page, (page - 1) * per_page,
         )
+    total = counts[role] if role else counts["everyone"]
     return {"users": [_user_item(r) for r in rows], "total": total,
-            "page": page, "per_page": per_page}
+            "page": page, "per_page": per_page, "counts": counts}
 
 
 @router.patch("/users/{firebase_uid}/roles", response_model=AdminUserItem)
