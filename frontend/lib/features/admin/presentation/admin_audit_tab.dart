@@ -15,6 +15,8 @@ import '../../events/data/events_repository.dart';
 import '../data/audit_api.dart';
 import '../domain/registration_filters.dart';
 import 'admin_widgets.dart';
+import '../../../shared/widgets/state_message.dart';
+import '../../../shared/widgets/list_search_field.dart';
 
 const _categories = {
   'events': 'Events',
@@ -180,17 +182,9 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
     return ListPage(
-      search: SizedBox(
-        height: 44,
-        child: TextField(
-          controller: _search,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.search, size: 20),
-            hintText: 'Search name, event, number, email or Razorpay id…',
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-        ),
+      search: ListSearchField(
+        controller: _search,
+        hint: 'Search name, event, number, email or Razorpay id…',
       ),
       quickFilters: [
         SizedBox(
@@ -253,18 +247,11 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
     final p = context.palette;
     if (_loading && _rows.isEmpty && _error == null) return const Center(child: CircularProgressIndicator());
     if (_error != null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.error_outline, size: 44, color: p.textMuted),
-            const SizedBox(height: 12),
-            Text('Couldn\'t load the audit log', style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary)),
-            const SizedBox(height: 6),
-            Text(_error!, style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary)),
-            TextButton(onPressed: _load, child: const Text('Try again')),
-          ],
-        ),
+      return StateMessage(
+        icon: Icons.error_outline,
+        title: 'Couldn\'t load the audit log',
+        body: _error!,
+        action: TextButton(onPressed: _load, child: const Text('Try again')),
       );
     }
     return LayoutBuilder(
@@ -272,12 +259,7 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
         padding: ListPage.contentPadding(context, constraints.maxWidth, top: 20),
         children: [
           if (_rows.isEmpty)
-            Padding(
-              padding: const EdgeInsets.symmetric(vertical: 40),
-              child: Center(
-                child: Text('No entries match.', style: AppTextStyles.bodyMedium.copyWith(color: p.textMuted)),
-              ),
-            )
+            const StateMessage(body: 'No entries match.')
           else
             AdminGridTable<AuditEntry>(
               rows: _sorted,

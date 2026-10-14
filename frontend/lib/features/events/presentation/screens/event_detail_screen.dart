@@ -16,6 +16,7 @@ import '../widgets/entry_pass_qr.dart';
 import '../widgets/venue_section.dart';
 import '../../../../shared/widgets/form_fields.dart';
 import '../../../../shared/widgets/notice.dart';
+import '../../../../shared/format.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
   const EventDetailScreen({super.key, required this.eventId});
@@ -809,8 +810,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   /// Fee tiers: what the ticket price covers. Their total is the price.
   Widget _buildFeesSection(AppEvent event) {
     final p = context.palette;
-    String rupees(double v) =>
-        '₹${v.toStringAsFixed(v == v.roundToDouble() ? 0 : 2)}';
     final total = event.fees.fold<double>(0, (sum, f) => sum + f.amount);
     final rowStyle = TextStyle(fontSize: 14, color: p.textPrimary);
     return Column(
@@ -827,7 +826,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             child: Row(
               children: [
                 Expanded(child: Text(f.name, style: rowStyle)),
-                Text(rupees(f.amount), style: rowStyle),
+                Text(formatMoney(f.amount), style: rowStyle),
               ],
             ),
           ),
@@ -835,7 +834,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         Row(
           children: [
             Expanded(child: Text('Total', style: rowStyle.copyWith(fontWeight: FontWeight.w600))),
-            Text(rupees(total), style: rowStyle.copyWith(fontWeight: FontWeight.w600)),
+            Text(formatMoney(total), style: rowStyle.copyWith(fontWeight: FontWeight.w600)),
           ],
         ),
       ],
@@ -1003,7 +1002,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         title: 'Registration closes in',
         countdown: _formatRemainingTime(event.registrationClosesAt!),
         dateLabel: 'Last date to register',
-        dateValue: _formatDateTime(event.registrationClosesAt!),
+        dateValue: formatDateTime(event.registrationClosesAt!),
       );
     } else if (event.registrationStatus != 'open' &&
         event.registrationOpensAt != null &&
@@ -1012,7 +1011,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         title: 'Registration opens in',
         countdown: _formatRemainingTime(event.registrationOpensAt!),
         dateLabel: 'Registration opening on',
-        dateValue: _formatDateTime(event.registrationOpensAt!),
+        dateValue: formatDateTime(event.registrationOpensAt!),
       );
     }
 
@@ -1318,7 +1317,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         alumniName: isAlumni ? (profile['fullname']?.toString() ?? '') : null,
         email: auth.session?.email ?? '',
         initialPhone: isAlumni ? (profile['phone']?.toString() ?? '') : '',
-        totalLabel: isPaid ? _formatRupees(event.ticketPrice!) : 'Free',
+        totalLabel: isPaid ? formatMoney(event.ticketPrice!) : 'Free',
         isPaid: isPaid,
         onContinue: (draft) {
           notifier.setRegistrationDraft(draft);
@@ -1326,13 +1325,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         },
       ),
     );
-  }
-
-  String _formatRupees(double amount) {
-    final text = amount == amount.roundToDouble()
-        ? amount.toInt().toString()
-        : amount.toStringAsFixed(2);
-    return '₹$text';
   }
 
   Widget _buildInfoBox(bool isDark) {
@@ -1402,25 +1394,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   // ==========================================
   // HELPER FORMATTERS
   // ==========================================
-  String _formatDate(DateTime dt) {
-    final months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
-
-  String _formatTime(DateTime start, DateTime? end) {
-    String formatSingle(DateTime dt) {
-      final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
-      final period = dt.hour >= 12 ? 'PM' : 'AM';
-      final minute = dt.minute.toString().padLeft(2, '0');
-      return '$hour:$minute $period';
-    }
-
-    if (end == null) {
-      return formatSingle(start);
-    }
-    return '${formatSingle(start)} – ${formatSingle(end)}';
-  }
-
   /// The last moment of the event. A full-day event is stored ending at
   /// midnight after its last day, which belongs to the day before.
   DateTime? _lastMoment(AppEvent event) {
@@ -1435,7 +1408,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final last = _lastMoment(event);
     if (last == null ||
         (last.year == start.year && last.month == start.month && last.day == start.day)) {
-      return _formatDate(start);
+      return formatDate(start);
     }
     const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     final days = DateTime(last.year, last.month, last.day)
@@ -1444,7 +1417,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         1;
     final String range;
     if (start.year != last.year) {
-      range = '${_formatDate(start)} – ${_formatDate(last)}';
+      range = '${formatDate(start)} – ${formatDate(last)}';
     } else if (start.month != last.month) {
       range = '${start.day} ${months[start.month - 1]} – ${last.day} ${months[last.month - 1]} ${last.year}';
     } else {
@@ -1458,18 +1431,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     if (event.isFullDay) return 'All day';
     final start = event.startDatetime;
     final end = event.endDatetime;
-    if (end == null) return _formatTime(start, null);
+    if (end == null) return formatTimeRange(start, null);
     final sameDay = end.year == start.year && end.month == start.month && end.day == start.day;
-    if (sameDay) return _formatTime(start, end);
-    return 'Starts ${_formatTime(start, null)}, ends ${_formatTime(end, null)}';
-  }
-
-  String _formatDateTime(DateTime dt) {
-    return '${_formatDate(dt)} at ${_formatTime(dt, null)}';
+    if (sameDay) return formatTimeRange(start, end);
+    return 'Starts ${formatTimeRange(start, null)}, ends ${formatTimeRange(end, null)}';
   }
 
   String _formatSessionTime(EventSession session) {
-    return _formatTime(session.startDatetime, session.endDatetime);
+    return formatTimeRange(session.startDatetime, session.endDatetime);
   }
 
   String _formatSessionTitle(EventSession session) {
@@ -1503,10 +1472,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   String _eventFeeLabel(AppEvent event) {
     if (_isPaidEvent(event)) {
       final price = event.ticketPrice!;
-      final amountText = price == price.roundToDouble()
-          ? price.toInt().toString()
-          : price.toStringAsFixed(2);
-      return 'Event Fee: ₹$amountText';
+      return 'Event Fee: ${formatMoney(price)}';
     }
     return 'Free Event';
   }

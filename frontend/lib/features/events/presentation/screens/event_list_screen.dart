@@ -4,21 +4,23 @@ import 'package:go_router/go_router.dart';
 
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
+import '../../../../shared/widgets/filter_controls.dart';
 import '../../../../shared/widgets/list_page.dart';
 import '../../../../shared/widgets/quick_filter_pill.dart';
 import '../../../../shared/widgets/segment_toggle.dart';
+import '../../../../shared/widgets/state_message.dart';
 import '../../../admin/presentation/event_admin_actions.dart';
 import '../../../auth/domain/admin_access.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../providers/created_events_provider.dart';
 import '../providers/events_provider.dart';
 import '../providers/my_events_provider.dart';
-import '../widgets/refund_status_dialog.dart';
 import '../widgets/event_card.dart';
 import '../../domain/event.dart';
 import '../../domain/my_event_registration.dart';
-import '../../../../shared/widgets/notice.dart';
-import '../../domain/refund_status.dart';
+import '../../../../shared/format.dart';
+import '../../../../shared/widgets/list_search_field.dart';
+import '../widgets/unregister_flow.dart';
 
 /// "Registered by me" filter. UI state only; shared with the phone filter
 /// sheet, which is a separate route.
@@ -96,53 +98,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     return byEvent;
   }
 
-  /// Same confirm dialog and provider call as the My Events page.
-  Future<void> _confirmUnregister(
-    AppEvent event,
-    MyEventRegistration registration,
-  ) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Unregister?'),
-        content: Text('This will unregister you from ${event.title}.'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Unregister'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    final outcome = await ref
-        .read(myEventsProvider.notifier)
-        .cancelRegistration(registration.registrationId);
-    if (!mounted) return;
-    final refundStatus = outcome.refund?.status;
-    showNotice(
-      context,
-      outcome.message,
-      kind: !outcome.cancelled
-          ? NoticeKind.error
-          : (refundStatus == RefundStatus.failed || refundStatus == RefundStatus.delayed)
-              ? NoticeKind.warning
-              : NoticeKind.success,
-      // A notice with an action would otherwise stay up until pressed.
-      persist: outcome.cancelled ? false : null,
-      action: viewRefundAction(
-        context,
-        ref,
-        outcome: outcome,
-        registrationId: registration.registrationId,
-      ),
-    );
-  }
-
   @override
   void dispose() {
     _searchController.dispose();
@@ -168,43 +123,44 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  /// Filter section label, website `.filter-label`: small uppercase, 70% gold.
-  Widget _filterLabel(String text) => Text(
-        text.toUpperCase(),
-        style: AppTextStyles.eyebrow.copyWith(
-          fontSize: 11.5,
-          letterSpacing: 0.9,
-          color: context.palette.primary.withValues(alpha: 0.7),
-        ),
-      );
+  /// A rail section of on/off chips over "included" flags: [included] maps
+  /// each option to whether its events are shown (all true = no filter).
+  ///
+  /// A chip is lit only when it narrows the list, so a fresh page shows none
+  /// lit. Clicking one when none is lit shows only that option; clicking a
+  /// lit one takes it off again (the last one off means all again).
+  List<Widget> _includeChips(
+    String label,
+    Map<String, String> options,
+    Map<String, bool> included,
+    void Function(String key) toggle,
+  ) {
+    bool on(String key) => included[key] ?? true;
+    final all = options.keys.every(on);
+    void tap(String key) {
+      final wanted = all
+          ? {key}
+          : {for (final k in options.keys) if (on(k) != (k == key)) k};
+      // Nothing left means no filter: everything shown again.
+      final target = wanted.isEmpty ? options.keys.toSet() : wanted;
+      for (final k in options.keys) {
+        if (on(k) != target.contains(k)) toggle(k);
+      }
+    }
 
-  /// Website `.chip` toggle: faint pill, gold-tinted when on. Calls
-  /// [onChanged] with the new value, like the checkbox it replaces.
-  Widget _filterChip(String label, bool value, ValueChanged<bool?> onChanged) {
-    final p = context.palette;
-    return InkWell(
-      borderRadius: BorderRadius.circular(20),
-      onTap: () => onChanged(!value),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 11, vertical: 5),
-        decoration: BoxDecoration(
-          color: value ? p.primary.withValues(alpha: 0.14) : p.surfaceSubtle,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(
-            color: p.primary.withValues(alpha: value ? 0.5 : 0.14),
+    return [
+      FilterLabel(label),
+      const SizedBox(height: 8),
+      Wrap(spacing: 6, runSpacing: 6, children: [
+        for (final MapEntry(:key, :value) in options.entries)
+          FilterChipToggle(
+            label: value,
+            selected: !all && on(key),
+            onChanged: (_) => tap(key),
           ),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.bodySmall.copyWith(
-            fontSize: 12.8,
-            height: 1.2,
-            color: value ? p.primary : p.textSecondary,
-            fontWeight: value ? FontWeight.w500 : FontWeight.w400,
-          ),
-        ),
-      ),
-    );
+      ]),
+      const SizedBox(height: 20),
+    ];
   }
 
   /// Active filters, for the rail badge (search is not counted).
@@ -283,32 +239,32 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           SizedBox(height: inRail ? 8 : 20),
 
           // When: upcoming or past (single choice; was the page tabs).
-          _filterLabel('When'),
+          const FilterLabel('When'),
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final period in const ['upcoming', 'past'])
-              _filterChip(
-                period == 'upcoming' ? 'Upcoming' : 'Past',
-                state.period == period,
-                (_) => rf.read(eventsProvider.notifier).setPeriod(period),
+              FilterChipToggle(
+                label: period == 'upcoming' ? 'Upcoming' : 'Past',
+                selected: state.period == period,
+                onChanged: (_) => rf.read(eventsProvider.notifier).setPeriod(period),
               ),
           ]),
           const SizedBox(height: 20),
 
           // Your registrations (website "Author: My Stories"), signed in only.
           if (rf.watch(authControllerProvider).isAuthenticated) ...[
-            _filterLabel('My Registrations'),
+            const FilterLabel('My Registrations'),
             const SizedBox(height: 8),
-            _filterChip(
-              'Registered by me',
-              rf.watch(_registeredOnlyProvider),
-              (on) => rf.read(_registeredOnlyProvider.notifier).state = on ?? false,
+            FilterChipToggle(
+              label: 'Registered by me',
+              selected: rf.watch(_registeredOnlyProvider),
+              onChanged: (on) => rf.read(_registeredOnlyProvider.notifier).state = on,
             ),
             const SizedBox(height: 20),
           ],
 
           // Date Range Section
-          _filterLabel('Date Range'),
+          const FilterLabel('Date Range'),
           const SizedBox(height: 12),
           Row(
             children: [
@@ -365,85 +321,33 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 20),
 
           // Timeline Section (single-select dropdown)
-          _filterLabel('Timeline'),
+          const FilterLabel('Timeline'),
           const SizedBox(height: 8),
           _buildTimelineDropdown(rf, state, isInDrawer),
           const SizedBox(height: 20),
 
-          // Event Mode Section (website chips)
-          _filterLabel('Event Mode'),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-          _filterChip(
-            'Physical',
-            state.filterModes['physical'] ?? true,
-            (val) {
-              if (val == null) return;
-              final current = state.filterModes['physical'] ?? true;
-              if (val != current) {
-                rf.read(eventsProvider.notifier).toggleFilterMode('physical');
-              }
-            },
+          // Event mode, registration status and price work like the website's
+          // chips: none lit = all; lit = only those. The provider keeps
+          // "included" flags (all included = no filter); _includeChips maps
+          // between the two.
+          ..._includeChips(
+            'Event Mode',
+            const {'physical': 'Physical', 'virtual': 'Virtual'},
+            state.filterModes,
+            rf.read(eventsProvider.notifier).toggleFilterMode,
           ),
-          _filterChip(
-            'Virtual',
-            state.filterModes['virtual'] ?? true,
-            (val) {
-              if (val == null) return;
-              final current = state.filterModes['virtual'] ?? true;
-              if (val != current) {
-                rf.read(eventsProvider.notifier).toggleFilterMode('virtual');
-              }
-            },
+          ..._includeChips(
+            'Registration Status',
+            const {'open': 'Open', 'closed': 'Closed'},
+            state.filterRegistrationStatus,
+            rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus,
           ),
-          ]),
-          const SizedBox(height: 20),
-
-          // Registration Status Section (website chips)
-          _filterLabel('Registration Status'),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-          _filterChip(
-            'Open',
-            state.filterRegistrationStatus['open'] ?? true,
-            (val) {
-              if (val == null) return;
-              final current = state.filterRegistrationStatus['open'] ?? true;
-              if (val != current) {
-                rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus('open');
-              }
-            },
+          ..._includeChips(
+            'Price',
+            const {'free': 'Free', 'paid': 'Paid'},
+            state.filterPrice,
+            rf.read(eventsProvider.notifier).toggleFilterPrice,
           ),
-          _filterChip(
-            'Closed',
-            state.filterRegistrationStatus['closed'] ?? true,
-            (val) {
-              if (val == null) return;
-              final current = state.filterRegistrationStatus['closed'] ?? true;
-              if (val != current) {
-                rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus('closed');
-              }
-            },
-          ),
-          ]),
-          const SizedBox(height: 20),
-
-          // Price Section (website chips)
-          _filterLabel('Price'),
-          const SizedBox(height: 8),
-          Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final (key, label) in const [('free', 'Free'), ('paid', 'Paid')])
-              _filterChip(
-                label,
-                state.filterPrice[key] ?? true,
-                (val) {
-                  if (val == null) return;
-                  if (val != (state.filterPrice[key] ?? true)) {
-                    rf.read(eventsProvider.notifier).toggleFilterPrice(key);
-                  }
-                },
-              ),
-          ]),
           const SizedBox(height: 24),
 
           // Drawer-only clear button removed — top 'Clear All' handles clearing.
@@ -481,7 +385,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     final filteredEvents = registeredOnly
         ? allEvents.where((e) => registrations[e.eventId]?.isActive ?? false).toList()
         : allEvents;
-    final p = context.palette;
     final signedIn = ref.watch(authControllerProvider).isAuthenticated;
     final access = ref.watch(authControllerProvider).session?.access ?? AdminAccess.none;
     final drafts = access.isAnyAdmin ? (ref.watch(myDraftCountProvider).valueOrNull ?? 0) : 0;
@@ -501,17 +404,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       body: ListPage(
         title: 'Events',
         subtitle: 'Reunions, talks and meetups of the NITK Surathkal Alumni Association.',
-        search: SizedBox(
-          height: 44,
-          child: TextField(
-            controller: _searchController,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search, size: 20),
-              hintText: 'Search events…',
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            ),
-          ),
+        search: ListSearchField(
+          controller: _searchController,
+          hint: 'Search events…',
         ),
         // Cards / Table, like the website; phones get cards only.
         toggle: MediaQuery.sizeOf(context).width < 600
@@ -526,18 +421,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               ),
         count: state.isLoading
             ? null
-            : Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '${filteredEvents.length}',
-                      style: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
-                    ),
-                    TextSpan(text: filteredEvents.length == 1 ? ' event' : ' events'),
-                  ],
-                ),
-                style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
-              ),
+            : ResultCount(count: filteredEvents.length, one: 'event', many: 'events'),
         // Admins act here too: their drafts (kept off the public grid, as on
         // the website) and Create event.
         actions: [
@@ -598,9 +482,22 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             return state.isLoading
             ? const Center(child: CircularProgressIndicator())
             : state.errorMessage != null
-            ? _buildMaterialErrorState(state.errorMessage!)
+            ? StateMessage(
+                icon: Icons.error_outline,
+                title: 'Couldn\'t load events',
+                body: state.errorMessage!,
+                action: TextButton(
+                  onPressed: () =>
+                      ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true),
+                  child: const Text('Try again'),
+                ),
+              )
             : filteredEvents.isEmpty
-            ? _buildMaterialEmptyState()
+            ? const StateMessage(
+                icon: Icons.event_note_outlined,
+                title: 'No events found',
+                body: 'Check back later or try other filters.',
+              )
             : _view == 'table' && MediaQuery.sizeOf(context).width >= 600
             ? _buildEventTable(filteredEvents, pad, registrations)
             // Website grid: columns of at least 300px, every card the same
@@ -623,7 +520,16 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                         ? _adminActions.actionsFor(event)
                         : const [],
                     onUnregister: registered && registration!.canCancel
-                        ? () => _confirmUnregister(event, registration)
+                        ? () => confirmAndUnregister(
+                            // The page's context, not the card's: with
+                            // "Registered by me" on, the card goes away once
+                            // cancelled, and the notice (View refund) needs
+                            // something that stays.
+                            this.context,
+                            ref,
+                            registration: registration,
+                            eventTitle: event.title,
+                          )
                         : null,
                     unregistering: registration != null &&
                         ref
@@ -712,9 +618,9 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                             fontWeight: FontWeight.w600,
                           ),
                         )),
-                        DataCell(Text(_formatDate(event.startDatetime), style: cellStyle)),
+                        DataCell(Text(formatDate(event.startDatetime), style: cellStyle)),
                         DataCell(Text(
-                          _formatTime(event.startDatetime, event.endDatetime),
+                          formatTimeRange(event.startDatetime, event.endDatetime),
                           style: cellStyle,
                         )),
                         DataCell(Text(event.isVirtual ? 'Virtual' : 'Physical', style: cellStyle)),
@@ -745,52 +651,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ),
           ),
         ),
-      ),
-    );
-  }
-
-  Widget _buildMaterialErrorState(String message) {
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24.0),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Icon(Icons.error_outline, size: 48, color: context.palette.error),
-            const SizedBox(height: 12),
-            const Text(
-              'Something went wrong',
-              style: TextStyle(fontFamily: AppTextStyles.serif, fontWeight: FontWeight.w600, fontSize: 18),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              message,
-              textAlign: TextAlign.center,
-              style: TextStyle(color: Theme.of(context).colorScheme.outline),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget _buildMaterialEmptyState() {
-    return Center(
-      child: Column(
-        mainAxisAlignment: MainAxisAlignment.center,
-        children: [
-          Icon(Icons.calendar_today_outlined, size: 64, color: context.palette.textMuted),
-          const SizedBox(height: 16),
-          Text(
-            'No Events Found',
-            style: TextStyle(fontFamily: AppTextStyles.serif, fontWeight: FontWeight.w600, fontSize: 18),
-          ),
-          const SizedBox(height: 6),
-          Text(
-            'Please check back later or try adjusting filters.',
-            style: TextStyle(color: context.palette.textMuted),
-          ),
-        ],
       ),
     );
   }
@@ -849,35 +709,4 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   // ==========================================
   // HELPER DATE & TIME FORMATTERS
   // ==========================================
-  String _formatDate(DateTime dt) {
-    final months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}';
-  }
-
-  String _formatTime(DateTime start, DateTime? end) {
-    String formatSingle(DateTime dt) {
-      final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
-      final period = dt.hour >= 12 ? 'PM' : 'AM';
-      final minute = dt.minute.toString().padLeft(2, '0');
-      return '$hour:$minute $period';
-    }
-
-    if (end == null) {
-      return formatSingle(start);
-    }
-    return '${formatSingle(start)} – ${formatSingle(end)}';
-  }
 }

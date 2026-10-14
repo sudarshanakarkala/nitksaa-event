@@ -110,11 +110,20 @@ class FilterChipSection extends StatelessWidget {
 
 /// Count line under the pills, as on the Events page: "**24** events".
 class ResultCount extends StatelessWidget {
-  const ResultCount({super.key, required this.count, required this.one, required this.many});
+  const ResultCount({
+    super.key,
+    required this.count,
+    required this.one,
+    required this.many,
+    this.extra,
+  });
 
   final int count;
   final String one;
   final String many;
+
+  /// Added after a dot, e.g. "· 3 registered".
+  final String? extra;
 
   @override
   Widget build(BuildContext context) {
@@ -127,6 +136,7 @@ class ResultCount extends StatelessWidget {
             style: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
           ),
           TextSpan(text: count == 1 ? ' $one' : ' $many'),
+          if (extra != null) TextSpan(text: ' · $extra'),
         ],
       ),
       style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),

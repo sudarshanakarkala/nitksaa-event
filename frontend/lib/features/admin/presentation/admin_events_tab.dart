@@ -17,6 +17,10 @@ import '../../events/domain/event.dart';
 import '../../events/presentation/widgets/event_card.dart';
 import 'event_admin_actions.dart';
 import 'admin_widgets.dart';
+import '../../../shared/widgets/status_badge.dart';
+import '../../../shared/widgets/state_message.dart';
+import '../../../shared/format.dart';
+import '../../../shared/widgets/list_search_field.dart';
 
 /// Status filters, website pill style.
 enum _Filter {
@@ -221,17 +225,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     // Same frame as the Events page: search, Cards/Table, Filters; the
     // status pills; then the count and Create Event.
     return ListPage(
-      search: SizedBox(
-        height: 44,
-        child: TextField(
-          controller: _search,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.search, size: 20),
-            hintText: 'Search events…',
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-        ),
+      search: ListSearchField(
+        controller: _search,
+        hint: 'Search events…',
       ),
       toggle: compact
           ? null
@@ -338,7 +334,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null && _events.isEmpty) {
-      return _Message(
+      return StateMessage(
         icon: Icons.error_outline,
         title: 'Couldn\'t load events',
         body: _error!,
@@ -347,7 +343,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     }
     if (visible.isEmpty) {
       final searching = _search.text.trim().isNotEmpty;
-      return _Message(
+      return StateMessage(
         icon: searching ? Icons.search_off : Icons.event_note_outlined,
         title: searching ? 'No events match your search' : 'No ${_filter.label.toLowerCase()} events',
         body: _filter == _Filter.all && !searching && _activeFilterCount == 0
@@ -451,23 +447,11 @@ class _EventsTableState extends State<_EventsTable> {
         _ascending = ascending;
       });
 
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
-  static String _date(DateTime d) {
-    final hour = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
-    final minute = d.minute.toString().padLeft(2, '0');
-    return '${d.day} ${_months[d.month - 1]} ${d.year}, $hour:$minute ${d.hour >= 12 ? 'PM' : 'AM'}';
-  }
-
   static String _price(AppEvent e) {
     if (e.isFree ?? true) return 'Free';
     final amount = e.ticketPrice;
     if (amount == null) return 'Paid';
-    final whole = amount == amount.roundToDouble();
-    return '₹${amount.toStringAsFixed(whole ? 0 : 2)}';
+    return formatMoney(amount);
   }
 
   @override
@@ -535,8 +519,8 @@ class _EventsTableState extends State<_EventsTable> {
                               ),
                               onTap: () => context.push('/events/${e.eventId}'),
                             ),
-                            DataCell(Text(_date(e.startDatetime), style: cell)),
-                            DataCell(_StatusBadge(status: e.status)),
+                            DataCell(Text(formatDateTime(e.startDatetime), style: cell)),
+                            DataCell(StatusBadge.event(context, e.status)),
                             DataCell(Text(e.isVirtual ? 'Virtual' : 'Physical', style: cell)),
                             DataCell(_CapacityCell(registered: e.registeredCount, capacity: e.capacity)),
                             DataCell(Text(_price(e), style: cell)),
@@ -604,40 +588,6 @@ class _ActionsMenu extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.status});
-
-  final String status;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final (label, tone) = switch (status) {
-      'draft' => ('Draft', p.warning),
-      'published' => ('Published', p.success),
-      'cancelled' => ('Cancelled', p.error),
-      'completed' => ('Completed', p.textMuted),
-      _ => (status, p.textMuted),
-    };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.08),
-        border: Border.all(color: tone.withValues(alpha: 0.22)),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w600,
-          color: tone,
-        ),
-      ),
-    );
-  }
-}
-
 class _CapacityCell extends StatelessWidget {
   const _CapacityCell({required this.registered, required this.capacity});
 
@@ -675,49 +625,6 @@ class _CapacityCell extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({
-    required this.icon,
-    required this.title,
-    required this.body,
-    this.action,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 44, color: p.textMuted),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
-            ),
-            const SizedBox(height: 6),
-            Text(
-              body,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary),
-            ),
-            if (action != null) ...[const SizedBox(height: 8), action!],
-          ],
-        ),
       ),
     );
   }

@@ -1,4 +1,7 @@
 import '../data/registrations_api.dart';
+import '../../../shared/format.dart';
+
+export '../../../shared/format.dart' show formatDate, formatDateTime;
 
 /// The three lists in the Registrations tab.
 enum RegistrationView {
@@ -179,17 +182,4 @@ String confirmationEmailLabel(String? raw) {
   }
 }
 
-const _months = [
-  'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-];
-
-/// e.g. `12 Oct 2026`.
-String formatDate(DateTime d) => '${d.day} ${_months[d.month - 1]} ${d.year}';
-
-/// e.g. `12 Oct 2026, 4:05 PM`.
-String formatDateTime(DateTime d) {
-  final hour = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
-  final minute = d.minute.toString().padLeft(2, '0');
-  return '${formatDate(d)}, $hour:$minute ${d.hour >= 12 ? 'PM' : 'AM'}';
-}
+// formatDate / formatDateTime now live in shared/format.dart (exported above).

@@ -13,6 +13,8 @@ import '../../events/data/events_repository.dart';
 import '../data/admin_api.dart';
 import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/notice.dart';
+import '../../../shared/widgets/state_message.dart';
+import '../../../shared/widgets/list_search_field.dart';
 
 /// Roles tab (overall admins only): search people and switch their
 /// "Overall admin", "Can create events" and "Finance" roles. Per-event
@@ -285,20 +287,11 @@ class _RolesTabState extends ConsumerState<RolesTab> {
 
     // Same frame as the other admin tabs (search on top, list below).
     return ListPage(
-      search: SizedBox(
-        height: 44,
-        child: TextField(
-          controller: _search,
-          onChanged: _onSearchChanged,
-          textInputAction: TextInputAction.search,
-          onSubmitted: (_) => _load(),
-          decoration: const InputDecoration(
-            hintText: 'Search people by name or email',
-            prefixIcon: Icon(Icons.search, size: 20),
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-        ),
+      search: ListSearchField(
+        controller: _search,
+        hint: 'Search people by name or email',
+        onChanged: _onSearchChanged,
+        onSubmitted: (_) => _load(),
       ),
       body: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -306,14 +299,14 @@ class _RolesTabState extends ConsumerState<RolesTab> {
         if (_loading) const LinearProgressIndicator(minHeight: 2),
         Expanded(
           child: _error != null && result == null
-              ? _Message(
-                  text: _error!,
+              ? StateMessage(
+                  body: _error!,
                   action: TextButton(onPressed: _load, child: const Text('Try again')),
                 )
               : result == null
               ? const SizedBox.shrink()
               : result.users.isEmpty
-              ? const _Message(text: 'No one matches that search.')
+              ? const StateMessage(body: 'No one matches that search.')
               : LayoutBuilder(
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 900;
@@ -651,34 +644,6 @@ class _Pager extends StatelessWidget {
             ),
           ],
         ],
-      ),
-    );
-  }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({required this.text, this.action});
-
-  final String text;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Text(
-              text,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary),
-            ),
-            if (action != null) ...[const SizedBox(height: 8), action!],
-          ],
-        ),
       ),
     );
   }

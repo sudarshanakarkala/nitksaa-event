@@ -18,6 +18,8 @@ import '../data/registrations_api.dart';
 import '../domain/registration_filters.dart';
 import 'admin_widgets.dart';
 import '../../../shared/widgets/notice.dart';
+import '../../../shared/widgets/state_message.dart';
+import '../../../shared/widgets/list_search_field.dart';
 
 /// Value of the event picker meaning "all events".
 const int _allEvents = adminAllEvents;
@@ -523,7 +525,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_eventsError != null && _events.isEmpty) {
-      return _Message(
+      return StateMessage(
         icon: Icons.error_outline,
         title: 'Couldn\'t load your events',
         body: _eventsError!,
@@ -531,7 +533,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       );
     }
     if (_events.isEmpty) {
-      return const _Message(
+      return const StateMessage(
         icon: Icons.event_note_outlined,
         title: 'No events yet',
         body: 'Registrations appear here once you\'re an admin of an event.',
@@ -548,17 +550,9 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     // Same frame as the Events page: search and Filters; the list pills;
     // then the count and Export CSV.
     return ListPage(
-      search: SizedBox(
-        height: 44,
-        child: TextField(
-          controller: _search,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.search, size: 20),
-            hintText: 'Search name, email, phone or number…',
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-        ),
+      search: ListSearchField(
+        controller: _search,
+        hint: 'Search name, email, phone or number…',
       ),
       // Quick filters: shortcuts to filters that are also in the rail.
       quickFilters: [
@@ -744,7 +738,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   Widget _body(bool compact) {
     final target = _selected;
     if (target != _allEvents && _event(target) == null && !_eventsLoading) {
-      return _Message(
+      return StateMessage(
         icon: Icons.lock_outline,
         title: 'Not available',
         body: 'This event doesn\'t exist, or you\'re not one of its admins.',
@@ -758,7 +752,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return _Message(
+      return StateMessage(
         icon: Icons.error_outline,
         title: 'Couldn\'t load registrations',
         body: _error!,
@@ -920,7 +914,7 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     };
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 40),
-      child: _Message(
+      child: StateMessage(
         icon: _anyFilter ? Icons.search_off : Icons.people_outline,
         title: _anyFilter ? 'No one matches' : what,
         body: _anyFilter ? 'Try a different search or clear the filters.' : '',
@@ -1193,51 +1187,6 @@ class _CheckInTile extends StatelessWidget {
             style: muted,
           ),
         ],
-      ),
-    );
-  }
-}
-
-class _Message extends StatelessWidget {
-  const _Message({
-    required this.icon,
-    required this.title,
-    required this.body,
-    this.action,
-  });
-
-  final IconData icon;
-  final String title;
-  final String body;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 44, color: p.textMuted),
-            const SizedBox(height: 12),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
-            ),
-            if (body.isNotEmpty) ...[
-              const SizedBox(height: 6),
-              Text(
-                body,
-                textAlign: TextAlign.center,
-                style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary),
-              ),
-            ],
-            if (action != null) ...[const SizedBox(height: 8), action!],
-          ],
-        ),
       ),
     );
   }

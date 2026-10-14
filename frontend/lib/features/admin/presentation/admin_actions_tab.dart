@@ -10,6 +10,7 @@ import '../../auth/domain/admin_access.dart';
 import '../../auth/services/auth_controller.dart';
 import '../data/actions_api.dart';
 import '../domain/registration_filters.dart' show formatDate, formatDateTime;
+import '../../../shared/widgets/state_message.dart';
 
 /// Admin → Actions (the default tab): what needs attention, website
 /// "Needs attention" pattern. Each row is a queue with a count and
@@ -51,9 +52,14 @@ class _AdminActionsTabState extends ConsumerState<AdminActionsTab> {
             child: counts != null
                 ? _list(counts, access)
                 : pending.hasError
-                ? _ErrorState(
-                    message: apiErrorMessage(pending.error!, action: 'load the actions'),
-                    onRetry: () => ref.invalidate(pendingCountProvider),
+                ? StateMessage(
+                    icon: Icons.error_outline,
+                    title: 'Couldn\'t load the actions',
+                    body: apiErrorMessage(pending.error!, action: 'load the actions'),
+                    action: TextButton(
+                      onPressed: () => ref.invalidate(pendingCountProvider),
+                      child: const Text('Try again'),
+                    ),
                   )
                 : const Center(child: CircularProgressIndicator()),
           ),
@@ -385,34 +391,6 @@ class _AllClear extends StatelessWidget {
             ),
           ],
         ),
-      ),
-    );
-  }
-}
-
-class _ErrorState extends StatelessWidget {
-  const _ErrorState({required this.message, required this.onRetry});
-
-  final String message;
-  final VoidCallback onRetry;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Center(
-      child: Column(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Icon(Icons.error_outline, size: 44, color: p.textMuted),
-          const SizedBox(height: 12),
-          Text(
-            'Couldn\'t load the actions',
-            style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
-          ),
-          const SizedBox(height: 6),
-          Text(message, style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary)),
-          TextButton(onPressed: onRetry, child: const Text('Try again')),
-        ],
       ),
     );
   }
