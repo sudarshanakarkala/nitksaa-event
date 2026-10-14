@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/event.dart';
@@ -31,12 +30,7 @@ class EventsRepository {
     );
   }
 
-  static String get _defaultBackendBaseUrl {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8000';
-    }
-    return 'http://127.0.0.1:8000';
-  }
+  static String get _defaultBackendBaseUrl => 'http://127.0.0.1:8000';
 
   Future<Map<String, dynamic>> getPublicEvents({
     required int page,
@@ -291,14 +285,20 @@ class EventsRepository {
         .map((json) => MyEventRegistration.fromJson(json as Map<String, dynamic>))
         .toList();
 
+    // Each event once, however many of your registrations it has.
+    final events = <int, AppEvent?>{};
     final hydrated = <MyEventRegistration>[];
     for (final registration in registrations) {
-      try {
-        final event = await getPublicEvent(registration.eventId);
-        hydrated.add(registration.copyWith(publicEvent: event));
-      } on DioException {
-        hydrated.add(registration);
+      final id = registration.eventId;
+      if (!events.containsKey(id)) {
+        try {
+          events[id] = await getPublicEvent(id);
+        } on DioException {
+          events[id] = null;
+        }
       }
+      final event = events[id];
+      hydrated.add(event == null ? registration : registration.copyWith(publicEvent: event));
     }
     return hydrated;
   }

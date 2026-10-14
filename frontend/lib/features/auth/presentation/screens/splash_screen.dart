@@ -1,5 +1,3 @@
-import 'package:flutter/cupertino.dart';
-import 'package:flutter/foundation.dart' show defaultTargetPlatform, kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import '../../../../core/logger/app_logger.dart';
@@ -10,7 +8,7 @@ import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../services/auth_controller.dart';
 
-/// The line under the brand on every splash layout.
+/// The line under the brand.
 const _tagline = 'EVENTS';
 
 class SplashScreen extends StatefulWidget {
@@ -63,13 +61,7 @@ class _SplashScreenState extends State<SplashScreen> {
 
 @override
   Widget build(BuildContext context) {
-    if (kIsWeb) {
-      return _buildWebSplash();
-    } else if (defaultTargetPlatform == TargetPlatform.iOS) {
-      return _buildIOSSplash();
-    } else {
-      return _buildAndroidSplash();
-    }
+    return _buildWebSplash();
   }
 
   Widget _buildWebSplash() {
@@ -130,114 +122,6 @@ class _SplashScreenState extends State<SplashScreen> {
                 ],
               ),
             ),
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildIOSSplash() {
-    final p = context.palette;
-    final Color bgColor = p.background;
-
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'NITKSAA',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.serif,
-                  fontSize: 30,
-                  fontWeight: FontWeight.bold,
-                  color: p.primary,
-                  letterSpacing: -0.5,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _tagline,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: p.textSecondary,
-                  letterSpacing: 1.0,
-                  fontWeight: FontWeight.w500,
-                ),
-              ),
-              const SizedBox(height: 28),
-              const EmblemRing(size: 68),
-              const SizedBox(height: 28),
-              CupertinoActivityIndicator(
-                radius: 13,
-                color: p.primary,
-              ),
-              const SizedBox(height: 12),
-              Text(
-                'Connecting…',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: p.textMuted,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _buildAndroidSplash() {
-    final p = context.palette;
-    final Color bgColor = p.background;
-
-    return Scaffold(
-      backgroundColor: bgColor,
-      body: SafeArea(
-        child: Center(
-          child: Column(
-            mainAxisAlignment: MainAxisAlignment.center,
-            children: [
-              Text(
-                'NITKSAA',
-                style: TextStyle(
-                  fontFamily: AppTextStyles.serif,
-                  fontSize: 28,
-                  fontWeight: FontWeight.w600,
-                  color: p.primary,
-                ),
-              ),
-              const SizedBox(height: 4),
-              Text(
-                _tagline,
-                style: TextStyle(
-                  fontSize: 11,
-                  color: p.textSecondary,
-                  letterSpacing: 1.1,
-                ),
-              ),
-              const SizedBox(height: 28),
-              const EmblemRing(size: 64),
-              const SizedBox(height: 28),
-              SizedBox(
-                width: 24,
-                height: 24,
-                child: CircularProgressIndicator(
-                  strokeWidth: 2,
-                  valueColor: AlwaysStoppedAnimation<Color>(p.primary),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                'Connecting…',
-                style: TextStyle(
-                  fontSize: 10,
-                  color: p.textMuted,
-                ),
-              ),
-            ],
           ),
         ),
       ),

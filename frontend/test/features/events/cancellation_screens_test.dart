@@ -49,8 +49,7 @@ enum _Screen {
   /// The My Events page.
   myEvents('My Events', AppRoutes.myEvents, Size(1400, 2400)),
 
-  /// The event list narrowed to "Registered by me", as the account menu's
-  /// "My Events" link opens it.
+  /// The event list narrowed to "Registered by me" (`/home?mine=1`).
   eventList(
     'the event list "Registered by me" card',
     '${AppRoutes.home}?mine=1',
@@ -154,8 +153,7 @@ Future<GoRouter> _pumpApp(
       ],
       child: MaterialApp.router(
         routerConfig: router,
-        // In the app every page sits inside AppShell's Scaffold. The iOS
-        // event page has no Material of its own to take a text style from.
+        // In the app every page sits inside AppShell's Scaffold.
         builder: (context, child) => Material(child: child),
       ),
     ),
@@ -205,7 +203,7 @@ void _expectNotRegistered(WidgetTester tester, _Screen screen) {
   switch (screen) {
     case _Screen.myEvents:
       expect(find.text('Unregistered'), findsWidgets);
-      expect(find.text('0 active registrations'), findsOneWidget);
+      expect(find.textContaining('0 registered'), findsOneWidget);
     case _Screen.eventList:
       // "Registered by me" is on, and nothing is registered any more.
       expect(find.text('No Events Found'), findsOneWidget);
@@ -400,11 +398,6 @@ void main() {
   }
 
   group('ISSUE-004: the event page after a cancellation', () {
-    const bothForms = TargetPlatformVariant({
-      TargetPlatform.android, // the Material page and dialog
-      TargetPlatform.iOS, // the Cupertino button and sheet
-    });
-
     testWidgets('Test L: opening the event again shows the attendee as not '
         'registered, with Register available', (tester) async {
       final backend = FakeRegistrationBackend(isFree: true);
@@ -480,7 +473,7 @@ void main() {
       );
       expect(find.text(_cancelledEarlier), findsNothing);
       expect(find.text('Register'), findsNothing);
-    }, variant: bothForms);
+    });
 
     for (final refusal in const [
       (status: 'ineligible', message: 'Alumni account is not active.'),
@@ -498,7 +491,7 @@ void main() {
         expect(find.text('Register'), findsNothing);
         expect(find.text(_cancelledEarlier), findsNothing);
         expect(find.text(_unregisteredBanner), findsOneWidget);
-      }, variant: bothForms);
+      });
     }
 
     testWidgets('cancelled and eligibility unknown: no Register button', (

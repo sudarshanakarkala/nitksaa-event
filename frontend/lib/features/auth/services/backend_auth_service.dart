@@ -1,5 +1,4 @@
 import 'package:dio/dio.dart';
-import 'package:flutter/foundation.dart';
 
 import '../domain/auth_session.dart';
 import 'backend_auth_exception.dart';
@@ -29,12 +28,7 @@ class BackendAuthService {
     );
   }
 
-  static String get _defaultBackendBaseUrl {
-    if (!kIsWeb && defaultTargetPlatform == TargetPlatform.android) {
-      return 'http://10.0.2.2:8000';
-    }
-    return 'http://127.0.0.1:8000';
-  }
+  static String get _defaultBackendBaseUrl => 'http://127.0.0.1:8000';
 
   /// Throws a [BackendAuthException] if the backend refuses the token or
   /// cannot be reached.
