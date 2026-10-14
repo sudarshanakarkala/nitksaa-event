@@ -49,6 +49,8 @@ dependencies:
   fl_chart: ^1.0.0
   qr_flutter: ^4.1.0
   mobile_scanner: ^7.4.1
+  # Tables with fixed headings and a frozen first column (Flutter team).
+  two_dimensional_scrollables: ^0.3.0
 
 dev_dependencies:
   flutter_test:

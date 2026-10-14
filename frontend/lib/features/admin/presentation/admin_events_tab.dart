@@ -16,6 +16,7 @@ import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../../events/presentation/widgets/event_card.dart';
 import 'event_admin_actions.dart';
+import '../domain/registration_filters.dart';
 import 'admin_widgets.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/widgets/state_message.dart';
@@ -361,7 +362,6 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
         final content = table
             ? _EventsTable(
                 events: visible,
-                padding: padding,
                 createdBy: _createdBy,
                 actionsFor: _actionsFor,
                 busy: _busy,
@@ -399,14 +399,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
 class _EventsTable extends StatefulWidget {
   const _EventsTable({
     required this.events,
-    required this.padding,
     required this.createdBy,
     required this.actionsFor,
     required this.busy,
   });
 
   final List<AppEvent> events;
-  final EdgeInsets padding;
   final String? Function(AppEvent) createdBy;
   final List<EventCardAction> Function(AppEvent) actionsFor;
   final Set<int> busy;
@@ -416,36 +414,8 @@ class _EventsTable extends StatefulWidget {
 }
 
 class _EventsTableState extends State<_EventsTable> {
-  // Column index and direction. Starts as the list arrives (no arrow).
-  int? _sortIndex;
-  bool _ascending = true;
-
-  // Sort keys, in column order (the last column, the ⋯ menu, doesn't sort).
-  static final List<Comparable Function(AppEvent)> _keys = [
-    (e) => e.title.toLowerCase(),
-    (e) => e.startDatetime,
-    (e) => e.status,
-    (e) => e.isVirtual ? 1 : 0,
-    (e) => e.registeredCount,
-    (e) => (e.isFree ?? true) ? -1.0 : (e.ticketPrice ?? 0.0),
-    (e) => (e.createdByName ?? '').toLowerCase(),
-  ];
-
-  List<AppEvent> get _sorted {
-    final i = _sortIndex;
-    if (i == null) return widget.events;
-    final list = [...widget.events];
-    list.sort((a, b) {
-      final c = _keys[i](a).compareTo(_keys[i](b));
-      return _ascending ? c : -c;
-    });
-    return list;
-  }
-
-  void _sortBy(int index, bool ascending) => setState(() {
-        _sortIndex = index;
-        _ascending = ascending;
-      });
+  // Starts sorted on a visible column (UI_PATTERNS → Tables): newest first.
+  (String, bool) _sort = ('starts', false);
 
   static String _price(AppEvent e) {
     if (e.isFree ?? true) return 'Free';
@@ -454,100 +424,76 @@ class _EventsTableState extends State<_EventsTable> {
     return formatMoney(amount);
   }
 
+  List<GridColumn<AppEvent>> get _columns => [
+        GridColumn(id: 'title', label: 'Event', kind: ColumnKind.text, value: (e) => e.title),
+        GridColumn(
+          id: 'starts',
+          label: 'Starts',
+          kind: ColumnKind.date,
+          value: (e) => e.startDatetime,
+        ),
+        GridColumn(
+          id: 'status',
+          label: 'Status',
+          kind: ColumnKind.category,
+          value: (e) => e.status,
+          width: 96,
+        ),
+        GridColumn(
+          id: 'mode',
+          label: 'Mode',
+          kind: ColumnKind.category,
+          value: (e) => e.isVirtual ? 'Virtual' : 'Physical',
+        ),
+        GridColumn(
+          id: 'capacity',
+          label: 'Capacity',
+          kind: ColumnKind.number,
+          value: (e) => e.registeredCount,
+          width: 120,
+        ),
+        GridColumn(
+          id: 'price',
+          label: 'Price',
+          kind: ColumnKind.number,
+          value: (e) => (e.isFree ?? true) ? -1.0 : (e.ticketPrice ?? 0.0),
+          text: _price,
+        ),
+        GridColumn(
+          id: 'createdBy',
+          label: 'Created by',
+          kind: ColumnKind.text,
+          value: (e) => (widget.createdBy(e) ?? '').replaceFirst('Created by ', ''),
+        ),
+        // The ⋯ menu; doesn't sort.
+        GridColumn(id: 'actions', label: '', kind: ColumnKind.text, value: (_) => null, width: 32),
+      ];
+
   @override
   Widget build(BuildContext context) {
-    final p = context.palette;
-    final head = AppTextStyles.labelSmall.copyWith(
-      color: p.textMuted,
-      fontWeight: FontWeight.w600,
-      letterSpacing: 0.6,
-    );
-    final cell = AppTextStyles.bodySmall.copyWith(fontSize: 13, color: p.textPrimary);
-    final events = _sorted;
-    final padding = widget.padding;
-    final createdBy = widget.createdBy;
-    final actionsFor = widget.actionsFor;
-    final busy = widget.busy;
-    return ListView(
-      padding: padding,
-      physics: const AlwaysScrollableScrollPhysics(),
-      children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            color: p.card,
-            border: Border.all(color: p.border),
-            borderRadius: BorderRadius.circular(12),
-          ),
-          child: ClipRRect(
-            borderRadius: BorderRadius.circular(12),
-            child: LayoutBuilder(
-              builder: (context, constraints) => AdminHScroll(
-                minWidth: constraints.maxWidth,
-                child: DataTable(
-                    headingRowHeight: 40,
-                    dataRowMinHeight: 52,
-                    dataRowMaxHeight: 60,
-                    horizontalMargin: 16,
-                    columnSpacing: 24,
-                    dividerThickness: 0.6,
-                    headingRowColor: WidgetStatePropertyAll(p.surfaceSubtle),
-                    sortColumnIndex: _sortIndex,
-                    sortAscending: _ascending,
-                    columns: [
-                      DataColumn(label: Text('EVENT', style: head), onSort: _sortBy),
-                      DataColumn(label: Text('STARTS', style: head), onSort: _sortBy),
-                      DataColumn(label: Text('STATUS', style: head), onSort: _sortBy),
-                      DataColumn(label: Text('MODE', style: head), onSort: _sortBy),
-                      DataColumn(label: Text('CAPACITY', style: head), onSort: _sortBy),
-                      DataColumn(label: Text('PRICE', style: head), onSort: _sortBy),
-                      DataColumn(label: Text('CREATED BY', style: head), onSort: _sortBy),
-                      const DataColumn(label: SizedBox.shrink()),
-                    ],
-                    rows: [
-                      for (final e in events)
-                        DataRow(
-                          cells: [
-                            DataCell(
-                              ConstrainedBox(
-                                constraints: const BoxConstraints(maxWidth: 260),
-                                child: Text(
-                                  e.title,
-                                  maxLines: 2,
-                                  overflow: TextOverflow.ellipsis,
-                                  style: cell.copyWith(fontWeight: FontWeight.w600),
-                                ),
-                              ),
-                              onTap: () => context.push('/events/${e.eventId}'),
-                            ),
-                            DataCell(Text(formatDateTime(e.startDatetime), style: cell)),
-                            DataCell(StatusBadge.event(context, e.status)),
-                            DataCell(Text(e.isVirtual ? 'Virtual' : 'Physical', style: cell)),
-                            DataCell(_CapacityCell(registered: e.registeredCount, capacity: e.capacity)),
-                            DataCell(Text(_price(e), style: cell)),
-                            DataCell(
-                              Text(
-                                (createdBy(e) ?? '—').replaceFirst('Created by ', ''),
-                                style: cell.copyWith(color: p.textSecondary),
-                              ),
-                            ),
-                            DataCell(
-                              busy.contains(e.eventId)
-                                  ? const SizedBox(
-                                      width: 18,
-                                      height: 18,
-                                      child: CircularProgressIndicator(strokeWidth: 2),
-                                    )
-                                  : _ActionsMenu(actions: actionsFor(e)),
-                            ),
-                          ],
-                        ),
-                    ],
-                  ),
-              ),
-            ),
-          ),
-        ),
-      ],
+    final columns = _columns;
+    final rows = applyGrid(widget.events, columns, sortId: _sort.$1, ascending: _sort.$2);
+    return AdminGridTable<AppEvent>(
+      rows: rows,
+      columns: columns,
+      sortId: _sort.$1,
+      ascending: _sort.$2,
+      onSort: (id, kind) => setState(
+        () => _sort = _sort.$1 == id ? (id, !_sort.$2) : (id, kind != ColumnKind.date),
+      ),
+      onRowTap: (e) => context.push('/events/${e.eventId}'),
+      cell: (c, e) => switch (c.id) {
+        'status' => StatusBadge.event(context, e.status),
+        'capacity' => _CapacityCell(registered: e.registeredCount, capacity: e.capacity),
+        'actions' => widget.busy.contains(e.eventId)
+            ? const SizedBox(
+                width: 18,
+                height: 18,
+                child: CircularProgressIndicator(strokeWidth: 2),
+              )
+            : _ActionsMenu(actions: widget.actionsFor(e)),
+        _ => null,
+      },
     );
   }
 }

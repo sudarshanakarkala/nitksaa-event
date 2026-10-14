@@ -25,11 +25,16 @@ class GridColumn<T> {
     required this.kind,
     required this.value,
     String Function(T row)? text,
+    this.width,
   }) : _text = text;
 
   final String id;
   final String label;
   final ColumnKind kind;
+
+  /// A set width for the table, for columns whose cells aren't plain text
+  /// (badges, buttons). Null: sized to the text.
+  final double? width;
 
   /// The sort value: a String, num or DateTime, or null when there's none.
   final Object? Function(T row) value;

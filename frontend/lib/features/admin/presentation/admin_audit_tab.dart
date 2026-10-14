@@ -254,43 +254,33 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
         action: TextButton(onPressed: _load, child: const Text('Try again')),
       );
     }
-    return LayoutBuilder(
-      builder: (context, constraints) => ListView(
-        padding: ListPage.contentPadding(context, constraints.maxWidth, top: 20),
-        children: [
-          if (_rows.isEmpty)
-            const StateMessage(body: 'No entries match.')
-          else
-            AdminGridTable<AuditEntry>(
-              rows: _sorted,
-              columns: _columns,
-              sortId: _sort.$1,
-              ascending: _sort.$2,
-              onSort: (id, kind) => setState(
-                () => _sort = _sort.$1 == id ? (id, !_sort.$2) : (id, kind != ColumnKind.date),
-              ),
-              onRowTap: (e) => showAuditEntry(context, e),
-            ),
-          if (_pages > 1)
-            Padding(
-              padding: const EdgeInsets.only(top: 12),
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.end,
-                children: [
-                  TextButton(
-                    onPressed: _page > 1 && !_loading ? () => _load(page: _page - 1) : null,
-                    child: const Text('Newer'),
-                  ),
-                  Text('Page $_page of $_pages', style: AppTextStyles.bodySmall.copyWith(color: p.textMuted)),
-                  TextButton(
-                    onPressed: _page < _pages && !_loading ? () => _load(page: _page + 1) : null,
-                    child: const Text('Older'),
-                  ),
-                ],
-              ),
-            ),
-        ],
+    return AdminGridTable<AuditEntry>(
+      rows: _sorted,
+      columns: _columns,
+      sortId: _sort.$1,
+      ascending: _sort.$2,
+      onSort: (id, kind) => setState(
+        () => _sort = _sort.$1 == id ? (id, !_sort.$2) : (id, kind != ColumnKind.date),
       ),
+      onRowTap: (e) => showAuditEntry(context, e),
+      empty: const StateMessage(body: 'No entries match.'),
+      onRefresh: () => _load(page: _page),
+      below: _pages > 1
+          ? Row(
+              mainAxisAlignment: MainAxisAlignment.end,
+              children: [
+                TextButton(
+                  onPressed: _page > 1 && !_loading ? () => _load(page: _page - 1) : null,
+                  child: const Text('Newer'),
+                ),
+                Text('Page $_page of $_pages', style: AppTextStyles.bodySmall.copyWith(color: p.textMuted)),
+                TextButton(
+                  onPressed: _page < _pages && !_loading ? () => _load(page: _page + 1) : null,
+                  child: const Text('Older'),
+                ),
+              ],
+            )
+          : null,
     );
   }
 }

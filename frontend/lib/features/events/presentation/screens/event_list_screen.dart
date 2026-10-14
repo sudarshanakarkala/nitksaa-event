@@ -9,6 +9,8 @@ import '../../../../shared/widgets/list_page.dart';
 import '../../../../shared/widgets/quick_filter_pill.dart';
 import '../../../../shared/widgets/segment_toggle.dart';
 import '../../../../shared/widgets/state_message.dart';
+import '../../../admin/domain/registration_filters.dart';
+import '../../../admin/presentation/admin_widgets.dart';
 import '../../../admin/presentation/event_admin_actions.dart';
 import '../../../auth/domain/admin_access.dart';
 import '../../../auth/services/auth_controller.dart';
@@ -53,8 +55,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
 
   // Cards / Table view (website ViewToggle) and table sort.
   String _view = 'cards';
-  int _sortColumn = 1; // Date
-  bool _sortAsc = true;
+  // Table view sort (column id, ascending): soonest first.
+  (String, bool) _tableSort = ('date', true);
   String? _appliedUri;
 
   @override
@@ -499,7 +501,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 body: 'Check back later or try other filters.',
               )
             : _view == 'table' && MediaQuery.sizeOf(context).width >= 600
-            ? _buildEventTable(filteredEvents, pad, registrations)
+            ? _eventTable(filteredEvents, registrations)
             // Website grid: columns of at least 300px, every card the same
             // height (no intrinsic sizing).
             : EventCardGrid(
@@ -544,114 +546,75 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     );
   }
 
-  /// Table view (website ViewToggle "Table"): sortable columns, a row
-  /// opens the event.
-  Widget _buildEventTable(
-    List<AppEvent> events,
-    EdgeInsets pad,
-    Map<int, MyEventRegistration> registrations,
-  ) {
+  /// Table view (website ViewToggle "Table"): the shared table; every
+  /// heading sorts and a row opens the event.
+  Widget _eventTable(List<AppEvent> events, Map<int, MyEventRegistration> registrations) {
     final p = context.palette;
-    int compare(AppEvent a, AppEvent b) {
-      switch (_sortColumn) {
-        case 0:
-          return a.title.toLowerCase().compareTo(b.title.toLowerCase());
-        case 3:
-          return a.isVirtual.toString().compareTo(b.isVirtual.toString());
-        case 5:
-          return a.registrationStatus.compareTo(b.registrationStatus);
-        default:
-          return a.startDatetime.compareTo(b.startDatetime);
-      }
-    }
-
-    final rows = [...events]
-      ..sort((a, b) => _sortAsc ? compare(a, b) : compare(b, a));
-    void onSort(int column, bool ascending) => setState(() {
-          _sortColumn = column;
-          _sortAsc = ascending;
-        });
-    final cellStyle = AppTextStyles.bodySmall.copyWith(color: p.textSecondary);
-
-    return LayoutBuilder(
-      builder: (context, constraints) => SingleChildScrollView(
-        // Left and right insets differ on wide screens (content lines up with
-        // the logo); using the left one on both sides cut the table short.
-        padding: EdgeInsets.fromLTRB(pad.left, 24, pad.right, 24),
-        child: SingleChildScrollView(
-          scrollDirection: Axis.horizontal,
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minWidth: constraints.maxWidth - pad.horizontal),
-            child: Container(
-              decoration: BoxDecoration(
-                color: p.card,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: p.border),
-              ),
-              clipBehavior: Clip.antiAlias,
-              child: DataTable(
-                sortColumnIndex: _sortColumn,
-                sortAscending: _sortAsc,
-                showCheckboxColumn: false,
-                headingRowColor: WidgetStateProperty.all(p.surfaceSubtle),
-                headingTextStyle: AppTextStyles.labelMedium.copyWith(
-                  color: p.primary.withValues(alpha: 0.8),
-                ),
-                dividerThickness: 1,
-                columns: [
-                  DataColumn(label: const Text('TITLE'), onSort: onSort),
-                  DataColumn(label: const Text('DATE'), onSort: onSort),
-                  const DataColumn(label: Text('TIME')),
-                  DataColumn(label: const Text('MODE'), onSort: onSort),
-                  const DataColumn(label: Text('LOCATION')),
-                  DataColumn(label: const Text('REGISTRATION'), onSort: onSort),
-                ],
-                rows: [
-                  for (final event in rows)
-                    DataRow(
-                      onSelectChanged: (_) => context.push('/events/${event.eventId}'),
-                      cells: [
-                        DataCell(Text(
-                          event.title,
-                          style: AppTextStyles.bodySmall.copyWith(
-                            color: p.textPrimary,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        )),
-                        DataCell(Text(formatDate(event.startDatetime), style: cellStyle)),
-                        DataCell(Text(
-                          formatTimeRange(event.startDatetime, event.endDatetime),
-                          style: cellStyle,
-                        )),
-                        DataCell(Text(event.isVirtual ? 'Virtual' : 'Physical', style: cellStyle)),
-                        DataCell(Text(
-                          event.locationText ?? (event.isVirtual ? 'Online' : 'TBD'),
-                          style: cellStyle,
-                          overflow: TextOverflow.ellipsis,
-                        )),
-                        DataCell(Text(
-                          (registrations[event.eventId]?.isActive ?? false)
-                              ? 'Registered'
-                              : event.registrationStatus == 'open'
-                              ? 'Open'
-                              : 'Closed',
-                          style: cellStyle.copyWith(
-                            color: (registrations[event.eventId]?.isActive ?? false)
-                                ? p.primary
-                                : event.registrationStatus == 'open'
-                                ? p.success
-                                : p.error,
-                            fontWeight: FontWeight.w600,
-                          ),
-                        )),
-                      ],
-                    ),
-                ],
-              ),
-            ),
-          ),
-        ),
+    String registration(AppEvent e) => (registrations[e.eventId]?.isActive ?? false)
+        ? 'Registered'
+        : e.registrationStatus == 'open'
+        ? 'Open'
+        : 'Closed';
+    final columns = <GridColumn<AppEvent>>[
+      GridColumn(id: 'title', label: 'Title', kind: ColumnKind.text, value: (e) => e.title),
+      GridColumn(
+        id: 'date',
+        label: 'Date',
+        kind: ColumnKind.date,
+        value: (e) => e.startDatetime,
+        text: (e) => formatDate(e.startDatetime),
       ),
+      GridColumn(
+        id: 'time',
+        label: 'Time',
+        kind: ColumnKind.text,
+        value: (e) => e.startDatetime.hour * 60 + e.startDatetime.minute,
+        text: (e) => formatTimeRange(e.startDatetime, e.endDatetime),
+      ),
+      GridColumn(
+        id: 'mode',
+        label: 'Mode',
+        kind: ColumnKind.category,
+        value: (e) => e.isVirtual ? 'Virtual' : 'Physical',
+      ),
+      GridColumn(
+        id: 'location',
+        label: 'Location',
+        kind: ColumnKind.text,
+        value: (e) => e.locationText ?? (e.isVirtual ? 'Online' : 'TBD'),
+      ),
+      GridColumn(
+        id: 'registration',
+        label: 'Registration',
+        kind: ColumnKind.category,
+        value: registration,
+      ),
+    ];
+    final rows = applyGrid(events, columns, sortId: _tableSort.$1, ascending: _tableSort.$2);
+    return AdminGridTable<AppEvent>(
+      rows: rows,
+      columns: columns,
+      sortId: _tableSort.$1,
+      ascending: _tableSort.$2,
+      onSort: (id, kind) => setState(
+        () => _tableSort = _tableSort.$1 == id ? (id, !_tableSort.$2) : (id, true),
+      ),
+      onRowTap: (e) => context.push('/events/${e.eventId}'),
+      cell: (c, e) {
+        if (c.id != 'registration') return null;
+        final label = registration(e);
+        return Text(
+          label,
+          style: AppTextStyles.bodySmall.copyWith(
+            fontWeight: FontWeight.w600,
+            color: label == 'Registered'
+                ? p.primary
+                : label == 'Open'
+                ? p.success
+                : p.error,
+          ),
+        );
+      },
     );
   }
 

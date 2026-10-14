@@ -244,8 +244,15 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           label: 'Status',
           kind: ColumnKind.category,
           value: (o) => o.stuck ? _orderStatus['stuck']! : (_orderStatus[o.status] ?? o.status),
+          width: 120,
         ),
-        GridColumn(id: 'mode', label: 'Mode', kind: ColumnKind.category, value: (o) => _modeLabel(o.mode)),
+        GridColumn(
+          id: 'mode',
+          label: 'Mode',
+          kind: ColumnKind.category,
+          value: (o) => _modeLabel(o.mode),
+          width: 56,
+        ),
         GridColumn(id: 'created', label: 'Started', kind: ColumnKind.date, value: (o) => o.createdAt),
         GridColumn(id: 'paid', label: 'Paid', kind: ColumnKind.date, value: (o) => o.paidAt),
         GridColumn(id: 'number', label: 'Order #', kind: ColumnKind.text, value: (o) => o.orderNumber),
@@ -269,12 +276,14 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           label: 'Status',
           kind: ColumnKind.category,
           value: (r) => _refundStatus[r.status] ?? r.status,
+          width: 120,
         ),
         GridColumn(
           id: 'reason',
           label: 'Reason',
           kind: ColumnKind.text,
           value: (r) => r.reasonText ?? r.failureReason,
+          width: 190,
         ),
         GridColumn(id: 'tries', label: 'Tries', kind: ColumnKind.number, value: (r) => r.attemptCount),
         // The starting sort (newest first), so the arrow shows like on Orders.
@@ -291,6 +300,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           label: 'Action',
           kind: ColumnKind.text,
           value: (r) => _mayRetry(r) ? 'Retry now' : '',
+          width: 96,
         ),
       ];
 
@@ -563,24 +573,11 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
       return const Center(child: CircularProgressIndicator());
     }
     if (_error != null) {
-      return Center(
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Icon(Icons.error_outline, size: 44, color: p.textMuted),
-              const SizedBox(height: 12),
-              Text(
-                'Couldn\'t load payments',
-                style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
-              ),
-              const SizedBox(height: 6),
-              Text(_error!, style: AppTextStyles.bodyMedium.copyWith(color: p.textSecondary)),
-              TextButton(onPressed: _load, child: const Text('Try again')),
-            ],
-          ),
-        ),
+      return StateMessage(
+        icon: Icons.error_outline,
+        title: 'Couldn\'t load payments',
+        body: _error!,
+        action: TextButton(onPressed: _load, child: const Text('Try again')),
       );
     }
 
@@ -593,20 +590,18 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           case _View.orders:
             final rows = _orderRows;
             final stuck = rows.where((o) => o.stuck).length;
-            children = [
-              if (stuck > 0) ...[
-                _Note(
-                  text: stuck == 1
-                      ? 'One payment has been pending for over 30 minutes.'
-                      : '$stuck payments have been pending for over 30 minutes.',
-                  warning: true,
-                ),
-                const SizedBox(height: 12),
-              ],
-              if (rows.isEmpty)
-                const StateMessage(body: 'No orders match.')
-              else
-                AdminGridTable<AdminOrder>(
+            return AdminGridTable<AdminOrder>(
+                  above: [
+                    if (stuck > 0)
+                      _Note(
+                        text: stuck == 1
+                            ? 'One payment has been pending for over 30 minutes.'
+                            : '$stuck payments have been pending for over 30 minutes.',
+                        warning: true,
+                      ),
+                  ],
+                  empty: const StateMessage(body: 'No orders match.'),
+                  onRefresh: _load,
                   rows: rows,
                   columns: _orderColumns,
                   onRowTap: _showOrderDetails,
@@ -627,13 +622,13 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                     'mode' => StatusBadge.paymentMode(context, o.mode),
                     _ => null,
                   },
-                ),
-            ];
+                );
           case _View.refunds:
             final rows = _refundRows;
             final failed = rows.where((r) => r.status == 'failed').length;
             final delayed = rows.where((r) => r.status == 'delayed').length;
-            children = [
+            return AdminGridTable<AdminRefund>(
+                  above: [
               const _Note(text: 'Refunds start automatically when someone cancels a paid registration.'),
               const SizedBox(height: 8),
               if (failed > 0) ...[
@@ -657,11 +652,9 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                 ),
                 const SizedBox(height: 8),
               ],
-              const SizedBox(height: 4),
-              if (rows.isEmpty)
-                const StateMessage(body: 'No refunds match.')
-              else
-                AdminGridTable<AdminRefund>(
+                  ],
+                  empty: const StateMessage(body: 'No refunds match.'),
+                  onRefresh: _load,
                   rows: rows,
                   columns: _refundColumns,
                   onRowTap: _showRefundDetails,
@@ -703,8 +696,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                         : const SizedBox.shrink(),
                     _ => null,
                   },
-                ),
-            ];
+                );
           case _View.pricing:
             final ids = _pricingRows;
             children = [
