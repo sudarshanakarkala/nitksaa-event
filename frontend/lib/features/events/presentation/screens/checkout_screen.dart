@@ -16,11 +16,9 @@ class CheckoutScreen extends ConsumerStatefulWidget {
   const CheckoutScreen({
     super.key,
     required this.eventId,
-    this.notes = '',
   });
 
   final int eventId;
-  final String notes;
 
   @override
   ConsumerState<CheckoutScreen> createState() => _CheckoutScreenState();
@@ -28,6 +26,24 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   var _isSubmitting = false;
+  var _leaving = false;
+
+  /// True when a registration already holds a seat and owes payment
+  /// ("Complete payment"): checkout reuses it and needs no form details.
+  static bool _canReuse(Map<String, dynamic>? registration) =>
+      registration?['registration_id'] != null &&
+      _payableStatuses.contains(registration?['status'] as String?);
+
+  /// Without the form's details (e.g. the page was refreshed here) and with
+  /// nothing to reuse, there is nothing to register with: back to the event.
+  void _backToEventIfNoDetails(EventDetailState state) {
+    if (_leaving || _isSubmitting || state.isLoading) return;
+    if (state.registrationDraft != null || _canReuse(state.myRegistration)) return;
+    _leaving = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) context.go('/events/${widget.eventId}');
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -74,6 +90,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
         body: Center(child: Text('Event not found')),
       );
     }
+    _backToEventIfNoDetails(state);
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -264,15 +281,12 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
 
       // 1. Register - or reuse an existing registration that still owes payment.
       var registration = detail.myRegistration;
-      final existingStatus = registration?['status'] as String?;
-      final reuse = registration?['registration_id'] != null &&
-          _payableStatuses.contains(existingStatus);
-      if (!reuse) {
-        final ok = await notifier.register(widget.eventId, widget.notes);
+      if (!_canReuse(registration)) {
+        final ok = await notifier.register(widget.eventId);
         if (!ok) {
           final state = ref.read(eventDetailProvider(widget.eventId));
           _showMessage(
-            'Registration failed: ${state.errorMessage ?? 'Unknown error'}',
+            state.errorMessage ?? 'Could not register. Please try again.',
             kind: NoticeKind.error,
           );
           return;

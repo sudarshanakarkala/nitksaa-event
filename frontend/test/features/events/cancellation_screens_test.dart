@@ -79,7 +79,7 @@ class _CheckoutStandIn extends ConsumerWidget {
           onPressed: () async {
             await ref
                 .read(eventDetailProvider(eventX).notifier)
-                .register(eventX, '');
+                .register(eventX);
             if (context.mounted) context.pop();
           },
           child: const Text('Confirm Registration'),
@@ -458,8 +458,8 @@ void main() {
 
       await tester.tap(find.text('Register'));
       await settleRequests(tester);
-      expect(find.text('Badge name'), findsOneWidget);
-      await tester.tap(find.text('Proceed to Checkout'));
+      expect(find.text('YOUR DETAILS'), findsOneWidget);
+      await tester.tap(find.widgetWithText(ElevatedButton, 'Register').last);
       await settleRequests(tester);
       await tester.tap(find.text('Confirm Registration'));
       await settleRequests(tester);

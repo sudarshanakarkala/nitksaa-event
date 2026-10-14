@@ -102,8 +102,7 @@ abstract class AppRouter {
             builder: (context, state) {
               final idStr = state.pathParameters['id'] ?? '';
               final eventId = int.tryParse(idStr) ?? 0;
-              final notes = state.uri.queryParameters['notes'] ?? '';
-              return CheckoutScreen(eventId: eventId, notes: notes);
+              return CheckoutScreen(eventId: eventId);
             },
           ),
           GoRoute(

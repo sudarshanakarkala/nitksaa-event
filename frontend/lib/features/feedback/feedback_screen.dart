@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../features/auth/services/auth_controller.dart';
 import '../../routes/app_routes.dart';
 import '../../shared/site_links.dart';
+import '../../shared/widgets/form_fields.dart';
 import '../../shared/widgets/site_page.dart';
 import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
@@ -122,7 +123,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
     final remaining = _maxLength - _message.text.length;
     final compact = MediaQuery.sizeOf(context).width < 600;
 
-    final areaField = _Field(
+    final areaField = LabeledField(
       label: 'Area',
       child: DropdownButtonFormField<String>(
         initialValue: _area,
@@ -136,7 +137,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
       ),
     );
 
-    final typeField = _Field(
+    final typeField = LabeledField(
       label: 'Type',
       child: DropdownButtonFormField<String>(
         initialValue: _type,
@@ -167,7 +168,7 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
             ],
           ),
         const SizedBox(height: 20),
-        _Field(
+        LabeledField(
           label: 'Message',
           child: TextField(
             controller: _message,
@@ -239,28 +240,6 @@ class _FeedbackScreenState extends ConsumerState<FeedbackScreen> {
 }
 
 /// Website-style field: small uppercase muted label above the control.
-class _Field extends StatelessWidget {
-  const _Field({required this.label, required this.child});
-
-  final String label;
-  final Widget child;
-
-  @override
-  Widget build(BuildContext context) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: AppTextStyles.labelMedium.copyWith(color: context.palette.textMuted),
-        ),
-        const SizedBox(height: 6),
-        child,
-      ],
-    );
-  }
-}
-
 class _ErrorBox extends StatelessWidget {
   const _ErrorBox({required this.onRetry});
 

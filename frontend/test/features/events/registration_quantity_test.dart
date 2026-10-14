@@ -19,7 +19,7 @@ import 'package:go_router/go_router.dart';
 import 'support/auth_isolation_fakes.dart';
 import 'support/registration_backend_fake.dart';
 
-const _notesHint = 'Dietary preferences, accessibility needs…';
+const _phone = '+91 98450 12345';
 
 final _passOrQuantityWording = RegExp(
   r'\bpass(es)?\b|quantity',
@@ -79,7 +79,7 @@ void main() {
     Future<void> openRegistrationForm(WidgetTester tester) async {
       await tester.tap(find.text('Register'));
       await settleRequests(tester);
-      expect(find.text('Badge name'), findsOneWidget);
+      expect(find.text('YOUR DETAILS'), findsOneWidget);
     }
 
     testWidgets('Test A: the form has no pass count to choose, and '
@@ -96,31 +96,53 @@ void main() {
         findsNothing,
       );
 
-      await tester.tap(find.text('Proceed to Checkout'));
+      await tester.tap(find.text('Continue to payment'));
       await settleRequests(tester);
 
       expect(find.text('checkout page'), findsOneWidget);
       expect(visits, hasLength(1));
     }, variant: bothForms);
 
-    testWidgets('Test B: the checkout route carries no quantity, and still '
-        'carries the notes', (tester) async {
+    testWidgets('Test B: the checkout route carries nothing in its address; '
+        'the note travels in the draft', (tester) async {
       final visits = await pumpEventPage(tester, FakeRegistrationBackend());
       await openRegistrationForm(tester);
       await tester.enterText(
-        find.widgetWithText(TextField, _notesHint),
+        find.byKey(const ValueKey('registration-note')),
         'Vegetarian meal',
       );
 
-      await tester.tap(find.text('Proceed to Checkout'));
+      await tester.tap(find.text('Continue to payment'));
       await settleRequests(tester);
 
       final location = visits.single;
       expect(location.path, '/events/$eventX/checkout');
-      expect(location.toString().toLowerCase(), isNot(contains('quantity')));
-      // The notes still travel in the URL. Moving them is ISSUE-019.
-      expect(location.queryParameters, {'notes': 'Vegetarian meal'});
+      expect(location.queryParameters, isEmpty);
+      final container =
+          ProviderScope.containerOf(tester.element(find.text('checkout page')));
+      final draft = container.read(eventDetailProvider(eventX)).registrationDraft;
+      expect(draft?.note, 'Vegetarian meal');
+      expect(draft?.phone, isNotEmpty);
+      expect(draft?.fullname, isNull); // alumni: the server takes the record's name
     }, variant: bothForms);
+
+    testWidgets('an empty phone is caught in the form, and nothing is sent',
+        (tester) async {
+      final visits = await pumpEventPage(tester, FakeRegistrationBackend());
+      await openRegistrationForm(tester);
+      await tester.enterText(find.byKey(const ValueKey('registration-phone')), '');
+      await tester.tap(find.text('Continue to payment'));
+      await settleRequests(tester);
+      expect(
+        find.text('Please enter a phone number we can reach you on.'),
+        findsOneWidget,
+      );
+      await tester.enterText(find.byKey(const ValueKey('registration-phone')), '123');
+      await tester.tap(find.text('Continue to payment'));
+      await settleRequests(tester);
+      expect(find.text('Please enter a valid phone number.'), findsOneWidget);
+      expect(visits, isEmpty);
+    });
   });
 
   group('ISSUE-006: registration request', () {
@@ -141,14 +163,16 @@ void main() {
       return notifier;
     }
 
-    test('Test C: the request body is attendee_note and nothing else', () async {
+    test('Test C: the request body is the note and phone, no quantity', () async {
       final backend = FakeRegistrationBackend();
       final notifier = await openEvent(backend);
 
-      expect(await notifier.register(eventX, 'Vegetarian meal'), isTrue);
+      notifier.setRegistrationDraft(
+          const RegistrationDraft(phone: _phone, note: 'Vegetarian meal'));
+      expect(await notifier.register(eventX), isTrue);
 
       final request = backend.registerRequests.single;
-      expect(request.json, {'attendee_note': 'Vegetarian meal'});
+      expect(request.json, {'attendee_note': 'Vegetarian meal', 'phone': _phone});
       expect(request.rawBody, isNot(contains('quantity')));
       expect(request.bearer, 'Bearer $tokenA');
     });
@@ -157,16 +181,19 @@ void main() {
       final backend = FakeRegistrationBackend();
       final notifier = await openEvent(backend);
 
-      expect(await notifier.register(eventX, ''), isTrue);
+      notifier.setRegistrationDraft(const RegistrationDraft(phone: _phone));
+      expect(await notifier.register(eventX), isTrue);
 
-      expect(backend.registerRequests.single.json, {'attendee_note': ''});
+      expect(backend.registerRequests.single.json,
+          {'attendee_note': '', 'phone': _phone});
     });
 
     test('Test D: one registration takes one request and one seat', () async {
       final backend = FakeRegistrationBackend();
       final notifier = await openEvent(backend);
 
-      expect(await notifier.register(eventX, ''), isTrue);
+      notifier.setRegistrationDraft(const RegistrationDraft(phone: _phone));
+      expect(await notifier.register(eventX), isTrue);
 
       expect(backend.registerRequests, hasLength(1));
       expect(backend.registrations, hasLength(1));
@@ -179,10 +206,12 @@ void main() {
       final backend = FakeRegistrationBackend(isFree: true);
       final notifier = await openEvent(backend);
 
-      expect(await notifier.register(eventX, ''), isTrue);
+      notifier.setRegistrationDraft(const RegistrationDraft(phone: _phone));
+      expect(await notifier.register(eventX), isTrue);
 
       expect(backend.registerRequests, hasLength(1));
-      expect(backend.registerRequests.single.json, {'attendee_note': ''});
+      expect(backend.registerRequests.single.json,
+          {'attendee_note': '', 'phone': _phone});
       expect(backend.seatsTaken, 1);
       expect(notifier.state.myRegistration?['status'], 'registered');
       expect(backend.paymentOrderRequests, isEmpty);
@@ -192,9 +221,10 @@ void main() {
         'retried', () async {
       final backend = FakeRegistrationBackend();
       final notifier = await openEvent(backend);
-      expect(await notifier.register(eventX, ''), isTrue);
+      notifier.setRegistrationDraft(const RegistrationDraft(phone: _phone));
+      expect(await notifier.register(eventX), isTrue);
 
-      expect(await notifier.register(eventX, ''), isFalse);
+      expect(await notifier.register(eventX), isFalse);
 
       expect(backend.registerRequests, hasLength(2));
       expect(backend.registrations, hasLength(1));

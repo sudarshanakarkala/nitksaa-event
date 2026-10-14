@@ -45,10 +45,7 @@ void main() {
         ),
         GoRoute(
           path: AppRoutes.checkout,
-          builder: (context, state) => CheckoutScreen(
-            eventId: eventX,
-            notes: state.uri.queryParameters['notes'] ?? '',
-          ),
+          builder: (context, state) => const CheckoutScreen(eventId: eventX),
         ),
       ],
     );
@@ -72,7 +69,10 @@ void main() {
     expect(find.text('You cancelled your earlier registration.'), findsOneWidget);
     await tester.tap(find.text('Register'));
     await settleRequests(tester);
-    await tester.tap(find.text('Proceed to Checkout'));
+    // Alumni: name from the record and phone prefilled. The form's button is
+    // "Register" (free) or "Continue to payment" (paid); it's the dialog's
+    // ElevatedButton, drawn above the page's own Register button.
+    await tester.tap(find.byType(ElevatedButton).last);
     await settleRequests(tester);
     expect(find.text('Fee Summary'), findsOneWidget);
     await tester.tap(find.byType(ElevatedButton));

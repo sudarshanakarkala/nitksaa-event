@@ -9,11 +9,15 @@ from pydantic import BaseModel, Field
 class RegisterRequest(BaseModel):
     """Body for POST /events/{event_id}/register.
 
-    All profile data is fetched from alumni_db — the only client-supplied field
-    is the optional attendee note, which is stored in registrations.notes.
+    Alumni get their name, batch and branch from the alumni record; everyone
+    else types their name. Phone is required for everyone (alumni may change
+    the one from their record; it's saved on this registration only). The
+    email is always the sign-in email.
     """
 
     attendee_note: Optional[str] = Field(None, max_length=500)
+    fullname: Optional[str] = Field(None, max_length=120)
+    phone: Optional[str] = Field(None, max_length=20)
 
 
 class AlumniProfileResponse(BaseModel):
