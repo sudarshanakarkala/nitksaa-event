@@ -6,18 +6,17 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../../../routes/app_routes.dart';
 import '../../../../shared/widgets/filter_controls.dart';
 import '../../../../shared/widgets/list_page.dart';
-import '../../../../shared/widgets/notice.dart';
 import '../../../../shared/widgets/quick_filter_pill.dart';
-import '../../../../theme/app_palette.dart';
-import '../../../../theme/app_text_styles.dart';
+import '../../../../shared/widgets/state_message.dart';
 import '../../../auth/services/auth_controller.dart';
-import '../../domain/my_event_registration.dart';
 import '../../domain/my_events_view.dart';
-import '../../domain/refund_status.dart';
 import '../providers/created_events_provider.dart';
 import '../providers/my_events_provider.dart';
 import '../widgets/event_card.dart';
 import '../widgets/refund_status_dialog.dart';
+import '../../../../shared/format.dart';
+import '../../../../shared/widgets/list_search_field.dart';
+import '../widgets/unregister_flow.dart';
 
 /// Your registrations, one card per event, in the Events page's layout
 /// (`ListPage`): search, Filters rail, quick-filter pills and a count line.
@@ -130,24 +129,15 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     final entries = myEventEntries(state.registrations);
     final visible = _visible(entries);
     final activeCount = entries.where((e) => e.registration.isActive).length;
-    final p = context.palette;
 
     return Scaffold(
       body: ListPage(
         title: 'My Events',
         subtitle: 'Events you have registered for, and the ones you cancelled '
             'with their refunds.',
-        search: SizedBox(
-          height: 44,
-          child: TextField(
-            controller: _searchController,
-            decoration: const InputDecoration(
-              prefixIcon: Icon(Icons.search, size: 20),
-              hintText: 'Search my events…',
-              isDense: true,
-              contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            ),
-          ),
+        search: ListSearchField(
+          controller: _searchController,
+          hint: 'Search my events…',
         ),
         quickFilters: [
           QuickFilterPill(label: 'All', active: _isQuick(), onTap: () => _quick()),
@@ -169,18 +159,11 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
         ],
         count: state.isLoading
             ? null
-            : Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(
-                      text: '${visible.length}',
-                      style: TextStyle(color: p.primary, fontWeight: FontWeight.w600),
-                    ),
-                    TextSpan(text: visible.length == 1 ? ' event' : ' events'),
-                    TextSpan(text: ' · $activeCount registered'),
-                  ],
-                ),
-                style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+            : ResultCount(
+                count: visible.length,
+                one: 'event',
+                many: 'events',
+                extra: '$activeCount registered',
               ),
         filters: (context) => _filterRail(),
         onOpenFilters: () =>
@@ -193,10 +176,10 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
               return const Center(child: CircularProgressIndicator());
             }
             if (state.errorMessage != null) {
-              return _Message(
+              return StateMessage(
                 icon: Icons.error_outline,
                 title: 'Could not load your registrations',
-                detail: state.errorMessage!,
+                body: state.errorMessage!,
                 action: TextButton(
                   onPressed: () => ref.read(myEventsProvider.notifier).fetchMyEvents(),
                   child: const Text('Try again'),
@@ -204,7 +187,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
               );
             }
             if (entries.isEmpty) {
-              return _Message(
+              return StateMessage(
                 icon: Icons.event_available_outlined,
                 title: 'No registrations yet',
                 action: TextButton(
@@ -214,10 +197,10 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
               );
             }
             if (visible.isEmpty) {
-              return _Message(
+              return StateMessage(
                 icon: Icons.search_off,
                 title: 'No events match',
-                detail: 'Try another search or filter.',
+                body: 'Try another search or filter.',
                 action: TextButton(onPressed: _clearAll, child: const Text('Clear filters')),
               );
             }
@@ -270,10 +253,15 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       mine: created.contains(registration.eventId),
       footerNote: when == null
           ? null
-          : '${active ? 'Registered' : 'Cancelled'} ${_shortDate(when)}',
+          : '${active ? 'Registered' : 'Cancelled'} ${formatShortDate(when)}',
       onView: () => context.push('/events/${registration.eventId}'),
       onUnregister:
-          registration.canCancel ? () => _confirmCancel(registration) : null,
+          registration.canCancel ? () => confirmAndUnregister(
+                context,
+                ref,
+                registration: registration,
+                eventTitle: registration.event?.title ?? 'this event',
+              ) : null,
       unregistering: isCancelling,
       onJoin: canJoin
           ? () => launchUrl(Uri.parse(joinUrl), mode: LaunchMode.externalApplication)
@@ -288,99 +276,6 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     );
   }
 
-  static String _shortDate(DateTime d) {
-    const months = [
-      'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-      'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-    ];
-    return '${d.day} ${months[d.month - 1]}';
-  }
-
-  Future<void> _confirmCancel(MyEventRegistration registration) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Unregister?'),
-        content: Text(
-          'This will unregister you from ${registration.event?.title ?? 'this event'}.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('Keep'),
-          ),
-          FilledButton.tonal(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Unregister'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed != true || !mounted) return;
-    final outcome = await ref
-        .read(myEventsProvider.notifier)
-        .cancelRegistration(registration.registrationId);
-    if (!mounted) return;
-    final refundStatus = outcome.refund?.status;
-    showNotice(
-      context,
-      outcome.message,
-      kind: !outcome.cancelled
-          ? NoticeKind.error
-          : (refundStatus == RefundStatus.failed || refundStatus == RefundStatus.delayed)
-              ? NoticeKind.warning
-              : NoticeKind.success,
-      // A notice with an action would otherwise stay up until pressed.
-      persist: outcome.cancelled ? false : null,
-      action: viewRefundAction(
-        context,
-        ref,
-        outcome: outcome,
-        registrationId: registration.registrationId,
-      ),
-    );
-  }
-}
-
-/// Centred icon, title, optional detail and action (empty and error states).
-class _Message extends StatelessWidget {
-  const _Message({required this.icon, required this.title, this.detail, this.action});
-
-  final IconData icon;
-  final String title;
-  final String? detail;
-  final Widget? action;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    return Center(
-      child: Padding(
-        padding: const EdgeInsets.all(24),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(icon, size: 56, color: p.textMuted),
-            const SizedBox(height: 16),
-            Text(
-              title,
-              textAlign: TextAlign.center,
-              style: const TextStyle(
-                fontFamily: AppTextStyles.serif,
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-              ),
-            ),
-            if (detail != null) ...[
-              const SizedBox(height: 6),
-              Text(detail!, textAlign: TextAlign.center, style: TextStyle(color: p.textMuted)),
-            ],
-            if (action != null) ...[const SizedBox(height: 12), action!],
-          ],
-        ),
-      ),
-    );
-  }
 }
 
 class _SignedOut extends StatelessWidget {
@@ -389,10 +284,10 @@ class _SignedOut extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      body: _Message(
+      body: StateMessage(
         icon: Icons.bookmark_border,
         title: 'Sign in to see My Events',
-        detail: 'Your registrations, join links and refunds appear here.',
+        body: 'Your registrations, join links and refunds appear here.',
         action: FilledButton(
           onPressed: () => context.push(AppRoutes.login),
           child: const Text('Sign in'),

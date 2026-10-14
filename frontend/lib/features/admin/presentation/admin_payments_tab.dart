@@ -20,6 +20,10 @@ import '../data/payments_api.dart';
 import '../domain/registration_filters.dart';
 import 'admin_audit_tab.dart' show AuditTimeline;
 import 'admin_widgets.dart';
+import '../../../shared/widgets/status_badge.dart';
+import '../../../shared/widgets/state_message.dart';
+import '../../../shared/format.dart';
+import '../../../shared/widgets/list_search_field.dart';
 
 enum _View {
   orders('Orders'),
@@ -52,38 +56,6 @@ const _refundStatus = {
 };
 
 String _modeLabel(String mode) => mode == 'live' ? 'Live' : 'Test';
-
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-
-/// "13 Oct, 10:29 AM": short enough for the Refunds table; the year is in
-/// the details window.
-String _shortDate(DateTime d) {
-  final hour = d.hour == 0 ? 12 : (d.hour > 12 ? d.hour - 12 : d.hour);
-  return '${d.day} ${_months[d.month - 1]}, $hour:${d.minute.toString().padLeft(2, '0')} '
-      '${d.hour >= 12 ? 'PM' : 'AM'}';
-}
-
-/// ₹ with Indian digit grouping; paise only when there are any.
-String _money(double amount) {
-  final whole = amount.truncate();
-  final paise = ((amount - whole) * 100).round();
-  final digits = whole.abs().toString();
-  String grouped;
-  if (digits.length <= 3) {
-    grouped = digits;
-  } else {
-    final last3 = digits.substring(digits.length - 3);
-    var rest = digits.substring(0, digits.length - 3);
-    final groups = <String>[];
-    while (rest.length > 2) {
-      groups.insert(0, rest.substring(rest.length - 2));
-      rest = rest.substring(0, rest.length - 2);
-    }
-    if (rest.isNotEmpty) groups.insert(0, rest);
-    grouped = '${groups.join(',')},$last3';
-  }
-  return '₹$grouped${paise == 0 ? '' : '.${paise.toString().padLeft(2, '0')}'}';
-}
 
 /// Admin → Payments: who paid what, refunds, and how each event charges.
 /// Read-only: prices are set in the event form, refunds start when someone
@@ -265,7 +237,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           label: 'Amount',
           kind: ColumnKind.number,
           value: (o) => o.amount,
-          text: (o) => _money(o.amount),
+          text: (o) => formatMoney(o.amount),
         ),
         GridColumn(
           id: 'status',
@@ -290,7 +262,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           label: 'Amount',
           kind: ColumnKind.number,
           value: (r) => r.amount,
-          text: (r) => _money(r.amount),
+          text: (r) => formatMoney(r.amount),
         ),
         GridColumn(
           id: 'status',
@@ -311,7 +283,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           label: 'Requested',
           kind: ColumnKind.date,
           value: (r) => r.requestedAt,
-          text: (r) => _shortDate(r.requestedAt),
+          text: (r) => formatShortDateTime(r.requestedAt),
         ),
         GridColumn(id: 'number', label: 'Refund ID', kind: ColumnKind.text, value: (r) => r.refundNumber),
         GridColumn(
@@ -494,21 +466,13 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     };
 
     return ListPage(
-      search: SizedBox(
-        height: 44,
-        child: TextField(
-          controller: _search,
-          decoration: InputDecoration(
-            prefixIcon: const Icon(Icons.search, size: 20),
-            hintText: switch (_view) {
+      search: ListSearchField(
+        controller: _search,
+        hint: switch (_view) {
               _View.pricing => 'Search events…',
               _View.orders => 'Search name, email, number or Razorpay id…',
               _View.refunds => 'Search name, email or number…',
             },
-            isDense: true,
-            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-        ),
       ),
       quickFilters: [
         SizedBox(
@@ -640,7 +604,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                 const SizedBox(height: 12),
               ],
               if (rows.isEmpty)
-                const _Empty('No orders match.')
+                const StateMessage(body: 'No orders match.')
               else
                 AdminGridTable<AdminOrder>(
                   rows: rows,
@@ -650,7 +614,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                   ascending: sort.$2,
                   onSort: _sortBy,
                   cell: (c, o) => switch (c.id) {
-                    'status' => _StatusBadge(
+                    'status' => StatusBadge(
                         label: o.stuck ? 'Pending · stuck' : (_orderStatus[o.status] ?? o.status),
                         tone: o.stuck
                             ? p.warning
@@ -660,7 +624,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                                 _ => p.textMuted,
                               },
                       ),
-                    'mode' => _ModeBadge(mode: o.mode),
+                    'mode' => StatusBadge.paymentMode(context, o.mode),
                     _ => null,
                   },
                 ),
@@ -695,7 +659,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
               ],
               const SizedBox(height: 4),
               if (rows.isEmpty)
-                const _Empty('No refunds match.')
+                const StateMessage(body: 'No refunds match.')
               else
                 AdminGridTable<AdminRefund>(
                   rows: rows,
@@ -705,7 +669,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                   ascending: sort.$2,
                   onSort: _sortBy,
                   cell: (c, r) => switch (c.id) {
-                    'status' => _StatusBadge(
+                    'status' => StatusBadge(
                         label: _refundStatus[r.status] ?? r.status,
                         tone: switch (r.status) {
                           'processed' => p.success,
@@ -713,7 +677,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
                           _ => p.warning,
                         },
                       ),
-                    'mode' => _ModeBadge(mode: r.mode),
+                    'mode' => StatusBadge.paymentMode(context, r.mode),
                     // Narrower than other text, so the row fits; the full
                     // reason is in the details window.
                     'reason' => (r.reasonText ?? r.failureReason) == null
@@ -749,7 +713,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
               ),
               const SizedBox(height: 12),
               if (ids.isEmpty)
-                const _Empty('No paid events.')
+                const StateMessage(body: 'No paid events.')
               else
                 for (final id in ids) ...[
                   _PricingCard(
@@ -832,7 +796,7 @@ class _PricingCard extends StatelessWidget {
                   style: AppTextStyles.titleSmall.copyWith(color: p.textPrimary),
                 ),
               ),
-              if (pr != null) _ModeBadge(mode: pr.mode),
+              if (pr != null) StatusBadge.paymentMode(context, pr.mode),
               if (onEdit != null) ...[
                 const SizedBox(width: 8),
                 TextButton.icon(
@@ -855,7 +819,7 @@ class _PricingCard extends StatelessWidget {
             Wrap(
               runSpacing: 10,
               children: [
-                figure('Price', _money(pr.baseAmount)),
+                figure('Price', formatMoney(pr.baseAmount)),
                 figure(
                   'GST',
                   !pr.gstEnabled
@@ -869,9 +833,9 @@ class _PricingCard extends StatelessWidget {
                       ? 'None'
                       : pr.feeType == 'percentage'
                       ? '${pr.feeValue.toStringAsFixed(pr.feeValue % 1 == 0 ? 0 : 1)}%'
-                      : _money(pr.feeValue),
+                      : formatMoney(pr.feeValue),
                 ),
-                figure('Attendee pays', _money(pr.finalAmount)),
+                figure('Attendee pays', formatMoney(pr.finalAmount)),
                 figure('Gateway', pr.gateway == 'razorpay' ? 'Razorpay' : pr.gateway),
                 if (pr.updatedAt != null) figure('Price last changed', formatDate(pr.updatedAt!)),
               ],
@@ -896,7 +860,7 @@ class _RefundDetailsDialog extends StatelessWidget {
       ('Name', r.fullname, false),
       ('Email', r.email, true),
       ('Event', r.eventTitle, false),
-      ('Amount', _money(r.amount), false),
+      ('Amount', formatMoney(r.amount), false),
       ('Status', statusLabel, false),
       ('Reason', r.reasonText ?? r.failureReason, false),
       ('Tries', '${r.attemptCount}', false),
@@ -995,7 +959,7 @@ class _OrderDetailsDialog extends StatelessWidget {
                 ('Name', o.fullname, false),
                 ('Email', o.email, true),
                 ('Event', o.eventTitle, false),
-                ('Amount', _money(o.amount), false),
+                ('Amount', formatMoney(o.amount), false),
                 ('Status', o.stuck ? 'Pending · stuck' : (_orderStatus[o.status] ?? o.status), false),
                 ('Mode', _modeLabel(o.mode), false),
                 ('Order #', o.orderNumber, true),
@@ -1035,7 +999,7 @@ class _OrderDetailsDialog extends StatelessWidget {
                         heading('Refund ${r.refundNumber}'),
                         AdminDetailRows(rows: [
                           ('Status', _refundStatus[r.status] ?? r.status, false),
-                          ('Amount', _money(r.amount), false),
+                          ('Amount', formatMoney(r.amount), false),
                           ('Reason', r.reasonText ?? r.failureReason, false),
                           ('Tries', '${r.attemptCount}', false),
                           ('Razorpay refund id', r.providerRef, true),
@@ -1060,46 +1024,6 @@ class _OrderDetailsDialog extends StatelessWidget {
   }
 }
 
-class _StatusBadge extends StatelessWidget {
-  const _StatusBadge({required this.label, required this.tone});
-
-  final String label;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: tone.withValues(alpha: 0.08),
-          border: Border.all(color: tone.withValues(alpha: 0.22)),
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.labelSmall.copyWith(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: tone,
-          ),
-        ),
-      );
-}
-
-/// TEST / LIVE, always shown so practice payments are never mistaken for
-/// real money.
-class _ModeBadge extends StatelessWidget {
-  const _ModeBadge({required this.mode});
-
-  final String mode;
-
-  @override
-  Widget build(BuildContext context) {
-    final p = context.palette;
-    final live = mode == 'live';
-    return _StatusBadge(label: live ? 'LIVE' : 'TEST', tone: live ? p.success : p.info);
-  }
-}
-
 class _Note extends StatelessWidget {
   const _Note({required this.text, this.warning = false});
 
@@ -1121,21 +1045,4 @@ class _Note extends StatelessWidget {
       ],
     );
   }
-}
-
-class _Empty extends StatelessWidget {
-  const _Empty(this.text);
-
-  final String text;
-
-  @override
-  Widget build(BuildContext context) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 40),
-        child: Center(
-          child: Text(
-            text,
-            style: AppTextStyles.bodyMedium.copyWith(color: context.palette.textMuted),
-          ),
-        ),
-      );
 }

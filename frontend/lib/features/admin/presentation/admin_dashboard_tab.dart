@@ -15,6 +15,8 @@ import '../../../theme/app_text_styles.dart';
 import '../../auth/services/auth_controller.dart';
 import '../data/dashboard_api.dart';
 import '../domain/registration_filters.dart' show formatDate;
+import '../../../shared/widgets/status_badge.dart';
+import '../../../shared/format.dart';
 
 /// Admin → Dashboard: how the events you administer are doing. The
 /// period's numbers, upcoming events and their progress, the weekly trend
@@ -184,7 +186,7 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
                   _TileData('Upcoming events', '${data.upcomingEvents}', 'Not yet ended'),
                   _TileData('Registrations', '${data.registrations}', _period.label),
                   _TileData('Cancellations', '${data.cancellations}', _period.label),
-                  _TileData('Money collected', _money(data.money), '${_period.label} · live payments'),
+                  _TileData('Money collected', formatMoney(data.money, wholeRupees: true), '${_period.label} · live payments'),
                 ],
               ),
               const SizedBox(height: 20),
@@ -228,21 +230,6 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
       },
     );
   }
-}
-
-/// ₹ with Indian digit grouping, whole rupees.
-String _money(double amount) {
-  final digits = amount.round().toString();
-  if (digits.length <= 3) return '₹$digits';
-  final last3 = digits.substring(digits.length - 3);
-  var rest = digits.substring(0, digits.length - 3);
-  final groups = <String>[];
-  while (rest.length > 2) {
-    groups.insert(0, rest.substring(rest.length - 2));
-    rest = rest.substring(0, rest.length - 2);
-  }
-  if (rest.isNotEmpty) groups.insert(0, rest);
-  return '₹${groups.join(',')},$last3';
 }
 
 String _daysToGo(DashboardUpcoming e) {
@@ -408,7 +395,7 @@ class _UpcomingRow extends StatelessWidget {
                     style: AppTextStyles.titleSmall.copyWith(color: p.textPrimary),
                   ),
                 ),
-                if (statusLabel.isNotEmpty) _Badge(label: statusLabel, tone: statusTone),
+                if (statusLabel.isNotEmpty) StatusBadge(label: statusLabel, tone: statusTone),
               ],
             ),
             const SizedBox(height: 2),
@@ -450,31 +437,6 @@ class _UpcomingRow extends StatelessWidget {
       ),
     );
   }
-}
-
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label, required this.tone});
-
-  final String label;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) => Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-        decoration: BoxDecoration(
-          color: tone.withValues(alpha: 0.08),
-          border: Border.all(color: tone.withValues(alpha: 0.22)),
-          borderRadius: BorderRadius.circular(100),
-        ),
-        child: Text(
-          label,
-          style: AppTextStyles.labelSmall.copyWith(
-            fontSize: 11.5,
-            fontWeight: FontWeight.w600,
-            color: tone,
-          ),
-        ),
-      );
 }
 
 /// Legend entry: a short line in the series colour, then its name.

@@ -16,6 +16,7 @@ import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../data/registrations_api.dart';
 import '../domain/registration_filters.dart' show formatDate;
+import '../../../shared/format.dart';
 
 /// When an event ends (start + 4 hours if it has no end time).
 DateTime _endOf(AppEvent e) =>
@@ -528,7 +529,7 @@ class _PersonRow extends StatelessWidget {
           Icon(Icons.check_circle, size: 18, color: p.success),
           const SizedBox(width: 4),
           Text(
-            _time(checked.checkedInAt),
+            formatTime(checked.checkedInAt.toLocal()),
             style: AppTextStyles.bodySmall.copyWith(color: p.success, fontWeight: FontWeight.w600),
           ),
           const SizedBox(width: 4),
@@ -575,12 +576,6 @@ class _PersonRow extends StatelessWidget {
     );
   }
 
-  static String _time(DateTime t) {
-    final local = t.toLocal();
-    final hour = local.hour % 12 == 0 ? 12 : local.hour % 12;
-    final minute = local.minute.toString().padLeft(2, '0');
-    return '$hour:$minute ${local.hour < 12 ? 'AM' : 'PM'}';
-  }
 }
 
 

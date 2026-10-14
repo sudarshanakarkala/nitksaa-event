@@ -206,7 +206,7 @@ void _expectNotRegistered(WidgetTester tester, _Screen screen) {
       expect(find.textContaining('0 registered'), findsOneWidget);
     case _Screen.eventList:
       // "Registered by me" is on, and nothing is registered any more.
-      expect(find.text('No Events Found'), findsOneWidget);
+      expect(find.text('No events found'), findsOneWidget);
   }
 }
 

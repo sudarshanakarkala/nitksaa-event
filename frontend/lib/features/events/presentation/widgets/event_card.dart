@@ -3,6 +3,8 @@ import 'package:flutter/material.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../domain/event.dart';
+import '../../../../shared/widgets/status_badge.dart';
+import '../../../../shared/format.dart';
 
 /// Where the person stands with an event, for the card's badge and buttons.
 enum EventAttendance { none, registered, cancelled }
@@ -251,13 +253,13 @@ class EventCard extends StatelessWidget {
         'completed' => ('Completed', p.textMuted),
         final other => (other, p.textMuted),
       };
-      badges.add(_Badge(label: label, tone: tone));
+      badges.add(StatusBadge(label: label, tone: tone));
     }
     switch (attendance) {
       case EventAttendance.registered:
-        badges.add(_Badge(label: 'Registered', tone: p.info));
+        badges.add(StatusBadge(label: 'Registered', tone: p.info));
       case EventAttendance.cancelled:
-        badges.add(_Badge(label: 'Unregistered', tone: p.error));
+        badges.add(StatusBadge(label: 'Unregistered', tone: p.error));
       case EventAttendance.none:
         break;
     }
@@ -265,16 +267,16 @@ class EventCard extends StatelessWidget {
     if (status != null) badges.add(status);
     // Unknown price (no event details loaded): no badge rather than a guess.
     if (isFree != null || price != null) {
-      badges.add(_Badge(label: _priceLabel(), tone: p.primary));
+      badges.add(StatusBadge(label: _priceLabel(), tone: p.primary));
     }
-    badges.add(_Badge(label: isVirtual ? 'Virtual' : 'Physical', tone: p.textSecondary));
+    badges.add(StatusBadge(label: isVirtual ? 'Virtual' : 'Physical', tone: p.textSecondary));
     return badges;
   }
 
   Widget? _registrationBadge(AppPalette p) {
     final now = DateTime.now();
     final finished = (end ?? start)?.isBefore(now) ?? false;
-    if (finished) return _Badge(label: 'Ended', tone: p.textMuted);
+    if (finished) return StatusBadge(label: 'Ended', tone: p.textMuted);
     switch (registrationStatus?.toLowerCase()) {
       case 'open':
         final closes = registrationClosesAt;
@@ -282,14 +284,14 @@ class EventCard extends StatelessWidget {
             closes.isAfter(now) &&
             closes.difference(now) <= const Duration(hours: 72);
         return closingSoon
-            ? _Badge(label: 'Closing soon', tone: p.warning)
-            : _Badge(label: 'Registration open', tone: p.success);
+            ? StatusBadge(label: 'Closing soon', tone: p.warning)
+            : StatusBadge(label: 'Registration open', tone: p.success);
       case 'full':
-        return _Badge(label: 'Full', tone: p.error);
+        return StatusBadge(label: 'Full', tone: p.error);
       case 'not_open_yet':
-        return _Badge(label: 'Opens soon', tone: p.info);
+        return StatusBadge(label: 'Opens soon', tone: p.info);
       case 'closed':
-        return _Badge(label: 'Registration closed', tone: p.textMuted);
+        return StatusBadge(label: 'Registration closed', tone: p.textMuted);
       default:
         return null;
     }
@@ -299,8 +301,7 @@ class EventCard extends StatelessWidget {
     if (isFree ?? true) return 'Free';
     final amount = price;
     if (amount == null) return 'Paid';
-    final whole = amount == amount.roundToDouble();
-    return '₹${amount.toStringAsFixed(whole ? 0 : 2)}';
+    return formatMoney(amount);
   }
 
   Widget _footer(BuildContext context) {
@@ -417,29 +418,17 @@ class EventCard extends StatelessWidget {
     );
   }
 
-  static const _months = [
-    'Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
-    'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec',
-  ];
-
-  static String _clock(DateTime dt) {
-    final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
-    final minute = dt.minute.toString().padLeft(2, '0');
-    return '$hour:$minute ${dt.hour >= 12 ? 'PM' : 'AM'}';
-  }
-
   /// "Sun, 11 Oct · 7:00 PM – 10:00 PM", or a date range across days.
   static String _when(DateTime start, DateTime? end) {
-    const days = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-    String date(DateTime d) => '${days[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]}';
-    if (end == null) return '${date(start)} · ${_clock(start)}';
+    String date(DateTime d) => '${weekdayNames[d.weekday - 1]}, ${d.day} ${monthNames[d.month - 1]}';
+    if (end == null) return '${date(start)} · ${formatTime(start)}';
     // Full-day events end at midnight after their last day.
     if (end.hour == 0 && end.minute == 0 && end.isAfter(start)) {
       end = end.subtract(const Duration(minutes: 1));
     }
     final sameDay = start.year == end.year && start.month == end.month && start.day == end.day;
     return sameDay
-        ? '${date(start)} · ${_clock(start)} – ${_clock(end)}'
+        ? '${date(start)} · ${formatTime(start)} – ${formatTime(end)}'
         : '${date(start)} – ${date(end)}';
   }
 }
@@ -657,7 +646,7 @@ class _DateTile extends StatelessWidget {
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
-            EventCard._months[date.month - 1].toUpperCase(),
+            monthNames[date.month - 1].toUpperCase(),
             style: AppTextStyles.eyebrow.copyWith(color: accent, fontSize: 10.5),
           ),
           Text(
@@ -669,36 +658,6 @@ class _DateTile extends StatelessWidget {
             ),
           ),
         ],
-      ),
-    );
-  }
-}
-
-/// Website `.sc-community-badge`: small rounded pill in a faint tint of
-/// [tone].
-class _Badge extends StatelessWidget {
-  const _Badge({required this.label, required this.tone});
-
-  final String label;
-  final Color tone;
-
-  @override
-  Widget build(BuildContext context) {
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.08),
-        border: Border.all(color: tone.withValues(alpha: 0.22)),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w600,
-          letterSpacing: 0.2,
-          color: tone,
-        ),
       ),
     );
   }

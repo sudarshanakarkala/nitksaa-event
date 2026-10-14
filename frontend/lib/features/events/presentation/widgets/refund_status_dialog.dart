@@ -9,6 +9,7 @@ import '../../domain/refund_status.dart';
 import '../providers/cancellation_outcome.dart';
 import '../providers/refund_status_provider.dart';
 import '../../../../shared/widgets/notice.dart';
+import '../../../../shared/format.dart';
 
 /// Opens the refund status of one of the attendee's registrations.
 ///
@@ -177,9 +178,9 @@ class RefundStatusDialog extends ConsumerWidget {
     return [
       if (amount != null) _DetailRow(label: 'Amount', value: amount),
       if (waiting && requestedAt != null)
-        _DetailRow(label: 'Requested on', value: _formatDateTime(requestedAt)),
+        _DetailRow(label: 'Requested on', value: formatDateTime(requestedAt)),
       if (refund.status == RefundStatus.processed && finalizedAt != null)
-        _DetailRow(label: 'Refunded on', value: _formatDateTime(finalizedAt)),
+        _DetailRow(label: 'Refunded on', value: formatDateTime(finalizedAt)),
       if (refund.refundId != null)
         _DetailRow(label: 'Refund reference', value: refund.refundId!, copyable: true),
       if (refund.paymentReference != null)
@@ -197,34 +198,14 @@ class RefundStatusDialog extends ConsumerWidget {
   static String? _formatAmount(RefundStatus refund) {
     final amount = refund.amount;
     if (amount == null) return null;
+    final currency = refund.currency;
+    if (currency == null || currency.toUpperCase() == 'INR') return formatMoney(amount);
     final figure = amount == amount.roundToDouble()
         ? '${amount.toInt()}'
         : amount.toStringAsFixed(2);
-    final currency = refund.currency;
-    if (currency == null || currency.toUpperCase() == 'INR') return '₹$figure';
     return '$figure $currency';
   }
 
-  static String _formatDateTime(DateTime dt) {
-    const months = [
-      'Jan',
-      'Feb',
-      'Mar',
-      'Apr',
-      'May',
-      'Jun',
-      'Jul',
-      'Aug',
-      'Sep',
-      'Oct',
-      'Nov',
-      'Dec',
-    ];
-    final hour = dt.hour == 0 ? 12 : (dt.hour > 12 ? dt.hour - 12 : dt.hour);
-    final minute = dt.minute.toString().padLeft(2, '0');
-    final period = dt.hour >= 12 ? 'PM' : 'AM';
-    return '${dt.day} ${months[dt.month - 1]} ${dt.year}, $hour:$minute $period';
-  }
 }
 
 class _DetailRow extends StatelessWidget {
