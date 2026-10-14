@@ -196,10 +196,9 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
   /// holds a plain-words message.
   Future<bool> register(int eventId) async {
     final token = _accessToken;
+    if (token == null || !mounted) return false;
     final draft = state.registrationDraft;
-    if (token == null || draft == null || !mounted) {
-      return false;
-    }
+    if (draft == null) return false;
 
     state = state.copyWith(isRegistering: true);
     try {
