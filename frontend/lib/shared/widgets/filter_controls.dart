@@ -390,8 +390,9 @@ class _FilterYearRangeState extends State<FilterYearRange> {
 
 /// Reads a typed date: "15 Nov", "15 November", "15/11", "15-11-26",
 /// "15 Nov 2026" or "15/11/2026" (day first). With no year it takes the next
-/// one on or after [today]. Null when it isn't a date.
-DateTime? parseFilterDate(String text, DateTime today) {
+/// one on or after [today], or with [past] the latest one on or before it.
+/// Null when it isn't a date.
+DateTime? parseFilterDate(String text, DateTime today, {bool past = false}) {
   final t = text.trim().toLowerCase().replaceAll(',', ' ');
   if (t.isEmpty) return null;
   int? day;
@@ -421,7 +422,11 @@ DateTime? parseFilterDate(String text, DateTime today) {
   }
   final start = DateTime(today.year, today.month, today.day);
   var d = make(today.year);
-  if (d.isBefore(start)) d = make(today.year + 1);
+  if (past) {
+    if (d.isAfter(start)) d = make(today.year - 1);
+  } else if (d.isBefore(start)) {
+    d = make(today.year + 1);
+  }
   return real(d) ? d : null;
 }
 
@@ -446,7 +451,31 @@ class FilterDateRange extends StatefulWidget {
     this.presets = const [],
     this.inline = false,
     this.leading,
+    this.lookBack = false,
   });
+
+  /// For records in the past (Audit, Payments, Registrations): a date typed
+  /// without a year means the latest one, not the next one.
+  final bool lookBack;
+
+  /// Today · Last 7 days · Last 30 days, for [lookBack] filters.
+  static List<(String, DateTimeRange)> lookBackPresets(DateTime now) {
+    final today = DateTime(now.year, now.month, now.day);
+    return [
+      ('Today', DateTimeRange(start: today, end: today)),
+      ('Last 7 days', DateTimeRange(start: today.subtract(const Duration(days: 6)), end: today)),
+      ('Last 30 days', DateTimeRange(start: today.subtract(const Duration(days: 29)), end: today)),
+    ];
+  }
+
+  /// Whether [at] falls in [range] (whole days; null = any date).
+  static bool contains(DateTimeRange? range, DateTime? at) {
+    if (range == null) return true;
+    if (at == null) return false;
+    final local = at.toLocal();
+    final to = DateTime(range.end.year, range.end.month, range.end.day + 1);
+    return !local.isBefore(range.start) && local.isBefore(to);
+  }
 
   final String label;
   final bool inline;
@@ -538,16 +567,25 @@ class _FilterDateRangeState extends State<FilterDateRange> {
     final today = DateTime.now();
     final fromText = _from.text.trim();
     final toText = _to.text.trim();
-    final from = fromText.isEmpty ? null : parseFilterDate(fromText, today);
-    var to = toText.isEmpty ? null : parseFilterDate(toText, today);
+    final past = widget.lookBack;
+    var from = fromText.isEmpty ? null : parseFilterDate(fromText, today, past: past);
+    var to = toText.isEmpty ? null : parseFilterDate(toText, today, past: past);
     setState(() {
       _fromBad = fromText.isNotEmpty && from == null;
       _toBad = toText.isNotEmpty && to == null;
     });
     if (_fromBad || _toBad) return;
-    // "To" with no year before "From": the year after.
-    if (from != null && to != null && to.isBefore(from) && !RegExp(r'\d{4}|[\/\-. ]\d{2}$').hasMatch(toText)) {
-      to = DateTime(to.year + 1, to.month, to.day);
+    // Without a year, a From after To (or To before From) means a range
+    // across the new year.
+    // A typed year gives the same date whatever today is.
+    bool hasYear(String t) =>
+        parseFilterDate(t, DateTime(2000, 6, 1)) == parseFilterDate(t, DateTime(2003, 6, 1));
+    if (from != null && to != null && to.isBefore(from)) {
+      if (past && !hasYear(fromText)) {
+        from = DateTime(from.year - 1, from.month, from.day);
+      } else if (!past && !hasYear(toText)) {
+        to = DateTime(to.year + 1, to.month, to.day);
+      }
     }
     if (from == null && to == null) {
       widget.onChanged(null);

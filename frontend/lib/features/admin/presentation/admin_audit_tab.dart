@@ -27,9 +27,6 @@ const _categories = {
 
 const _whoLabels = {'admin': 'Admins', 'attendee': 'Attendees', 'system': 'System'};
 
-/// "When" in the rail: how far back to look (the server's `from`).
-const _periods = {'today': 'Today', '7': 'Last 7 days', '30': 'Last 30 days'};
-
 /// Admin → Audit: who did what, newest first (website Audit tab, step 10b).
 ///
 /// Overall admins see every entry; event admins only their events'. The
@@ -56,7 +53,8 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
 
   String? _category;
   String? _who;
-  String? _period;
+  /// When the entries happened (the server's `from` and `to`); null = any.
+  DateTimeRange? _dates;
   int _event = adminAllEvents;
   (String, bool) _sort = ('when', false);
 
@@ -97,15 +95,26 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
     }
   }
 
-  DateTime? get _from {
+  /// The date line: the server filters, so a drag waits until it settles.
+  void _setDates(DateTimeRange? v) {
+    setState(() => _dates = v);
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 400), () => _load(page: 1));
+  }
+
+  Widget _dateLine() {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
-    return switch (_period) {
-      'today' => today,
-      '7' => today.subtract(const Duration(days: 6)),
-      '30' => today.subtract(const Duration(days: 29)),
-      _ => null,
-    };
+    return FilterDateRange(
+      inline: true,
+      lookBack: true,
+      label: 'When',
+      first: today.subtract(const Duration(days: 365)),
+      last: today,
+      value: _dates,
+      presets: FilterDateRange.lookBackPresets(now),
+      onChanged: _setDates,
+    );
   }
 
   Future<void> _load({int? page}) async {
@@ -123,7 +132,8 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
             category: _category,
             who: _who,
             eventId: _event == adminAllEvents ? null : _event,
-            from: _from,
+            from: _dates?.start,
+            to: _dates?.end,
             q: _search.text,
           );
       if (!mounted) return;
@@ -150,7 +160,7 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
   }
 
   int get _activeFilterCount =>
-      [_category != null, _who != null, _period != null, _event != adminAllEvents].where((on) => on).length;
+      [_category != null, _who != null, _event != adminAllEvents].where((on) => on).length;
 
   void _clearAll() {
     _debounce?.cancel();
@@ -158,7 +168,6 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
     _set(() {
       _category = null;
       _who = null;
-      _period = null;
       _event = adminAllEvents;
     });
   }
@@ -201,6 +210,7 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
       onOpenFilters: () => showFilterSheet(context, builder: (_) => _filterRail(), onClear: _clearAll),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearAll,
+      belowPills: _dateLine(),
       loading: _loading && _rows.isNotEmpty,
       body: _body(),
     );
@@ -228,7 +238,6 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
             const SizedBox(height: 20),
             _chips('Category', _categories, _category, (v) => _set(() => _category = v)),
             _chips('Who', _whoLabels, _who, (v) => _set(() => _who = v)),
-            _chips('When', _periods, _period, (v) => _set(() => _period = v)),
           ],
         ),
       );

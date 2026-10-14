@@ -91,6 +91,9 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
   Set<String> _status = const {};
   Set<String> _mode = const {};
 
+  /// Orders started / refunds requested in this range; null = any date.
+  DateTimeRange? _dates;
+
   final Map<_View, (String, bool)> _sorts = {
     _View.orders: ('created', false),
     _View.refunds: ('requested', false),
@@ -385,7 +388,10 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     return applyGrid(
       [
         for (final o in _orders)
-          if ((_isAll || o.eventId == _event) && (q.isEmpty || o.searchText.contains(q))) o,
+          if ((_isAll || o.eventId == _event) &&
+              FilterDateRange.contains(_dates, o.createdAt) &&
+              (q.isEmpty || o.searchText.contains(q)))
+            o,
       ],
       _orderColumns,
       filters: _filters,
@@ -402,6 +408,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
       [
         for (final r in _refunds)
           if ((_isAll || r.eventId == _event) &&
+              FilterDateRange.contains(_dates, r.requestedAt) &&
               (_mode.isEmpty || _mode.contains(_modeLabel(r.mode))))
             r,
       ],
@@ -425,6 +432,30 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     }).toList()
       ..sort((a, b) => _eventTitle(a).toLowerCase().compareTo(_eventTitle(b).toLowerCase()));
     return ids;
+  }
+
+  /// Orders by when they were started, refunds by when they were
+  /// requested. Not on Paid events (a list of events, mostly ahead).
+  Widget? _dateLine() {
+    if (_view == _View.pricing) return null;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+    var first = today.subtract(const Duration(days: 30));
+    for (final d in [for (final o in _orders) o.createdAt, for (final r in _refunds) r.requestedAt]) {
+      if (d.year < 2020) continue; // a missing date read as 1970
+      final day = DateTime(d.year, d.month, d.day);
+      if (day.isBefore(first)) first = day;
+    }
+    return FilterDateRange(
+      inline: true,
+      lookBack: true,
+      label: _view == _View.orders ? 'Started' : 'Requested',
+      first: first,
+      last: today,
+      value: _dates,
+      presets: FilterDateRange.lookBackPresets(now),
+      onChanged: (v) => setState(() => _dates = v),
+    );
   }
 
   int _count(_View v) => switch (v) {
@@ -508,6 +539,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
       ),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearAll,
+      belowPills: _dateLine(),
       loading: _loading && _orders.isNotEmpty,
       body: _body(),
     );

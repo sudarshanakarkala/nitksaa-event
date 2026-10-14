@@ -109,7 +109,7 @@ class AuditApi {
   }
 
   /// One page, newest first. Filters are the server's: category, who,
-  /// event, from (a date) and q (a name or event title).
+  /// event, from and to (dates, inclusive) and q (a name or event title).
   Future<AuditPage> list(
     String token, {
     int page = 1,
@@ -118,8 +118,11 @@ class AuditApi {
     String? who,
     int? eventId,
     DateTime? from,
+    DateTime? to,
     String? q,
   }) async {
+    String day(DateTime d) =>
+        '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/admin/audit-log',
       queryParameters: {
@@ -128,8 +131,8 @@ class AuditApi {
         'category': ?category,
         'who': ?who,
         'event_id': ?eventId,
-        if (from != null)
-          'from': '${from.year}-${from.month.toString().padLeft(2, '0')}-${from.day.toString().padLeft(2, '0')}',
+        if (from != null) 'from': day(from),
+        if (to != null) 'to': day(to),
         if (q != null && q.trim().isNotEmpty) 'q': q.trim(),
       },
       options: Options(headers: {'Authorization': 'Bearer $token'}),

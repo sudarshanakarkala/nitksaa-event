@@ -19,17 +19,21 @@ import '../../../shared/widgets/filter_controls.dart';
 import '../../../shared/widgets/quick_filter_pill.dart';
 import 'admin_tab_frame.dart';
 
-/// The Roles tab's pills: who holds each role. None lit shows everyone with
-/// a role; a search always looks across everyone.
+/// The Roles tab's pills. None lit shows the people with a role; Everyone
+/// shows all who have signed in; a search always looks across everyone.
 enum _Role {
+  everyone(null, 'Everyone'),
   overall('overall_admin', 'Overall admins'),
   event('event_admin', 'Event admins'),
   finance('finance', 'Finance');
 
   const _Role(this.param, this.label);
 
-  /// The `role=` value on GET /admin/users (and its key in `counts`).
-  final String param;
+  /// The `role=` value on GET /admin/users; null for Everyone.
+  final String? param;
+
+  /// Its key in the response's `counts`.
+  String get countKey => param ?? 'everyone';
   final String label;
 }
 
@@ -95,10 +99,11 @@ class _RolesTabState extends ConsumerState<RolesTab> {
     try {
       // No pill and no search: just the people with a role.
       final searching = _search.text.trim().isNotEmpty;
+      final role = _role;
       final result = await ref.read(adminApiProvider).searchUsers(
             accessToken: token,
             query: _search.text,
-            role: _role?.param ?? (searching ? null : 'any'),
+            role: role == null ? (searching ? null : 'any') : role.param,
             page: page,
           );
       if (!mounted) return;
@@ -325,7 +330,7 @@ class _RolesTabState extends ConsumerState<RolesTab> {
         for (final r in _Role.values)
           QuickFilterPill(
             label: r.label,
-            count: counts[r.param],
+            count: counts[r.countKey],
             active: r == _role,
             onTap: () {
               // Tap the lit pill again to take it off.
