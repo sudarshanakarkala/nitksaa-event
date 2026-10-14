@@ -19,6 +19,7 @@ import '../../events/presentation/screens/manage_events_screen.dart' show showEv
 import '../data/payments_api.dart';
 import '../domain/registration_filters.dart';
 import 'admin_audit_tab.dart' show AuditTimeline;
+import 'admin_tab_frame.dart';
 import 'admin_widgets.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/widgets/state_message.dart';
@@ -467,7 +468,6 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
     final options = _eventOptions;
     final (one, many) = switch (_view) {
       _View.orders => ('order', 'orders'),
@@ -475,7 +475,7 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
       _View.pricing => ('paid event', 'paid events'),
     };
 
-    return ListPage(
+    return AdminTabFrame(
       search: ListSearchField(
         controller: _search,
         hint: switch (_view) {
@@ -484,17 +484,13 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
               _View.refunds => 'Search name, email or number…',
             },
       ),
-      quickFilters: [
-        SizedBox(
-          width: compact ? 240 : 320,
-          child: AdminEventPicker(
-            options: options,
-            selected: _event,
-            onChanged: (id) => setState(() => _event = id),
-            width: compact ? 240 : 320,
-          ),
-        ),
-        const SizedBox(width: 6),
+      picker: AdminEventPicker(
+        options: options,
+        selected: _event,
+        onChanged: (id) => setState(() => _event = id),
+        width: AdminTabFrame.pickerWidth(context),
+      ),
+      pills: [
         for (final v in _View.values)
           QuickFilterPill(
             label: v.label,
@@ -512,13 +508,8 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
       ),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearAll,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loading && _orders.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: _body()),
-        ],
-      ),
+      loading: _loading && _orders.isNotEmpty,
+      body: _body(),
     );
   }
 

@@ -16,6 +16,9 @@ import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../data/registrations_api.dart';
 import '../domain/registration_filters.dart' show formatDate;
+import '../../../shared/widgets/list_search_field.dart';
+import 'admin_tab_frame.dart';
+import 'admin_widgets.dart';
 import '../../../shared/format.dart';
 
 /// When an event ends (start + 4 hours if it has no end time).
@@ -38,6 +41,25 @@ List<AppEvent> checkInEvents(List<AppEvent> events, DateTime now) {
   final recent = relevant.where((e) => !_endOf(e).isAfter(now)).toList()
     ..sort((a, b) => _endOf(b).compareTo(_endOf(a)));
   return [...current, ...recent];
+}
+
+/// Smart landing: an event on now, or starting within [ahead], that someone
+/// registered for. Plain `/admin` opens Check-in for it (soonest first).
+AppEvent? eventOnNow(
+  List<AppEvent> events,
+  DateTime now, {
+  Duration ahead = const Duration(hours: 3),
+}) {
+  final on = events
+      .where((e) =>
+          e.status != 'draft' &&
+          e.status != 'cancelled' &&
+          e.registeredCount > 0 &&
+          !e.startDatetime.toLocal().subtract(ahead).isAfter(now) &&
+          _endOf(e).isAfter(now))
+      .toList()
+    ..sort((a, b) => a.startDatetime.compareTo(b.startDatetime));
+  return on.isEmpty ? null : on.first;
 }
 
 /// Which people the list shows.
@@ -330,109 +352,88 @@ class _AdminCheckInTabState extends ConsumerState<AdminCheckInTab> {
     if (picked != null) _pick(picked);
   }
 
+  /// The laptop picker: events worth checking in to first, then the rest.
+  List<AdminEventOption> get _pickerOptions {
+    final suggested = checkInEvents(_events, DateTime.now());
+    final ids = {for (final e in suggested) e.eventId};
+    return [
+      for (final e in suggested) AdminEventOption.of(e),
+      for (final e in _events)
+        if (!ids.contains(e.eventId)) AdminEventOption.of(e),
+    ];
+  }
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     final ready = _loadedFor != null && _loadedFor == _selected && _error == null;
-    final event = _event;
+    final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final compact = constraints.maxWidth < 600;
-        final pad = ListPage.contentPadding(context, constraints.maxWidth, top: 16, bottom: 0);
+    // At the door, on a phone: a big event card and a big Scan, for one
+    // hand. On a laptop: the standard picker and button, like the other tabs.
+    final picker = compact
+        ? _EventCard(
+            event: _event,
+            loading: _eventsLoading,
+            onTap: _eventsLoading || _events.isEmpty ? null : _chooseEvent,
+          )
+        : AdminEventPicker(
+            options: _pickerOptions,
+            selected: _selected ?? adminAllEvents,
+            onChanged: _pick,
+            includeAll: false,
+            width: AdminTabFrame.pickerWidth(context),
+          );
+    final canScan = ready && _people.isNotEmpty;
+    final scan = compact
+        ? FilledButton.icon(
+            onPressed: canScan ? _openScanner : null,
+            style: FilledButton.styleFrom(
+              minimumSize: const Size.fromHeight(56),
+              textStyle: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600),
+            ),
+            icon: const Icon(Icons.qr_code_scanner, size: 24),
+            label: const Text('Scan'),
+          )
+        : FilledButton.icon(
+            onPressed: canScan ? _openScanner : null,
+            icon: const Icon(Icons.qr_code_scanner, size: 18),
+            label: const Text('Scan'),
+          );
+    final numberStyle = TextStyle(color: p.primary, fontWeight: FontWeight.w600);
 
-        final eventCard = _EventCard(
-          event: event,
-          loading: _eventsLoading,
-          checkedIn: ready ? _checkedInCount : null,
-          total: ready ? _people.length : null,
-          onTap: _eventsLoading || _events.isEmpty ? null : _chooseEvent,
-        );
-        final scan = SizedBox(
-          height: 52,
-          width: compact ? double.infinity : null,
-          child: ElevatedButton.icon(
-            onPressed: ready && _people.isNotEmpty ? _openScanner : null,
-            icon: const Icon(Icons.qr_code_scanner),
-            label: const Text('Scan', style: TextStyle(fontSize: 16, fontWeight: FontWeight.w600)),
+    return AdminTabFrame(
+      search: ListSearchField(
+        controller: _search,
+        hint: 'Find a person: name, email, phone or number',
+      ),
+      picker: picker,
+      pills: [
+        for (final s in _Show.values)
+          QuickFilterPill(
+            label: s.label,
+            count: ready ? _countFor(s) : null,
+            active: s == _show,
+            onTap: () => setState(() => _show = s),
           ),
-        );
-        final pills = Wrap(
-          spacing: 6,
-          runSpacing: 6,
-          children: [
-            for (final s in _Show.values)
-              QuickFilterPill(
-                label: s.label,
-                count: ready ? _countFor(s) : null,
-                active: s == _show,
-                onTap: () => setState(() => _show = s),
-              ),
-          ],
-        );
-        final search = TextField(
-          controller: _search,
-          decoration: const InputDecoration(
-            prefixIcon: Icon(Icons.search, size: 20),
-            hintText: 'Find a person: name, email, phone or number',
-            isDense: true,
-            contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-          ),
-        );
-
-        return Column(
-          crossAxisAlignment: CrossAxisAlignment.stretch,
-          children: [
-            Padding(
-              padding: pad,
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
+      ],
+      count: ready
+          ? Text.rich(
+              TextSpan(
                 children: [
-                  if (compact) ...[
-                    eventCard,
-                    const SizedBox(height: 12),
-                    scan,
-                  ] else
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Align(
-                            alignment: Alignment.centerLeft,
-                            child: ConstrainedBox(
-                              constraints: const BoxConstraints(maxWidth: 560),
-                              child: eventCard,
-                            ),
-                          ),
-                        ),
-                        const SizedBox(width: 16),
-                        SizedBox(width: 160, child: scan),
-                      ],
-                    ),
-                  const SizedBox(height: 16),
-                  pills,
-                  const SizedBox(height: 10),
-                  if (compact)
-                    search
-                  else
-                    Align(
-                      alignment: Alignment.centerLeft,
-                      child: ConstrainedBox(
-                        constraints: const BoxConstraints(maxWidth: 560),
-                        child: search,
-                      ),
-                    ),
-                  const SizedBox(height: 8),
+                  TextSpan(text: '$_checkedInCount', style: numberStyle),
+                  const TextSpan(text: ' of '),
+                  TextSpan(text: '${_people.length}', style: numberStyle),
+                  const TextSpan(text: ' checked in'),
                 ],
               ),
-            ),
-            if (_loading || _eventsLoading)
-              const LinearProgressIndicator(minHeight: 2)
-            else
-              Divider(height: 2, thickness: 1, color: p.border),
-            Expanded(child: _body()),
-          ],
-        );
-      },
+              style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+            )
+          : null,
+      action: scan,
+      bigActionOnPhone: true,
+      loading: _loading || _eventsLoading,
+      body: _body(),
     );
   }
 
@@ -584,15 +585,11 @@ class _EventCard extends StatelessWidget {
   const _EventCard({
     required this.event,
     required this.loading,
-    required this.checkedIn,
-    required this.total,
     required this.onTap,
   });
 
   final AppEvent? event;
   final bool loading;
-  final int? checkedIn;
-  final int? total;
   final VoidCallback? onTap;
 
   @override
@@ -601,7 +598,6 @@ class _EventCard extends StatelessWidget {
     final e = event;
     final title = e?.title ?? (loading ? 'Loading your events…' : 'Choose an event');
     final when = e == null ? null : formatDate(e.startDatetime.toLocal());
-    final counts = checkedIn == null ? null : '$checkedIn of $total checked in';
 
     return Material(
       color: p.surfaceSubtle,
@@ -613,10 +609,10 @@ class _EventCard extends StatelessWidget {
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 8, 12),
+          padding: const EdgeInsets.fromLTRB(16, 16, 8, 16),
           child: Row(
             children: [
-              Icon(Icons.event_outlined, color: p.primary),
+              Icon(Icons.event_outlined, color: p.primary, size: 28),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -626,12 +622,12 @@ class _EventCard extends StatelessWidget {
                       title,
                       maxLines: 2,
                       overflow: TextOverflow.ellipsis,
-                      style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
+                      style: AppTextStyles.titleLarge.copyWith(fontSize: 18, color: p.textPrimary),
                     ),
-                    if (when != null || counts != null) ...[
+                    if (when != null) ...[
                       const SizedBox(height: 2),
                       Text(
-                        [when, counts].whereType<String>().join(' · '),
+                        when,
                         style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
                       ),
                     ],

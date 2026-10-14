@@ -6,7 +6,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../shared/widgets/filter_controls.dart';
-import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/quick_filter_pill.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -14,6 +13,7 @@ import '../../auth/services/auth_controller.dart';
 import '../../events/data/events_repository.dart';
 import '../data/audit_api.dart';
 import '../domain/registration_filters.dart';
+import 'admin_tab_frame.dart';
 import 'admin_widgets.dart';
 import '../../../shared/widgets/state_message.dart';
 import '../../../shared/widgets/list_search_field.dart';
@@ -180,23 +180,18 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
 
   @override
   Widget build(BuildContext context) {
-    final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
-    return ListPage(
+    return AdminTabFrame(
       search: ListSearchField(
         controller: _search,
         hint: 'Search name, event, number, email or Razorpay id…',
       ),
-      quickFilters: [
-        SizedBox(
-          width: compact ? 240 : 320,
-          child: AdminEventPicker(
-            options: _events,
-            selected: _event,
-            onChanged: (id) => _set(() => _event = id),
-            width: compact ? 240 : 320,
-          ),
-        ),
-        const SizedBox(width: 6),
+      picker: AdminEventPicker(
+        options: _events,
+        selected: _event,
+        onChanged: (id) => _set(() => _event = id),
+        width: AdminTabFrame.pickerWidth(context),
+      ),
+      pills: [
         QuickFilterPill(label: 'All', active: _category == null, onTap: () => _set(() => _category = null)),
         for (final c in _categories.entries)
           QuickFilterPill(label: c.value, active: _category == c.key, onTap: () => _set(() => _category = c.key)),
@@ -206,13 +201,8 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
       onOpenFilters: () => showFilterSheet(context, builder: (_) => _filterRail(), onClear: _clearAll),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearAll,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loading && _rows.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: _body()),
-        ],
-      ),
+      loading: _loading && _rows.isNotEmpty,
+      body: _body(),
     );
   }
 

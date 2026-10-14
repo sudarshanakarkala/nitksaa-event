@@ -14,6 +14,7 @@ import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/services/auth_controller.dart';
 import '../data/dashboard_api.dart';
+import 'admin_tab_frame.dart';
 import '../domain/registration_filters.dart' show formatDate;
 import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/format.dart';
@@ -90,8 +91,10 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
 
   @override
   Widget build(BuildContext context) {
-    return ListPage(
-      quickFilters: [
+    // No search or count line: an overview. The Filters icon sits at the
+    // end of the period pills.
+    return AdminTabFrame(
+      pills: [
         for (final p in DashboardPeriod.values)
           QuickFilterPill(
             label: p.label,
@@ -120,13 +123,8 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
       ),
       activeFilterCount: _period == DashboardPeriod.days30 ? 0 : 1,
       onClearFilters: () => _setPeriod(DashboardPeriod.days30),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loading && _data != null) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: _body()),
-        ],
-      ),
+      loading: _loading && _data != null,
+      body: _body(),
     );
   }
 

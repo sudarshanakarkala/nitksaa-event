@@ -47,8 +47,22 @@ enum AdminTab {
   }
 
   /// Where `/admin` lands: what needs attention (website pattern). People
-  /// without it (finance only) land on their first visible tab.
+  /// without it (finance only) land on their first visible tab. On an
+  /// event day the Admin page then moves on to Check-in (see
+  /// [landingQuery]).
   static const AdminTab landing = AdminTab.actions;
+
+  /// Added to [landing]'s path when someone opens plain `/admin`, so the
+  /// page knows to check for an event on now (smart landing).
+  static const String landingQuery = 'from=admin';
+
+  /// The tabs shown on a phone; the rest go under "More".
+  static const Set<AdminTab> phoneTabs = {
+    AdminTab.actions,
+    AdminTab.checkIn,
+    AdminTab.registrations,
+    AdminTab.events,
+  };
 
   static List<AdminTab> visibleTabs(AdminAccess access) =>
       AdminTab.values.where((t) => t.visibleTo(access)).toList();

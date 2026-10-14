@@ -15,12 +15,31 @@ import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/notice.dart';
 import '../../../shared/widgets/state_message.dart';
 import '../../../shared/widgets/list_search_field.dart';
+import '../../../shared/widgets/filter_controls.dart';
+import '../../../shared/widgets/quick_filter_pill.dart';
+import 'admin_tab_frame.dart';
+
+/// The Roles tab's pills: who holds each role. None lit shows everyone with
+/// a role; a search always looks across everyone.
+enum _Role {
+  overall('overall_admin', 'Overall admins'),
+  event('event_admin', 'Event admins'),
+  finance('finance', 'Finance');
+
+  const _Role(this.param, this.label);
+
+  /// The `role=` value on GET /admin/users (and its key in `counts`).
+  final String param;
+  final String label;
+}
 
 /// Roles tab (overall admins only): search people and switch their
 /// "Overall admin", "Can create events" and "Finance" roles. Per-event
 /// admins are managed on the event itself (Events tab, step 5). Finance is
 /// the backend's finance_operator payment role: sees every event's payments
 /// and refunds without being an admin.
+///
+/// Pills only, no Filters rail: the pills are the only filter.
 class RolesTab extends ConsumerStatefulWidget {
   const RolesTab({super.key});
 
@@ -33,6 +52,7 @@ class _RolesTabState extends ConsumerState<RolesTab> {
   Timer? _debounce;
 
   AdminUserPage? _result;
+  _Role? _role;
   bool _loading = false;
   String? _error;
 
@@ -73,9 +93,12 @@ class _RolesTabState extends ConsumerState<RolesTab> {
       _error = null;
     });
     try {
+      // No pill and no search: just the people with a role.
+      final searching = _search.text.trim().isNotEmpty;
       final result = await ref.read(adminApiProvider).searchUsers(
             accessToken: token,
             query: _search.text,
+            role: _role?.param ?? (searching ? null : 'any'),
             page: page,
           );
       if (!mounted) return;
@@ -177,6 +200,7 @@ class _RolesTabState extends ConsumerState<RolesTab> {
         if (mounted) setState(() => _finance = {..._finance}..remove(user.firebaseUid));
       }
       _snack('Roles updated for $name.');
+      if (mounted) unawaited(_load(page: _result?.page ?? 1)); // fresh pill counts
     } catch (error, stackTrace) {
       AppLogger.error('Roles: finance change failed', error, stackTrace);
       if (mounted) _snack(apiErrorMessage(error, action: 'update roles'), isError: true);
@@ -259,9 +283,11 @@ class _RolesTabState extends ConsumerState<RolesTab> {
             total: current.total,
             page: current.page,
             perPage: current.perPage,
+            counts: current.counts,
           );
         }
       });
+      unawaited(_load(page: _result?.page ?? 1)); // fresh pill counts
       _snack('Roles updated for $name.');
       if (user.firebaseUid == _myUid) {
         await ref.read(authControllerProvider.notifier).refreshSession();
@@ -285,18 +311,36 @@ class _RolesTabState extends ConsumerState<RolesTab> {
     final p = context.palette;
     final result = _result;
 
-    // Same frame as the other admin tabs (search on top, list below).
-    return ListPage(
+    final counts = result?.counts ?? const <String, int>{};
+
+    // The admin tab frame: search; the role pills with counts; the count.
+    return AdminTabFrame(
       search: ListSearchField(
         controller: _search,
         hint: 'Search people by name or email',
         onChanged: _onSearchChanged,
         onSubmitted: (_) => _load(),
       ),
+      pills: [
+        for (final r in _Role.values)
+          QuickFilterPill(
+            label: r.label,
+            count: counts[r.param],
+            active: r == _role,
+            onTap: () {
+              // Tap the lit pill again to take it off.
+              setState(() => _role = r == _role ? null : r);
+              _load();
+            },
+          ),
+      ],
+      count: result == null
+          ? null
+          : ResultCount(count: result.total, one: 'person', many: 'people'),
+      loading: _loading,
       body: Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (_loading) const LinearProgressIndicator(minHeight: 2),
         Expanded(
           child: _error != null && result == null
               ? StateMessage(
@@ -306,7 +350,15 @@ class _RolesTabState extends ConsumerState<RolesTab> {
               : result == null
               ? const SizedBox.shrink()
               : result.users.isEmpty
-              ? const StateMessage(body: 'No one matches that search.')
+              ? StateMessage(
+                  icon: Icons.search_off,
+                  title: _search.text.trim().isEmpty && _role == null
+                      ? 'No one has a role yet'
+                      : 'No one matches',
+                  body: _search.text.trim().isEmpty && _role == null
+                      ? 'Search for someone by name or email to give them one.'
+                      : 'Try another search or role.',
+                )
               : LayoutBuilder(
                   builder: (context, constraints) {
                     final wide = constraints.maxWidth >= 900;
@@ -627,11 +679,11 @@ class _Pager extends StatelessWidget {
       padding: const EdgeInsets.only(top: 8),
       child: Row(
         children: [
-          Text(
-            '${result.total} ${result.total == 1 ? 'person' : 'people'}'
-            '${pages > 1 ? ' · page $page of $pages' : ''}',
-            style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
-          ),
+          if (pages > 1)
+            Text(
+              'Page $page of $pages',
+              style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+            ),
           const Spacer(),
           if (pages > 1) ...[
             TextButton(

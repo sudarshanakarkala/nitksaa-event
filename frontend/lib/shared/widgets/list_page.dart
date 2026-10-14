@@ -30,7 +30,23 @@ class ListPage extends StatefulWidget {
     this.onOpenFilters,
     this.activeFilterCount = 0,
     this.onClearFilters,
+    this.picker,
+    this.reserveRail = true,
+    this.wideActionOnPhone = false,
   });
+
+  /// A choice before the pills, such as the event picker. On phones it gets
+  /// its own full-width line above them.
+  final Widget? picker;
+
+  /// From [railFrom], keep the rail's strip free on the left so opening it
+  /// covers nothing. Off for the Admin tabs, which line up with the "Admin"
+  /// title instead: there the rail slides over the page, as on tablets.
+  final bool reserveRail;
+
+  /// Phones: the action on its own full-width line below the count (Scan at
+  /// the door).
+  final bool wideActionOnPhone;
 
   /// Page title. Null inside a page that already has one (the Admin tabs).
   final String? title;
@@ -119,8 +135,48 @@ class _ListPageState extends State<ListPage> {
           )
         : null;
 
-    final reserve = hasFilters && width >= ListPage.railFrom;
+    final reserve = hasFilters && widget.reserveRail && width >= ListPage.railFrom;
     final reservedLeft = reserve ? ListPage.railWidth + ListPage.railGap : 0.0;
+
+    // No search box or toggle: the Filters icon goes at the end of the pills,
+    // never alone on a row.
+    final hasPillRow = widget.picker != null || widget.quickFilters.isNotEmpty;
+    final filtersWithPills =
+        filterButtons != null && widget.search == null && widget.toggle == null && hasPillRow;
+    final showTopRow = widget.search != null ||
+        (widget.toggle != null && !compact) ||
+        (filterButtons != null && !filtersWithPills);
+    final pickerOwnLine = widget.picker != null && compact;
+
+    final pills = widget.quickFilters.isEmpty
+        ? null
+        : SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: [
+                for (var i = 0; i < widget.quickFilters.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 6),
+                  widget.quickFilters[i],
+                ],
+              ],
+            ),
+          );
+    final pillRow = Row(
+      children: [
+        if (widget.picker != null && !pickerOwnLine) ...[
+          widget.picker!,
+          if (pills != null) const SizedBox(width: 12),
+        ],
+        if (pills != null)
+          Expanded(child: Align(alignment: Alignment.centerLeft, child: pills))
+        else if (filtersWithPills)
+          const Spacer(),
+        if (filtersWithPills) ...[const SizedBox(width: 8), filterButtons],
+      ],
+    );
+    final showPillRow = pills != null || filtersWithPills || (widget.picker != null && !pickerOwnLine);
+
+    final actionsBelow = widget.wideActionOnPhone && compact && widget.actions.isNotEmpty;
 
     final toolbar = LayoutBuilder(
       builder: (context, constraints) => Padding(
@@ -131,54 +187,64 @@ class _ListPageState extends State<ListPage> {
           bottom: 14,
         ),
         child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (widget.title != null) ...[
-              PageHeader(
-                eyebrow: widget.eyebrow,
-                title: widget.title!,
-                subtitle: compact ? null : widget.subtitle,
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PageHeader(
+                  eyebrow: widget.eyebrow,
+                  title: widget.title!,
+                  subtitle: compact ? null : widget.subtitle,
+                ),
               ),
               const SizedBox(height: 20),
             ],
-            Row(
-              children: [
-                // No search box: keep the toggle and Filters at the right
-                // end, where they sit on every other page.
-                if (widget.search != null) Expanded(child: widget.search!) else const Spacer(),
-                if (widget.toggle != null && !compact) ...[
-                  const SizedBox(width: 12),
-                  widget.toggle!,
-                ],
-                if (filterButtons != null) ...[const SizedBox(width: 8), filterButtons],
-              ],
-            ),
-            if (widget.quickFilters.isNotEmpty) ...[
-              const SizedBox(height: 12),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: [
-                    for (var i = 0; i < widget.quickFilters.length; i++) ...[
-                      if (i > 0) const SizedBox(width: 6),
-                      widget.quickFilters[i],
-                    ],
-                  ],
-                ),
-              ),
-            ],
-            if (widget.count != null || widget.actions.isNotEmpty) ...[
-              const SizedBox(height: 12),
+            if (showTopRow)
               Row(
                 children: [
-                  if (widget.count != null) widget.count!,
-                  const Spacer(),
-                  for (var i = 0; i < widget.actions.length; i++) ...[
-                    if (i > 0) const SizedBox(width: 8),
-                    widget.actions[i],
+                  // No search box: keep the toggle and Filters at the right
+                  // end, where they sit on every other page.
+                  if (widget.search != null) Expanded(child: widget.search!) else const Spacer(),
+                  if (widget.toggle != null && !compact) ...[
+                    const SizedBox(width: 12),
+                    widget.toggle!,
+                  ],
+                  if (filterButtons != null && !filtersWithPills) ...[
+                    const SizedBox(width: 8),
+                    filterButtons,
                   ],
                 ],
               ),
+            if (pickerOwnLine) ...[
+              if (showTopRow) const SizedBox(height: 12),
+              widget.picker!,
+            ],
+            if (showPillRow) ...[
+              if (showTopRow || pickerOwnLine) const SizedBox(height: 12),
+              pillRow,
+            ],
+            if (widget.count != null || widget.actions.isNotEmpty) ...[
+              if (showTopRow || pickerOwnLine || showPillRow) const SizedBox(height: 12),
+              Row(
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: widget.count ?? const SizedBox.shrink(),
+                    ),
+                  ),
+                  if (!actionsBelow)
+                    for (var i = 0; i < widget.actions.length; i++) ...[
+                      if (i > 0) const SizedBox(width: 8),
+                      widget.actions[i],
+                    ],
+                ],
+              ),
+              if (actionsBelow) ...[
+                const SizedBox(height: 12),
+                for (final a in widget.actions) a,
+              ],
             ],
           ],
         ),

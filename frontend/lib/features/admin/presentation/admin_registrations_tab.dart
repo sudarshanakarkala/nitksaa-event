@@ -16,6 +16,7 @@ import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../data/registrations_api.dart';
 import '../domain/registration_filters.dart';
+import 'admin_tab_frame.dart';
 import 'admin_widgets.dart';
 import '../../../shared/widgets/notice.dart';
 import '../../../shared/widgets/state_message.dart';
@@ -550,25 +551,21 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       RegistrationView.checkIns => ('check-in', 'check-ins'),
     };
 
-    // Same frame as the Events page: search and Filters; the list pills;
-    // then the count and Export CSV.
-    return ListPage(
+    // The admin tab frame: search and Filters; the event picker and list
+    // pills; then the count and Export CSV.
+    return AdminTabFrame(
       search: ListSearchField(
         controller: _search,
         hint: 'Search name, email, phone or number…',
       ),
+      picker: AdminEventPicker(
+        options: _eventOptions,
+        selected: _selected,
+        onChanged: _pick,
+        width: AdminTabFrame.pickerWidth(context),
+      ),
       // Quick filters: shortcuts to filters that are also in the rail.
-      quickFilters: [
-        SizedBox(
-          width: compact ? 240 : 320,
-          child: AdminEventPicker(
-            options: _eventOptions,
-            selected: _selected,
-            onChanged: _pick,
-            width: compact ? 240 : 320,
-          ),
-        ),
-        const SizedBox(width: 6),
+      pills: [
         for (final v in RegistrationView.values)
           QuickFilterPill(
             label: v.label,
@@ -580,20 +577,19 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       count: _loadedFor == _selected && _error == null
           ? ResultCount(count: shown, one: one, many: many)
           : null,
-      actions: [
-        if (!_isAll)
-          OutlinedButton.icon(
-            onPressed: _exporting || _loading ? null : _export,
-            icon: _exporting
-                ? const SizedBox(
-                    width: 16,
-                    height: 16,
-                    child: CircularProgressIndicator(strokeWidth: 2),
-                  )
-                : const Icon(Icons.download_outlined, size: 18),
-            label: const Text('Export CSV'),
-          ),
-      ],
+      action: _isAll
+          ? null
+          : OutlinedButton.icon(
+              onPressed: _exporting || _loading ? null : _export,
+              icon: _exporting
+                  ? const SizedBox(
+                      width: 16,
+                      height: 16,
+                      child: CircularProgressIndicator(strokeWidth: 2),
+                    )
+                  : const Icon(Icons.download_outlined, size: 18),
+              label: const Text('Export CSV'),
+            ),
       filters: (context) => _filterRail(),
       onOpenFilters: () => showFilterSheet(
         context,
@@ -602,13 +598,8 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       ),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearAll,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loading) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: _body(compact)),
-        ],
-      ),
+      loading: _loading,
+      body: _body(compact),
     );
   }
 

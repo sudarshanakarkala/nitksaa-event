@@ -17,6 +17,7 @@ import '../../events/domain/event.dart';
 import '../../events/presentation/widgets/event_card.dart';
 import 'event_admin_actions.dart';
 import '../domain/registration_filters.dart';
+import 'admin_tab_frame.dart';
 import 'admin_widgets.dart';
 import '../../../shared/widgets/status_badge.dart';
 import '../../../shared/widgets/state_message.dart';
@@ -223,9 +224,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     final filtered = _filtered;
     final canCreate = ref.watch(authControllerProvider).session?.access.isEventCreator ?? false;
 
-    // Same frame as the Events page: search, Cards/Table, Filters; the
-    // status pills; then the count and Create Event.
-    return ListPage(
+    // The admin tab frame: search, Cards/Table, Filters; the status pills;
+    // then the count and Create event.
+    return AdminTabFrame(
       search: ListSearchField(
         controller: _search,
         hint: 'Search events…',
@@ -240,7 +241,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
               selected: _view,
               onChanged: (v) => setState(() => _view = v),
             ),
-      quickFilters: [
+      pills: [
         for (final f in _Filter.values)
           QuickFilterPill(
             label: f.label,
@@ -252,14 +253,13 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       count: _loading && _events.isEmpty
           ? null
           : ResultCount(count: visible.length, one: 'event', many: 'events'),
-      actions: [
-        if (canCreate)
-          FilledButton.icon(
-            onPressed: _create,
-            icon: const Icon(Icons.add, size: 18),
-            label: const Text('Create Event'),
-          ),
-      ],
+      action: canCreate
+          ? FilledButton.icon(
+              onPressed: _create,
+              icon: const Icon(Icons.add, size: 18),
+              label: const Text('Create event'),
+            )
+          : null,
       filters: (context) => _filterRail(),
       onOpenFilters: () => showFilterSheet(
         context,
@@ -268,13 +268,8 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       ),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearFilters,
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
-        children: [
-          if (_loading && _events.isNotEmpty) const LinearProgressIndicator(minHeight: 2),
-          Expanded(child: _body(visible, compact)),
-        ],
-      ),
+      loading: _loading && _events.isNotEmpty,
+      body: _body(visible, compact),
     );
   }
 

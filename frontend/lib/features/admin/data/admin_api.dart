@@ -91,12 +91,17 @@ class AdminUserPage {
     required this.total,
     required this.page,
     required this.perPage,
+    this.counts = const {},
   });
 
   final List<AdminUser> users;
   final int total;
   final int page;
   final int perPage;
+
+  /// People matching the search in each role (`overall_admin`,
+  /// `event_admin`, `finance`, `any`, `everyone`): the Roles pills.
+  final Map<String, int> counts;
 
   int get pages => total == 0 ? 1 : ((total + perPage - 1) ~/ perPage);
 }
@@ -136,6 +141,7 @@ class AdminApi {
   Future<AdminUserPage> searchUsers({
     required String accessToken,
     String? query,
+    String? role,
     int page = 1,
     int perPage = 25,
   }) async {
@@ -143,6 +149,7 @@ class AdminApi {
       '/api/v1/admin/users',
       queryParameters: {
         if (query != null && query.trim().isNotEmpty) 'query': query.trim(),
+        'role': ?role,
         'page': page,
         'per_page': perPage,
       },
@@ -158,6 +165,10 @@ class AdminApi {
       total: (data['total'] as num?)?.toInt() ?? rows.length,
       page: (data['page'] as num?)?.toInt() ?? page,
       perPage: (data['per_page'] as num?)?.toInt() ?? perPage,
+      counts: {
+        for (final e in (data['counts'] as Map<String, dynamic>? ?? const {}).entries)
+          if (e.value is num) e.key: (e.value as num).toInt(),
+      },
     );
   }
 
