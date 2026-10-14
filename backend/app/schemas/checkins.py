@@ -12,14 +12,25 @@ CheckInAttemptResponse was removed: no check_in_attempts table exists in
 the active schema — the list-attempts route returns 501, not a fabricated
 empty/degraded response.
 """
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 from typing import Optional
 from datetime import datetime
 
 
 class CheckInCreate(BaseModel):
-    qr_token: str
+    """Check someone in by their entry pass token (a scan), or by their
+    registration (the admin Check-in list, e.g. someone without their QR).
+    Exactly one of the two."""
+
+    qr_token: Optional[str] = None
+    registration_id: Optional[int] = None
     session_id: Optional[int] = None
+
+    @model_validator(mode="after")
+    def _one_way(self):
+        if (self.qr_token is None) == (self.registration_id is None):
+            raise ValueError("give either qr_token or registration_id")
+        return self
 
 
 class CheckInResponse(BaseModel):
