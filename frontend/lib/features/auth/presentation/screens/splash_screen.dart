@@ -39,7 +39,9 @@ class _SplashScreenState extends State<SplashScreen> {
     }
 
     final elapsed = DateTime.now().difference(_startTime);
-    final remaining = const Duration(milliseconds: 1500) - elapsed;
+    // A short minimum so the splash doesn't just flash; sign-in itself is
+    // waited for above. (It was 1.5 s, which held every page load back.)
+    final remaining = const Duration(milliseconds: 300) - elapsed;
     if (remaining.isNegative) {
       // A sign-in link that needs the email, or that failed: the login
       // screen asks or explains.

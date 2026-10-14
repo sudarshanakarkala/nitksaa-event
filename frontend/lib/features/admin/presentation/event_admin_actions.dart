@@ -22,22 +22,17 @@ import '../../../shared/widgets/notice.dart';
 /// Admin badge (Actions counts).
 void refreshEventLists(WidgetRef ref) {
   ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true);
-  ref.invalidate(createdEventIdsProvider);
-  ref.invalidate(myDraftCountProvider);
+  // The tint and the drafts count follow this one list.
+  ref.invalidate(myAdminEventsProvider);
   ref.invalidate(pendingCountProvider);
 }
 
 /// How many drafts the signed-in person can work on (their events; all of
 /// them for an overall admin), for the "N drafts" link on the Events page.
+/// Shares one admin events request with the "mine" tint.
 final myDraftCountProvider = FutureProvider<int>((ref) async {
-  final session = ref.watch(authControllerProvider).session;
-  if (session == null || !session.access.isAnyAdmin) return 0;
-  try {
-    final events = await ref.read(eventsRepositoryProvider).getAllAdminEvents(session.accessToken);
-    return events.where((e) => e.status == 'draft').length;
-  } catch (_) {
-    return 0;
-  }
+  final events = await ref.watch(myAdminEventsProvider.future);
+  return events.where((e) => e.status == 'draft').length;
 });
 
 /// The actions an event's admins can take on it, wherever the event is
