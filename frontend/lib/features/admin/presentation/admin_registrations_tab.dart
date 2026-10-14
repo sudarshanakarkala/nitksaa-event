@@ -20,6 +20,7 @@ import 'admin_widgets.dart';
 import '../../../shared/widgets/notice.dart';
 import '../../../shared/widgets/state_message.dart';
 import '../../../shared/widgets/list_search_field.dart';
+import '../../../shared/widgets/status_badge.dart';
 
 /// Value of the event picker meaning "all events".
 const int _allEvents = adminAllEvents;
@@ -313,12 +314,6 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   List<GridColumn<AdminRegistration>> _registrationColumns({required bool cancelled}) => [
         GridColumn(
-          id: 'number',
-          label: 'No.',
-          kind: ColumnKind.text,
-          value: (r) => r.registrationNumber,
-        ),
-        GridColumn(
           id: 'name',
           label: 'Name',
           kind: ColumnKind.text,
@@ -360,9 +355,10 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
           ),
           GridColumn(
             id: 'emailStatus',
-            label: 'Confirmation email',
+            label: 'Confirmation',
             kind: ColumnKind.category,
             value: (r) => confirmationEmailLabel(r.confirmationEmailStatus),
+            width: 110,
           ),
         ],
         GridColumn(
@@ -378,6 +374,13 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
             kind: ColumnKind.date,
             value: (r) => r.cancelledAt,
           ),
+        // IDs last (UI_PATTERNS → Tables); the name is the frozen column.
+        GridColumn(
+          id: 'number',
+          label: 'No.',
+          kind: ColumnKind.text,
+          value: (r) => r.registrationNumber,
+        ),
       ];
 
   List<GridColumn<CheckInEntry>> get _checkInColumns => [
@@ -573,7 +576,6 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
             active: v == _view,
             onTap: () => setState(() => _view = v),
           ),
-        if (compact) _compactSortMenu(),
       ],
       count: _loadedFor == _selected && _error == null
           ? ResultCount(count: shown, one: one, many: many)
@@ -700,41 +702,6 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     );
   }
 
-  /// Phones show cards, not a table: sorting moves to a menu.
-  Widget _compactSortMenu() {
-    final p = context.palette;
-    final columns = _view == RegistrationView.checkIns
-        ? [for (final c in _checkInColumns) (c.id, c.label, c.kind)]
-        : [
-            for (final c in _registrationColumns(cancelled: _view == RegistrationView.cancelled))
-              (c.id, c.label, c.kind),
-          ];
-    final current = _sorts[_view]!;
-    return PopupMenuButton<(String, ColumnKind)>(
-      tooltip: 'Sort',
-      onSelected: (c) => _sortBy(c.$1, c.$2),
-      itemBuilder: (_) => [
-        for (final c in columns)
-          CheckedPopupMenuItem<(String, ColumnKind)>(
-            value: (c.$1, c.$3),
-            checked: c.$1 == current.$1,
-            child: Text(c.$2),
-          ),
-      ],
-      child: Padding(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-        child: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.sort, size: 18, color: p.textSecondary),
-            const SizedBox(width: 4),
-            Text('Sort', style: AppTextStyles.labelMedium.copyWith(color: p.textSecondary)),
-          ],
-        ),
-      ),
-    );
-  }
-
   Widget _body(bool compact) {
     final target = _selected;
     if (target != _allEvents && _event(target) == null && !_eventsLoading) {
@@ -763,34 +730,59 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       );
     }
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final padding = ListPage.contentPadding(context, constraints.maxWidth, top: 20);
-        final children = <Widget>[
-          _summary(),
-          if (_failedEvents > 0) ...[
-            const SizedBox(height: 12),
-            _Note(
-              text: _failedEvents == 1
-                  ? 'One event couldn\'t be loaded, so its registrations are missing. Refresh to try again.'
-                  : '$_failedEvents events couldn\'t be loaded, so their registrations are missing. Refresh to try again.',
-              warning: true,
-            ),
-          ],
-          const SizedBox(height: 20),
-          ..._list(compact),
-        ];
-        return RefreshIndicator(
+    final above = <Widget>[
+      _summary(),
+      if (_failedEvents > 0) ...[
+        const SizedBox(height: 12),
+        _Note(
+          text: _failedEvents == 1
+              ? 'One event couldn\'t be loaded, so its registrations are missing. Refresh to try again.'
+              : '$_failedEvents events couldn\'t be loaded, so their registrations are missing. Refresh to try again.',
+          warning: true,
+        ),
+      ],
+    ];
+    final sort = _sorts[_view]!;
+    switch (_view) {
+      case RegistrationView.registered:
+      case RegistrationView.cancelled:
+        return AdminGridTable<AdminRegistration>(
+          rows: _registrationRows(_view),
+          columns: _registrationColumns(cancelled: _view == RegistrationView.cancelled),
+          sortId: sort.$1,
+          ascending: sort.$2,
+          onSort: _sortBy,
+          cell: _registrationCell,
+          above: above,
+          empty: _empty(),
           onRefresh: _refresh,
-          color: context.palette.primary,
-          child: ListView(
-            padding: padding,
-            physics: const AlwaysScrollableScrollPhysics(),
-            children: children,
+          card: (context, r) => _RegistrationTile(
+            registration: r,
+            eventTitle: _isAll ? _eventTitle(r.eventId) : null,
           ),
         );
-      },
-    );
+      case RegistrationView.checkIns:
+        return AdminGridTable<CheckInEntry>(
+          rows: _checkInRows,
+          columns: _checkInColumns,
+          sortId: sort.$1,
+          ascending: sort.$2,
+          onSort: _sortBy,
+          above: [
+            ...above,
+            const SizedBox(height: 12),
+            const _Note(
+              text: 'Check-ins scanned at the door. Rejected scans aren\'t recorded, so they don\'t appear here.',
+            ),
+          ],
+          empty: _empty(),
+          onRefresh: _refresh,
+          card: (context, c) => _CheckInTile(
+            entry: c,
+            eventTitle: _isAll ? _eventTitle(c.checkIn.eventId) : null,
+          ),
+        );
+    }
   }
 
   Widget _summary() {
@@ -830,66 +822,6 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       ],
       capacityFraction: cap != null && cap > 0 ? registered / cap : null,
     );
-  }
-
-  List<Widget> _list(bool compact) {
-    final sort = _sorts[_view]!;
-    switch (_view) {
-      case RegistrationView.registered:
-      case RegistrationView.cancelled:
-        final cancelled = _view == RegistrationView.cancelled;
-        final rows = _registrationRows(_view);
-        if (rows.isEmpty) return [_empty()];
-        if (compact) {
-          return [
-            for (final r in rows) ...[
-              _RegistrationTile(
-                registration: r,
-                eventTitle: _isAll ? _eventTitle(r.eventId) : null,
-              ),
-              const SizedBox(height: 10),
-            ],
-          ];
-        }
-        return [
-          AdminGridTable<AdminRegistration>(
-            rows: rows,
-            columns: _registrationColumns(cancelled: cancelled),
-            sortId: sort.$1,
-            ascending: sort.$2,
-            onSort: _sortBy,
-            cell: _registrationCell,
-          ),
-        ];
-      case RegistrationView.checkIns:
-        final rows = _checkInRows;
-        const note = [
-          _Note(
-            text: 'Check-ins scanned at the door. Rejected scans aren\'t recorded, so they don\'t appear here.',
-          ),
-          SizedBox(height: 12),
-        ];
-        if (rows.isEmpty) return [...note, _empty()];
-        if (compact) {
-          return [
-            ...note,
-            for (final c in rows) ...[
-              _CheckInTile(entry: c, eventTitle: _isAll ? _eventTitle(c.checkIn.eventId) : null),
-              const SizedBox(height: 10),
-            ],
-          ];
-        }
-        return [
-          ...note,
-          AdminGridTable<CheckInEntry>(
-            rows: rows,
-            columns: _checkInColumns,
-            sortId: sort.$1,
-            ascending: sort.$2,
-            onSort: _sortBy,
-          ),
-        ];
-    }
   }
 
   /// Cells that need more than plain text.
@@ -1069,22 +1001,7 @@ class _EmailStatus extends StatelessWidget {
       'pending' || 'queued' => p.warning,
       _ => p.textMuted,
     };
-    return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-      decoration: BoxDecoration(
-        color: tone.withValues(alpha: 0.08),
-        border: Border.all(color: tone.withValues(alpha: 0.22)),
-        borderRadius: BorderRadius.circular(100),
-      ),
-      child: Text(
-        label,
-        style: AppTextStyles.labelSmall.copyWith(
-          fontSize: 11.5,
-          fontWeight: FontWeight.w600,
-          color: tone,
-        ),
-      ),
-    );
+    return StatusBadge(label: label, tone: tone);
   }
 }
 
