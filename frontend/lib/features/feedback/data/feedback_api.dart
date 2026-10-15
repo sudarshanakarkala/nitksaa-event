@@ -2,12 +2,10 @@ import 'package:dio/dio.dart';
 
 /// Sends feedback to the events API.
 ///
-/// Mirrors the website's `POST /api/v1/feedback` (website backend:
-/// src/api/feedback.py), which emails nitksaa.infra@gmail.com.
-///
-/// STUB: the events API does not have this endpoint yet (backend work for
-/// Sudarshana). Until it does, the call fails and the form shows the
-/// website's "please email us" fallback.
+/// `POST /api/v1/feedback` on the events API (`backend/app/api/feedback.py`),
+/// the same contract as the website's: it emails nitksaa.infra@gmail.com,
+/// with the sender as Reply-To. If it fails, the form shows the website's
+/// "please email us" fallback.
 class FeedbackApi {
   FeedbackApi({Dio? dio}) : _dio = dio ?? _createDio();
 
@@ -31,7 +29,7 @@ class FeedbackApi {
     );
   }
 
-  /// Throws on any failure (including the endpoint not existing yet).
+  /// Throws on any failure.
   Future<void> submit({
     required String accessToken,
     required String area,

@@ -52,6 +52,9 @@ class Settings(BaseSettings):
     smtp_port: int = Field(587, alias="SMTP_PORT")
     smtp_user: Optional[str] = Field(None, alias="SMTP_USER")
     smtp_password: Optional[str] = Field(None, alias="SMTP_PASSWORD")
+    # Feedback form (POST /api/v1/feedback): where it goes. Sent with the
+    # SMTP settings above whatever EMAIL_MODE says.
+    feedback_email_to: str = Field("nitksaa.infra@gmail.com", alias="FEEDBACK_EMAIL_TO")
     app_public_base_url: str = Field("http://localhost:8000", alias="APP_PUBLIC_BASE_URL")
 
     # Payments — gateway-neutral foundation (Sprint 7). payment_gateway_mode
