@@ -9,14 +9,24 @@ import 'app_routes.dart';
 import 'return_after_sign_in.dart';
 
 abstract class RouteGuards {
-  static String? redirect(BuildContext context, GoRouterState state) {
-    final auth = AuthController.instance;
-    final location = state.uri.path;
+  static String? redirect(BuildContext context, GoRouterState state) =>
+      redirectFor(AuthController.instance, state.uri);
+
+  /// The page opened (or refreshed) while sign-in was still being checked.
+  /// The splash goes there once it is done ([afterSplash]).
+  static String? _requested;
+
+  /// [redirect], for [auth] at [uri].
+  @visibleForTesting
+  static String? redirectFor(AuthController auth, Uri uri) {
+    final location = uri.path;
 
     final isSplash = location == AppRoutes.splash;
     final isLogin = location == AppRoutes.login;
     final isDeveloper = location == AppRoutes.developer;
-    final isProtected = location.startsWith('/events/');
+    // Pages that need sign-in: My Events, an event's page and its checkout.
+    final isProtected =
+        location == AppRoutes.myEvents || location.startsWith('/events/');
 
     if (isDeveloper && !kDebugMode) return AppRoutes.login;
 
@@ -28,11 +38,14 @@ abstract class RouteGuards {
     if (location.startsWith(AppRoutes.checkInPrefix)) return null;
 
     if (auth.isChecking) {
-      return isSplash ? null : AppRoutes.splash;
+      if (isSplash) return null;
+      // Remembered, so a page refresh comes back to the same page.
+      _requested = uri.toString();
+      return AppRoutes.splash;
     }
 
     if (location == AppRoutes.admin || location.startsWith('${AppRoutes.admin}/')) {
-      return _adminRedirect(auth, location);
+      return _adminRedirect(auth, uri);
     }
 
     if (auth.isAuthenticated) {
@@ -41,21 +54,39 @@ abstract class RouteGuards {
       return null;
     }
 
-    if (isProtected) return AppRoutes.login;
+    if (isProtected) return _signInFirst(uri);
     if (isSplash) return null;
     if (isLogin || isDeveloper) return null;
 
     return null;
   }
 
-  /// `/admin…`: signed-out people go to login, non-admins to Events.
-  /// `/admin` and tabs the person can't see go to their landing tab.
-  static String? _adminRedirect(AuthController auth, String location) {
-    if (!auth.isAuthenticated) return AppRoutes.login;
-    final access = auth.session?.access ?? AdminAccess.none;
-    if (!access.hasAdminArea) return AppRoutes.home;
+  /// Where the splash goes once sign-in has been checked: the page that was
+  /// opened or refreshed, else the page that asked for sign-in (e.g. a
+  /// check-in link, then an emailed sign-in link opened in a new tab), else
+  /// Events.
+  static String afterSplash(AuthController auth) {
+    final requested = _requested;
+    _requested = null;
+    final back = auth.isAuthenticated ? ReturnAfterSignIn.take() : null;
+    return requested ?? back ?? AppRoutes.home;
+  }
 
-    final segments = Uri.parse(location).pathSegments;
+  /// To sign-in, and back to [uri] afterwards.
+  static String _signInFirst(Uri uri) {
+    ReturnAfterSignIn.save(uri.toString());
+    return AppRoutes.login;
+  }
+
+  /// `/admin…`: signed-out people go to sign-in (and back), non-admins to a
+  /// page that says Admin is not for them. `/admin` and tabs the person
+  /// can't see go to their landing tab.
+  static String? _adminRedirect(AuthController auth, Uri uri) {
+    if (!auth.isAuthenticated) return _signInFirst(uri);
+    final access = auth.session?.access ?? AdminAccess.none;
+    if (!access.hasAdminArea) return AppRoutes.notAdmin;
+
+    final segments = uri.pathSegments;
     // Deeper admin pages, e.g. /admin/events/:id/registrations.
     if (segments.length > 2) return null;
 

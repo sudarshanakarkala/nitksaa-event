@@ -18,6 +18,7 @@ import '../features/policies/policy_screen.dart';
 import '../shared/widgets/app_shell.dart';
 import 'app_routes.dart';
 import 'route_guards.dart';
+import 'route_pages.dart';
 
 abstract class AppRouter {
   static final GoRouter router = GoRouter(
@@ -25,6 +26,8 @@ abstract class AppRouter {
     debugLogDiagnostics: false,
     refreshListenable: AuthController.instance,
     redirect: RouteGuards.redirect,
+    // An unknown address: a page that says so, not the router's error.
+    errorBuilder: (context, state) => const NotFoundPage(),
     routes: [
       GoRoute(
         path: AppRoutes.splash,
@@ -128,6 +131,10 @@ abstract class AppRouter {
           GoRoute(
             path: AppRoutes.feedback,
             builder: (context, state) => const FeedbackScreen(),
+          ),
+          GoRoute(
+            path: AppRoutes.notAdmin,
+            builder: (context, state) => const NotAdminPage(),
           ),
         ],
       ),
