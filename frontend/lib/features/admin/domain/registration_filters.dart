@@ -26,6 +26,7 @@ class GridColumn<T> {
     required this.value,
     String Function(T row)? text,
     this.width,
+    this.searchable = true,
   }) : _text = text;
 
   final String id;
@@ -35,6 +36,10 @@ class GridColumn<T> {
   /// A set width for the table, for columns whose cells aren't plain text
   /// (badges, buttons). Null: sized to the text.
   final double? width;
+
+  /// Whether the page's search box looks in this column. Registrations
+  /// leaves the event out: the event is chosen in the picker.
+  final bool searchable;
 
   /// The sort value: a String, num or DateTime, or null when there's none.
   final Object? Function(T row) value;
@@ -91,7 +96,7 @@ List<T> applyGrid<T>(
   bool ascending = true,
 }) {
   final q = search.trim().toLowerCase();
-  final searchable = columns.where((c) => c.filterable).toList();
+  final searchable = columns.where((c) => c.filterable && c.searchable).toList();
   final active = [
     for (final c in columns)
       if (filters[c.id]?.isActive ?? false) (c, filters[c.id]!),

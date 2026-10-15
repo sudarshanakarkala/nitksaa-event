@@ -145,6 +145,28 @@ class RefundStatusResponse(BaseModel):
     real_money: bool = False
     payment_reference: Optional[str] = None
     bank_reference: Optional[str] = None
+    # Every refund on this registration's group (a guest cancelled alone, and
+    # the rest), oldest first, when the group has more than one person; and
+    # what the group paid. Empty / None for someone registered alone.
+    group_refunds: List["GroupRefundItem"] = Field(default_factory=list)
+    group_paid: Optional[Decimal] = None
+
+
+class GroupRefundItem(BaseModel):
+    refund_id: str
+    registration_id: int
+    name: Optional[str] = None
+    is_guest: bool = False
+    status: str
+    amount: Decimal
+    currency: str
+    requested_at: datetime
+    finalized_at: Optional[datetime] = None
+    payment_reference: Optional[str] = None
+    bank_reference: Optional[str] = None
+
+
+RefundStatusResponse.model_rebuild()
 
 
 class CancelRegistrationRequest(BaseModel):

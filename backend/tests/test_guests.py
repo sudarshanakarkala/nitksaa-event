@@ -336,3 +336,31 @@ def test_retry_adopts_only_its_own_refund_at_the_provider(client, monkeypatch):
     sent.clear()
     row = _retry_now()
     assert sent == [] and row["status"] == "processed"
+
+
+def test_refund_status_lists_every_refund_on_the_group(client):
+    eid = _event(client, is_free=False, price="500.00")
+    reg = _register(client, eid, ["Asha", "Kiran"]).json()
+    _pay(client, reg)
+    asha = reg["guests"][0]["registration_id"]
+    _cancel(client, asha)
+    _cancel(client, reg["registration_id"])
+
+    for rid in (reg["registration_id"], asha):  # from the leader's row or the guest's
+        body = client.get(f"/api/v1/registrations/{rid}/refund", headers=_bearer()).json()
+        refunds = body["group_refunds"]
+        assert [(r["name"], r["is_guest"]) for r in refunds] == [
+            ("Asha", True), (reg["fullname_snapshot"], False)]
+        assert [Decimal(str(r["amount"])) for r in refunds] == [Decimal("500.00"), Decimal("1000.00")]
+        assert all(r["status"] == "refund_processed" and r["refund_id"] for r in refunds)
+        assert Decimal(str(body["group_paid"])) == Decimal("1500.00")
+
+
+def test_refund_status_alone_has_no_group_list(client):
+    eid = _event(client, is_free=False, price="500.00")
+    reg = _register(client, eid, []).json()
+    _pay(client, reg)
+    _cancel(client, reg["registration_id"])
+    body = client.get(f"/api/v1/registrations/{reg['registration_id']}/refund", headers=_bearer()).json()
+    assert body["group_refunds"] == [] and body["group_paid"] is None
+    assert body["status"] == "refund_processed"

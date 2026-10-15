@@ -89,11 +89,19 @@ class RefundStatusDialog extends ConsumerWidget {
     final refund = state.refund;
     final error = state.errorMessage;
     final isFirstLoad = refund == null && state.isLoading;
-    final canCheck =
-        !isFirstLoad && (error != null || refund == null || _mayChange(refund));
+    final group = refund?.groupRefunds ?? const <GroupRefund>[];
+    final canCheck = !isFirstLoad &&
+        (error != null ||
+            refund == null ||
+            _mayChange(refund) ||
+            group.any((g) => _mayChange(RefundStatus(status: g.status))));
 
     return AlertDialog(
-      title: Text(refund == null ? 'Refund status' : _headline(refund)),
+      title: Text(group.isNotEmpty
+          ? 'Refunds'
+          : refund == null
+              ? 'Refund status'
+              : _headline(refund)),
       content: isFirstLoad
           ? const SizedBox(
               height: 48,
@@ -103,7 +111,9 @@ class RefundStatusDialog extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                if (refund != null)
+                if (group.isNotEmpty)
+                  ..._groupDetails(context, refund!)
+                else if (refund != null)
                   ..._details(context, refund)
                 else if (error == null)
                   const Text(_unavailable),
@@ -191,6 +201,48 @@ class RefundStatusDialog extends ConsumerWidget {
         if (amount != null) const SizedBox(height: 8),
         Text(message),
       ],
+    ];
+  }
+
+  /// A group's refunds, each on its own (a guest cancelled alone, then the
+  /// rest), and what they add up to against what was paid.
+  static List<Widget> _groupDetails(BuildContext context, RefundStatus refund) {
+    final p = context.palette;
+    final total = refund.groupRefunds
+        .where((g) => g.status != RefundStatus.failed)
+        .fold<double>(0, (sum, g) => sum + (g.amount ?? 0));
+    return [
+      for (final g in refund.groupRefunds) ...[
+        Text(
+          g.isGuest ? '${g.name ?? 'Guest'} (guest)' : 'You and the rest of your group',
+          style: const TextStyle(fontWeight: FontWeight.w600),
+        ),
+        const SizedBox(height: 4),
+        _DetailRow(
+          label: _headline(RefundStatus(status: g.status)),
+          value: _formatAmount(RefundStatus(status: g.status, amount: g.amount, currency: g.currency)) ?? '',
+        ),
+        if (g.refundId.isNotEmpty)
+          _DetailRow(label: 'Refund reference', value: g.refundId, copyable: true),
+        if (g.bankReference != null)
+          _DetailRow(label: 'Bank reference', value: g.bankReference!, copyable: true),
+        const SizedBox(height: 12),
+      ],
+      Divider(height: 1, color: p.border),
+      const SizedBox(height: 8),
+      _DetailRow(
+        label: 'Total refunded',
+        value: refund.groupPaid == null
+            ? formatMoney(total)
+            : '${formatMoney(total)} of ${formatMoney(refund.groupPaid!)} paid',
+      ),
+      if (refund.groupRefunds.isNotEmpty &&
+          refund.groupRefunds.first.paymentReference != null)
+        _DetailRow(
+          label: 'Payment reference',
+          value: refund.groupRefunds.first.paymentReference!,
+          copyable: true,
+        ),
     ];
   }
 
