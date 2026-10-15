@@ -121,7 +121,7 @@ Not changed, reported here:
 
 1. **Guest ✕ on the event page has a different rule.** It has no registration-window rule and no time rule: it is shown for every active guest while the head is `registered`, also after the event has started or ended. Per the task it was left alone. To match, the condition would become `guest.isActive && <event not started>`.
 2. **The start-time cut-off is the app's, not the backend's.** The backend still accepts a cancel (with a full refund) after the event starts, e.g. from an old tab or a direct API call. If "no cancelling once it has started" is the policy, the backend should enforce it too; that is a backend change and out of scope.
-3. **ISSUE-006 Test K fails in Chrome on `main`** (`checkout_single_registration_test.dart`, "the backend's refusal of a duplicate is shown"). It expects the text "Registration failed", which #56 removed from the checkout screen. It runs only in Chrome, so `flutter test` on the VM does not show it. Unrelated to this change; it fails the same way without it.
+3. **ISSUE-006 Test K fails in Chrome on `main`** (`checkout_single_registration_test.dart`, "the backend's refusal of a duplicate is shown"). It expects the text "Registration failed", which left the app in `3f0a221` (#37, 14 Oct). It runs only in Chrome, so `flutter test` on the VM does not show it. Unrelated to this change; it fails the same way without it. Fixed separately in `fix/test-006-k`.
 4. ISSUE-010, -011, -017, -018 and -021, and the checkout page, are untouched.
 
 ---

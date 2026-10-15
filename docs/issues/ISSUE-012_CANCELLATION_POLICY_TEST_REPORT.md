@@ -181,7 +181,7 @@ flutter test --platform chrome test/features/
 
 Result: 342 of 343 (303 of 304 before). The ISSUE-012 tests pass in Chrome.
 
-The failure, before and after: `checkout_single_registration_test.dart`, "ISSUE-006: paid registration Test K: the backend's refusal of a duplicate is shown, and nothing more is requested". It expects the text "Registration failed", which no longer exists in `lib/` since #56 (`d3420b2`) changed the checkout screen. It runs only in Chrome. It was confirmed failing with this change removed, and was not changed (out of scope).
+The failure, before and after: `checkout_single_registration_test.dart`, "ISSUE-006: paid registration Test K: the backend's refusal of a duplicate is shown, and nothing more is requested". It expects the text "Registration failed", which no longer exists in `lib/` since `3f0a221` (#37, 14 Oct). It runs only in Chrome. It was confirmed failing with this change removed, and was not changed (out of scope).
 
 ### flutter analyze
 
