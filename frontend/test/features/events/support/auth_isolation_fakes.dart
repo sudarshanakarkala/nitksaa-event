@@ -231,8 +231,9 @@ class FakeEventsRepository extends EventsRepository {
   @override
   Future<Map<String, dynamic>> getPaymentPricing(
     int eventId,
-    String accessToken,
-  ) async {
+    String accessToken, {
+    int people = 1,
+  }) async {
     calls.add((endpoint: 'payment-pricing', token: accessToken));
     _account(accessToken);
     return {
@@ -259,6 +260,7 @@ class FakeEventsRepository extends EventsRepository {
     required String attendeeNote,
     String? fullname,
     required String phone,
+    List<String> guests = const [],
   }) async {
     calls.add((endpoint: 'register', token: accessToken));
     final account = _account(accessToken);

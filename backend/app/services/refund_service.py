@@ -1,7 +1,10 @@
-"""Attendee-initiated paid-registration cancellation + full refund.
+"""Attendee-initiated cancellation + refund.
 
-Scope (this sprint): full refund only, one logical refund per paid order,
-INR only, 100% for the ₹1 pilot. No partial refunds, no policy engine.
+A registration is a group (migration 031): the leader's row plus guest rows.
+Cancelling a guest's row cancels that guest and refunds one person's share
+of the order; cancelling the leader's row cancels everyone still in the
+group and refunds their shares. One refund row per cancellation; an order's
+refunds never add up to more than was paid. INR only, no policy engine.
 
 Refund truth lives in payment_refunds — never inferred from the provider
 dashboard alone. The registration is set to 'cancelled' immediately (the
@@ -128,6 +131,10 @@ async def _load_owned_registration(
     return reg
 
 
+class _AlreadyRefunding(Exception):
+    """Inside the order lock: this registration already has its refund."""
+
+
 def _resolve_gateway(name: str):
     try:
         return gateway_registry.get_enabled_gateway(name, get_settings())
@@ -157,14 +164,16 @@ async def cancel_registration(
             # and the lifecycle sweep / retry paths own those.
             raise HTTPException(status_code=409, detail="registration_not_cancellable")
 
-        # Find a captured payment for this registration.
+        # The group's order is on the leader's row.
+        head_id = reg["group_head_id"] if "group_head_id" in reg else registration_id
+        is_guest = head_id != registration_id
         paid_order = await conn.fetchrow(
             """
             SELECT * FROM payment_orders
             WHERE registration_id = $1 AND status = 'paid'
             ORDER BY paid_at DESC NULLS LAST, created_at DESC LIMIT 1
             """,
-            registration_id,
+            head_id,
         )
 
         if paid_order is None:
@@ -179,7 +188,7 @@ async def cancel_registration(
             await audit_service.emit(
                 actor_uid=firebase_uid, event_type="registration_cancelled",
                 entity_type="registration", entity_id=registration_id,
-                context={"paid": False},
+                context={"paid": False, "guest_of": head_id if is_guest else None},
             )
             return _view(registration_id, None)
 
@@ -216,13 +225,43 @@ async def cancel_registration(
         existing_by_key = await refund_repo.get_by_idempotency_key(idempotency_key)
         if existing_by_key is not None:
             return await _refresh_and_view(conn, registration_id, existing_by_key, gw)
-        existing_active = await refund_repo.get_active_for_order(paid_order["id"])
+        existing_active = await refund_repo.get_active_for_registration(registration_id)
         if existing_active is not None:
             return await _refresh_and_view(conn, registration_id, existing_active, gw)
 
         i_am_the_refund_creator = False
+        winner = None
         try:
             async with conn.transaction():
+                # Lock the order: refunds on it are worked out one at a time.
+                await conn.execute(
+                    "SELECT 1 FROM payment_orders WHERE id = $1 FOR UPDATE", paid_order["id"]
+                )
+                # A repeated click that waited for the lock: return the refund
+                # the first one made.
+                winner = (
+                    await refund_repo.get_by_idempotency_key(idempotency_key)
+                    or await refund_repo.get_active_for_registration(registration_id)
+                )
+                if winner is not None:
+                    raise _AlreadyRefunding()
+                quantity = int(paid_order["quantity"]) if "quantity" in paid_order else 1
+                share = (Decimal(paid_order["final_amount"]) / Decimal(max(quantity, 1))).quantize(Decimal("0.01"))
+                if is_guest:
+                    people = 1
+                else:
+                    people = int(await conn.fetchval(
+                        "SELECT COUNT(*) FROM registrations"
+                        " WHERE group_head_id = $1::int AND status = 'registered'",
+                        registration_id,
+                    ))
+                refunded = await refund_repo.total_active_for_order(paid_order["id"])
+                left = Decimal(paid_order["final_amount"]) - refunded
+                # The last refund on an order takes what's left, so rounding
+                # never leaves a paisa behind; never more than was paid.
+                amount = left if (not is_guest or people * share > left) else people * share
+                if amount <= 0:
+                    raise HTTPException(status_code=409, detail="nothing_left_to_refund")
                 refund_row = await refund_repo.create(
                     public_refund_number=f"RFND-{secrets.token_urlsafe(9)}",
                     registration_id=registration_id,
@@ -230,7 +269,7 @@ async def cancel_registration(
                     payment_attempt_id=captured["id"],
                     gateway=gateway_name,
                     provider_payment_id=captured["gateway_payment_ref"],
-                    amount=Decimal(paid_order["final_amount"]),
+                    amount=amount,
                     currency=paid_order["currency"],
                     idempotency_key=idempotency_key,
                     reason="attendee_cancellation",
@@ -243,20 +282,23 @@ async def cancel_registration(
                     registration_id,
                 )
                 i_am_the_refund_creator = True
+        except _AlreadyRefunding:
+            return await _refresh_and_view(conn, registration_id, winner, gw)
         except asyncpg.exceptions.UniqueViolationError:
             # Lost the race (same key, or the one-active-refund-per-order
             # index). Reload the winner and return it — do NOT call the
             # provider a second time.
             winner = (
                 await refund_repo.get_by_idempotency_key(idempotency_key)
-                or await refund_repo.get_active_for_order(paid_order["id"])
+                or await refund_repo.get_active_for_registration(registration_id)
             )
             return await _refresh_and_view(conn, registration_id, winner, gw)
 
         await audit_service.emit(
             actor_uid=firebase_uid, event_type="payment_refund_requested",
             entity_type="payment_refund", entity_id=refund_row["id"],
-            context={"order_id": paid_order["id"], "amount": str(refund_row["amount"])},
+            context={"order_id": paid_order["id"], "amount": str(refund_row["amount"]),
+                     "guest_of": head_id if is_guest else None},
         )
 
     # ── provider call (outside the DB transaction) ──
@@ -271,6 +313,7 @@ async def cancel_registration(
             currency=refund_row["currency"],
             idempotency_key=refund_row["idempotency_key"],
             payment_mode=refund_row["payment_mode"] if "payment_mode" in refund_row else "test",
+            refund_number=refund_row["public_refund_number"],
         )
     except GatewayError as exc:
         reason = _refusal_reason(exc)
@@ -537,15 +580,38 @@ async def retry_refund(refund_id: int, *, source: str, actor_uid: str = "system"
                             if r.status != NormalizedRefundStatus.REFUND_FAILED]
             except GatewayError:
                 return await record_refusal(conn, row, RefundFailureReason.PROVIDER_UNAVAILABLE, source=source)
-            expected_minor = int((Decimal(row["amount"]) * 100).to_integral_value())
-            ours = next((r for r in existing if row["provider_refund_id"]
-                         and r.provider_refund_id == row["provider_refund_id"]), None)
-            same = ours or next((r for r in existing if r.amount_minor == expected_minor), None)
+            # Ours: the provider's id we stored, or our refund number in its notes.
+            def is_this(r) -> bool:
+                return bool((row["provider_refund_id"] and r.provider_refund_id == row["provider_refund_id"])
+                            or (r.refund_number and r.refund_number == row["public_refund_number"]))
+
+            same = next((r for r in existing if is_this(r)), None)
+            if same is None:
+                # An order can have several refunds (one per cancelled guest):
+                # set aside the provider's refunds that are our other ones.
+                others = await conn.fetch(
+                    """
+                    SELECT provider_refund_id, public_refund_number FROM payment_refunds
+                    WHERE payment_order_id = $1::bigint AND id <> $2::bigint
+                    """,
+                    row["payment_order_id"], row["id"],
+                )
+                other_ids = {o["provider_refund_id"] for o in others if o["provider_refund_id"]}
+                other_numbers = {o["public_refund_number"] for o in others}
+                unexplained = [r for r in existing
+                               if r.provider_refund_id not in other_ids
+                               and not (r.refund_number and r.refund_number in other_numbers)]
+                # A refund sent before refund numbers were stored, for exactly
+                # this amount: it's this one (the old rule).
+                expected_minor = int((Decimal(row["amount"]) * 100).to_integral_value())
+                same = next((r for r in unexplained
+                             if not r.refund_number and r.amount_minor == expected_minor), None)
+                if same is None and unexplained:
+                    return await record_refusal(conn, row, RefundFailureReason.REFUNDED_OUTSIDE_APP,
+                                                source=source)
             if same is not None:
                 # It already went through at the provider: take that result.
                 return await apply_refund_result(conn, row, same, source=f"{source}:found_at_provider")
-            if existing:
-                return await record_refusal(conn, row, RefundFailureReason.REFUNDED_OUTSIDE_APP, source=source)
 
         amount_minor = int((Decimal(row["amount"]) * 100).to_integral_value())
         try:
@@ -556,6 +622,7 @@ async def retry_refund(refund_id: int, *, source: str, actor_uid: str = "system"
                 # A new key per try: the provider remembers a refused key's answer.
                 idempotency_key=f"{row['idempotency_key']}:try{row['attempt_count']}",
                 payment_mode=mode,
+                refund_number=row["public_refund_number"],
             )
         except GatewayError as exc:
             return await record_refusal(conn, row, _refusal_reason(exc), source=source)

@@ -251,6 +251,7 @@ class PaymentRepository:
         expires_at: datetime,
         gateway: str = "deterministic_sandbox",
         payment_mode: str = "test",
+        quantity: int = 1,
     ) -> asyncpg.Record:
         return await self.conn.fetchrow(
             """
@@ -258,9 +259,10 @@ class PaymentRepository:
                 public_order_number, registration_id, event_id, payer_firebase_uid,
                 configuration_id, configuration_version, currency, base_amount, tax_amount,
                 convenience_fee, final_amount, pricing_snapshot, idempotency_key, expires_at,
-                gateway, payment_mode, status
+                gateway, payment_mode, status, quantity
             ) VALUES (
-                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, 'created'
+                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12::jsonb, $13, $14, $15, $16, 'created',
+                $17::int
             )
             RETURNING *
             """,
@@ -280,6 +282,7 @@ class PaymentRepository:
             expires_at,
             gateway,
             payment_mode,
+            quantity,
         )
 
     async def mark_order_payment_pending(self, order_id: int) -> None:

@@ -133,6 +133,7 @@ class AppEvent {
     this.capacity,
     this.isFree = true,
     this.ticketPrice,
+    this.maxGuests = 0,
     this.registrationMinQuantity,
     this.registrationMaxQuantity,
     this.registrationOpensAt,
@@ -175,6 +176,9 @@ class AppEvent {
   /// runtime `TypeError`. Consumers must fall back (e.g. `event.isFree ?? true`).
   final bool? isFree;
   final double? ticketPrice;
+
+  /// Guests one registrant may bring (0 = none, up to 4).
+  final int maxGuests;
   final int? registrationMinQuantity;
   final int? registrationMaxQuantity;
   final DateTime? registrationOpensAt;
@@ -218,6 +222,7 @@ class AppEvent {
       capacity: json['capacity'] as int?,
       isFree: json['is_free'] as bool? ?? true,
       ticketPrice: _parseTicketPrice(json['ticket_price']),
+      maxGuests: (json['max_guests'] as num?)?.toInt() ?? 0,
       registrationMinQuantity: json['registration_min_quantity'] as int?,
       registrationMaxQuantity: json['registration_max_quantity'] as int?,
       registrationOpensAt: json['registration_opens_at'] != null

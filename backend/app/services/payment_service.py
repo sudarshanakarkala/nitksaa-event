@@ -137,11 +137,13 @@ async def _get_config_or_404(conn: asyncpg.Connection, event_id: int) -> asyncpg
     return config
 
 
-async def get_pricing(event_id: int) -> PricingBreakdownResponse:
+async def get_pricing(event_id: int, people: int = 1) -> PricingBreakdownResponse:
     pool = await get_pool()
     async with pool.acquire() as conn:
         config = await _get_config_or_404(conn, event_id)
-    breakdown = pricing_service.calculate_price(dict(config))
+    breakdown = pricing_service.for_people(
+        pricing_service.calculate_price(dict(config)), max(1, min(people, 5))
+    )
     return PricingBreakdownResponse(
         event_id=event_id,
         configuration_key=config["configuration_key"],
@@ -155,6 +157,7 @@ async def get_pricing(event_id: int) -> PricingBreakdownResponse:
         convenience_fee=breakdown["convenience_fee"],
         final_amount=breakdown["final_amount"],
         line_items=breakdown["line_items"],
+        people=breakdown["people"],
     )
 
 
@@ -238,7 +241,16 @@ async def create_order(
             return _order_view(active_order, registration["status"])
 
         config = await _get_config_or_404(conn, registration["event_id"])
-        breakdown = pricing_service.calculate_price(dict(config))
+        # The order pays for the whole group: the leader and their guests
+        # still in it (guests follow the leader's status).
+        quantity = int(await conn.fetchval(
+            "SELECT COUNT(*) FROM registrations"
+            " WHERE group_head_id = $1::int AND status <> 'cancelled'",
+            registration_id,
+        )) or 1
+        breakdown = pricing_service.for_people(
+            pricing_service.calculate_price(dict(config)), quantity
+        )
 
         expires_at = datetime.now(timezone.utc) + timedelta(
             minutes=config["payment_session_expiry_minutes"]
@@ -263,6 +275,7 @@ async def create_order(
                     pricing_snapshot=breakdown,
                     idempotency_key=idempotency_key,
                     expires_at=expires_at,
+                    quantity=quantity,
                 )
                 if registration["status"] == "seat_held":
                     await reg_repo.set_status(registration_id, "payment_pending")
@@ -778,6 +791,8 @@ async def _process_refund_webhook(
     refund_row = None
     if result.provider_refund_id:
         refund_row = await refund_repo.get_by_provider_refund_id(gateway, result.provider_refund_id)
+    if refund_row is None and result.refund_number:
+        refund_row = await refund_repo.get_by_public_number(result.refund_number)
     if refund_row is None and result.provider_payment_id:
         refund_row = await refund_repo.get_awaiting_provider_id(gateway, result.provider_payment_id)
 

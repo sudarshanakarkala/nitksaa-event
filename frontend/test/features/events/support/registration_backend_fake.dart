@@ -83,10 +83,14 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     this.isFree = false,
     this.ticketPrice = '100.00',
     this.finalAmount = '123.45',
+    this.maxGuests = 0,
   });
 
   final int eventId;
   final bool isFree;
+
+  /// `max_guests` of the public event.
+  final int maxGuests;
 
   /// `ticket_price` of the public event, in rupees.
   final String ticketPrice;
@@ -341,10 +345,23 @@ class FakeRegistrationBackend implements HttpClientAdapter {
         return _json(409, {'detail': 'already_registered'});
       }
       _shelveRegistration(token);
+      final status = isFree ? 'registered' : 'seat_held';
       final registration = _newRegistration(
-        status: isFree ? 'registered' : 'seat_held',
+        status: status,
         note: request.json['attendee_note'] as String?,
       );
+      // Guests: a row each, with their own number and (once registered) QR.
+      final guests = request.json['guests'] as List<dynamic>? ?? const [];
+      registration['guests'] = [
+        for (final g in guests)
+          {
+            'registration_id': ++_lastRegistrationId,
+            'registration_number': 'NITKSAA-2099-000$_lastRegistrationId',
+            'name': (g as Map)['name'],
+            'status': status,
+            'qr_token': status == 'registered' ? 'qr-guest-$_lastRegistrationId' : null,
+          },
+      ];
       registrations[token] = registration;
       return _json(201, registration);
     }
@@ -687,6 +704,7 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       'is_virtual': false,
       'is_free': isFree,
       'ticket_price': isFree ? null : ticketPrice,
+      'max_guests': maxGuests,
       'registration_status': 'open',
       'registered_count': seatsTaken,
     };

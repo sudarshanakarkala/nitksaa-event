@@ -188,7 +188,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
         return _ResultCard(
           tone: p.success,
           icon: Icons.check_circle,
-          name: _pass?.fullName,
+          name: _pass?.displayName,
           headline: 'Checked in',
           action: _done == null
               ? null
@@ -204,7 +204,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
           return _ResultCard(
             tone: p.warning,
             icon: Icons.info_outline,
-            name: pass.fullName,
+            name: pass.displayName,
             headline: 'Already checked in',
           );
         }
@@ -213,7 +213,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
             return _ResultCard(
               tone: p.info,
               icon: Icons.badge_outlined,
-              name: pass.fullName,
+              name: pass.displayName,
               headline: 'Registered',
               action: SizedBox(
                 width: double.infinity,
@@ -233,7 +233,7 @@ class _CheckInScreenState extends ConsumerState<CheckInScreen> {
             return _ResultCard(
               tone: p.error,
               icon: Icons.block,
-              name: pass.fullName,
+              name: pass.displayName,
               headline: 'Not registered',
               detail: 'This registration was cancelled or never paid.',
             );

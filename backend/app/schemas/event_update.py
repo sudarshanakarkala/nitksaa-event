@@ -19,6 +19,7 @@ class EventUpdate(BaseModel):
     banner_url: Optional[str] = None
     capacity: Optional[int] = Field(default=None, gt=0)
     show_attendee_list: Optional[bool] = None
+    max_guests: Optional[int] = Field(default=None, ge=0, le=4)
     registration_opens_at: Optional[datetime] = None
     registration_closes_at: Optional[datetime] = None
     is_full_day: Optional[bool] = None

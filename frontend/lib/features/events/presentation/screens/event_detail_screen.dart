@@ -12,7 +12,9 @@ import '../../../auth/services/auth_controller.dart';
 import '../../../admin/presentation/event_admin_actions.dart' show EventAdminActions;
 import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
+import '../../domain/my_event_registration.dart' show EventGuest;
 import '../widgets/entry_pass_qr.dart';
+import '../widgets/unregister_flow.dart' show confirmAndCancelGuest;
 import '../widgets/venue_section.dart';
 import '../../../../shared/widgets/form_fields.dart';
 import '../../../../shared/widgets/notice.dart';
@@ -1097,6 +1099,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
           const SizedBox(height: 16),
           _buildQRBadgeSection(state, event),
+          ..._buildGuestsSection(state, event),
         ],
       );
     } else if (paymentDue) {
@@ -1324,7 +1327,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         initialName: initialName,
         email: auth.session?.email ?? '',
         initialPhone: initialPhone,
-        totalLabel: isPaid ? formatMoney(event.ticketPrice!) : 'Free',
+        unitPrice: isPaid ? event.ticketPrice! : null,
+        maxGuests: event.maxGuests,
         isPaid: isPaid,
         onContinue: (draft) {
           notifier.setRegistrationDraft(draft);
@@ -1698,6 +1702,144 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
+  /// The registrant's guests under their own pass: each with their QR (to
+  /// show or forward) and, while still coming, ✕ to cancel just them.
+  List<Widget> _buildGuestsSection(EventDetailState state, AppEvent event) {
+    final guests = EventGuest.listFromJson(state.myRegistration?['guests']);
+    if (guests.isEmpty) return const [];
+    final p = context.palette;
+    final active = guests.where((g) => g.isActive).length;
+    final leader = state.myRegistration?['fullname_snapshot']?.toString() ?? '';
+    final refundLabel =
+        _isPaidEvent(event) ? formatMoney(event.ticketPrice!) : null;
+    return [
+      const SizedBox(height: 20),
+      Text(
+        active == 0
+            ? 'Your guests'
+            : 'You + $active ${active == 1 ? 'guest' : 'guests'}',
+        style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
+      ),
+      const SizedBox(height: 8),
+      for (final guest in guests)
+        Container(
+          margin: const EdgeInsets.only(bottom: 8),
+          padding: const EdgeInsets.only(left: 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: p.border),
+            borderRadius: BorderRadius.circular(8),
+          ),
+          child: Row(
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      guest.name,
+                      style: TextStyle(
+                        fontWeight: FontWeight.w600,
+                        color: guest.isActive ? p.textPrimary : p.textMuted,
+                        decoration:
+                            guest.isActive ? null : TextDecoration.lineThrough,
+                      ),
+                    ),
+                    if (!guest.isActive)
+                      Text(
+                        'Cancelled',
+                        style: TextStyle(fontSize: 12, color: p.textMuted),
+                      ),
+                  ],
+                ),
+              ),
+              if (guest.isActive && (guest.qrToken ?? '').isNotEmpty)
+                TextButton.icon(
+                  onPressed: () => _showGuestPassDialog(event, guest, leader),
+                  icon: const Icon(Icons.qr_code_2, size: 18),
+                  label: const Text('QR'),
+                ),
+              if (guest.isActive)
+                IconButton(
+                  tooltip: 'Cancel ${guest.name}',
+                  icon: const Icon(Icons.close),
+                  onPressed: () => confirmAndCancelGuest(
+                    context,
+                    ref,
+                    guest: guest,
+                    refundLabel: refundLabel,
+                    onDone: () => ref
+                        .read(eventDetailProvider(widget.eventId).notifier)
+                        .fetchEventDetails(widget.eventId),
+                  ),
+                ),
+            ],
+          ),
+        ),
+    ];
+  }
+
+  /// A guest's entry pass, to show at the door or screenshot and forward.
+  void _showGuestPassDialog(AppEvent event, EventGuest guest, String leader) {
+    showDialog<void>(
+      context: context,
+      builder: (context) => Dialog(
+        backgroundColor: context.palette.card,
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        child: Padding(
+          padding: const EdgeInsets.all(24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Row(
+                children: [
+                  const Expanded(
+                    child: Text(
+                      'Guest entry pass',
+                      style: TextStyle(
+                        fontFamily: AppTextStyles.serif,
+                        fontSize: 18,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed: () => Navigator.pop(context),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 16),
+              Text(
+                event.title,
+                textAlign: TextAlign.center,
+                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                guest.name,
+                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+              ),
+              if (leader.isNotEmpty)
+                Text(
+                  'Guest of $leader',
+                  style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+                ),
+              const SizedBox(height: 16),
+              EntryPassQr(eventId: event.eventId, qrToken: guest.qrToken!),
+              if ((guest.registrationNumber ?? '').isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text(
+                  'Badge Number: ${guest.registrationNumber}',
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _showQRBadgeDialog(AppEvent event, String regNo, EventDetailState state) {
     final auth = ref.read(authControllerProvider);
     final registration = state.myRegistration;
@@ -1797,7 +1939,8 @@ class _RegistrationFormDialog extends StatefulWidget {
     required this.initialName,
     required this.email,
     required this.initialPhone,
-    required this.totalLabel,
+    required this.unitPrice,
+    required this.maxGuests,
     required this.isPaid,
     required this.onContinue,
   });
@@ -1813,7 +1956,12 @@ class _RegistrationFormDialog extends StatefulWidget {
   final String initialName;
   final String email;
   final String initialPhone;
-  final String totalLabel;
+
+  /// One person's price (paid events); null for a free event.
+  final double? unitPrice;
+
+  /// Guests allowed (0 = no guests section).
+  final int maxGuests;
   final bool isPaid;
   final ValueChanged<RegistrationDraft> onContinue;
 
@@ -1831,12 +1979,31 @@ class _RegistrationFormDialogState extends State<_RegistrationFormDialog> {
       TextEditingController(text: widget.initialPhone);
   final _note = TextEditingController();
 
+  /// One name field per guest, in the order added.
+  final _guests = <TextEditingController>[];
+
   @override
   void dispose() {
     _name.dispose();
     _phone.dispose();
     _note.dispose();
+    for (final g in _guests) {
+      g.dispose();
+    }
     super.dispose();
+  }
+
+  void _addGuest() => setState(() => _guests.add(TextEditingController()));
+
+  void _removeGuest(int index) => setState(() => _guests.removeAt(index).dispose());
+
+  int get _people => 1 + _guests.length;
+
+  String get _totalLabel {
+    final unit = widget.unitPrice;
+    if (unit == null) return 'Free';
+    if (_people == 1) return formatMoney(unit);
+    return '$_people people × ${formatMoney(unit)} = ${formatMoney(unit * _people)}';
   }
 
   /// Same rule as the server: 10–15 digits once spaces, dashes and a
@@ -1854,6 +2021,7 @@ class _RegistrationFormDialogState extends State<_RegistrationFormDialog> {
       fullname: widget.alumniName == null ? _name.text.trim() : null,
       phone: _phone.text.trim(),
       note: _note.text.trim(),
+      guests: [for (final g in _guests) g.text.trim()],
     );
     Navigator.of(context).pop();
     widget.onContinue(draft);
@@ -1980,20 +2148,68 @@ class _RegistrationFormDialogState extends State<_RegistrationFormDialog> {
                     ),
                   ),
                 ),
+                if (widget.maxGuests > 0) ...[
+                  const SizedBox(height: 8),
+                  const FormSectionLabel('Guests'),
+                  const SizedBox(height: 12),
+                  for (var i = 0; i < _guests.length; i++) ...[
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: TextFormField(
+                            key: ValueKey('registration-guest-$i'),
+                            controller: _guests[i],
+                            textCapitalization: TextCapitalization.words,
+                            maxLength: 120,
+                            decoration: InputDecoration(
+                              hintText: 'Guest ${i + 1}: full name',
+                              counterText: '',
+                            ),
+                            validator: (v) => (v ?? '').trim().isEmpty
+                                ? 'Please enter the guest\'s name.'
+                                : null,
+                          ),
+                        ),
+                        IconButton(
+                          tooltip: 'Remove guest',
+                          icon: const Icon(Icons.close),
+                          onPressed: () => _removeGuest(i),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 10),
+                  ],
+                  if (_guests.length < widget.maxGuests)
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: TextButton.icon(
+                        key: const ValueKey('registration-add-guest'),
+                        onPressed: _addGuest,
+                        icon: const Icon(Icons.add),
+                        label: Text(
+                          'Add a guest (up to ${widget.maxGuests})',
+                        ),
+                      ),
+                    ),
+                ],
                 const SizedBox(height: 16),
                 const Divider(height: 1),
                 const SizedBox(height: 16),
                 Row(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
+                    Text(
+                      'Total',
+                      style: AppTextStyles.titleMedium.copyWith(color: p.textSecondary),
+                    ),
+                    const SizedBox(width: 16),
                     Expanded(
                       child: Text(
-                        'Total',
-                        style: AppTextStyles.titleMedium.copyWith(color: p.textSecondary),
+                        _totalLabel,
+                        textAlign: TextAlign.right,
+                        style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
                       ),
-                    ),
-                    Text(
-                      widget.totalLabel,
-                      style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
                     ),
                   ],
                 ),

@@ -12,11 +12,22 @@ const _kUnsetValue = Object();
 /// (never in the page address). [fullname] is null for alumni: the server
 /// takes their name from the alumni record.
 class RegistrationDraft {
-  const RegistrationDraft({this.fullname, required this.phone, this.note = ''});
+  const RegistrationDraft({
+    this.fullname,
+    required this.phone,
+    this.note = '',
+    this.guests = const [],
+  });
 
   final String? fullname;
   final String phone;
   final String note;
+
+  /// Guest names, in the order typed. Empty when registering alone.
+  final List<String> guests;
+
+  /// The registrant plus their guests.
+  int get people => 1 + guests.length;
 }
 
 class EventDetailState {
@@ -227,6 +238,7 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
         attendeeNote: draft.note,
         fullname: draft.fullname,
         phone: draft.phone,
+        guests: draft.guests,
       );
       if (!mounted) return false;
       state = state.copyWith(

@@ -13,6 +13,7 @@ class MyEventRegistration {
     this.latestOrderId,
     this.event,
     this.publicEvent,
+    this.guests = const [],
   });
 
   final int registrationId;
@@ -29,6 +30,13 @@ class MyEventRegistration {
   final String? latestOrderId;
   final RegisteredEventSummary? event;
   final AppEvent? publicEvent;
+
+  /// The registrant's guests (any status), oldest first.
+  final List<EventGuest> guests;
+
+  /// Guests still coming.
+  List<EventGuest> get activeGuests =>
+      [for (final g in guests) if (g.status != 'cancelled') g];
 
   bool get isActive => status == 'registered';
   bool get canCancel =>
@@ -52,6 +60,7 @@ class MyEventRegistration {
       latestOrderId: latestOrderId,
       event: event,
       publicEvent: publicEvent ?? this.publicEvent,
+      guests: guests,
     );
   }
 
@@ -71,8 +80,43 @@ class MyEventRegistration {
       event: json['event'] != null
           ? RegisteredEventSummary.fromJson(json['event'] as Map<String, dynamic>)
           : null,
+      guests: EventGuest.listFromJson(json['guests']),
     );
   }
+}
+
+/// A guest in someone's registration: their own row, number and QR.
+class EventGuest {
+  const EventGuest({
+    required this.registrationId,
+    this.registrationNumber,
+    required this.name,
+    required this.status,
+    this.qrToken,
+  });
+
+  final int registrationId;
+  final String? registrationNumber;
+  final String name;
+  final String status;
+
+  /// The guest's entry pass; only while registered.
+  final String? qrToken;
+
+  bool get isActive => status == 'registered';
+
+  factory EventGuest.fromJson(Map<String, dynamic> json) => EventGuest(
+        registrationId: (json['registration_id'] as num).toInt(),
+        registrationNumber: json['registration_number'] as String?,
+        name: json['name']?.toString() ?? 'Guest',
+        status: json['status']?.toString() ?? 'registered',
+        qrToken: json['qr_token']?.toString(),
+      );
+
+  static List<EventGuest> listFromJson(Object? raw) => [
+        for (final g in (raw as List<dynamic>? ?? const []))
+          if (g is Map<String, dynamic>) EventGuest.fromJson(g),
+      ];
 }
 
 class RegisteredEventSummary {

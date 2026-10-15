@@ -34,15 +34,29 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   Map<String, dynamic>? _pricing;
   var _pricingRequested = false;
 
+  /// How many people this checkout pays for (the registrant and guests).
+  var _people = 1;
+
   Future<void> _loadPricing(AppEvent event) async {
     if (_pricingRequested || !_isPaidEvent(event)) return;
     _pricingRequested = true;
     final token = ref.read(authControllerProvider).session?.accessToken;
     if (token == null) return;
+    // The whole group pays: the form's guests, or (Complete payment) the
+    // guests of the held registration.
+    final state = ref.read(eventDetailProvider(widget.eventId));
+    final draft = state.registrationDraft;
+    final held = _canReuse(state.myRegistration) ? state.myRegistration : null;
+    final heldGuests = (held?['guests'] as List<dynamic>? ?? const [])
+        .whereType<Map>()
+        .where((g) => g['status'] != 'cancelled')
+        .length;
+    final people = held != null ? 1 + heldGuests : (draft?.people ?? 1);
+    _people = people;
     try {
       final pricing = await ref
           .read(eventsRepositoryProvider)
-          .getPaymentPricing(event.eventId, token);
+          .getPaymentPricing(event.eventId, token, people: people);
       if (mounted) setState(() => _pricing = pricing);
     } catch (_) {
       // The table falls back to the event's listed price.
@@ -206,8 +220,11 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           double.tryParse(_pricing?['final_amount']?.toString() ?? '') ?? 0;
       totalText = formatMoney(total);
     } else {
-      rows.add(('Registration fee', formatMoney(event.ticketPrice!)));
-      totalText = formatMoney(event.ticketPrice!);
+      rows.add((
+        _people > 1 ? 'Registration fee × $_people people' : 'Registration fee',
+        formatMoney(event.ticketPrice! * _people),
+      ));
+      totalText = formatMoney(event.ticketPrice! * _people);
     }
 
     return Column(

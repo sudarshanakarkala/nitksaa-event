@@ -323,6 +323,12 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
           kind: ColumnKind.text,
           value: (r) => r.displayName,
         ),
+        GridColumn(
+          id: 'guest_of',
+          label: 'Guest of',
+          kind: ColumnKind.text,
+          value: (r) => r.guestOf ?? '',
+        ),
         if (_isAll)
           GridColumn(
             id: 'event',
@@ -1073,6 +1079,8 @@ class _RegistrationTile extends StatelessWidget {
               if (!r.isCancelled) _EmailStatus(status: r.confirmationEmailStatus),
             ],
           ),
+          if (r.guestOf != null)
+            Text('Guest of ${r.guestOf}', style: secondary),
           if (r.registrationNumber != null)
             Text(r.registrationNumber!, style: secondary.copyWith(color: p.textMuted)),
           if (eventTitle != null) ...[

@@ -20,14 +20,20 @@ _ATTENDEE_COLS = """
     email          AS email_snapshot,
     phone          AS phone_snapshot,
     batch_year_snapshot, branch_snapshot,
-    registered_at, status, confirmation_email_status
+    registered_at, status, confirmation_email_status,
+    (SELECT h.fullname_snapshot FROM registrations h
+     WHERE h.registration_id = registrations.group_head_id
+       AND registrations.registration_id <> registrations.group_head_id) AS guest_of
 """
 
 # Columns for admin registrations audit view (all statuses).
 _REGISTRATION_AUDIT_COLS = """
     registration_id, registration_number, fullname_snapshot,
     email          AS email_snapshot,
-    status, registered_at, cancelled_at
+    status, registered_at, cancelled_at,
+    (SELECT h.fullname_snapshot FROM registrations h
+     WHERE h.registration_id = registrations.group_head_id
+       AND registrations.registration_id <> registrations.group_head_id) AS guest_of
 """
 
 # SELECT clause shared by queries that need event fields for join_url resolution.
@@ -52,6 +58,7 @@ _REG_WITH_EVENT = """
         r.hold_expires_at,
         r.updated_at,
         r.qrtoken        AS qr_token,
+        r.group_head_id,
         (SELECT po.public_order_number FROM payment_orders po
          WHERE po.registration_id = r.registration_id
          ORDER BY po.created_at DESC LIMIT 1) AS latest_order_id,
@@ -87,7 +94,8 @@ class RegistrationRepository:
         """Return the active registration row if the user is already registered."""
         return await self.conn.fetchrow(
             """SELECT registration_id FROM registrations
-               WHERE event_id = $1 AND firebase_uid = $2 AND status = 'registered'""",
+               WHERE event_id = $1 AND firebase_uid = $2 AND status = 'registered'
+                 AND registration_id = group_head_id""",
             event_id,
             firebase_uid,
         )
@@ -106,7 +114,8 @@ class RegistrationRepository:
         return await self.conn.fetchrow(
             """SELECT registration_id, status FROM registrations
                WHERE event_id = $1 AND firebase_uid = $2
-                 AND status = ANY($3::text[])""",
+                 AND status = ANY($3::text[])
+                 AND registration_id = group_head_id""",
             event_id,
             firebase_uid,
             list(self._IN_FLIGHT_OR_CONFIRMED),
@@ -215,6 +224,7 @@ class RegistrationRepository:
         notes: Optional[str],
         status: str = "registered",
         hold_expires_at: Optional[datetime] = None,
+        group_head_id: Optional[int] = None,
     ) -> int:
         """Insert a new registration row. Returns the new registration_id.
 
@@ -236,8 +246,8 @@ class RegistrationRepository:
                     event_id, firebase_uid, ref_id,
                     email, phone,
                     fullname_snapshot, batch_year_snapshot, branch_snapshot,
-                    notes, status, hold_expires_at, qrtoken
-                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                    notes, status, hold_expires_at, qrtoken, group_head_id
+                ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
                 RETURNING registration_id
                 """,
                 event_id,
@@ -252,7 +262,23 @@ class RegistrationRepository:
                 status,
                 hold_expires_at,
                 secrets.token_urlsafe(16),
+                group_head_id,
             )
+        )
+
+    async def list_guests(self, head_ids: List[int]) -> List[asyncpg.Record]:
+        """The guest rows (not the leaders) of these groups, oldest first."""
+        if not head_ids:
+            return []
+        return await self.conn.fetch(
+            """
+            SELECT registration_id, registration_number, group_head_id,
+                   fullname_snapshot AS name, status, qrtoken AS qr_token
+            FROM registrations
+            WHERE group_head_id = ANY($1::int[]) AND registration_id <> group_head_id
+            ORDER BY registration_id
+            """,
+            head_ids,
         )
 
     async def set_registration_number(
@@ -300,7 +326,9 @@ class RegistrationRepository:
     ) -> Optional[asyncpg.Record]:
         """Fetch the most recent registration row for a user+event (any status)."""
         return await self.conn.fetchrow(
-            f"{_REG_WITH_EVENT} WHERE r.event_id = $1 AND r.firebase_uid = $2 ORDER BY r.registered_at DESC LIMIT 1",
+            f"{_REG_WITH_EVENT} WHERE r.event_id = $1 AND r.firebase_uid = $2"
+            " AND r.registration_id = r.group_head_id"
+            " ORDER BY r.registered_at DESC, r.registration_id DESC LIMIT 1",
             event_id,
             firebase_uid,
         )
@@ -308,7 +336,9 @@ class RegistrationRepository:
     async def list_for_user(self, firebase_uid: str) -> List[asyncpg.Record]:
         """Fetch all registration rows for a user across all events."""
         return await self.conn.fetch(
-            f"{_REG_WITH_EVENT} WHERE r.firebase_uid = $1 ORDER BY r.registered_at DESC",
+            f"{_REG_WITH_EVENT} WHERE r.firebase_uid = $1"
+            " AND r.registration_id = r.group_head_id"
+            " ORDER BY r.registered_at DESC, r.registration_id DESC",
             firebase_uid,
         )
 

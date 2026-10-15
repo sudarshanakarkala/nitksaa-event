@@ -23,6 +23,7 @@ class AdminRegistration {
     this.branch,
     this.confirmationEmailStatus,
     this.cancelledAt,
+    this.guestOf,
   });
 
   final int registrationId;
@@ -37,6 +38,9 @@ class AdminRegistration {
   final String? branch;
   final String? confirmationEmailStatus;
   final DateTime? cancelledAt;
+
+  /// The registrant's name, when this person is someone's guest.
+  final String? guestOf;
 
   bool get isCancelled => status == 'cancelled';
 
@@ -63,6 +67,7 @@ class AdminRegistration {
       branch: _text(json['branch_snapshot']),
       confirmationEmailStatus: _text(json['confirmation_email_status']),
       cancelledAt: _date(json['cancelled_at']),
+      guestOf: _text(json['guest_of']),
     );
   }
 }

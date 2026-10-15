@@ -346,14 +346,16 @@ class EventsRepository {
     );
   }
 
-  /// What the server will charge one person for the event: line items and
-  /// the final amount (GST and fees as set in the event's payment setup).
+  /// What the server will charge [people] people for the event: line items
+  /// and the final amount (GST and fees as set in the event's payment setup).
   Future<Map<String, dynamic>> getPaymentPricing(
     int eventId,
-    String accessToken,
-  ) async {
+    String accessToken, {
+    int people = 1,
+  }) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/events/$eventId/payment-pricing',
+      queryParameters: {if (people > 1) 'people': people},
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
     return response.data ?? <String, dynamic>{};
@@ -401,6 +403,7 @@ class EventsRepository {
     required String attendeeNote,
     String? fullname,
     required String phone,
+    List<String> guests = const [],
   }) async {
     final response = await _dio.post<Map<String, dynamic>>(
       '/api/v1/events/$eventId/register',
@@ -408,6 +411,7 @@ class EventsRepository {
         'attendee_note': attendeeNote,
         if (fullname != null) 'fullname': fullname,
         'phone': phone,
+        if (guests.isNotEmpty) 'guests': [for (final g in guests) {'name': g}],
       },
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );

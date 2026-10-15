@@ -86,3 +86,22 @@ def calculate_price(config: Dict[str, Any]) -> Dict[str, Any]:
         "final_amount": final_amount,
         "line_items": line_items,
     }
+
+
+def for_people(breakdown: Dict[str, Any], people: int) -> Dict[str, Any]:
+    """The same breakdown for a group: every amount times `people`, worked out
+    per person first, so one person's share of the final amount is exact
+    (a cancelled guest is refunded final_amount / people)."""
+    if people <= 1:
+        return {**breakdown, "people": 1}
+    n = Decimal(people)
+    scaled = dict(breakdown)
+    for key in ("base_amount", "taxable_amount", "tax_amount", "convenience_fee", "final_amount"):
+        if key in scaled and scaled[key] is not None:
+            scaled[key] = _q(Decimal(scaled[key]) * n)
+    scaled["line_items"] = [
+        {**item, "amount": str(_q(Decimal(item["amount"]) * n))}
+        for item in breakdown.get("line_items", [])
+    ]
+    scaled["people"] = people
+    return scaled

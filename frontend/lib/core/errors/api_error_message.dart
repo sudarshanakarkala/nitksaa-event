@@ -19,6 +19,11 @@ const _codeMessages = <String, String>{
   'name_required': 'Please enter your name.',
   'phone_required': 'Please enter a phone number we can reach you on.',
   'phone_invalid': 'Please enter a valid phone number.',
+  'not_enough_seats':
+      'There aren\'t enough seats left for everyone. Remove a guest to continue.',
+  'event_full': 'The event is full.',
+  'too_many_guests': 'This event allows fewer guests. Remove a guest to continue.',
+  'guest_name_required': 'Please enter a name for each guest.',
 };
 
 /// A user-facing message for a failed API call.
