@@ -255,7 +255,11 @@ void main() {
       expect(backend.seatsTaken, 1);
       expect(backend.paymentOrderRequests, isEmpty);
       expect(FakeRazorpay.opened, isEmpty);
-      expect(find.textContaining('Registration failed'), findsOneWidget);
+      // The backend's already_registered, in words: "Could not register:
+      // already registered." on main, "You're already registered for this
+      // event." with ISSUE-018. ("Registration failed" went in #37.)
+      expect(find.textContaining('already registered'), findsOneWidget);
+      expect(find.textContaining('already_registered'), findsNothing);
     });
   });
 
