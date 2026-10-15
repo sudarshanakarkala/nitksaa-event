@@ -6,7 +6,7 @@ P3 — Routing
 
 ## Status
 
-Fixed on `fix/issue-021`, from `main` at `fbe4ede`. Code and automated tests pass. Manual run on beta PENDING. Not on the live site.
+Fixed on `fix/issue-021`, from `main` at `fbe4ede`. Code and automated tests pass. Beta run 1 (2026-10-15) found that a sign-in opened from an event card did not return (021-8); fixed in a second commit, see the test report §5a. Remaining manual checks PENDING. Not on the live site.
 
 ---
 
@@ -49,7 +49,7 @@ Elsewhere:
 
 | File | Change |
 |---|---|
-| `lib/routes/route_guards.dart` | `/my-events` also needs sign-in. A signed-out person at a page that needs it (`/my-events`, `/events/…`, `/admin…`) is sent to sign-in and the page is remembered (`ReturnAfterSignIn`). A page opened while sign-in is being checked is remembered, and `afterSplash` returns it. A non-admin at `/admin…` goes to `/no-access`. The logic is in `redirectFor(auth, uri)` so it can be tested |
+| `lib/routes/route_guards.dart` | When signed in with a page waiting, send it from whichever page the router re-checks (a sign-in page pushed over another page, e.g. from an event card; second commit). `/my-events` also needs sign-in. A signed-out person at a page that needs it (`/my-events`, `/events/…`, `/admin…`) is sent to sign-in and the page is remembered (`ReturnAfterSignIn`). A page opened while sign-in is being checked is remembered, and `afterSplash` returns it. A non-admin at `/admin…` goes to `/no-access`. The logic is in `redirectFor(auth, uri)` so it can be tested |
 | `lib/routes/return_after_sign_in.dart` | Also keeps the page in memory, for when the Hive box is not open |
 | `lib/routes/route_pages.dart` (new) | `NotFoundPage` ("Page not found", Go to Events) and `NotAdminPage` ("Not an admin", Go to Events), on the shared `StateMessage` |
 | `lib/routes/app_routes.dart`, `app_router.dart` | `AppRoutes.notAdmin` (`/no-access`) inside the shell; `errorBuilder` → `NotFoundPage` |

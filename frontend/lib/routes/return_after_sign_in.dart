@@ -33,6 +33,16 @@ abstract class ReturnAfterSignIn {
     }
   }
 
+  /// Whether a page is remembered (fresh or not), without forgetting it.
+  static bool get isPending {
+    if (_memoryPath != null) return true;
+    try {
+      return _box?.containsKey(_pathKey) ?? false;
+    } catch (_) {
+      return false;
+    }
+  }
+
   /// The remembered page, if any and still fresh; forgets it either way.
   static String? take() {
     final box = _box;
