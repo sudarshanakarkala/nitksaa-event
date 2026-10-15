@@ -10,6 +10,7 @@ import '../../domain/event.dart';
 import '../providers/event_detail_provider.dart';
 import '../services/razorpay_payment.dart';
 import '../../../../shared/widgets/notice.dart';
+import '../../../../shared/format.dart';
 
 /// Checkout for one registration: the signed-in attendee's own.
 class CheckoutScreen extends ConsumerStatefulWidget {
@@ -27,6 +28,26 @@ class CheckoutScreen extends ConsumerStatefulWidget {
 class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   var _isSubmitting = false;
   var _leaving = false;
+
+  /// What the server will charge (line items and total), loaded once for a
+  /// paid event. Null while loading or if it couldn't be loaded.
+  Map<String, dynamic>? _pricing;
+  var _pricingRequested = false;
+
+  Future<void> _loadPricing(AppEvent event) async {
+    if (_pricingRequested || !_isPaidEvent(event)) return;
+    _pricingRequested = true;
+    final token = ref.read(authControllerProvider).session?.accessToken;
+    if (token == null) return;
+    try {
+      final pricing = await ref
+          .read(eventsRepositoryProvider)
+          .getPaymentPricing(event.eventId, token);
+      if (mounted) setState(() => _pricing = pricing);
+    } catch (_) {
+      // The table falls back to the event's listed price.
+    }
+  }
 
   /// True when a registration already holds a seat and owes payment
   /// ("Complete payment"): checkout reuses it and needs no form details.
@@ -91,6 +112,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
       );
     }
     _backToEventIfNoDetails(state);
+    _loadPricing(event);
 
     final theme = Theme.of(context);
     final isDark = theme.brightness == Brightness.dark;
@@ -166,9 +188,27 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   }
 
   Widget _buildFeeSummarySection(AppEvent event) {
-    // The public event fee. The amount charged is the backend's own, taken
-    // from the payment attempt in _confirmRegistration.
-    final fee = _isPaidEvent(event) ? event.ticketPrice! : 0.0;
+    // The server's line items and total when loaded; until then (or if they
+    // can't be loaded) the event's listed price. The amount charged is always
+    // the server's, taken from the payment attempt in _confirmRegistration.
+    final rows = <(String, String)>[];
+    String totalText;
+    final items = _pricing?['line_items'] as List<dynamic>?;
+    if (!_isPaidEvent(event)) {
+      rows.add(('Free event', formatMoney(0)));
+      totalText = 'Free';
+    } else if (items != null && items.isNotEmpty) {
+      for (final item in items.whereType<Map>()) {
+        final amount = double.tryParse(item['amount']?.toString() ?? '') ?? 0;
+        rows.add((item['label']?.toString() ?? '', formatMoney(amount)));
+      }
+      final total =
+          double.tryParse(_pricing?['final_amount']?.toString() ?? '') ?? 0;
+      totalText = formatMoney(total);
+    } else {
+      rows.add(('Registration fee', formatMoney(event.ticketPrice!)));
+      totalText = formatMoney(event.ticketPrice!);
+    }
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -189,49 +229,40 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           ),
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
-            child: SingleChildScrollView(
-              scrollDirection: Axis.horizontal,
-              child: SizedBox(
-                width: 460,
-                child: Table(
-                  columnWidths: const {
-                    0: FlexColumnWidth(2.2),
-                    1: FlexColumnWidth(1.6),
-                    2: FlexColumnWidth(1.4),
-                  },
-                  border: TableBorder(
-                    horizontalInside:
-                        BorderSide(color: context.palette.border, width: 1),
+            child: Table(
+              columnWidths: const {
+                0: FlexColumnWidth(3),
+                1: IntrinsicColumnWidth(),
+              },
+              border: TableBorder(
+                horizontalInside:
+                    BorderSide(color: context.palette.border, width: 1),
+              ),
+              defaultVerticalAlignment: TableCellVerticalAlignment.middle,
+              children: [
+                TableRow(
+                  decoration: BoxDecoration(
+                    color: context.palette.primary.withValues(alpha: 0.08),
                   ),
-                  defaultVerticalAlignment: TableCellVerticalAlignment.middle,
                   children: [
-                    TableRow(
-                      decoration: BoxDecoration(
-                        color: context.palette.primary.withValues(alpha: 0.08),
-                      ),
-                      children: [
-                        _feeTableHeaderCell('Item'),
-                        _feeTableHeaderCell('Details'),
-                        _feeTableHeaderCell('Amount'),
-                      ],
-                    ),
-                    TableRow(
-                      children: [
-                        _feeTableCell(
-                          _isPaidEvent(event) ? 'Registration Fee' : 'Free Event',
-                          bold: true,
-                        ),
-                        _feeTableCell(
-                          _isPaidEvent(event)
-                              ? 'Event fee'
-                              : 'Complimentary registration',
-                        ),
-                        _feeTableCell(_formatAmount(fee)),
-                      ],
-                    ),
+                    _feeTableHeaderCell('Item'),
+                    _feeTableHeaderCell('Amount'),
                   ],
                 ),
-              ),
+                for (final row in rows)
+                  TableRow(
+                    children: [
+                      _feeTableCell(row.$1),
+                      _feeTableCell(row.$2),
+                    ],
+                  ),
+                TableRow(
+                  children: [
+                    _feeTableCell('Total', bold: true),
+                    _feeTableCell(totalText, bold: true),
+                  ],
+                ),
+              ],
             ),
           ),
         ),
@@ -428,7 +459,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              "You'll receive a confirmation email. Your QR badge will appear in My Events.",
+              "Your QR code for entry will be on the event page and in My Events.",
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
@@ -449,13 +480,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     return !(event.isFree ?? true) &&
         (event.ticketPrice?.isFinite ?? false) &&
         (event.ticketPrice! > 0);
-  }
-
-  String _formatAmount(double amount) {
-    if (amount == amount.roundToDouble()) {
-      return '₹${amount.toInt()}';
-    }
-    return '₹${amount.toStringAsFixed(2)}';
   }
 
   Widget _buildEventHeader(AppEvent event, bool isDark) {

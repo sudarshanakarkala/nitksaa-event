@@ -86,30 +86,34 @@ void main() {
   }
 
   group('ISSUE-006: checkout screen', () {
-    testWidgets('Test E: a paid event shows one registration fee, with no '
-        'pass count and no multiplied total', (tester) async {
-      final backend = FakeRegistrationBackend(ticketPrice: '100.00');
+    testWidgets('Test E: a paid event shows the server\'s line items and '
+        'total, with no pass count', (tester) async {
+      final backend = FakeRegistrationBackend(
+        ticketPrice: '100.00',
+        finalAmount: '123.45',
+      );
       await openCheckout(tester, backend);
 
-      expect(find.text('Registration Fee'), findsOneWidget);
-      // The public fee is shown once: not again as a total, nor on the button.
-      expect(find.textContaining('₹100'), findsOneWidget);
+      expect(find.text('Registration fee'), findsOneWidget);
+      expect(find.text('₹100'), findsOneWidget);
+      expect(find.text('Convenience fee'), findsOneWidget);
+      expect(find.text('₹23.45'), findsOneWidget);
+      // The total is the server's amount, the one Razorpay is asked for.
+      expect(find.text('Total'), findsOneWidget);
+      expect(find.text('₹123.45'), findsOneWidget);
       for (final multiplied in ['₹200', '₹300', '₹400']) {
         expect(find.textContaining(multiplied), findsNothing);
       }
       expect(find.text('No of passes'), findsNothing);
       expect(find.textContaining(_passOrQuantityWording), findsNothing);
-      expect(find.text('Grand Total'), findsNothing);
-      expect(find.textContaining('Confirm & Pay'), findsNothing);
       expect(find.text('Proceed to Payment'), findsOneWidget);
     });
 
     testWidgets('a free event has no pass count either', (tester) async {
       await openCheckout(tester, FakeRegistrationBackend(isFree: true));
 
-      expect(find.text('Free Event'), findsOneWidget);
+      expect(find.text('Free event'), findsOneWidget);
       expect(find.textContaining(_passOrQuantityWording), findsNothing);
-      expect(find.text('Grand Total'), findsNothing);
       expect(find.text('Confirm Registration'), findsOneWidget);
     });
   });

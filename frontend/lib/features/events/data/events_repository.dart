@@ -320,6 +320,45 @@ class EventsRepository {
     ];
   }
 
+  /// The name and phone from the attendee's newest registration that has a
+  /// phone, to fill in the registration form. Null when there is none. Reads
+  /// only the registrations list, not their events.
+  Future<({String? fullname, String phone})?> getLastRegistrationDetails(
+    String accessToken,
+  ) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/my/registrations',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    final raw = response.data?['registrations'] as List<dynamic>? ?? [];
+    final withPhone = raw
+        .whereType<Map<String, dynamic>>()
+        .where((r) => (r['phone_snapshot']?.toString().trim() ?? '').isNotEmpty)
+        .toList()
+      ..sort((a, b) => (b['registered_at']?.toString() ?? '')
+          .compareTo(a['registered_at']?.toString() ?? ''));
+    if (withPhone.isEmpty) return null;
+    final newest = withPhone.first;
+    final name = newest['fullname_snapshot']?.toString().trim();
+    return (
+      fullname: (name == null || name.isEmpty) ? null : name,
+      phone: newest['phone_snapshot'].toString().trim(),
+    );
+  }
+
+  /// What the server will charge one person for the event: line items and
+  /// the final amount (GST and fees as set in the event's payment setup).
+  Future<Map<String, dynamic>> getPaymentPricing(
+    int eventId,
+    String accessToken,
+  ) async {
+    final response = await _dio.get<Map<String, dynamic>>(
+      '/api/v1/events/$eventId/payment-pricing',
+      options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+    );
+    return response.data ?? <String, dynamic>{};
+  }
+
   /// Cancels one of the attendee's own registrations. If it was paid for, the
   /// backend starts a full refund in the same call.
   ///
