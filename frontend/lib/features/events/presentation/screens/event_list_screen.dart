@@ -18,6 +18,7 @@ import '../providers/created_events_provider.dart';
 import '../providers/events_provider.dart';
 import '../providers/my_events_provider.dart';
 import '../widgets/event_card.dart';
+import '../widgets/event_list_controls.dart';
 import '../../domain/event.dart';
 import '../../domain/my_event_registration.dart';
 import '../../../../shared/format.dart';
@@ -27,6 +28,25 @@ import '../widgets/unregister_flow.dart';
 /// "Registered by me" filter. UI state only; shared with the phone filter
 /// sheet, which is a separate route.
 final _registeredOnlyProvider = StateProvider.autoDispose<bool>((ref) => false);
+
+/// The type pills (Admin → Events has its own set, with drafts and
+/// cancelled events). Upcoming is the default.
+enum _Show {
+  upcoming('Upcoming'),
+  open('Open'),
+  past('Past'),
+  all('All');
+
+  const _Show(this.label);
+  final String label;
+
+  bool matches(AppEvent e) => switch (this) {
+        _Show.upcoming => !eventEnded(e),
+        _Show.open => e.registrationStatus == 'open' && !eventEnded(e),
+        _Show.past => eventEnded(e),
+        _Show.all => true,
+      };
+}
 
 class EventListScreen extends ConsumerStatefulWidget {
   const EventListScreen({super.key});
@@ -57,6 +77,12 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
   String _view = 'cards';
   // Table view sort (column id, ascending): soonest first.
   (String, bool) _tableSort = ('date', true);
+
+  // Same controls as Admin → Events: type pills, the date line and the
+  // Date ↑/↓ order (soonest first by default).
+  _Show _show = _Show.upcoming;
+  DateTimeRange? _dates;
+  bool _soonestFirst = true;
   String? _appliedUri;
 
   @override
@@ -111,20 +137,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     return _buildMaterialLayout();
   }
 
-  /// Phones: the filters in a bottom sheet. Wider screens use the Filters
-  /// panel in ListPage, which slides over the cards.
-  void _showFilterBottomSheet() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      builder: (context) => ProviderScope(
-        child: Consumer(
-          builder: (context, ref, _) => _buildFilterPanel(ref),
-        ),
-      ),
-    );
-  }
-
   /// A rail section of on/off chips over "included" flags: [included] maps
   /// each option to whether its events are shown (all true = no filter).
   ///
@@ -165,242 +177,118 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     ];
   }
 
-  /// Active filters, for the rail badge (search is not counted).
-  int _activeFilterCount(EventsState s) => [
-        s.period == 'past',
-        s.dateRangeStart != null || s.dateRangeEnd != null,
-        s.timeline != null,
+  /// Active filters, for the rail badge (search and dates not counted).
+  int _activeFilterCount(EventsState s, bool registeredOnly) => [
+        _show != _Show.upcoming,
+        registeredOnly,
         !((s.filterModes['physical'] ?? true) && (s.filterModes['virtual'] ?? true)),
         !((s.filterRegistrationStatus['open'] ?? true) &&
             (s.filterRegistrationStatus['closed'] ?? true)),
         !((s.filterPrice['free'] ?? true) && (s.filterPrice['paid'] ?? true)),
       ].where((active) => active).length;
 
-  Widget _buildFilterPanel([WidgetRef? panelRef, bool inRail = false]) {
-    final rf = panelRef ?? ref;
-    final state = rf.watch(eventsProvider);
-    final hasActiveFilters = state.dateRangeStart != null ||
-      state.dateRangeEnd != null ||
-      !((state.filterModes['physical'] ?? true) && (state.filterModes['virtual'] ?? true)) ||
-      !((state.filterRegistrationStatus['open'] ?? true) && (state.filterRegistrationStatus['closed'] ?? true)) ||
-      !((state.filterPrice['free'] ?? true) && (state.filterPrice['paid'] ?? true)) ||
-      state.searchQuery.isNotEmpty ||
-      state.timeline != null;
-    final isInDrawer = MediaQuery.of(context).size.width >= 900;
+  void _clearFilters() {
+    ref.read(_registeredOnlyProvider.notifier).state = false;
+    ref.read(eventsProvider.notifier).clearFilters();
+    _searchController.clear();
+    setState(() => _show = _Show.upcoming);
+  }
 
+  /// The Filters rail (a bottom sheet on phones): every filter, the pills
+  /// included. Reads rather than watches: the page rebuilds the rail, and
+  /// the sheet rebuilds itself on each tap.
+  Widget _filterRail() {
+    final state = ref.read(eventsProvider);
+    final notifier = ref.read(eventsProvider.notifier);
+    final signedIn = ref.read(authControllerProvider).isAuthenticated;
     return SingleChildScrollView(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          // Header (with clear & close actions). In the rail, the rail
-          // header has the title and "Clear all".
-          if (!inRail)
-          Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              const Text(
-                'Filters',
-                style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 20, fontWeight: FontWeight.w600),
-              ),
-              Row(
-                children: [
-                  if (hasActiveFilters)
-                    TextButton(
-                      onPressed: () {
-                        rf.read(eventsProvider.notifier).clearFilters();
-                        rf.read(eventsProvider.notifier).setPeriod('upcoming');
-                        rf.read(_registeredOnlyProvider.notifier).state = false;
-                        _searchController.clear();
-                        if (isInDrawer) {
-                          // keep drawer open so user can see cleared state
-                        } else {
-                          Navigator.pop(context);
-                        }
-                      },
-                      style: TextButton.styleFrom(
-                        foregroundColor: context.palette.textSecondary,
-                      ),
-                      child: const Text('Clear all'),
-                    ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () {
-                      // Only close the panel; do not modify filters.
-                      if (isInDrawer) {
-                        Navigator.of(context).maybePop();
-                      } else {
-                        Navigator.pop(context);
-                      }
-                    },
-                  ),
-                ],
-              ),
-            ],
-          ),
-          SizedBox(height: inRail ? 8 : 20),
-
-          // When: upcoming or past (single choice; was the page tabs).
-          const FilterLabel('When'),
+          const FilterLabel('Show'),
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: [
-            for (final period in const ['upcoming', 'past'])
+            for (final s in _Show.values)
               FilterChipToggle(
-                label: period == 'upcoming' ? 'Upcoming' : 'Past',
-                selected: state.period == period,
-                onChanged: (_) => rf.read(eventsProvider.notifier).setPeriod(period),
+                label: s.label,
+                selected: s == _show,
+                onChanged: (_) => setState(() => _show = s),
               ),
           ]),
           const SizedBox(height: 20),
-
           // Your registrations (website "Author: My Stories"), signed in only.
-          if (rf.watch(authControllerProvider).isAuthenticated) ...[
-            const FilterLabel('My Registrations'),
+          if (signedIn) ...[
+            const FilterLabel('My registrations'),
             const SizedBox(height: 8),
             FilterChipToggle(
               label: 'Registered by me',
-              selected: rf.watch(_registeredOnlyProvider),
-              onChanged: (on) => rf.read(_registeredOnlyProvider.notifier).state = on,
+              selected: ref.read(_registeredOnlyProvider),
+              onChanged: (on) => ref.read(_registeredOnlyProvider.notifier).state = on,
             ),
             const SizedBox(height: 20),
           ],
-
-          // Date Range Section
-          const FilterLabel('Date Range'),
-          const SizedBox(height: 12),
-          Row(
-            children: [
-              Expanded(
-                child: _buildDatePickerButton(
-                  label: state.dateRangeStart == null
-                      ? 'From Date'
-                      : '${state.dateRangeStart!.day}/${state.dateRangeStart!.month}/${state.dateRangeStart!.year}',
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: state.dateRangeStart ?? DateTime.now(),
-                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (picked != null) {
-                      rf.read(eventsProvider.notifier).setDateRangeStart(picked);
-                    }
-                  },
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: _buildDatePickerButton(
-                  label: state.dateRangeEnd == null
-                      ? 'To Date'
-                      : '${state.dateRangeEnd!.day}/${state.dateRangeEnd!.month}/${state.dateRangeEnd!.year}',
-                  onTap: () async {
-                    final picked = await showDatePicker(
-                      context: context,
-                      initialDate: state.dateRangeEnd ?? DateTime.now(),
-                      firstDate: DateTime.now().subtract(const Duration(days: 365)),
-                      lastDate: DateTime.now().add(const Duration(days: 365)),
-                    );
-                    if (picked != null) {
-                      rf.read(eventsProvider.notifier).setDateRangeEnd(picked);
-                    }
-                  },
-                ),
-              ),
-              if (state.dateRangeStart != null || state.dateRangeEnd != null)
-                Padding(
-                  padding: const EdgeInsets.only(left: 8.0),
-                  child: IconButton(
-                    icon: const Icon(Icons.close, size: 20),
-                    onPressed: () {
-                      rf.read(eventsProvider.notifier).setDateRangeStart(null);
-                      rf.read(eventsProvider.notifier).setDateRangeEnd(null);
-                    },
-                  ),
-                ),
-            ],
-          ),
-          const SizedBox(height: 20),
-
-          // Timeline Section (single-select dropdown)
-          const FilterLabel('Timeline'),
-          const SizedBox(height: 8),
-          _buildTimelineDropdown(rf, state, isInDrawer),
-          const SizedBox(height: 20),
-
-          // Event mode, registration status and price work like the website's
-          // chips: none lit = all; lit = only those. The provider keeps
-          // "included" flags (all included = no filter); _includeChips maps
-          // between the two.
+          // Mode, registration and price work like the website's chips:
+          // none lit = all; lit = only those. The provider keeps "included"
+          // flags (all included = no filter); _includeChips maps between the
+          // two.
           ..._includeChips(
-            'Event Mode',
+            'Event mode',
             const {'physical': 'Physical', 'virtual': 'Virtual'},
             state.filterModes,
-            rf.read(eventsProvider.notifier).toggleFilterMode,
+            notifier.toggleFilterMode,
           ),
           ..._includeChips(
-            'Registration Status',
+            'Registration',
             const {'open': 'Open', 'closed': 'Closed'},
             state.filterRegistrationStatus,
-            rf.read(eventsProvider.notifier).toggleFilterRegistrationStatus,
+            notifier.toggleFilterRegistrationStatus,
           ),
           ..._includeChips(
             'Price',
             const {'free': 'Free', 'paid': 'Paid'},
             state.filterPrice,
-            rf.read(eventsProvider.notifier).toggleFilterPrice,
+            notifier.toggleFilterPrice,
           ),
-          const SizedBox(height: 24),
-
-          // Drawer-only clear button removed — top 'Clear All' handles clearing.
         ],
       ),
     );
   }
-
-  Widget _buildDatePickerButton({required String label, required VoidCallback onTap}) {
-    return OutlinedButton.icon(
-      onPressed: onTap,
-      icon: const Icon(Icons.calendar_today, size: 16),
-      label: Text(label, style: const TextStyle(fontSize: 12)),
-      style: OutlinedButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      ),
-    );
-  }
-
-  
 
   // ==========================================
   // LAYOUT
   // ==========================================
   Widget _buildMaterialLayout() {
     final state = ref.watch(eventsProvider);
-    final allEvents = ref.watch(filteredEventsProvider);
-    // "Registered by me" (website "My Stories" filter): the public list
-    // narrowed to events with an active registration of yours.
+    // Search and the Filters rail (mode, registration, price).
+    final railed = ref.watch(filteredEventsProvider);
+    // "Registered by me" (website "My Stories" filter): narrowed to events
+    // with an active registration of yours.
     final registrations = _registrationsByEvent();
     final registeredOnly = ref.watch(_registeredOnlyProvider);
     // Events you created get the "mine" tint.
     final created =
         ref.watch(createdEventIdsProvider).valueOrNull ?? const <int>{};
-    final filteredEvents = registeredOnly
-        ? allEvents.where((e) => registrations[e.eventId]?.isActive ?? false).toList()
-        : allEvents;
     final signedIn = ref.watch(authControllerProvider).isAuthenticated;
     final access = ref.watch(authControllerProvider).session?.access ?? AdminAccess.none;
     final drafts = access.isAnyAdmin ? (ref.watch(myDraftCountProvider).valueOrNull ?? 0) : 0;
-    // Quick "when" pills: shortcuts to the same filters as the panel.
-    final noDates = state.dateRangeStart == null && state.dateRangeEnd == null;
-    void when({required String period, String? timeline}) {
-      final n = ref.read(eventsProvider.notifier);
-      n.setDateRangeStart(null);
-      n.setDateRangeEnd(null);
-      n.setTimeline(timeline);
-      n.setPeriod(period);
-    }
+    final compact = MediaQuery.sizeOf(context).width < 600;
+    final table = _view == 'table' && !compact;
 
-    // Toolbar (header, search, Filters, quick pills), then the card grid.
+    // Everything but the type pills: their counts follow the rest.
+    final narrowed = [
+      for (final e in railed)
+        if ((!registeredOnly || (registrations[e.eventId]?.isActive ?? false)) &&
+            FilterDateRange.contains(_dates, e.startDatetime))
+          e,
+    ];
+    final filteredEvents = orderEvents(
+      narrowed.where(_show.matches),
+      soonestFirst: _soonestFirst,
+    );
+
+    // The same rows as Admin → Events: search, Cards/Table, Filters; the
+    // pills; the date line; the count and Create event.
     return Scaffold(
       key: _scaffoldKey,
       body: ListPage(
@@ -411,7 +299,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           hint: 'Search events…',
         ),
         // Cards / Table, like the website; phones get cards only.
-        toggle: MediaQuery.sizeOf(context).width < 600
+        toggle: compact
             ? null
             : SegmentToggle<String>(
                 options: const [
@@ -441,26 +329,13 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ),
         ],
         quickFilters: [
-          QuickFilterPill(
-            label: 'Upcoming',
-            active: state.period == 'upcoming' && state.timeline == null && noDates,
-            onTap: () => when(period: 'upcoming'),
-          ),
-          QuickFilterPill(
-            label: 'This week',
-            active: state.period == 'upcoming' && state.timeline == 'this_week' && noDates,
-            onTap: () => when(period: 'upcoming', timeline: 'this_week'),
-          ),
-          QuickFilterPill(
-            label: 'This month',
-            active: state.period == 'upcoming' && state.timeline == 'this_month' && noDates,
-            onTap: () => when(period: 'upcoming', timeline: 'this_month'),
-          ),
-          QuickFilterPill(
-            label: 'Past',
-            active: state.period == 'past' && state.timeline == null && noDates,
-            onTap: () => when(period: 'past'),
-          ),
+          for (final s in _Show.values)
+            QuickFilterPill(
+              label: s.label,
+              count: state.isLoading ? null : narrowed.where(s.matches).length,
+              active: s == _show,
+              onTap: () => setState(() => _show = s),
+            ),
           if (signedIn)
             QuickFilterPill(
               label: 'Registered by me',
@@ -469,15 +344,26 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   ref.read(_registeredOnlyProvider.notifier).state = !registeredOnly,
             ),
         ],
-        filters: (context) => _buildFilterPanel(ref, true),
-        onOpenFilters: _showFilterBottomSheet,
-        activeFilterCount: _activeFilterCount(state) + (registeredOnly ? 1 : 0),
-        onClearFilters: () {
-          ref.read(_registeredOnlyProvider.notifier).state = false;
-          ref.read(eventsProvider.notifier).clearFilters();
-          ref.read(eventsProvider.notifier).setPeriod('upcoming');
-          _searchController.clear();
-        },
+        belowPills: state.events.isEmpty
+            ? null
+            : EventDateLine(
+                events: state.events,
+                value: _dates,
+                onChanged: (v) => setState(() => _dates = v),
+                sortable: !table,
+                soonestFirst: _soonestFirst,
+                dateOrder: true,
+                onDateOrder: () {},
+                onFlip: () => setState(() => _soonestFirst = !_soonestFirst),
+              ),
+        filters: (context) => _filterRail(),
+        onOpenFilters: () => showFilterSheet(
+          context,
+          builder: (_) => _filterRail(),
+          onClear: _clearFilters,
+        ),
+        activeFilterCount: _activeFilterCount(state, registeredOnly),
+        onClearFilters: _clearFilters,
         body: LayoutBuilder(
           builder: (context, constraints) {
             final pad = ListPage.contentPadding(context, constraints.maxWidth);
@@ -495,12 +381,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ),
               )
             : filteredEvents.isEmpty
-            ? const StateMessage(
+            ? StateMessage(
                 icon: Icons.event_note_outlined,
                 title: 'No events found',
-                body: 'Check back later or try other filters.',
+                body: _dates != null || _show != _Show.upcoming || registeredOnly
+                    ? 'Try other dates or filters.'
+                    : 'Check back later or try other filters.',
               )
-            : _view == 'table' && MediaQuery.sizeOf(context).width >= 600
+            : table
             ? _eventTable(filteredEvents, registrations)
             // Website grid: columns of at least 300px, every card the same
             // height (no intrinsic sizing).
@@ -615,57 +503,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           ),
         );
       },
-    );
-  }
-
-  // ==========================================
-  // TIMELINE DROPDOWN HELPERS
-  // ==========================================
-  static const Map<String, String> _timelineOptions = {
-    'this_week': 'This week',
-    'next_week': 'Next week',
-    'this_month': 'This month',
-    'next_month': 'Next month',
-    'next_3_months': 'Next 3 months',
-  };
-
-  Widget _buildTimelineDropdown(WidgetRef rf, EventsState state, bool isInDrawer) {
-    return Container(
-      width: double.infinity,
-      padding: const EdgeInsets.symmetric(horizontal: 12),
-      decoration: BoxDecoration(
-        border: Border.all(
-          color: Theme.of(context).colorScheme.outlineVariant,
-        ),
-        borderRadius: BorderRadius.circular(8),
-      ),
-      child: DropdownButtonHideUnderline(
-        child: DropdownButton<String?>(
-          value: state.timeline,
-          isExpanded: true,
-          hint: const Text('Select timeline'),
-          items: [
-            DropdownMenuItem<String?>(
-              value: null,
-              child: Text(
-                'None',
-                style: TextStyle(
-                  color: Theme.of(context).colorScheme.onSurfaceVariant,
-                ),
-              ),
-            ),
-            ..._timelineOptions.entries.map((entry) {
-              return DropdownMenuItem<String?>(
-                value: entry.key,
-                child: Text(entry.value),
-              );
-            }),
-          ],
-          onChanged: (value) {
-            rf.read(eventsProvider.notifier).setTimeline(value);
-          },
-        ),
-      ),
     );
   }
 

@@ -48,6 +48,20 @@ class EventsRepository {
     return response.data ?? <String, dynamic>{};
   }
 
+  /// The Events page: every published event, upcoming and past, a page of
+  /// 100 at a time.
+  Future<List<AppEvent>> getAllPublicEvents() async {
+    final events = <AppEvent>[];
+    for (var page = 1; page <= 50; page++) {
+      final data = await getPublicEvents(page: page, perPage: 100, period: 'all');
+      final rows = data['events'] as List<dynamic>? ?? const [];
+      events.addAll(rows.whereType<Map<String, dynamic>>().map(AppEvent.fromJson));
+      final total = (data['total'] as num?)?.toInt() ?? events.length;
+      if (rows.isEmpty || events.length >= total) break;
+    }
+    return events;
+  }
+
   Future<Map<String, dynamic>> getAdminEvents({
     required int page,
     required int perPage,
