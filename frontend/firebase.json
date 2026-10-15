@@ -36,7 +36,7 @@
           ]
         },
         {
-          "source": "**/*.@(html|js|mjs|json|wasm)",
+          "source": "**/*.@(html|js|mjs|json|wasm|md)",
           "headers": [
             {
               "key": "Cache-Control",
@@ -70,7 +70,7 @@
           ]
         },
         {
-          "source": "**/*.@(html|js|mjs|json|wasm)",
+          "source": "**/*.@(html|js|mjs|json|wasm|md)",
           "headers": [
             {
               "key": "Cache-Control",

@@ -6,7 +6,7 @@ import '../../shared/widgets/site_page.dart';
 import '../../theme/app_palette.dart';
 
 /// The policy pages. Texts live in assets/policies/ (copied from the
-/// association website, plus the interim refund policy).
+/// association website, plus the events app's refund policy).
 enum Policy {
   privacy(
     title: 'Privacy & Cookie Policy',
