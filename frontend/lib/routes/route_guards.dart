@@ -51,6 +51,14 @@ abstract class RouteGuards {
     if (auth.isAuthenticated) {
       // Just signed in: back to the page that asked for it, else Events.
       if (isLogin) return ReturnAfterSignIn.take() ?? AppRoutes.home;
+      // Signed in on a sign-in page that was pushed over another page (an
+      // event card pushes its event, which the guard turned into sign-in):
+      // the router then re-checks the page underneath, not sign-in, so the
+      // page that asked is sent from here.
+      if (ReturnAfterSignIn.isPending) {
+        final back = ReturnAfterSignIn.take();
+        if (back != null && back != uri.toString()) return back;
+      }
       return null;
     }
 
