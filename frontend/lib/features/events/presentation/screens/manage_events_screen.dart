@@ -672,6 +672,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   
   // Capacity & Pricing
   late final TextEditingController _capacity;
+
+  /// Guests one registrant may bring (0 = none, up to 4).
+  int _maxGuests = 0;
   bool _isFree = true;
   late final TextEditingController _ticketPrice;
   
@@ -749,6 +752,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _bannerUrl = TextEditingController(text: event?.bannerUrl ?? '');
     
     _capacity = TextEditingController(text: event?.capacity?.toString() ?? '');
+    _maxGuests = (event?.maxGuests ?? 0).clamp(0, 4);
     _isFree = event?.isFree ?? true;
     _ticketPrice = TextEditingController(text: event?.ticketPrice?.toString() ?? '');
     
@@ -1172,6 +1176,23 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           keyboardType: TextInputType.number,
           inputFormatters: [FilteringTextInputFormatter.digitsOnly],
           validator: validateCapacity,
+        ),
+        const SizedBox(height: 12),
+        DropdownButtonFormField<int>(
+          key: const ValueKey('event-max-guests'),
+          initialValue: _maxGuests,
+          decoration: const InputDecoration(
+            labelText: 'Guests per registration',
+            helperText: 'How many guests each person may bring. Guests take seats too.',
+          ),
+          items: [
+            for (var n = 0; n <= 4; n++)
+              DropdownMenuItem(
+                value: n,
+                child: Text(n == 0 ? 'None' : '$n'),
+              ),
+          ],
+          onChanged: (value) => setState(() => _maxGuests = value ?? 0),
         ),
         
         const SizedBox(height: 28),
@@ -3010,6 +3031,7 @@ void _showFeeDialog(int? editIndex) {
         'virtual_url': _isVirtual ? _virtualUrl.text.trim() : null,
         'is_full_day': _isFullDay,
         'capacity': parseCapacity(_capacity.text),
+        'max_guests': _maxGuests,
         'is_free': _isFree,
         // The price is the total of the fees (what checkout charges).
         'ticket_price': _isFree ? null : _feesTotal,

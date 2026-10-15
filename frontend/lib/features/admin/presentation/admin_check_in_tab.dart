@@ -308,7 +308,7 @@ class _AdminCheckInTabState extends ConsumerState<AdminCheckInTab> {
 
   bool _matches(AdminRegistration p, String q) {
     if (q.isEmpty) return true;
-    return [p.displayName, p.email, p.phone, p.registrationNumber]
+    return [p.displayName, p.email, p.phone, p.registrationNumber, p.guestOf]
         .whereType<String>()
         .any((v) => v.toLowerCase().contains(q));
   }
@@ -558,6 +558,11 @@ class _PersonRow extends StatelessWidget {
                   person.displayName,
                   style: AppTextStyles.titleMedium.copyWith(color: p.textPrimary),
                 ),
+                if (person.guestOf != null)
+                  Text(
+                    'Guest of ${person.guestOf}',
+                    style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+                  ),
                 if (details.isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(

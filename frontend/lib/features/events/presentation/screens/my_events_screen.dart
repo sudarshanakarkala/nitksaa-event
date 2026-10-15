@@ -253,7 +253,8 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       mine: created.contains(registration.eventId),
       footerNote: when == null
           ? null
-          : '${active ? 'Registered' : 'Cancelled'} ${formatShortDate(when)}',
+          : '${active ? 'Registered' : 'Cancelled'} ${formatShortDate(when)}'
+              '${active && registration.activeGuests.isNotEmpty ? ' · +${registration.activeGuests.length} ${registration.activeGuests.length == 1 ? 'guest' : 'guests'}' : ''}',
       onView: () => context.push('/events/${registration.eventId}'),
       onUnregister:
           registration.canCancel ? () => confirmAndUnregister(

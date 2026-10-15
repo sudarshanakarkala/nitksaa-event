@@ -105,14 +105,14 @@ class _CheckInScannerScreenState extends ConsumerState<CheckInScannerScreen> {
       final check = await api.verify(eventId: widget.eventId, qrToken: pass.token, accessToken: token);
       if (!mounted) return;
       if (check.alreadyCheckedIn) {
-        _show(_Result(_Tone.warning, 'Already checked in', name: check.fullName));
+        _show(_Result(_Tone.warning, 'Already checked in', name: check.displayName));
       } else if (check.message == 'ready_to_checkin') {
         final done = await api.checkIn(eventId: widget.eventId, qrToken: pass.token, accessToken: token);
         if (!mounted) return;
         _checkedIn++;
-        _show(_Result(_Tone.success, 'Checked in', name: check.fullName, undo: done));
+        _show(_Result(_Tone.success, 'Checked in', name: check.displayName, undo: done));
       } else if (check.message == 'registration_not_eligible') {
-        _show(_Result(_Tone.error, 'Not registered', name: check.fullName));
+        _show(_Result(_Tone.error, 'Not registered', name: check.displayName));
       } else {
         _show(const _Result(_Tone.error, 'Not a pass for this event'));
       }

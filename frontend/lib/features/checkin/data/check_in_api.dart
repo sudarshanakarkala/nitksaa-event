@@ -11,6 +11,7 @@ class EntryPassCheck {
     required this.message,
     this.fullName,
     this.registrationStatus,
+    this.guestOf,
   });
 
   factory EntryPassCheck.fromJson(Map<String, dynamic> json) => EntryPassCheck(
@@ -19,6 +20,7 @@ class EntryPassCheck {
         message: json['message']?.toString() ?? '',
         fullName: json['full_name']?.toString(),
         registrationStatus: json['registration_status']?.toString(),
+        guestOf: json['guest_of']?.toString(),
       );
 
   final bool valid;
@@ -29,6 +31,15 @@ class EntryPassCheck {
   final String message;
   final String? fullName;
   final String? registrationStatus;
+
+  /// The registrant's name, when this pass is a guest's.
+  final String? guestOf;
+
+  /// The name to show at the door: "Asha Warrier, guest of Padmanand Warrier".
+  String? get displayName {
+    if (fullName == null) return null;
+    return guestOf == null ? fullName : '$fullName, guest of $guestOf';
+  }
 }
 
 /// One check-in just made: what Undo needs.
