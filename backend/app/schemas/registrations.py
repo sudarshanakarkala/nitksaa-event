@@ -18,6 +18,22 @@ class RegisterRequest(BaseModel):
     attendee_note: Optional[str] = Field(None, max_length=500)
     fullname: Optional[str] = Field(None, max_length=120)
     phone: Optional[str] = Field(None, max_length=20)
+    # Up to the event's max_guests (at most 4). Each needs a name; nothing else.
+    guests: List["GuestIn"] = Field(default_factory=list, max_length=4)
+
+
+class GuestIn(BaseModel):
+    name: str = Field(..., max_length=120)
+
+
+class GuestOut(BaseModel):
+    """A guest in the leader's group. qr_token only while registered."""
+
+    registration_id: int
+    registration_number: Optional[str] = None
+    name: Optional[str] = None
+    status: str
+    qr_token: Optional[str] = None
 
 
 class AlumniProfileResponse(BaseModel):
@@ -92,6 +108,8 @@ class RegistrationResponse(BaseModel):
     updated_at: Optional[datetime] = None
     latest_order_id: Optional[str] = None
     qr_token: Optional[str] = None
+    # The leader's guests (any status), oldest first. Empty for someone alone.
+    guests: List[GuestOut] = Field(default_factory=list)
 
     model_config = {"from_attributes": True}
 
@@ -129,6 +147,7 @@ class AdminAttendeeItem(BaseModel):
     registered_at: datetime
     status: str
     confirmation_email_status: Optional[str] = None
+    guest_of: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -150,6 +169,7 @@ class AdminRegistrationItem(BaseModel):
     status: str
     registered_at: datetime
     cancelled_at: Optional[datetime] = None
+    guest_of: Optional[str] = None
 
     model_config = {"from_attributes": True}
 
@@ -159,3 +179,6 @@ class AdminRegistrationListResponse(BaseModel):
     total: int
     page: int
     per_page: int
+
+
+RegisterRequest.model_rebuild()

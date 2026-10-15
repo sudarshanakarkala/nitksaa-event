@@ -20,6 +20,8 @@ class EventCreate(BaseModel):
     # Every event has a capacity; there is no "unlimited" (decision, 11 Oct 2026).
     capacity: int = Field(..., gt=0)
     show_attendee_list: bool = False
+    # Guests a registrant may bring (0 = none).
+    max_guests: int = Field(default=0, ge=0, le=4)
     registration_opens_at: Optional[datetime] = None
     registration_closes_at: Optional[datetime] = None
     is_full_day: bool = False

@@ -171,7 +171,7 @@ async def export_attendees(
     writer.writerow([
         "registration_number", "fullname_snapshot", "email_snapshot",
         "batch_year_snapshot", "branch_snapshot", "phone_snapshot",
-        "registered_at", "status",
+        "registered_at", "status", "guest_of",
     ])
     for row in rows:
         writer.writerow([
@@ -183,6 +183,7 @@ async def export_attendees(
             row["phone_snapshot"] or "",
             row["registered_at"].isoformat() if row["registered_at"] else "",
             row["status"] or "",
+            row["guest_of"] or "",
         ])
 
     content = output.getvalue().encode("utf-8-sig")  # UTF-8 BOM for Excel

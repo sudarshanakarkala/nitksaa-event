@@ -1,4 +1,4 @@
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 import asyncpg
 from fastapi import HTTPException
@@ -27,6 +27,7 @@ class CheckInService:
             raise HTTPException(status_code=404, detail="event_not_found")
 
         registration = await self.reg_repo.get_by_qrtoken(qr_token)
+        guest_of = await self._guest_of(registration)
         if not registration:
             return QRVerifyResponse(
                 valid=False,
@@ -45,6 +46,7 @@ class CheckInService:
                 ref_id=registration["ref_id"],
                 registration_status=registration["status"],
                 already_checked_in=False,
+                guest_of=guest_of,
                 message="token_belongs_to_different_event",
             )
 
@@ -58,6 +60,7 @@ class CheckInService:
                 ref_id=registration["ref_id"],
                 registration_status=registration["status"],
                 already_checked_in=False,
+                guest_of=guest_of,
                 message="registration_not_eligible",
             )
 
@@ -72,7 +75,15 @@ class CheckInService:
             registration_status=registration["status"],
             already_checked_in=existing is not None,
             message="already_checked_in" if existing else "ready_to_checkin",
+            guest_of=guest_of,
         )
+
+    async def _guest_of(self, registration) -> Optional[str]:
+        """The leader's name, for a guest's row; None for a leader or someone alone."""
+        if not registration or registration["group_head_id"] == registration["registration_id"]:
+            return None
+        head = await self.reg_repo.get_by_id(registration["group_head_id"])
+        return head["fullname_snapshot"] if head else None
 
     async def check_in(
         self,

@@ -243,6 +243,10 @@ class NormalizedRefundResult:
     speed_processed: Optional[str] = None
     # The provider's payment id the refund belongs to (refund webhooks).
     provider_payment_id: str = ""
+    # Our refund number (RFND-…) as sent in the refund's notes, when the
+    # provider returns it. Tells our refunds apart when one payment has
+    # several (one per cancelled guest).
+    refund_number: Optional[str] = None
 
 
 class GatewayError(Exception):
@@ -366,8 +370,10 @@ class PaymentGateway(ABC):
         currency: str,
         idempotency_key: str,
         payment_mode: Optional[str] = None,
+        refund_number: Optional[str] = None,
     ) -> "NormalizedRefundResult":
-        """Create a full refund against a captured payment. Adapters that
+        """Create a refund (full or partial) against a captured payment.
+        `refund_number` is our RFND-… id, stored with the provider's refund. Adapters that
         declare GatewayCapability.REFUND override this. `idempotency_key` is
         a stable per-logical-refund string the adapter should forward to the
         provider's own idempotency mechanism where one exists (an extra

@@ -18,7 +18,7 @@ _PUBLIC_COLUMNS = """
     e.status, e.start_datetime, e.end_datetime, e.timezone,
     e.location_text, e.location_maps_url, e.is_virtual,
     e.thumbnail_url, e.banner_url, e.capacity,
-    e.show_attendee_list,
+    e.show_attendee_list, e.max_guests,
     e.registration_opens_at, e.registration_closes_at,
     e.is_full_day, e.is_free, e.ticket_price,
     e.published_at,
@@ -56,7 +56,7 @@ class EventsRepository:
                 capacity, show_attendee_list,
                 registration_opens_at, registration_closes_at,
                 is_full_day, is_free, ticket_price,
-                created_by_firebase_uid, status
+                created_by_firebase_uid, status, max_guests
             ) VALUES (
                 $1, $2, $3, $4,
                 $5, $6, $7,
@@ -66,7 +66,7 @@ class EventsRepository:
                 $14, $15,
                 $16, $17,
                 $18, $19, $20,
-                $21, 'draft'
+                $21, 'draft', $22
             ) RETURNING event_id
             """,
             slug,
@@ -90,6 +90,7 @@ class EventsRepository:
             data.is_free,
             data.ticket_price,
             firebase_uid,
+            data.max_guests,
         )
         return await self.get_event(event_id)
 

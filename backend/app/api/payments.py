@@ -7,7 +7,7 @@ token) and instead relies on HMAC signature verification.
 """
 from typing import Any, Dict
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Header, HTTPException, Query, Request
 
 from app.config import RAZORPAY_MODES, get_settings
 from app.gateways import registry as gateway_registry
@@ -35,9 +35,10 @@ router = APIRouter(tags=["payments"])
 )
 async def get_payment_pricing(
     event_id: int,
+    people: int = Query(1, ge=1, le=5),
     user: Dict[str, Any] = Depends(get_current_user),
 ) -> PricingBreakdownResponse:
-    return await payment_service.get_pricing(event_id)
+    return await payment_service.get_pricing(event_id, people)
 
 
 @router.post(

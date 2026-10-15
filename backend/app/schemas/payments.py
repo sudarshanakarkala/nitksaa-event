@@ -26,6 +26,7 @@ class PricingBreakdownResponse(BaseModel):
     convenience_fee: Decimal
     final_amount: Decimal
     line_items: List[Dict[str, Any]]
+    people: int = 1
 
 
 class CreatePaymentOrderRequest(BaseModel):

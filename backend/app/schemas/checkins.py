@@ -58,3 +58,5 @@ class QRVerifyResponse(BaseModel):
     registration_status: Optional[str] = None
     already_checked_in: bool
     message: str
+    # The leader's name when this pass is a guest's.
+    guest_of: Optional[str] = None

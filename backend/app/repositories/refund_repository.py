@@ -1,10 +1,12 @@
 """payment_refunds repository (migration 022).
 
-The "one logical refund per order" guarantee is enforced by two database
-indexes, not by the checks here:
-  * uq_payment_refunds_idempotency      (idempotency_key)
-  * uq_payment_refunds_active_per_order  (payment_order_id) WHERE status in
-                                         ('pending','processing','processed','delayed')
+An order can have several refunds since guests (migration 031): one per
+cancelled guest, one for the rest of the group. Database guards:
+  * uq_payment_refunds_idempotency                (idempotency_key)
+  * uq_payment_refunds_active_per_registration    (registration_id) WHERE status in
+                                                  ('pending','processing','processed','delayed')
+refund_service checks, with the order locked, that refunds never add up to
+more than was paid.
 Application-level lookups are a fast path; the UniqueViolationError handler in
 refund_service is the real serialisation point (same pattern as
 payment_orders / payment_attempts).
@@ -65,6 +67,26 @@ class RefundRepository:
             """,
             payment_order_id,
         )
+
+    async def get_active_for_registration(self, registration_id: int) -> Optional[asyncpg.Record]:
+        return await self.conn.fetchrow(
+            """
+            SELECT * FROM payment_refunds
+            WHERE registration_id = $1 AND status IN ('pending','processing','processed','delayed')
+            ORDER BY requested_at DESC LIMIT 1
+            """,
+            registration_id,
+        )
+
+    async def total_active_for_order(self, payment_order_id: int) -> Decimal:
+        """What the order's live and finished refunds add up to."""
+        return Decimal(await self.conn.fetchval(
+            """
+            SELECT COALESCE(SUM(amount), 0) FROM payment_refunds
+            WHERE payment_order_id = $1 AND status IN ('pending','processing','processed','delayed')
+            """,
+            payment_order_id,
+        ))
 
     async def get_by_public_number(self, public_refund_number: str) -> Optional[asyncpg.Record]:
         return await self.conn.fetchrow(

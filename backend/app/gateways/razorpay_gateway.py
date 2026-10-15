@@ -530,6 +530,7 @@ class RazorpayGateway(PaymentGateway):
         currency: str,
         idempotency_key: str,
         payment_mode: Optional[str] = None,
+        refund_number: Optional[str] = None,
     ) -> NormalizedRefundResult:
         from app.config import get_settings
 
@@ -547,7 +548,8 @@ class RazorpayGateway(PaymentGateway):
             "payments.refund", client.payment.refund,
             provider_payment_id,
             data={"amount": int(amount_minor), "speed": "normal",
-                  "notes": {"reason": "attendee_cancellation"}},
+                  "notes": {"reason": "attendee_cancellation",
+                            **({"refund_number": refund_number} if refund_number else {})}},
             headers={"Idempotency-Key": idempotency_key},
             timeout=settings.razorpay_http_timeout_seconds,
         )
@@ -600,6 +602,8 @@ class RazorpayGateway(PaymentGateway):
             if isinstance(acquirer := data.get("acquirer_data"), dict) else None,
             speed_processed=data.get("speed_processed") or None,
             provider_payment_id=data.get("payment_id") or "",
+            refund_number=(data.get("notes") or {}).get("refund_number")
+            if isinstance(data.get("notes"), dict) else None,
         )
 
 

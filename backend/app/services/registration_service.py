@@ -16,6 +16,7 @@ from app.repositories.payment_repository import PaymentRepository
 from app.repositories.registration_repository import RegistrationRepository
 from app.schemas.registrations import (
     EventSummary,
+    GuestOut,
     MyRegistrationsListResponse,
     RegisterRequest,
     RegistrationEligibilityResponse,
@@ -35,7 +36,20 @@ def _resolve_join_url(row: Dict[str, Any]) -> Optional[str]:
     return None
 
 
-def _format_registration(row: Dict[str, Any]) -> RegistrationResponse:
+def _format_guests(guests) -> list:
+    return [
+        GuestOut(
+            registration_id=g["registration_id"],
+            registration_number=g["registration_number"],
+            name=g["name"],
+            status=g["status"],
+            qr_token=g["qr_token"] if g["status"] == "registered" else None,
+        )
+        for g in guests
+    ]
+
+
+def _format_registration(row: Dict[str, Any], guests=()) -> RegistrationResponse:
     join_url = _resolve_join_url(row)
     event = EventSummary(
         event_id=row["event_id"],
@@ -71,6 +85,7 @@ def _format_registration(row: Dict[str, Any]) -> RegistrationResponse:
         latest_order_id=row.get("latest_order_id"),
         # The entry pass: only for a confirmed registration (not a held seat).
         qr_token=row.get("qr_token") if row.get("status") == "registered" else None,
+        guests=_format_guests(guests),
     )
 
 
@@ -134,6 +149,10 @@ async def register_for_event(
 ) -> RegistrationResponse:
     firebase_uid = user["firebase_uid"]
     attendee = await _attendee_details(user, body)
+    guest_names = [_clean(g.name) for g in body.guests]
+    if any(not name for name in guest_names):
+        raise HTTPException(status_code=422, detail="guest_name_required")
+    party_size = 1 + len(guest_names)
 
     pool = await get_pool()
     registration_id: int
@@ -157,7 +176,7 @@ async def register_for_event(
             event_row = await conn.fetchrow(
                 """
                 SELECT event_id, status, capacity, is_virtual, is_free,
-                       registration_opens_at, registration_closes_at
+                       registration_opens_at, registration_closes_at, max_guests
                 FROM events
                 WHERE event_id = $1
                 FOR UPDATE
@@ -177,6 +196,8 @@ async def register_for_event(
                 raise HTTPException(status_code=409, detail="registration_not_open_yet")
             if closes_at and now > closes_at:
                 raise HTTPException(status_code=409, detail="registration_closed")
+            if len(guest_names) > (event_row["max_guests"] or 0):
+                raise HTTPException(status_code=422, detail="too_many_guests")
 
             is_paid_event = not event_row["is_free"]
             payment_config = None
@@ -203,6 +224,9 @@ async def register_for_event(
                     )
                     if active_count >= capacity:
                         failure_reason = "event_full"
+                    elif active_count + party_size > capacity:
+                        # The whole group or nothing (D8).
+                        failure_reason = "not_enough_seats"
 
             if failure_reason is None:
                 registration_id = await repo.insert(
@@ -224,6 +248,31 @@ async def register_for_event(
                 )
                 reg_number = f"NITKSAA-{datetime.now(timezone.utc).year}-{registration_id:06d}"
                 await repo.set_registration_number(registration_id, reg_number)
+                # Guests: their own row, QR and number; the leader's sign-in
+                # and contact details; the same status and hold.
+                for name in guest_names:
+                    guest_id = await repo.insert(
+                        event_id=event_id,
+                        firebase_uid=firebase_uid,
+                        ref_id=None,
+                        email=attendee["email"],
+                        phone=attendee["phone"],
+                        fullname_snapshot=name,
+                        batch_year_snapshot=None,
+                        branch_snapshot=None,
+                        notes=None,
+                        status="seat_held" if is_paid_event else "registered",
+                        hold_expires_at=(
+                            now + timedelta(minutes=payment_config["seat_hold_minutes"])
+                            if is_paid_event
+                            else None
+                        ),
+                        group_head_id=registration_id,
+                    )
+                    await repo.set_registration_number(
+                        guest_id,
+                        f"NITKSAA-{datetime.now(timezone.utc).year}-{guest_id:06d}",
+                    )
         # Transaction committed (or was a no-op read) — FOR UPDATE lock on the
         # events row is released here, so it's now safe to open a second
         # pooled connection for analytics/audit without deadlocking.
@@ -239,6 +288,7 @@ async def register_for_event(
             raise HTTPException(status_code=409, detail=failure_reason)
 
         full_row = dict(await repo.get_by_id_with_event(registration_id))
+        guests = await repo.list_guests([registration_id])
 
     if is_paid_event:
         # Payment must clear before this registration is confirmed — no
@@ -249,9 +299,10 @@ async def register_for_event(
             event_type="registration_seat_held",
             entity_type="registration",
             entity_id=registration_id,
-            context={"event_id": event_id, "registration_number": reg_number},
+            context={"event_id": event_id, "registration_number": reg_number,
+                     "guests": len(guest_names)},
         )
-        return _format_registration(full_row)
+        return _format_registration(full_row, guests)
 
     await analytics_service.log_event_activity(
         action_type="REGISTRATION_COMPLETED",
@@ -293,10 +344,11 @@ async def register_for_event(
         event_type="registration_created",
         entity_type="registration",
         entity_id=registration_id,
-        context={"event_id": event_id, "registration_number": reg_number},
+        context={"event_id": event_id, "registration_number": reg_number,
+                 "guests": len(guest_names)},
     )
 
-    return _format_registration(full_row)
+    return _format_registration(full_row, guests)
 
 
 async def get_my_event_registration(
@@ -304,19 +356,24 @@ async def get_my_event_registration(
 ) -> RegistrationResponse:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        row = await RegistrationRepository(conn).get_latest_for_user_event(
-            event_id, user["firebase_uid"]
-        )
+        repo = RegistrationRepository(conn)
+        row = await repo.get_latest_for_user_event(event_id, user["firebase_uid"])
+        guests = await repo.list_guests([row["registration_id"]]) if row else []
     if not row:
         raise HTTPException(status_code=404, detail="registration_not_found")
-    return _format_registration(dict(row))
+    return _format_registration(dict(row), guests)
 
 
 async def list_my_registrations(user: Dict[str, Any]) -> MyRegistrationsListResponse:
     pool = await get_pool()
     async with pool.acquire() as conn:
-        rows = await RegistrationRepository(conn).list_for_user(user["firebase_uid"])
-    regs = [_format_registration(dict(r)) for r in rows]
+        repo = RegistrationRepository(conn)
+        rows = await repo.list_for_user(user["firebase_uid"])
+        guests = await repo.list_guests([r["registration_id"] for r in rows])
+    by_head: Dict[int, list] = {}
+    for g in guests:
+        by_head.setdefault(g["group_head_id"], []).append(g)
+    regs = [_format_registration(dict(r), by_head.get(r["registration_id"], [])) for r in rows]
     return MyRegistrationsListResponse(registrations=regs, total=len(regs))
 
 

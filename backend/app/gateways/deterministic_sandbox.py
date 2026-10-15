@@ -215,6 +215,7 @@ class DeterministicSandboxGateway(PaymentGateway):
         currency: str,
         idempotency_key: str,
         payment_mode: Optional[str] = None,
+        refund_number: Optional[str] = None,
     ) -> NormalizedRefundResult:
         # No async settlement in the sandbox — a refund is processed at once.
         return NormalizedRefundResult(
@@ -223,6 +224,7 @@ class DeterministicSandboxGateway(PaymentGateway):
             amount_minor=amount_minor,
             currency=currency,
             raw_status="processed",
+            refund_number=refund_number,
         )
 
     def query_refund(
