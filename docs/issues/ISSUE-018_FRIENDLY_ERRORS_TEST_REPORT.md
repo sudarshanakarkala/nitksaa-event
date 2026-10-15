@@ -140,7 +140,7 @@ All existing tests pass on the VM; in Chrome all but ISSUE-006 Test K, which fai
 |---|---|
 | `flutter analyze` | 25 info before and after; identical lists |
 | `flutter test` | 368 of 368 |
-| Chrome `test/features/` | 364 of 365. The failure: `checkout_single_registration_test.dart` Test K expects "Registration failed", removed by #56. It is fixed in `fix/test-006-k` |
+| Chrome `test/features/` | 364 of 365. The failure: `checkout_single_registration_test.dart` Test K expects "Registration failed", removed in `3f0a221` (#37). It is fixed in `fix/test-006-k` |
 | `tool/check_colors.sh` | OK |
 | `flutter build web --release` (production URL) | Succeeded |
 

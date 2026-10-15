@@ -84,7 +84,7 @@ Not changed, reported:
 
 1. **The fallbacks of `apiErrorMessage`.** A code that is not in the table still shows as `Could not <action>: <code with spaces>.`, and a server error with no `detail` as `Could not <action> (HTTP 500). Please try again.`. Both are what the admin pages rely on (and its tests pin). An attendee sees them only for a code the backend adds later, or a 5xx.
 2. **Three wordings for "no connection".** `apiErrorMessage` says "Could not reach the server…", `CancellationOutcome` and the refund view "Unable to connect to the server…". All plain; left as they are.
-3. **ISSUE-006 Test K** still fails in Chrome on this branch, as on `main` (it expects text removed by #56). It is fixed in `fix/test-006-k`, written so that it passes with or without this change.
+3. **ISSUE-006 Test K** still fails in Chrome on this branch, as on `main` (it expects text removed in `3f0a221`, #37). It is fixed in `fix/test-006-k`, written so that it passes with or without this change.
 
 ---
 
