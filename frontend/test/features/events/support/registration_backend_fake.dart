@@ -169,6 +169,11 @@ class FakeRegistrationBackend implements HttpClientAdapter {
   /// The `checkout` object of each payment attempt handed out.
   final checkouts = <Map<String, dynamic>>[];
 
+  /// Answers a test chooses ahead of the backend's own, by a pattern matched
+  /// against the request line (`POST /api/v1/...`): an HTTP status with a
+  /// `detail`, or status 0 for a request that never reaches the backend.
+  final failures = <String, ({int status, String? detail})>{};
+
   int _lastRegistrationId = 500;
 
   /// A repository that talks to this backend.
@@ -268,6 +273,12 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     requests.add(request);
     final token = bearer?.replaceFirst('Bearer ', '');
     final path = options.path;
+
+    for (final MapEntry(key: pattern, value: failure) in failures.entries) {
+      if (!RegExp(pattern).hasMatch(request.line)) continue;
+      if (failure.status == 0) throw _connectionError(options);
+      return _json(failure.status, {'detail': failure.detail});
+    }
 
     if (request.line == 'GET /api/v1/events/public/$eventId') {
       return _json(200, {'event': _publicEvent()});

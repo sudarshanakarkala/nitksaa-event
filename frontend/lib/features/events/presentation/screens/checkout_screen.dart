@@ -1,8 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:dio/dio.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../../../core/errors/api_error_message.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
@@ -413,10 +413,9 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
     } on RazorpayCheckoutFailureException catch (e) {
       _showMessage('Payment could not be completed: ${e.message}', kind: NoticeKind.error);
       await _backToEvent();
-    } on DioException catch (e) {
-      _showMessage('Payment could not be completed: ${_apiError(e)}', kind: NoticeKind.error);
     } catch (e) {
-      _showMessage('Payment could not be completed: $e', kind: NoticeKind.error);
+      // Plain words for the backend's codes; never its raw text (ISSUE-018).
+      _showMessage(apiErrorMessage(e, action: 'complete the payment'), kind: NoticeKind.error);
     } finally {
       if (mounted) setState(() => _isSubmitting = false);
     }
@@ -443,20 +442,6 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
   void _showMessage(String message, {NoticeKind kind = NoticeKind.info}) {
     if (!mounted) return;
     showNotice(context, message, kind: kind);
-  }
-
-  String _apiError(DioException e) {
-    final data = e.response?.data;
-    if (data is Map && data['detail'] != null) {
-      final detail = data['detail'];
-      if (detail is String) return detail;
-      if (detail is List && detail.isNotEmpty) {
-        final first = detail.first;
-        if (first is Map && first['msg'] != null) return first['msg'].toString();
-      }
-      return detail.toString();
-    }
-    return e.message ?? 'Network error';
   }
 
   Widget _buildInfoBox(bool isDark) {

@@ -12,6 +12,10 @@ enum FakeRazorpayOutcome {
 
   /// The attendee closes the checkout without paying.
   dismissed,
+
+  /// The payment fails ([failureDescription], [failureReason]) and the
+  /// attendee then closes the checkout.
+  failed,
 }
 
 /// Puts a fake `window.Razorpay` in place of the real checkout script, which
@@ -20,6 +24,11 @@ enum FakeRazorpayOutcome {
 abstract final class FakeRazorpay {
   static const paymentId = 'pay_FAKE1';
   static const signature = 'sig_FAKE1';
+
+  /// What Razorpay reports for a [FakeRazorpayOutcome.failed] payment.
+  static const failureDescription =
+      'Payment processing failed due to error at bank or wallet gateway';
+  static const failureReason = 'payment_failed';
 
   static void install({
     FakeRazorpayOutcome outcome = FakeRazorpayOutcome.paid,
@@ -50,7 +59,8 @@ abstract final class FakeRazorpay {
 (function () {
   window.$_openedKey = [];
   window.Razorpay = function (options) {
-    this.on = function () {};
+    var handlers = {};
+    this.on = function (name, handler) { handlers[name] = handler; };
     this.open = function () {
       window.$_openedKey.push(JSON.stringify({
         key: options.key,
@@ -60,7 +70,13 @@ abstract final class FakeRazorpay {
         name: options.name,
         description: options.description
       }));
-      if ('${outcome.name}' === 'paid') {
+      if ('${outcome.name}' === 'failed') {
+        handlers['payment.failed']({error: {
+          description: '$failureDescription',
+          reason: '$failureReason'
+        }});
+        options.modal.ondismiss(undefined);
+      } else if ('${outcome.name}' === 'paid') {
         options.handler({
           razorpay_payment_id: '$paymentId',
           razorpay_order_id: options.order_id,

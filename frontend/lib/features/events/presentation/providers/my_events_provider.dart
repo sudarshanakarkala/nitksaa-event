@@ -1,5 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../../core/errors/api_error_message.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/my_event_registration.dart';
@@ -71,7 +72,10 @@ class MyEventsNotifier extends StateNotifier<MyEventsState> {
         errorMessage: null,
       );
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: apiErrorMessage(e, action: 'load your registrations'),
+      );
     }
   }
 
