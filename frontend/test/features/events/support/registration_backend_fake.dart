@@ -84,6 +84,9 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     this.ticketPrice = '100.00',
     this.finalAmount = '123.45',
     this.maxGuests = 0,
+    this.registrationStatus = 'open',
+    this.startDatetime = '2099-01-10T12:30:00Z',
+    this.endDatetime = '2099-01-10T15:30:00Z',
   });
 
   final int eventId;
@@ -91,6 +94,13 @@ class FakeRegistrationBackend implements HttpClientAdapter {
 
   /// `max_guests` of the public event.
   final int maxGuests;
+
+  /// `registration_status` of the public event: `open` or `closed`.
+  final String registrationStatus;
+
+  /// `start_datetime` and `end_datetime` of the event, ISO 8601.
+  final String startDatetime;
+  final String endDatetime;
 
   /// `ticket_price` of the public event, in rupees.
   final String ticketPrice;
@@ -698,14 +708,14 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       'slug': 'event-$eventId',
       'title': 'Annual Alumni Meet',
       'status': 'published',
-      'start_datetime': '2099-01-10T12:30:00Z',
-      'end_datetime': '2099-01-10T15:30:00Z',
+      'start_datetime': startDatetime,
+      'end_datetime': endDatetime,
       'timezone': 'Asia/Kolkata',
       'is_virtual': false,
       'is_free': isFree,
       'ticket_price': isFree ? null : ticketPrice,
       'max_guests': maxGuests,
-      'registration_status': 'open',
+      'registration_status': registrationStatus,
       'registered_count': seatsTaken,
     };
   }

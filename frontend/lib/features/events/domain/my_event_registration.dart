@@ -39,8 +39,19 @@ class MyEventRegistration {
       [for (final g in guests) if (g.status != 'cancelled') g];
 
   bool get isActive => status == 'registered';
-  bool get canCancel =>
-      isActive && publicEvent?.registrationStatus.toLowerCase() == 'open';
+
+  /// Unregister is offered on an active registration until the event
+  /// starts. The backend's only rule is `registered` (refunds are full); a
+  /// closed registration window does not stop it (ISSUE-012).
+  bool get canCancel => canCancelAt(DateTime.now());
+
+  /// [canCancel] at [now].
+  bool canCancelAt(DateTime now) {
+    if (!isActive) return false;
+    final start = event?.startDatetime ?? publicEvent?.startDatetime;
+    // Without a start time, leave it to the backend.
+    return start == null || start.isAfter(now);
+  }
 
   /// Cancelled, and a payment order was made for it. Only such a registration
   /// can have a refund. Whether it has one is for the backend to say: a seat
