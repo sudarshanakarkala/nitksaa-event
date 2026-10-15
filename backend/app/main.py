@@ -7,7 +7,7 @@ from app.api import (
     health, events, admin_events, auth, dev_diagnostics, alumni, registrations,
     people, sponsors_partners, week5_diagnostics, payments, admin_payments,
     refunds, nitika, admin_roles, admin_dashboard, admin_payment_lists, admin_event_details,
-    admin_actions, admin_audit,
+    admin_actions, admin_audit, feedback,
 )
 
 
@@ -63,3 +63,4 @@ app.include_router(payments.router)
 app.include_router(admin_payments.router)
 app.include_router(refunds.router)
 app.include_router(nitika.router)
+app.include_router(feedback.router)
