@@ -14,6 +14,7 @@ import '../providers/event_detail_provider.dart';
 import '../../domain/event.dart';
 import '../../domain/my_event_registration.dart' show EventGuest;
 import '../widgets/entry_pass_qr.dart';
+import '../widgets/refund_status_dialog.dart' show showRefundStatus;
 import '../widgets/unregister_flow.dart' show confirmAndCancelGuest;
 import '../widgets/venue_section.dart';
 import '../../../../shared/widgets/form_fields.dart';
@@ -1757,6 +1758,16 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   onPressed: () => _showGuestPassDialog(event, guest, leader),
                   icon: const Icon(Icons.qr_code_2, size: 18),
                   label: const Text('QR'),
+                ),
+              // A paid guest cancelled alone: their refund, on its own.
+              if (!guest.isActive && _isPaidEvent(event))
+                TextButton(
+                  onPressed: () => showRefundStatus(
+                    context,
+                    ref,
+                    registrationId: guest.registrationId,
+                  ),
+                  child: const Text('View refund'),
                 ),
               if (guest.isActive)
                 IconButton(

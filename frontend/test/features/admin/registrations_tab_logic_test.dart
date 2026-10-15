@@ -206,6 +206,22 @@ void main() {
       expect(ids(applyGrid(rows, columns, search: '  ')), [1, 2, 3]);
     });
 
+    test('search skips a column marked not searchable (the event)', () {
+      final withEvent = [
+        ...columns,
+        GridColumn<AdminRegistration>(
+          id: 'event',
+          label: 'Event',
+          kind: ColumnKind.category,
+          value: (_) => 'Alice Memorial Lecture',
+          searchable: false,
+        ),
+      ];
+      // "alice" is in every row's event title, but only row 2 is Alice.
+      expect(ids(applyGrid(rows, withEvent, search: 'alice')), [2]);
+      expect(ids(applyGrid(rows, withEvent, search: 'memorial')), isEmpty);
+    });
+
     test('column filters combine with each other and the search', () {
       expect(
         ids(applyGrid(rows, columns, filters: {'branch': const ColumnFilter(values: {'ECE'})})),

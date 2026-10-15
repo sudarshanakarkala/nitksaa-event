@@ -1,3 +1,6 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
 import 'package:dio/dio.dart';
 import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
@@ -316,7 +319,12 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   String _eventTitle(int id) => _event(id)?.title ?? 'Event $id';
 
-  List<GridColumn<AdminRegistration>> _registrationColumns({required bool cancelled}) => [
+  /// [withEvent]: include the Event column even for one event (the export).
+  List<GridColumn<AdminRegistration>> _registrationColumns({
+    required bool cancelled,
+    bool withEvent = false,
+  }) =>
+      [
         GridColumn(
           id: 'name',
           label: 'Name',
@@ -329,12 +337,13 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
           kind: ColumnKind.text,
           value: (r) => r.guestOf ?? '',
         ),
-        if (_isAll)
+        if (_isAll || withEvent)
           GridColumn(
             id: 'event',
             label: 'Event',
             kind: ColumnKind.category,
             value: (r) => _eventTitle(r.eventId),
+            searchable: false,
           ),
         if (!cancelled) ...[
           GridColumn(
@@ -393,7 +402,9 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
         ),
       ];
 
-  List<GridColumn<CheckInEntry>> get _checkInColumns => [
+  List<GridColumn<CheckInEntry>> get _checkInColumns => _checkInColumnsFor();
+
+  List<GridColumn<CheckInEntry>> _checkInColumnsFor({bool withEvent = false}) => [
         GridColumn(
           id: 'name',
           label: 'Name',
@@ -406,12 +417,13 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
           kind: ColumnKind.text,
           value: (c) => c.person?.registrationNumber,
         ),
-        if (_isAll)
+        if (_isAll || withEvent)
           GridColumn(
             id: 'event',
             label: 'Event',
             kind: ColumnKind.category,
             value: (c) => _eventTitle(c.checkIn.eventId),
+            searchable: false,
           ),
         GridColumn(
           id: 'checkedIn',
@@ -528,22 +540,31 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   // ── Export ───────────────────────────────────────────────────────────────
 
+  /// Exports exactly the rows on screen (this view, after the event picker,
+  /// search, filters and dates), with the Event column always included.
+  /// Made in the app from what's loaded: no server call.
   Future<void> _export() async {
-    final token = _token;
-    final id = _selected;
-    if (token == null || id == _allEvents) return;
     setState(() => _exporting = true);
     try {
-      final bytes = await ref
-          .read(registrationsApiProvider)
-          .exportCsv(accessToken: token, eventId: id);
+      final csv = switch (_view) {
+        RegistrationView.checkIns =>
+          _csv(_checkInRows, _checkInColumnsFor(withEvent: true)),
+        final view => _csv(
+            _registrationRows(view),
+            _registrationColumns(
+              cancelled: view == RegistrationView.cancelled,
+              withEvent: true,
+            ).where((c) => c.id != 'emailStatus').toList(),
+          ),
+      };
       await FileSaver.instance.saveFile(
-        name: _exportName(id),
-        bytes: bytes,
+        name: _exportName(),
+        // A byte-order mark so Excel reads names in UTF-8.
+        bytes: Uint8List.fromList(utf8.encode('\uFEFF$csv')),
         ext: 'csv',
         mimeType: MimeType.csv,
       );
-      _snack('Downloaded the registrations for "${_eventTitle(id)}".');
+      _snack('Downloaded ${_count(_view)} rows.');
     } catch (error, stackTrace) {
       AppLogger.error('Admin registrations: export failed', error, stackTrace);
       _snack(_friendly(error, 'download the CSV'), isError: true);
@@ -552,10 +573,30 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
     }
   }
 
-  /// e.g. `registrations-alumni-meet-2026`.
-  String _exportName(int id) {
-    final slug = _event(id)?.slug.trim() ?? '';
-    return slug.isEmpty ? 'registrations-event-$id' : 'registrations-$slug';
+  /// A CSV of [rows] with [columns]' headings and cell text.
+  static String _csv<T>(List<T> rows, List<GridColumn<T>> columns) {
+    String cell(String value) {
+      // A leading = or @ would make a spreadsheet run it as a formula.
+      final safe = value.startsWith('=') || value.startsWith('@') ? "'$value" : value;
+      return '"${safe.replaceAll('"', '""')}"';
+    }
+
+    return [
+      columns.map((c) => cell(c.label)).join(','),
+      for (final row in rows) columns.map((c) => cell(c.text(row))).join(','),
+    ].join('\r\n');
+  }
+
+  /// e.g. `registrations-alumni-meet-2026`, `cancelled-all-events`.
+  String _exportName() {
+    final what = switch (_view) {
+      RegistrationView.registered => 'registrations',
+      RegistrationView.cancelled => 'cancelled',
+      RegistrationView.checkIns => 'check-ins',
+    };
+    if (_isAll) return '$what-all-events';
+    final slug = _event(_selected)?.slug.trim() ?? '';
+    return slug.isEmpty ? '$what-event-$_selected' : '$what-$slug';
   }
 
   void _snack(String message, {bool isError = false}) {
@@ -621,10 +662,8 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       count: _loadedFor == _selected && _error == null
           ? ResultCount(count: shown, one: one, many: many)
           : null,
-      action: _isAll
-          ? null
-          : OutlinedButton.icon(
-              onPressed: _exporting || _loading ? null : _export,
+      action: OutlinedButton.icon(
+              onPressed: _exporting || _loading || _count(_view) == 0 ? null : _export,
               icon: _exporting
                   ? const SizedBox(
                       width: 16,

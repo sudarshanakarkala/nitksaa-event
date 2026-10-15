@@ -42,7 +42,7 @@ from app.gateways.registry import GatewayDisabledError, UnknownGatewayError
 from app.repositories.payment_repository import PaymentRepository
 from app.repositories.refund_repository import RefundRepository
 from app.repositories.registration_repository import RegistrationRepository
-from app.schemas.payments import RefundStatusResponse
+from app.schemas.payments import GroupRefundItem, RefundStatusResponse
 from app.services import audit_service
 from app.config import get_settings
 
@@ -442,12 +442,65 @@ async def get_refund_status(
     firebase_uid = user["firebase_uid"]
     pool = await get_pool()
     async with pool.acquire() as conn:
-        await _load_owned_registration(conn, registration_id, firebase_uid)
+        reg = await _load_owned_registration(conn, registration_id, firebase_uid)
         refund = await RefundRepository(conn).get_latest_for_registration(registration_id)
         if refund is None:
-            return _view(registration_id, None)
-        gw = _resolve_gateway(refund["gateway"])
-        return await _refresh_and_view(conn, registration_id, refund, gw)
+            view = _view(registration_id, None)
+        else:
+            gw = _resolve_gateway(refund["gateway"])
+            view = await _refresh_and_view(conn, registration_id, refund, gw)
+        return await _with_group_refunds(conn, reg, view)
+
+
+async def _with_group_refunds(
+    conn: asyncpg.Connection, reg: asyncpg.Record, view: RefundStatusResponse
+) -> RefundStatusResponse:
+    """Adds every refund on the registration's group, so the attendee sees
+    each one (a guest's, then the rest) and what they add up to."""
+    head_id = reg["group_head_id"] if "group_head_id" in reg else reg["registration_id"]
+    people = await conn.fetchval(
+        "SELECT COUNT(*) FROM registrations WHERE group_head_id = $1::int", head_id
+    )
+    if (people or 0) <= 1:
+        return view
+    rows = await conn.fetch(
+        """
+        SELECT f.*, r.fullname_snapshot AS person_name,
+               r.registration_id <> r.group_head_id AS person_is_guest
+        FROM payment_refunds f
+        JOIN registrations r ON r.registration_id = f.registration_id
+        WHERE r.group_head_id = $1::int
+          AND f.status IN ('pending', 'processing', 'processed', 'delayed', 'failed')
+        ORDER BY f.requested_at, f.id
+        """,
+        head_id,
+    )
+    paid = await conn.fetchval(
+        """
+        SELECT final_amount FROM payment_orders
+        WHERE registration_id = $1::int AND status = 'paid'
+        ORDER BY paid_at DESC NULLS LAST, created_at DESC LIMIT 1
+        """,
+        head_id,
+    )
+    view.group_refunds = [
+        GroupRefundItem(
+            refund_id=r["public_refund_number"],
+            registration_id=r["registration_id"],
+            name=r["person_name"],
+            is_guest=bool(r["person_is_guest"]),
+            status=_ATTENDEE_STATUS.get(r["status"], "refund_pending"),
+            amount=r["amount"],
+            currency=r["currency"],
+            requested_at=r["requested_at"],
+            finalized_at=r["finalized_at"],
+            payment_reference=r["provider_payment_id"] or None,
+            bank_reference=r["bank_reference"] if "bank_reference" in r else None,
+        )
+        for r in rows
+    ]
+    view.group_paid = paid
+    return view
 
 
 # ── Refund reliability (admin revamp step 10c) ───────────────────────────────
