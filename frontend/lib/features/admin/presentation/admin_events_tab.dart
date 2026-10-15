@@ -15,6 +15,7 @@ import '../../auth/services/auth_controller.dart';
 import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../../events/presentation/widgets/event_card.dart';
+import '../../events/presentation/widgets/event_list_controls.dart';
 import 'event_admin_actions.dart';
 import '../domain/registration_filters.dart';
 import 'admin_tab_frame.dart';
@@ -39,22 +40,6 @@ enum _Filter {
 
 enum _View { cards, table }
 
-/// Card order by fullness (the table sorts by its headings). None lit:
-/// by date, in the Date button's direction.
-enum _Fill {
-  most('Most full'),
-  least('Least full');
-
-  const _Fill(this.label);
-  final String label;
-}
-
-/// Share of seats taken; null with no capacity set (sorted last).
-double? _fillOf(AppEvent e) {
-  final capacity = e.capacity;
-  return capacity == null || capacity <= 0 ? null : e.registeredCount / capacity;
-}
-
 /// Admin → Events: every event you administer (all of them for an overall
 /// admin), any status, past and upcoming, as cards or a table, with the
 /// status filters and the per-event actions.
@@ -72,7 +57,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   String? _error;
   _Filter _filter = _Filter.all;
   _View _view = _View.cards;
-  _Fill? _fill;
+  EventFill? _fill;
 
   /// Date ↑: soonest first (upcoming, then the most recent past).
   /// Date ↓: latest first.
@@ -144,8 +129,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     }
   }
 
-  static bool _ended(AppEvent e) =>
-      (e.endDatetime ?? e.startDatetime).isBefore(DateTime.now());
+  static bool _ended(AppEvent e) => eventEnded(e);
 
   bool _matches(AppEvent e, _Filter f) {
     switch (f) {
@@ -185,13 +169,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     }
     if (_price.isNotEmpty && !_price.contains(e.isPaid ? 'paid' : 'free')) return false;
     if (_mine && (e.createdByUid == null || e.createdByUid != _myUid)) return false;
-    final dates = _dates;
-    if (dates != null) {
-      final start = e.startDatetime.toLocal();
-      final to = DateTime(dates.end.year, dates.end.month, dates.end.day + 1);
-      if (start.isBefore(dates.start) || !start.isBefore(to)) return false;
-    }
-    return true;
+    return FilterDateRange.contains(_dates, e.startDatetime);
   }
 
   int get _activeFilterCount => [
@@ -216,27 +194,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   /// Search and rail filters; the pills apply on top.
   List<AppEvent> get _filtered => _searched.where(_railMatches).toList();
 
-  /// By date: soonest first (upcoming soonest at the top, then past most
-  /// recent first) or latest first. By fullness: share of seats taken, no
-  /// capacity last; ties in date order.
-  List<AppEvent> get _visible {
-    final rows = _filtered.where((e) => _matches(e, _filter)).toList();
-    final upcoming = rows.where((e) => !_ended(e)).toList()
-      ..sort((a, b) => a.startDatetime.compareTo(b.startDatetime));
-    final past = rows.where(_ended).toList()
-      ..sort((a, b) => b.startDatetime.compareTo(a.startDatetime));
-    final byDate = _soonestFirst
-        ? [...upcoming, ...past]
-        : (rows.toList()..sort((a, b) => b.startDatetime.compareTo(a.startDatetime)));
-    final fill = _fill;
-    if (fill == null) return byDate;
-    final indexed = [for (var i = 0; i < byDate.length; i++) (i, byDate[i])];
-    indexed.sort((a, b) {
-      final r = compareCells(_fillOf(a.$2), _fillOf(b.$2), ascending: fill == _Fill.least);
-      return r != 0 ? r : a.$1.compareTo(b.$1);
-    });
-    return [for (final e in indexed) e.$2];
-  }
+  /// In the Date button's order, or by fullness (`orderEvents`).
+  List<AppEvent> get _visible => orderEvents(
+        _filtered.where((e) => _matches(e, _filter)),
+        soonestFirst: _soonestFirst,
+        fill: _fill,
+      );
 
   String? _createdBy(AppEvent e) => e.createdByLabel(_myUid);
 
@@ -294,7 +257,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
         // Quick filters by type, then capacity; the date is on the line
         // below. The table sorts by its headings instead.
         if (_cardsShown(compact))
-          for (final f in _Fill.values)
+          for (final f in EventFill.values)
             QuickFilterPill(
               label: f.label,
               active: f == _fill,
@@ -328,41 +291,18 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   /// The cards (not the table) are on screen: the sort pills apply.
   bool _cardsShown(bool compact) => compact || _view == _View.cards;
 
-  /// Starting between two dates, on the page under the pills: presets, then
-  /// the slider over the events' own dates. Sort by works within it.
+  /// The shared Events date line: Date ↑/↓, presets, slider, From – To.
   Widget _dateFilter() {
-    final today = DateUtils.dateOnly(DateTime.now());
-    final starts = [for (final e in _events) DateUtils.dateOnly(e.startDatetime.toLocal())]..sort();
-    DateTime min(DateTime a, DateTime b) => a.isBefore(b) ? a : b;
-    DateTime max(DateTime a, DateTime b) => a.isAfter(b) ? a : b;
-    final presets = <(String, DateTimeRange)>[
-      ('Next 30 days', DateTimeRange(start: today, end: today.add(const Duration(days: 30)))),
-      ('Next 90 days', DateTimeRange(start: today, end: today.add(const Duration(days: 90)))),
-      ('This year', DateTimeRange(start: DateTime(today.year), end: DateTime(today.year, 12, 31))),
-    ];
     final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
-    return FilterDateRange(
-      inline: true,
-      leading: _cardsShown(compact)
-          ? QuickFilterPill(
-              label: _soonestFirst ? 'Date ↑' : 'Date ↓',
-              active: _fill == null,
-              onTap: () => setState(() {
-                // From a fullness sort: back to date order; then it flips.
-                if (_fill != null) {
-                  _fill = null;
-                } else {
-                  _soonestFirst = !_soonestFirst;
-                }
-              }),
-            )
-          : null,
-      label: 'Starts',
-      first: min(starts.first, today),
-      last: max(starts.last, today.add(const Duration(days: 90))),
+    return EventDateLine(
+      events: _events,
       value: _dates,
-      presets: presets,
       onChanged: (v) => setState(() => _dates = v),
+      sortable: _cardsShown(compact),
+      soonestFirst: _soonestFirst,
+      dateOrder: _fill == null,
+      onDateOrder: () => setState(() => _fill = null),
+      onFlip: () => setState(() => _soonestFirst = !_soonestFirst),
     );
   }
 
@@ -538,7 +478,7 @@ class _EventsTableState extends State<_EventsTable> {
           label: 'Capacity',
           kind: ColumnKind.number,
           // Sorts by share of seats taken; no capacity goes last.
-          value: _fillOf,
+          value: eventFill,
           text: (e) => e.capacity == null ? '${e.registeredCount}' : '${e.registeredCount} / ${e.capacity}',
           width: 120,
         ),
