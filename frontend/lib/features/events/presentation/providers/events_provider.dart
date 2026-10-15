@@ -1,4 +1,6 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+
+import '../../../../core/errors/api_error_message.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 
@@ -61,7 +63,10 @@ class EventsNotifier extends StateNotifier<EventsState> {
       final events = await _repository.getAllPublicEvents();
       state = state.copyWith(events: events, isLoading: false);
     } catch (e) {
-      state = state.copyWith(isLoading: false, errorMessage: e.toString());
+      state = state.copyWith(
+        isLoading: false,
+        errorMessage: apiErrorMessage(e, action: 'load events'),
+      );
     }
   }
 

@@ -39,9 +39,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           showNotice(context, 'Could not launch $urlString', kind: NoticeKind.error);
         }
       }
-    } catch (e) {
+    } catch (_) {
       if (mounted) {
-        showNotice(context, 'Error launching link: $e', kind: NoticeKind.error);
+        showNotice(context, 'Could not launch $urlString', kind: NoticeKind.error);
       }
     }
   }

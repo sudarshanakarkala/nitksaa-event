@@ -78,6 +78,8 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
   // (the success handler above). So a failure is only remembered here, and
   // reported if the window is then closed without a success.
   String? lastFailure;
+  // Whether that failure was a cancellation, by Razorpay's words or code.
+  var lastFailureCancelled = false;
 
   // Window closed (ESC / close button). After a failure: that failure.
   // Otherwise: a cancellation.
@@ -85,7 +87,7 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
   modal['ondismiss'] = ((JSAny? _) {
     if (completer.isCompleted) return;
     final failure = lastFailure;
-    if (failure != null && !failure.toLowerCase().contains('cancel')) {
+    if (failure != null && !lastFailureCancelled) {
       completer.completeError(RazorpayCheckoutFailureException(failure));
     } else {
       completer.completeError(
@@ -103,8 +105,8 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
   try {
     instance = razorpayCtor.callAsConstructor<JSObject>(optionsObj);
   } catch (e) {
-    throw RazorpayCheckoutFailureException(
-      'Unable to open Razorpay checkout: $e',
+    throw const RazorpayCheckoutFailureException(
+      'Razorpay could not be opened. Please try again.',
     );
   }
 
@@ -121,14 +123,16 @@ Future<RazorpayCheckoutResult> openRazorpayCheckout(
         final errorValue = response['error'];
         final error =
             errorValue.isA<JSObject>() ? errorValue as JSObject : response;
-        final description = _strProp(error, 'description');
+        final description = _strProp(error, 'description').trim();
         final reason = _strProp(error, 'reason');
-        final message = description.isEmpty
-            ? reason
-            : (reason.isEmpty ? description : '$description ($reason)');
-        lastFailure = message.trim().isEmpty
+        // The description is Razorpay's plain words. The reason is a code
+        // (e.g. payment_failed): it only tells a cancellation apart, and is
+        // not shown (ISSUE-018).
+        lastFailureCancelled =
+            '$description $reason'.toLowerCase().contains('cancel');
+        lastFailure = description.isEmpty
             ? 'Payment failed. Please try again.'
-            : message.trim();
+            : description;
       }).toJS,
     ],
   );
