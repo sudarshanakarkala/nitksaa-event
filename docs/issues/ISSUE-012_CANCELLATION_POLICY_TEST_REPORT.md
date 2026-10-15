@@ -7,6 +7,8 @@
 **Toolchain:** Flutter 3.44.2, Dart 3.12.2, Chrome for the browser tests
 **Final result:** CODE PASS — MANUAL E2E PENDING
 
+**Rebased 2026-10-15** onto `fbe4ede` (PR #58), with no conflicts and no code change. Re-run there: `flutter test` 354 of 354, Chrome `test/features/` 345 of 346 (the same ISSUE-006 Test K failure as on `main`, section 8), `flutter analyze` 25 info, unchanged. The figures below are from the first run, on `0f3b48f`.
+
 ---
 
 ## 1. Issue
