@@ -1355,7 +1355,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     }
     showNotice(
       context,
-      'You\'re registered. Your entry pass is on this page and in My Events.',
+      'You\'re registered. Your QR code for entry is on this page and in My Events.',
       kind: NoticeKind.success,
     );
     // Refresh the seat count and eligibility.
@@ -1379,7 +1379,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              "Your entry pass (QR) will be on this page and in My Events.",
+              "Your QR code for entry will be on this page and in My Events.",
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,

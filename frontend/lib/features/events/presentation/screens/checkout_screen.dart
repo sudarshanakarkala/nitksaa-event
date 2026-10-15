@@ -459,7 +459,7 @@ class _CheckoutScreenState extends ConsumerState<CheckoutScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              "Your entry pass (QR) will be on the event page and in My Events.",
+              "Your QR code for entry will be on the event page and in My Events.",
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
