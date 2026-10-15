@@ -153,6 +153,7 @@ void main() {
         (endpoint: 'eligibility', token: tokenB),
         (endpoint: 'my-registration', token: tokenB),
         (endpoint: 'alumni-me', token: tokenB),
+        (endpoint: 'last-registration', token: tokenB),
       ]);
     });
 
@@ -451,7 +452,7 @@ void main() {
       await tester.pumpAndSettle();
 
       expect(find.text('YOUR DETAILS'), findsOneWidget);
-      // B is not an alumnus: B types a name, so the name field starts empty.
+      // B is not an alumnus: B types a name (it starts from B's sign-in name).
       expect(find.byKey(const ValueKey('registration-name')), findsOneWidget);
       expect(find.text(sessionB.email!), findsOneWidget);
       expect(find.text(sessionA.fullname!), findsNothing);

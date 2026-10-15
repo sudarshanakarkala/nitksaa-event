@@ -64,8 +64,9 @@ void main() {
     await settleRequests(tester);
   }
 
-  /// Register on the event page, through the form, to the end of checkout.
-  Future<void> registerAgain(WidgetTester tester) async {
+  /// Register on the event page, through the form. A free event registers
+  /// from the form; a paid one goes on to checkout and through it.
+  Future<void> registerAgain(WidgetTester tester, {required bool paid}) async {
     expect(find.text('You cancelled your earlier registration.'), findsOneWidget);
     await tester.tap(find.text('Register'));
     await settleRequests(tester);
@@ -74,6 +75,10 @@ void main() {
     // ElevatedButton, drawn above the page's own Register button.
     await tester.tap(find.byType(ElevatedButton).last);
     await settleRequests(tester);
+    if (!paid) {
+      expect(find.text('Fee Summary'), findsNothing);
+      return;
+    }
     expect(find.text('Fee Summary'), findsOneWidget);
     await tester.tap(find.byType(ElevatedButton));
     await settleRequests(tester);
@@ -86,7 +91,7 @@ void main() {
     FakeRazorpay.install();
     await openEventPage(tester, backend);
 
-    await registerAgain(tester);
+    await registerAgain(tester, paid: false);
 
     expect(backend.registerRequests, hasLength(1));
     final current = backend.registrations[tokenA]!;
@@ -97,7 +102,7 @@ void main() {
     expect(backend.paymentOrderRequests, isEmpty);
     expect(FakeRazorpay.opened, isEmpty);
 
-    // Checkout has closed and the event page shows the new registration.
+    // No checkout page: the event page shows the new registration.
     expect(find.text('Fee Summary'), findsNothing);
     expect(find.text('Registered Successfully'), findsOneWidget);
     expect(
@@ -118,7 +123,7 @@ void main() {
     FakeRazorpay.install();
     await openEventPage(tester, backend);
 
-    await registerAgain(tester);
+    await registerAgain(tester, paid: true);
 
     final current = backend.registrations[tokenA]!;
     final currentId = current['registration_id'];

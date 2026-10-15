@@ -312,6 +312,21 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       ];
       return _json(200, {'registrations': rows, 'total': rows.length});
     }
+    if (request.line == 'GET /api/v1/events/$eventId/payment-pricing') {
+      // The server's breakdown for one person: the ticket price plus a fee,
+      // adding up to [finalAmount].
+      final fee = (double.parse(finalAmount) - double.parse(ticketPrice))
+          .toStringAsFixed(2);
+      return _json(200, {
+        'event_id': eventId,
+        'currency': 'INR',
+        'final_amount': finalAmount,
+        'line_items': [
+          {'label': 'Registration fee', 'amount': ticketPrice},
+          if (double.parse(fee) > 0) {'label': 'Convenience fee', 'amount': fee},
+        ],
+      });
+    }
     if (request.line == 'GET /api/v1/alumni/me') {
       return _json(200, {
         'ref_id': 'REF-1',

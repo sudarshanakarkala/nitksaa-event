@@ -452,10 +452,10 @@ void main() {
       await tester.tap(find.text('Register'));
       await settleRequests(tester);
       expect(find.text('YOUR DETAILS'), findsOneWidget);
+      // A free event registers from the form: no checkout page.
       await tester.tap(find.widgetWithText(ElevatedButton, 'Register').last);
       await settleRequests(tester);
-      await tester.tap(find.text('Confirm Registration'));
-      await settleRequests(tester);
+      expect(find.text('Confirm Registration'), findsNothing);
 
       expect(backend.registerRequests, hasLength(1));
       final current = backend.registrations[tokenA]!;

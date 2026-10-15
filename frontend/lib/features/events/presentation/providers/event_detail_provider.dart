@@ -30,6 +30,7 @@ class EventDetailState {
     this.isRegistering = false,
     this.alumniProfile,
     this.registrationDraft,
+    this.lastDetails,
   });
 
   final AppEvent? event;
@@ -41,6 +42,10 @@ class EventDetailState {
   final bool isRegistering;
   final Map<String, dynamic>? alumniProfile;
   final RegistrationDraft? registrationDraft;
+
+  /// Name and phone from the person's newest earlier registration, to fill
+  /// in the form. Null when signed out or never registered.
+  final ({String? fullname, String phone})? lastDetails;
 
   // The user-scoped fields take a sentinel default so that passing null clears
   // them; omitting the argument keeps the current value.
@@ -54,6 +59,7 @@ class EventDetailState {
     bool? isRegistering,
     dynamic alumniProfile = _kUnsetValue,
     dynamic registrationDraft = _kUnsetValue,
+    dynamic lastDetails = _kUnsetValue,
   }) {
     return EventDetailState(
       event: event ?? this.event,
@@ -67,6 +73,9 @@ class EventDetailState {
       registrationDraft: identical(registrationDraft, _kUnsetValue)
           ? this.registrationDraft
           : registrationDraft as RegistrationDraft?,
+      lastDetails: identical(lastDetails, _kUnsetValue)
+          ? this.lastDetails
+          : lastDetails as ({String? fullname, String phone})?,
     );
   }
 }
@@ -140,6 +149,16 @@ class EventDetailNotifier extends StateNotifier<EventDetailState> {
         }
         if (!mounted) return;
         state = state.copyWith(alumniProfile: profile);
+
+        // Name and phone from the last registration, for the form.
+        ({String? fullname, String phone})? last;
+        try {
+          last = await _repository.getLastRegistrationDetails(token);
+        } catch (_) {
+          // No prefill then.
+        }
+        if (!mounted) return;
+        state = state.copyWith(lastDetails: last);
       }
 
       state = state.copyWith(isLoading: false);

@@ -1296,13 +1296,19 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   }
 
   /// The registration form: one dialog for every screen size. Alumni see
-  /// their name from the alumni record; everyone else types it. Phone is
-  /// required for all. The details go to checkout as a draft in the event's
-  /// provider, never in the page address.
+  /// their name from the alumni record; everyone else types it, starting from
+  /// their last registration's name or their sign-in name. Phone is required
+  /// for all and starts from their last registration. A free event registers
+  /// from the dialog; a paid one goes on to checkout with the details as a
+  /// draft in the event's provider, never in the page address.
   void _showRegistrationForm(AppEvent event, EventDetailState state) {
     final auth = ref.read(authControllerProvider);
     final profile = state.alumniProfile ?? const <String, dynamic>{};
     final isAlumni = profile.isNotEmpty;
+    final last = state.lastDetails;
+    final initialName = last?.fullname ?? auth.session?.fullname ?? '';
+    final initialPhone = last?.phone ??
+        (isAlumni ? (profile['phone']?.toString() ?? '') : '');
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final isPaid = _isPaidEvent(event);
     final header = _buildEventHeader(event, isDark);
@@ -1315,16 +1321,45 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         eventHeader: header,
         infoBox: infoBox,
         alumniName: isAlumni ? (profile['fullname']?.toString() ?? '') : null,
+        initialName: initialName,
         email: auth.session?.email ?? '',
-        initialPhone: isAlumni ? (profile['phone']?.toString() ?? '') : '',
+        initialPhone: initialPhone,
         totalLabel: isPaid ? formatMoney(event.ticketPrice!) : 'Free',
         isPaid: isPaid,
         onContinue: (draft) {
           notifier.setRegistrationDraft(draft);
-          _proceedToCheckout(event);
+          if (isPaid) {
+            _proceedToCheckout(event);
+          } else {
+            _registerFree(event);
+          }
         },
       ),
     );
+  }
+
+  /// A free event registers straight from the form: no checkout page. The
+  /// event page then shows the green "registered" box and the entry pass.
+  Future<void> _registerFree(AppEvent event) async {
+    final notifier = ref.read(eventDetailProvider(widget.eventId).notifier);
+    final ok = await notifier.register(event.eventId);
+    if (!mounted) return;
+    if (!ok) {
+      final message = ref.read(eventDetailProvider(widget.eventId)).errorMessage;
+      showNotice(
+        context,
+        message ?? 'Could not register. Please try again.',
+        kind: NoticeKind.error,
+      );
+      return;
+    }
+    showNotice(
+      context,
+      'You\'re registered. Your entry pass is on this page and in My Events.',
+      kind: NoticeKind.success,
+    );
+    // Refresh the seat count and eligibility.
+    await notifier.fetchEventDetails(event.eventId);
   }
 
   Widget _buildInfoBox(bool isDark) {
@@ -1344,7 +1379,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           const SizedBox(width: 8),
           Expanded(
             child: Text(
-              "You'll receive a confirmation email. Your QR badge will appear in My Events.",
+              "Your entry pass (QR) will be on this page and in My Events.",
               style: TextStyle(
                 fontSize: 12,
                 height: 1.4,
@@ -1759,6 +1794,7 @@ class _RegistrationFormDialog extends StatefulWidget {
     required this.eventHeader,
     required this.infoBox,
     required this.alumniName,
+    required this.initialName,
     required this.email,
     required this.initialPhone,
     required this.totalLabel,
@@ -1771,6 +1807,10 @@ class _RegistrationFormDialog extends StatefulWidget {
 
   /// The name from the alumni record, or null for non-alumni (who type it).
   final String? alumniName;
+
+  /// Where a non-alumni's name starts: their last registration's name, else
+  /// their sign-in name. They can change it.
+  final String initialName;
   final String email;
   final String initialPhone;
   final String totalLabel;
@@ -1785,7 +1825,8 @@ class _RegistrationFormDialogState extends State<_RegistrationFormDialog> {
   static const _noteMaxLength = 500;
 
   final _formKey = GlobalKey<FormState>();
-  final _name = TextEditingController();
+  late final TextEditingController _name =
+      TextEditingController(text: widget.initialName);
   late final TextEditingController _phone =
       TextEditingController(text: widget.initialPhone);
   final _note = TextEditingController();
@@ -1897,7 +1938,7 @@ class _RegistrationFormDialogState extends State<_RegistrationFormDialog> {
                 const SizedBox(height: 16),
                 LabeledField(
                   label: 'Email',
-                  helper: 'Confirmation goes here.',
+                  helper: 'Your sign-in email.',
                   child: ReadOnlyValue(widget.email),
                 ),
                 const SizedBox(height: 16),

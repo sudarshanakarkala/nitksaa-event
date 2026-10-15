@@ -229,6 +229,30 @@ class FakeEventsRepository extends EventsRepository {
   }
 
   @override
+  Future<Map<String, dynamic>> getPaymentPricing(
+    int eventId,
+    String accessToken,
+  ) async {
+    calls.add((endpoint: 'payment-pricing', token: accessToken));
+    _account(accessToken);
+    return {
+      'final_amount': '500.00',
+      'line_items': [
+        {'label': 'Registration fee', 'amount': '500.00'},
+      ],
+    };
+  }
+
+  @override
+  Future<({String? fullname, String phone})?> getLastRegistrationDetails(
+    String accessToken,
+  ) async {
+    calls.add((endpoint: 'last-registration', token: accessToken));
+    _account(accessToken);
+    return null;
+  }
+
+  @override
   Future<Map<String, dynamic>> registerForEvent(
     int eventId,
     String accessToken, {
