@@ -19,6 +19,9 @@ abstract class AppRoutes {
   static const String checkIn = '/checkin/:eventId/:token';
   static const String checkInPrefix = '/checkin/';
 
+  /// Where a signed-in person who isn't an admin lands from `/admin…`.
+  static const String notAdmin = '/no-access';
+
   // Website-style public pages (UI alignment).
   static const String privacy = '/privacy';
   static const String terms = '/terms';

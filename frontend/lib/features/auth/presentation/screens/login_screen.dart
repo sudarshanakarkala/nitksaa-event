@@ -1,6 +1,5 @@
 import 'dart:async';
 
-import 'package:event_app/routes/app_routes.dart';
 import 'package:event_app/shared/widgets/emblem_ring.dart';
 import 'package:event_app/theme/app_palette.dart';
 import 'package:event_app/theme/app_text_styles.dart';
@@ -8,7 +7,6 @@ import 'package:event_app/widgets/material/app_primary_button.dart';
 import 'package:event_app/widgets/material/app_scaffold.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:go_router/go_router.dart';
 
 import '../../../../core/logger/app_logger.dart';
 import '../../services/auth_controller.dart';
@@ -162,8 +160,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     try {
       await login();
       if (!mounted) return;
-      setState(() => _statusMessage = 'Signed in. Opening Events...');
-      context.go(AppRoutes.home);
+      // The route guard moves on as soon as the session changes: back to the
+      // page that asked for sign-in, else Events (ISSUE-021).
+      setState(() => _statusMessage = 'Signed in.');
     } catch (_) {
       if (!mounted) return;
       setState(() {

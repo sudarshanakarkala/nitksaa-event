@@ -7,6 +7,9 @@ import 'package:hive_flutter/hive_flutter.dart';
 /// on that person's check-in page instead of the Events list. Kept in the
 /// `app_settings` box (see `EmailLinkStore`), so it survives the new tab.
 /// Used once, and forgotten after 30 minutes.
+///
+/// Also used by the route guard for every page that needs sign-in
+/// (ISSUE-021). A copy is kept in memory too, for when the box isn't open.
 abstract class ReturnAfterSignIn {
   static const _boxName = 'app_settings';
   static const _pathKey = 'returnAfterSignIn';
@@ -16,24 +19,41 @@ abstract class ReturnAfterSignIn {
   static Box<dynamic>? get _box =>
       Hive.isBoxOpen(_boxName) ? Hive.box<dynamic>(_boxName) : null;
 
+  static String? _memoryPath;
+  static int? _memoryAt;
+
   static void save(String path) {
+    _memoryPath = path;
+    _memoryAt = DateTime.now().millisecondsSinceEpoch;
     try {
       _box?.put(_pathKey, path);
       _box?.put(_atKey, DateTime.now().millisecondsSinceEpoch);
     } catch (_) {
-      // Not remembered: after sign-in the person lands on Events.
+      // Kept in memory only: lost if sign-in finishes in a new tab.
+    }
+  }
+
+  /// Whether a page is remembered (fresh or not), without forgetting it.
+  static bool get isPending {
+    if (_memoryPath != null) return true;
+    try {
+      return _box?.containsKey(_pathKey) ?? false;
+    } catch (_) {
+      return false;
     }
   }
 
   /// The remembered page, if any and still fresh; forgets it either way.
   static String? take() {
     final box = _box;
-    if (box == null) return null;
-    final path = box.get(_pathKey);
-    final at = box.get(_atKey);
+    final stored = box?.get(_pathKey);
+    final path = stored ?? _memoryPath;
+    final at = stored != null ? box?.get(_atKey) : _memoryAt;
+    _memoryPath = null;
+    _memoryAt = null;
     try {
-      box.delete(_pathKey);
-      box.delete(_atKey);
+      box?.delete(_pathKey);
+      box?.delete(_atKey);
     } catch (_) {}
     if (path is! String || path.isEmpty || at is! int) return null;
     final age = DateTime.now().difference(DateTime.fromMillisecondsSinceEpoch(at));

@@ -353,8 +353,11 @@ class _AccountButton extends ConsumerWidget {
           // Events page keeps "Registered by me" as a quick filter.
           context.go(AppRoutes.myEvents);
         } else if (value == 'sign-out') {
-          await ref.read(authControllerProvider.notifier).signOut();
-          if (context.mounted) context.go(AppRoutes.login);
+          // To Events, from any page (ISSUE-021). Moved there first, so the
+          // page left behind isn't remembered as one to return to.
+          final auth = ref.read(authControllerProvider.notifier);
+          context.go(AppRoutes.home);
+          await auth.signOut();
         }
       },
       itemBuilder: (context) => [
