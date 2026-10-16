@@ -65,6 +65,12 @@ const _codeMessages = <String, String>{
   'checkout_signature_invalid': _paymentUnconfirmed,
   'checkout_order_mismatch': _paymentUnconfirmed,
   'checkout_amount_mismatch': _paymentUnconfirmed,
+  // Feedback attachments (feedback.py); the form checks these first.
+  'too_many_attachments': 'You can attach up to 3 files.',
+  'attachment_too_large': 'Files can be up to 15 MB in total.',
+  'attachment_type_not_allowed':
+      'Only images and videos (PNG, JPG, WebP, GIF, HEIC, MP4, WebM, MOV).',
+  'attachment_invalid': 'A file couldn\'t be read. Please remove it and try again.',
   // Signed-in session (middleware/auth.py; FastAPI's own for no token).
   'invalid_or_expired_token': _sessionExpired,
   'invalid_token': _sessionExpired,
