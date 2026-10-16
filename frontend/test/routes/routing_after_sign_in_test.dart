@@ -3,7 +3,8 @@
 //
 // - 021-8: signed out, an event card on Events opened the sign-in page
 //   (pushed, with a back arrow, the address still #/home); after signing in
-//   it said "Signed in." and stayed there.
+//   it said "Signed in." and stayed there. (Since #64 the event page is
+//   public; its "Sign in to register" must still come back to it.)
 // - Right after signing in, My Events sometimes said "No registrations yet"
 //   until a reload.
 //
@@ -83,13 +84,21 @@ Future<GoRouter> _open(
 void main() {
   setUp(ReturnAfterSignIn.take);
 
-  testWidgets('021-8: signed out, an event card → sign-in → back to that '
-      'event', (tester) async {
+  testWidgets('021-8: signed out, an event card opens the event (public), '
+      'and "Sign in to register" comes back to it', (tester) async {
     final auth = FakeAuthController()..restore(null);
     final backend = FakeRegistrationBackend(isFree: true);
-    await _open(tester, auth, backend, AppRoutes.home);
+    final router = await _open(tester, auth, backend, AppRoutes.home);
 
     await tester.tap(find.text(_title).first);
+    await settleRequests(tester);
+    // The event page is public: no sign-in on the way.
+    expect(find.text('sign-in page'), findsNothing);
+    expect(find.text('event $eventX'), findsOneWidget);
+
+    // What "Sign in to register" does (event_page_public_test.dart taps it).
+    ReturnAfterSignIn.save('/events/$eventX');
+    router.go(AppRoutes.login);
     await settleRequests(tester);
     expect(find.text('sign-in page'), findsOneWidget);
 

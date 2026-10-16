@@ -457,7 +457,13 @@ void main() {
     expect(afterReload.isAuthenticated, isFalse);
     expect(afterReload.session, isNull);
     expect(await AuthSessionStore().load(), isNull);
-    expect(backend.requests, ['GET /api/v1/auth/me']);
+    // Firebase is still signed in as the same person, so a renewal is tried
+    // first; the backend refuses that too.
+    expect(backend.requests, [
+      'GET /api/v1/auth/me',
+      'POST /api/v1/auth/firebase',
+      'GET /api/v1/auth/me',
+    ]);
   });
 
   test('Test M: a reload with no stored session starts signed out without '

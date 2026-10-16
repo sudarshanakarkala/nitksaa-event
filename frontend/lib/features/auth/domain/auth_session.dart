@@ -1,3 +1,5 @@
+import 'dart:convert';
+
 import 'admin_access.dart';
 
 class AuthSession {
@@ -24,6 +26,24 @@ class AuthSession {
   final AdminAccess access;
 
   bool get isValid => accessToken.isNotEmpty && firebaseUid.isNotEmpty;
+
+  /// When [accessToken] stops working (its `exp`), or null if that can't be
+  /// read from it.
+  DateTime? get expiresAt {
+    final parts = accessToken.split('.');
+    if (parts.length != 3) return null;
+    try {
+      final payload = jsonDecode(
+        utf8.decode(base64Url.decode(base64Url.normalize(parts[1]))),
+      );
+      final exp = payload is Map ? payload['exp'] : null;
+      return exp is num
+          ? DateTime.fromMillisecondsSinceEpoch(exp.toInt() * 1000, isUtc: true)
+          : null;
+    } catch (_) {
+      return null;
+    }
+  }
 
   AuthSession copyWith({
     String? accessToken,

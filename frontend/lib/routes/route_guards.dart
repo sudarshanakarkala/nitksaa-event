@@ -24,9 +24,9 @@ abstract class RouteGuards {
     final isSplash = location == AppRoutes.splash;
     final isLogin = location == AppRoutes.login;
     final isDeveloper = location == AppRoutes.developer;
-    // Pages that need sign-in: My Events, an event's page and its checkout.
-    final isProtected =
-        location == AppRoutes.myEvents || location.startsWith('/events/');
+    // Pages that need sign-in: My Events and an event's checkout. An event's
+    // own page is public (its Register says "Sign in to register").
+    final isProtected = location == AppRoutes.myEvents || isCheckout(location);
 
     if (isDeveloper && !kDebugMode) return AppRoutes.login;
 
@@ -67,6 +67,29 @@ abstract class RouteGuards {
     if (isLogin || isDeveloper) return null;
 
     return null;
+  }
+
+  /// Pages a signed-out visitor can't stay on: My Events, checkout and
+  /// Admin.
+  static bool needsSignIn(String location) =>
+      location == AppRoutes.myEvents ||
+      isCheckout(location) ||
+      location == AppRoutes.admin ||
+      location.startsWith('${AppRoutes.admin}/');
+
+  /// Signed out in another tab: from a page that needs sign-in, to Events
+  /// (like Sign out in this tab), so that page isn't remembered as one to
+  /// come back to. Other pages stay. Null when nothing changes.
+  static String? afterSignedOutElsewhere(String location) =>
+      needsSignIn(location) ? AppRoutes.home : null;
+
+  /// `/events/<id>/checkout` (and anything under it).
+  @visibleForTesting
+  static bool isCheckout(String location) {
+    final segments = Uri.parse(location).pathSegments;
+    return segments.length >= 3 &&
+        segments[0] == 'events' &&
+        segments[2] == 'checkout';
   }
 
   /// Where the splash goes once sign-in has been checked: the page that was

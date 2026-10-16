@@ -8,6 +8,7 @@ import '../../../core/logger/app_logger.dart';
 import '../domain/auth_session.dart';
 import 'auth_error_messages.dart';
 import 'auth_session_store.dart';
+import 'auth_tab_channel.dart';
 import 'backend_auth_service.dart';
 import 'email_link_store.dart';
 import 'email_link_url.dart';
@@ -19,8 +20,10 @@ class AuthController extends ChangeNotifier {
   AuthController._({
     BackendAuthService? backendAuthService,
     AuthSessionStore? sessionStore,
+    AuthTabChannel? tabs,
   }) : _backendAuthService = backendAuthService ?? BackendAuthService(),
-       _sessionStore = sessionStore ?? AuthSessionStore();
+       _sessionStore = sessionStore ?? AuthSessionStore(),
+       _tabs = tabs ?? const AuthTabChannel();
 
   /// A controller that is separate from [instance], for tests that supply
   /// their own backend or session store.
@@ -28,15 +31,33 @@ class AuthController extends ChangeNotifier {
   AuthController.forTesting({
     BackendAuthService? backendAuthService,
     AuthSessionStore? sessionStore,
+    AuthTabChannel? tabs,
   }) : this._(
          backendAuthService: backendAuthService,
          sessionStore: sessionStore,
+         tabs: tabs,
        );
+
+  /// What tabs tell each other (see [AuthTabChannel]).
+  static const tabSignedOut = 'signed-out';
+  static const tabSignedInPrefix = 'signed-in:';
+
+  /// How long before the session ends it is renewed.
+  static const renewBefore = Duration(minutes: 10);
 
   static final AuthController instance = AuthController._();
 
   final BackendAuthService _backendAuthService;
   final AuthSessionStore _sessionStore;
+  final AuthTabChannel _tabs;
+
+  /// Runs when another tab signed out, just before this tab drops its
+  /// session: the app moves off a page that needs sign-in (to Events), so
+  /// that page isn't remembered as one to come back to.
+  VoidCallback? onSignedOutElsewhere;
+
+  Timer? _renewTimer;
+  Future<bool>? _renewing;
 
   StreamSubscription<User?>? _firebaseAuthSubscription;
   AuthStatus _status = AuthStatus.checking;
@@ -73,6 +94,8 @@ class AuthController extends ChangeNotifier {
     _setStatus(AuthStatus.checking);
 
     await _sessionStore.initialize();
+    _tabs.listen(_onTabMessage);
+    _tabs.onPageShown(_renewIfDue);
     _firebaseAuthSubscription = FirebaseAuth.instance.authStateChanges().listen(
       _handleFirebaseAuthChanged,
       onError: (Object error, StackTrace stackTrace) {
@@ -97,6 +120,14 @@ class AuthController extends ChangeNotifier {
       await _setAuthenticated(validatedSession);
     } catch (error, stackTrace) {
       AppLogger.warning('Stored backend session validation failed: $error');
+      // Usually it has just run out. Firebase keeps its own sign-in much
+      // longer: if it is still the same person, renew instead of asking
+      // them to sign in again.
+      final renewed = await _renewedFrom(storedSession);
+      if (renewed != null) {
+        await _setAuthenticated(renewed);
+        return;
+      }
       await _clearStoredSession();
       _errorMessage = friendlyAuthError(error);
       _setStatus(AuthStatus.unauthenticated);
@@ -220,6 +251,7 @@ class AuthController extends ChangeNotifier {
 
   Future<void> signOut() async {
     _errorMessage = null;
+    _renewTimer?.cancel();
     await _clearStoredSession();
     try {
       await FirebaseAuthService.signOut();
@@ -227,7 +259,103 @@ class AuthController extends ChangeNotifier {
       AppLogger.error('Sign out failed', error, stackTrace);
       _errorMessage = friendlyAuthError(error);
     }
+    // Only an explicit sign-out tells the other tabs; a sign-in that failed
+    // and was rolled back never does.
+    _tabs.post(tabSignedOut);
     _setStatus(AuthStatus.unauthenticated);
+  }
+
+  /// Renews the session from Firebase if it ends within [renewBefore].
+  /// Never throws.
+  Future<void> _renewIfDue() async {
+    final expiresAt = _session?.expiresAt;
+    if (expiresAt == null || !isAuthenticated) return;
+    if (expiresAt.difference(DateTime.now().toUtc()) > renewBefore) return;
+    await renewSession();
+  }
+
+  /// Swaps the session for a new one, from Firebase's sign-in, if Firebase
+  /// is still signed in as the same person. Returns whether it did. Never
+  /// throws; one renewal at a time.
+  Future<bool> renewSession() {
+    final running = _renewing;
+    if (running != null) return running;
+    final renewal = _renew();
+    _renewing = renewal;
+    renewal.whenComplete(() {
+      if (identical(_renewing, renewal)) _renewing = null;
+    });
+    return renewal;
+  }
+
+  Future<bool> _renew() async {
+    final current = _session;
+    if (current == null) return false;
+    final renewed = await _renewedFrom(current);
+    // Signed out, or someone else, while this was running: leave it.
+    if (renewed == null || _session?.firebaseUid != current.firebaseUid) {
+      return false;
+    }
+    await _setAuthenticated(renewed);
+    notifyListeners();
+    return true;
+  }
+
+  /// A new session for the person of [previous], exchanged from Firebase's
+  /// sign-in, or null if Firebase isn't signed in as them (signed out, or
+  /// someone else) or the exchange fails. Only ever replaces an existing
+  /// session: after a sign-out there is nothing to renew.
+  Future<AuthSession?> _renewedFrom(AuthSession previous) async {
+    try {
+      final uid = await FirebaseAuthService.restoredUid();
+      if (uid == null || uid != previous.firebaseUid) return null;
+      final firebaseToken = await FirebaseAuthService.idToken();
+      final backendSession = await _backendAuthService.loginWithFirebaseToken(
+        firebaseToken,
+      );
+      final validated = await _backendAuthService.validateAccessToken(
+        backendSession.accessToken,
+      );
+      if (validated.firebaseUid != previous.firebaseUid) return null;
+      AppLogger.info('Backend session renewed.');
+      return validated;
+    } catch (error) {
+      AppLogger.warning('Session renewal failed: $error');
+      return null;
+    }
+  }
+
+  void _scheduleRenewal() {
+    _renewTimer?.cancel();
+    final expiresAt = _session?.expiresAt;
+    if (expiresAt == null) return;
+    var wait = expiresAt.difference(DateTime.now().toUtc()) - renewBefore;
+    if (wait.isNegative) wait = Duration.zero;
+    _renewTimer = Timer(wait, () => unawaited(renewSession()));
+  }
+
+  /// What another tab of this site said (see [AuthTabChannel]).
+  @visibleForTesting
+  void onTabMessage(String message) => _onTabMessage(message);
+
+  void _onTabMessage(String message) {
+    if (message == tabSignedOut) {
+      // Signed out there: out here too. The stored session is already gone.
+      if (_session == null) return;
+      onSignedOutElsewhere?.call();
+      _renewTimer?.cancel();
+      _setUnauthenticated();
+      return;
+    }
+    if (message.startsWith(tabSignedInPrefix)) {
+      // Signed in there as someone else: reload as them, so nothing of the
+      // previous person stays on screen. A tab that is signed out, or
+      // already signed in as them, stays as it is (a tab waiting for an
+      // emailed sign-in link must not take the page it will go back to).
+      final uid = message.substring(tabSignedInPrefix.length);
+      final mine = _session?.firebaseUid;
+      if (mine != null && mine != uid) _tabs.reload();
+    }
   }
 
   /// Re-reads the signed-in user (and their admin rights) from `/auth/me`,
@@ -266,6 +394,7 @@ class AuthController extends ChangeNotifier {
         backendSession.accessToken,
       );
       await _setAuthenticated(validatedSession);
+      _tabs.post('$tabSignedInPrefix${validatedSession.firebaseUid}');
       AppLogger.info('Backend-authenticated login completed.');
     } catch (error, stackTrace) {
       AppLogger.error('Login failed', error, stackTrace);
@@ -328,15 +457,18 @@ class AuthController extends ChangeNotifier {
     _session = session;
     _errorMessage = null;
     await _sessionStore.save(session);
+    _scheduleRenewal();
     _setStatus(AuthStatus.authenticated);
   }
 
   Future<void> _clearStoredSession() async {
+    _renewTimer?.cancel();
     _session = null;
     await _sessionStore.clear();
   }
 
   void _setUnauthenticated() {
+    _renewTimer?.cancel();
     _session = null;
     _setStatus(AuthStatus.unauthenticated);
   }
@@ -349,6 +481,7 @@ class AuthController extends ChangeNotifier {
 
   @override
   void dispose() {
+    _renewTimer?.cancel();
     _firebaseAuthSubscription?.cancel();
     super.dispose();
   }

@@ -21,6 +21,7 @@ import '../../domain/event.dart';
 import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
 import '../widgets/event_card.dart';
+import '../../domain/event_time_zone.dart';
 import '../../../../shared/widgets/notice.dart';
 
 class ManageEventsScreen extends ConsumerStatefulWidget {
@@ -558,23 +559,6 @@ List<String> _getCommonTimezones() {
   ];
 }
 
-// Fallback timezone offsets for common zones
-const Map<String, String> TZ_OFFSETS = {
-  'Asia/Kolkata': '+05:30',
-  'UTC': '+00:00',
-  'Asia/Dubai': '+04:00',
-  'Europe/London': '+00:00',
-  'America/New_York': '-05:00',
-  'America/Los_Angeles': '-08:00',
-  'Asia/Singapore': '+08:00',
-  'Australia/Sydney': '+10:00',
-};
-
-String _getTimezoneOffset(String timezone) {
-  // Use fallback offsets map for most common zones
-  return TZ_OFFSETS[timezone] ?? '+05:30';
-}
-
 /// Opens the create/edit event form. Returns true when the event was saved.
 Future<bool> showEventFormDialog(BuildContext context, {AppEvent? event}) async {
   final saved = await showDialog<bool>(
@@ -720,8 +704,15 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _tagline = TextEditingController(text: event?.tagline ?? '');
     _description = TextEditingController(text: event?.description ?? '');
     
-    final startDt = event?.startDatetime ?? DateTime.now();
-    var endDt = event?.endDatetime ?? DateTime.now().add(const Duration(hours: 2));
+    // Times are shown and typed in the event's own timezone, wherever the
+    // person editing is.
+    final zone = event?.timezone ?? 'Asia/Kolkata';
+    DateTime inZone(DateTime d) => EventTimeZone.wallTime(d, zone) ?? d;
+    final startDt =
+        event != null ? inZone(event.startDatetime) : DateTime.now();
+    var endDt = event?.endDatetime != null
+        ? inZone(event!.endDatetime!)
+        : startDt.add(const Duration(hours: 2));
     // A full-day event is saved ending at midnight after its last day.
     if ((event?.isFullDay ?? false) && endDt.isAfter(startDt)) {
       endDt = endDt.subtract(const Duration(days: 1));
@@ -742,10 +733,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _virtualUrl = TextEditingController(text: event?.virtualUrl ?? '');
     
     _registrationOpensAt = TextEditingController(text: event?.registrationOpensAt != null 
-      ? _formatDateTimeOnly(event!.registrationOpensAt!) 
+      ? _formatDateTimeOnly(inZone(event!.registrationOpensAt!)) 
       : '');
     _registrationClosesAt = TextEditingController(text: event?.registrationClosesAt != null 
-      ? _formatDateTimeOnly(event!.registrationClosesAt!) 
+      ? _formatDateTimeOnly(inZone(event!.registrationClosesAt!)) 
       : '');
     
     _thumbnailUrl = TextEditingController(text: event?.thumbnailUrl ?? '');
@@ -788,8 +779,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       return {
         'title': sess.title,
         'speaker': matchingSpeaker,
-        'start_time': _formatDateTimeOnly(sess.startDatetime),
-        'end_time': sess.endDatetime != null ? _formatDateTimeOnly(sess.endDatetime!) : '',
+        'start_time': _formatDateTimeOnly(inZone(sess.startDatetime)),
+        'end_time': sess.endDatetime != null ? _formatDateTimeOnly(inZone(sess.endDatetime!)) : '',
       };
     }).toList() ?? [];
     
@@ -1786,8 +1777,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               'session_id': text(r['session_id']),
               'title': text(r['title']),
               'speaker': text(r['speaker_name']),
-              'start_time': _detailsTime(r['start_datetime']),
-              'end_time': _detailsTime(r['end_datetime']),
+              'start_time': _detailsTime(r['start_datetime'], _timezone.text),
+              'end_time': _detailsTime(r['end_datetime'], _timezone.text),
             },
         ];
         _fees = [
@@ -1825,15 +1816,27 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     }
   }
 
-  /// "yyyy-MM-dd HH:mm" in local time, the format the session dialog uses.
-  static String _detailsTime(Object? iso) {
-    final d = DateTime.tryParse(iso?.toString() ?? '')?.toLocal();
-    return d == null ? '' : _formatDateTimeOnly(d);
+  /// "yyyy-MM-dd HH:mm" in the event's timezone [zone], the format the
+  /// session dialog uses.
+  static String _detailsTime(Object? iso, String zone) {
+    final d = DateTime.tryParse(iso?.toString() ?? '');
+    if (d == null) return '';
+    return _formatDateTimeOnly(EventTimeZone.wallTime(d, zone) ?? d.toLocal());
+  }
+
+  /// [wall] (a date and time typed in the form) in the event's timezone, as
+  /// ISO 8601 with the offset for that date, summer time included.
+  String _iso(DateTime wall) => EventTimeZone.iso(wall, _timezone.text.trim())!;
+
+  /// [_iso] of a "yyyy-MM-dd HH:mm" field; null when it is empty.
+  String? _isoOfField(String text) {
+    final wall = DateTime.tryParse(text.trim().replaceFirst(' ', 'T'));
+    return wall == null ? null : _iso(wall);
   }
 
   /// Saves speakers, sessions and fee tiers after the event is saved.
   /// Returns false if that failed.
-  Future<bool> _saveDetails(int eventId, String token, String offset) async {
+  Future<bool> _saveDetails(int eventId, String token) async {
     if (_detailsLoadFailed || _detailsLoading) return true; // nothing loaded, nothing changed
     try {
       await ref.read(eventsRepositoryProvider).putEventDetails(eventId, token, {
@@ -1854,8 +1857,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                 'session_id': int.parse(se['session_id']!),
               'title': se['title'] ?? '',
               'speaker_name': se['speaker'],
-              'start_datetime': '${(se['start_time'] ?? '').replaceFirst(' ', 'T')}:00$offset',
-              'end_datetime': '${(se['end_time'] ?? '').replaceFirst(' ', 'T')}:00$offset',
+              'start_datetime': _isoOfField(se['start_time'] ?? ''),
+              'end_datetime': _isoOfField(se['end_time'] ?? ''),
             },
         ],
         'fees': [
@@ -3012,19 +3015,25 @@ void _showFeeDialog(int? editIndex) {
       return;
     }
 
+    if (!EventTimeZone.isKnown(_timezone.text.trim())) {
+      if (mounted) {
+        showNotice(context, 'Choose a timezone from the list.', kind: NoticeKind.warning);
+      }
+      return;
+    }
+
     setState(() => _isSaving = true);
 
     try {
       final auth = ref.read(authControllerProvider);
-      final offset = _getTimezoneOffset(_timezone.text);
 
       final data = <String, dynamic>{
         'title': _title.text.trim(),
         'tagline': _tagline.text.trim().isEmpty ? null : _tagline.text.trim(),
         'description': _description.text.trim(),
-        'start_datetime': '${_formatDateOnly(startDateTime)}T${_formatTimeFromDateTime(startDateTime)}:00$offset',
-        'end_datetime': '${_formatDateOnly(endDateTime)}T${_formatTimeFromDateTime(endDateTime)}:00$offset',
-        'timezone': _timezone.text,
+        'start_datetime': _iso(startDateTime),
+        'end_datetime': _iso(endDateTime),
+        'timezone': _timezone.text.trim(),
         'is_virtual': _isVirtual,
         'location_text': _isVirtual ? null : _location.text.trim().isEmpty ? null : _location.text.trim(),
         'location_maps_url': _isVirtual ? null : _locationMapsUrl.text.trim().isEmpty ? null : _locationMapsUrl.text.trim(),
@@ -3038,9 +3047,9 @@ void _showFeeDialog(int? editIndex) {
         'thumbnail_url': _thumbnailUrl.text.trim().isEmpty ? null : _thumbnailUrl.text.trim(),
         'banner_url': _bannerUrl.text.trim().isEmpty ? null : _bannerUrl.text.trim(),
         if (_registrationOpensAt.text.trim().isNotEmpty)
-          'registration_opens_at': '${_registrationOpensAt.text.trim()}:00$offset',
+          'registration_opens_at': _isoOfField(_registrationOpensAt.text),
         if (_registrationClosesAt.text.trim().isNotEmpty)
-          'registration_closes_at': '${_registrationClosesAt.text.trim()}:00$offset',
+          'registration_closes_at': _isoOfField(_registrationClosesAt.text),
       };
 
       final repo = ref.read(eventsRepositoryProvider);
@@ -3051,7 +3060,7 @@ void _showFeeDialog(int? editIndex) {
 
       // Speakers, sessions and fee tiers, then sponsors and partners, have
       // their own endpoints.
-      final detailsSaved = await _saveDetails(saved.eventId, token, offset);
+      final detailsSaved = await _saveDetails(saved.eventId, token);
       final orgsSaved = await _saveOrgs(saved.eventId, token);
       if (!detailsSaved && mounted) {
         showNotice(context, 'The event was saved, but its speakers, sessions or fee tiers could not be. '

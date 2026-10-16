@@ -10,6 +10,7 @@ import 'core/logger/app_logger.dart';
 import 'features/auth/services/auth_controller.dart';
 import 'firebase_options.dart';
 import 'routes/app_router.dart';
+import 'routes/route_guards.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 
@@ -34,6 +35,15 @@ Future<void> main() async {
 
   await AuthController.instance.initialize();
   AppLogger.info('Auth controller initialized');
+
+  // Signed out in another tab: leave a page that needs sign-in first.
+  AuthController.instance.onSignedOutElsewhere = () {
+    final router = AppRouter.router;
+    final next = RouteGuards.afterSignedOutElsewhere(
+      router.routerDelegate.currentConfiguration.uri.path,
+    );
+    if (next != null) router.go(next);
+  };
 
   // Opened from an emailed sign-in link: start completing it now. Not
   // awaited, but it reads and cleans the URL (and marks sign-in as in

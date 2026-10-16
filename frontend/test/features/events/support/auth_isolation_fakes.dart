@@ -107,6 +107,16 @@ class FakeAuthController extends ChangeNotifier implements AuthController {
   @override
   Future<void> refreshSession() async {}
 
+  // Other tabs and session renewal: not exercised by these tests.
+  @override
+  VoidCallback? onSignedOutElsewhere;
+
+  @override
+  void onTabMessage(String message) {}
+
+  @override
+  Future<bool> renewSession() async => false;
+
   // Email sign-in links: not exercised by these tests.
   @override
   String? get pendingEmailLink => null;

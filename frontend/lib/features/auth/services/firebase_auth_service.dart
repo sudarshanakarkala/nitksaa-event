@@ -96,6 +96,21 @@ abstract class FirebaseAuthService {
     return token;
   }
 
+  /// The uid of the person signed in to Firebase, once Firebase has
+  /// restored its sign-in after a page load (it keeps it much longer than
+  /// our app's own session lasts). Null if nobody is.
+  static Future<String?> restoredUid() async {
+    try {
+      await FirebaseAuth.instance
+          .authStateChanges()
+          .first
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // Not reported in time: go by what Firebase has now.
+    }
+    return FirebaseAuth.instance.currentUser?.uid;
+  }
+
   static Future<void> signOut() async {
     AppLogger.info('signOut called');
     await FirebaseAuth.instance.signOut();
