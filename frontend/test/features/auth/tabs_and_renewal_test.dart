@@ -130,7 +130,10 @@ void main() {
       await signIn(auth, accountA);
       backend.requests.clear();
       auth.onTabMessage('signed-out');
-      await Future<void>.delayed(Duration.zero);
+      // The call isn't awaited by the tab; give it a moment to go out.
+      for (var i = 0; i < 50 && backend.requests.isEmpty; i++) {
+        await Future<void>.delayed(const Duration(milliseconds: 10));
+      }
       expect(backend.requests, ['POST /api/v1/auth/logout']);
     });
 
