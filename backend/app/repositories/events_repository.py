@@ -3,12 +3,17 @@ import asyncpg
 
 from app.schemas.event_create import EventCreate
 from app.schemas.events import SessionCreate
+from app.repositories.registration_repository import RegistrationRepository
+
+# Seats taken, as Register counts them: paid, or being paid for (a hold
+# that hasn't run out). The Dashboard keeps its own count of paid ones.
+_SEATS_TAKEN = RegistrationRepository.seat_taken_sql("r")
 
 
 _SELECT_WITH_CREATOR = """
     SELECT e.*, u.fullname AS created_by_name,
            (SELECT COUNT(*) FROM registrations r
-            WHERE r.event_id = e.event_id AND r.status = 'registered') AS registered_count
+            WHERE r.event_id = e.event_id AND """ + _SEATS_TAKEN + """) AS registered_count
     FROM events e
     LEFT JOIN event_users u ON u.firebase_uid = e.created_by_firebase_uid
 """
@@ -23,7 +28,7 @@ _PUBLIC_COLUMNS = """
     e.is_full_day, e.is_free, e.ticket_price,
     e.published_at,
     (SELECT COUNT(*) FROM registrations r
-     WHERE r.event_id = e.event_id AND r.status = 'registered') AS registered_count
+     WHERE r.event_id = e.event_id AND """ + _SEATS_TAKEN + """) AS registered_count
 """
 
 

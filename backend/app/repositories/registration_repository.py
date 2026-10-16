@@ -108,6 +108,20 @@ class RegistrationRepository:
         "registered", "seat_held", "payment_pending", "payment_verification", "payment_failed",
     )
 
+    @classmethod
+    def seat_taken_sql(cls, alias: str = "r") -> str:
+        """SQL condition: this registration row takes a seat, exactly as
+        Register counts it (after expire_stale_holds): confirmed, or a hold
+        or payment still in flight that hasn't run out. For the public seat
+        count, so the Events list, the event page and Register agree."""
+        statuses = ", ".join(f"'{s}'" for s in cls._IN_FLIGHT_OR_CONFIRMED)
+        return (
+            f"{alias}.status IN ({statuses})"
+            f" AND NOT ({alias}.status <> 'registered'"
+            f" AND {alias}.hold_expires_at IS NOT NULL"
+            f" AND {alias}.hold_expires_at < now())"
+        )
+
     async def get_active_or_held_for_user(
         self, event_id: int, firebase_uid: str
     ) -> Optional[asyncpg.Record]:
