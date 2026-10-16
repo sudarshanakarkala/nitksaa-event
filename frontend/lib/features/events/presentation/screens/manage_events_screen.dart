@@ -615,6 +615,21 @@ const _partnerKind = _OrgKind(
   ],
 );
 
+/// The optional parts of an event, added with "+" on the edit form only when
+/// the event needs them (EVENT_FORM_REDESIGN.md). A group is shown when it
+/// holds data or was just added; removing it clears its data on save.
+enum _Group {
+  images('Images'),
+  registrationDates('Registration dates'),
+  guests('Guests'),
+  speakers('Speakers'),
+  agenda('Agenda'),
+  sponsors('Sponsors & partners');
+
+  const _Group(this.label);
+  final String label;
+}
+
 class _EventFormDialog extends ConsumerStatefulWidget {
   const _EventFormDialog({this.event});
 
@@ -629,7 +644,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   
   // Basic info
   late final TextEditingController _title;
-  late final TextEditingController _tagline;
   late final TextEditingController _description;
   
   // Datetime
@@ -687,7 +701,16 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   bool _detailsLoadFailed = false;
   
   var _isSaving = false;
-  var _currentStep = 0;
+
+  /// Groups added with "+" in this sitting (see [_Group]).
+  final _addedGroups = <_Group>{};
+
+  /// The timezone picker shows once asked for, or for an event not in IST.
+  var _showTimezone = false;
+
+  /// The form as last saved or opened, to tell whether closing loses
+  /// anything. Null until speakers, sponsors and the rest have loaded.
+  String? _baseline;
   
   // Location search state
   final _locationSearchController = TextEditingController();
@@ -701,7 +724,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final event = widget.event;
     
     _title = TextEditingController(text: event?.title ?? '');
-    _tagline = TextEditingController(text: event?.tagline ?? '');
     _description = TextEditingController(text: event?.description ?? '');
     
     // Times are shown and typed in the event's own timezone, wherever the
@@ -723,6 +745,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _startTime = TextEditingController(text: _formatTimeFromDateTime(startDt));
     _endTime = TextEditingController(text: _formatTimeFromDateTime(endDt));
     _timezone = TextEditingController(text: event?.timezone ?? 'Asia/Kolkata');
+    _showTimezone = _timezone.text != 'Asia/Kolkata';
     _isFullDay = event?.isFullDay ?? false;
     
     _isVirtual = event?.isVirtual ?? false;
@@ -735,8 +758,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _registrationOpensAt = TextEditingController(text: event?.registrationOpensAt != null 
       ? _formatDateTimeOnly(inZone(event!.registrationOpensAt!)) 
       : '');
-    _registrationClosesAt = TextEditingController(text: event?.registrationClosesAt != null 
-      ? _formatDateTimeOnly(inZone(event!.registrationClosesAt!)) 
+    // Closing when the event starts is the default (saved when the field is
+    // empty), so that time shows as an empty field.
+    final closes = event?.registrationClosesAt;
+    final closesAtStart = event != null &&
+        closes != null &&
+        closes.difference(event.startDatetime).inMinutes.abs() < 1;
+    _registrationClosesAt = TextEditingController(text: closes != null && !closesAtStart
+      ? _formatDateTimeOnly(inZone(closes))
       : '');
     
     _thumbnailUrl = TextEditingController(text: event?.thumbnailUrl ?? '');
@@ -784,20 +813,126 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       };
     }).toList() ?? [];
     
-    // Add listeners to step 1 required fields to trigger rebuild for Next button state
-    _title.addListener(_onFieldChanged);
-    _description.addListener(_onFieldChanged);
-    _startDate.addListener(_onFieldChanged);
-    _endDate.addListener(_onFieldChanged);
-    _timezone.addListener(_onFieldChanged);
-    _location.addListener(_onFieldChanged);
-    _virtualUrl.addListener(_onFieldChanged);
-    _capacity.addListener(_onFieldChanged);
+    // Any change rebuilds, so groups and the unsaved-changes check stay current.
+    for (final c in _textFields) {
+      c.addListener(_onFieldChanged);
+    }
+    _setBaselineWhenLoaded();
   }
 
+  List<TextEditingController> get _textFields => [
+        _title, _description, _startDate, _endDate, _startTime, _endTime,
+        _timezone, _location, _locationMapsUrl, _virtualUrl,
+        _registrationOpensAt, _registrationClosesAt, _thumbnailUrl, _bannerUrl,
+        _capacity,
+      ];
+
   void _onFieldChanged() {
-    // Trigger rebuild so _isStep1Complete is re-evaluated
-    setState(() {});
+    if (mounted) setState(() {});
+  }
+
+  /// Everything the form would save, as one string.
+  String _signature() => jsonEncode([
+        for (final c in _textFields) c.text,
+        _isFullDay, _isVirtual, _maxGuests, _isFree,
+        _speakers, _sessions, _fees, _sponsors, _partners,
+      ]);
+
+  /// Takes the "nothing changed yet" snapshot once everything has loaded.
+  void _setBaselineWhenLoaded() {
+    if (_baseline != null || _detailsLoading || _orgsLoading) return;
+    _baseline = _signature();
+  }
+
+  bool get _hasUnsavedChanges => _baseline != null && _signature() != _baseline;
+
+  /// Cancel, ✕, Esc or a click outside: asks first if anything would be lost.
+  Future<void> _close() async {
+    if (_hasUnsavedChanges) {
+      final discard = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: const Text('Discard your changes?'),
+          content: const Text('You have changes that aren\'t saved yet.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Keep editing'),
+            ),
+            FilledButton(
+              key: const ValueKey('event-form-discard'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Discard'),
+            ),
+          ],
+        ),
+      );
+      if (discard != true || !mounted) return;
+    }
+    if (mounted) Navigator.pop(context, false);
+  }
+
+  bool _hasData(_Group group) => switch (group) {
+        _Group.images =>
+          _thumbnailUrl.text.trim().isNotEmpty || _bannerUrl.text.trim().isNotEmpty,
+        _Group.registrationDates => _registrationOpensAt.text.trim().isNotEmpty ||
+            _registrationClosesAt.text.trim().isNotEmpty,
+        _Group.guests => _maxGuests > 0,
+        _Group.speakers => _speakers.isNotEmpty,
+        _Group.agenda => _sessions.isNotEmpty,
+        _Group.sponsors => _sponsors.isNotEmpty || _partners.isNotEmpty,
+      };
+
+  bool _shows(_Group group) => _addedGroups.contains(group) || _hasData(group);
+
+  /// Removes a group; if it holds data, asks first. The data goes on save.
+  Future<void> _removeGroup(_Group group) async {
+    if (_hasData(group)) {
+      final ok = await showDialog<bool>(
+        context: context,
+        builder: (context) => AlertDialog(
+          title: Text('Remove ${group.label.toLowerCase()}?'),
+          content: Text('What\'s in ${group.label.toLowerCase()} will be removed '
+              'from the event when you save.'),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, false),
+              child: const Text('Cancel'),
+            ),
+            FilledButton(
+              key: const ValueKey('event-group-remove-confirm'),
+              onPressed: () => Navigator.pop(context, true),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+      );
+      if (ok != true || !mounted) return;
+    }
+    setState(() {
+      _addedGroups.remove(group);
+      switch (group) {
+        case _Group.images:
+          _thumbnailUrl.clear();
+          _bannerUrl.clear();
+        case _Group.registrationDates:
+          _registrationOpensAt.clear();
+          _registrationClosesAt.clear();
+        case _Group.guests:
+          _maxGuests = 0;
+        case _Group.speakers:
+          _speakers.clear();
+          // Sessions name their speaker; there are none now.
+          for (final session in _sessions) {
+            session['speaker'] = '';
+          }
+        case _Group.agenda:
+          _sessions.clear();
+        case _Group.sponsors:
+          _sponsors.clear();
+          _partners.clear();
+      }
+    });
   }
 
   /// One moment from a date field and a time field.
@@ -827,7 +962,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   @override
   void dispose() {
     _title.dispose();
-    _tagline.dispose();
     _description.dispose();
     _startDate.dispose();
     _endDate.dispose();
@@ -847,14 +981,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     super.dispose();
   }
 
-  /// Every field the backend needs to publish is filled in, so the admin
-  /// can leave step 1. Same rule as `_validate_for_publish` in
-  /// backend/app/services/events_service.py (see event_publish_requirements.dart).
-  bool get _isStep1Complete => _missingRequiredFields().isEmpty;
+  /// A published event keeps its description; a draft can be saved without
+  /// one (it is needed to publish).
+  bool get _descriptionRequired => widget.event?.status == 'published';
 
-  /// Labels of the publish-required fields still missing, e.g.
-  /// ['Capacity', 'Description']. Checked again in [_save], because the
-  /// step-1 validators aren't mounted while the admin is on step 3.
+  /// Labels of the fields still missing to save, e.g. ['Capacity']: the
+  /// publish rule (`_validate_for_publish` in
+  /// backend/app/services/events_service.py, see
+  /// event_publish_requirements.dart), less the description for a draft.
   List<String> _missingRequiredFields() => missingPublishFields(
         title: _title.text,
         description: _description.text,
@@ -865,127 +999,86 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         isVirtual: _isVirtual,
         location: _location.text,
         virtualUrl: _virtualUrl.text,
-      );
+      ).where((label) => _descriptionRequired || label != 'Description').toList();
 
   @override
   Widget build(BuildContext context) {
     final isEditing = widget.event != null;
     final theme = Theme.of(context);
-    
-    return Dialog(
-      child: SizedBox(
-        width: MediaQuery.of(context).size.width > 800 ? 700 : null,
-        height: MediaQuery.of(context).size.height * 0.9,
-        child: Scaffold(
-          appBar: AppBar(
-            title: Text(isEditing ? 'Edit Event' : 'Create Event'),
-            leading: IconButton(
-              icon: const Icon(Icons.close),
-              onPressed: () => Navigator.pop(context, false),
+
+    return PopScope(
+      // Esc, back and a click outside come here first when changes would
+      // be lost.
+      canPop: !_hasUnsavedChanges,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop && !_isSaving) _close();
+      },
+      child: Dialog(
+        child: SizedBox(
+          width: MediaQuery.of(context).size.width > 800 ? 700 : null,
+          height: MediaQuery.of(context).size.height * 0.9,
+          child: Scaffold(
+            appBar: AppBar(
+              title: Text(isEditing ? 'Edit event' : 'Create event'),
+              leading: IconButton(
+                icon: const Icon(Icons.close),
+                tooltip: 'Close',
+                onPressed: _isSaving ? null : _close,
+              ),
             ),
-          ),
-          body: Form(
-            key: _formKey,
-            child: Column(
-              children: [
-                // Step indicator
-                Padding(
-                  padding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
-                  child: Row(
-                    children: [
-                      Flexible(
-                        flex: 2,
-                        child: _buildStepIndicator(0, 'General', 'Event details, date, location'),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Divider(
-                          color: _currentStep > 0 ? context.palette.primary : context.palette.border,
-                          thickness: 2,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        flex: 3,
-                        child: _buildStepIndicator(1, 'People & Agenda', 'Sponsors, speakers and sessions'),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: Divider(
-                          color: _currentStep > 1 ? context.palette.primary : context.palette.border,
-                          thickness: 2,
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Flexible(
-                        flex: 2,
-                        child: _buildStepIndicator(2, 'Pricing', 'Free, or what attendees pay'),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 8),
-                // Step content
-                Expanded(
-                  child: SingleChildScrollView(
-                    padding: const EdgeInsets.all(24),
-                    child: _currentStep == 0
-                        ? _buildStep1()
-                        : _currentStep == 1
-                            ? _buildStep2()
-                            : _buildStep3(),
-                  ),
-                ),
-                // Bottom actions
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: theme.scaffoldBackgroundColor,
-                    border: Border(top: BorderSide(color: context.palette.border)),
-                  ),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.spaceBetween,
-                    children: [
-                      if (_currentStep > 0)
-                        TextButton.icon(
-                          onPressed: () => setState(() => _currentStep--),
-                          icon: const Icon(Icons.arrow_back),
-                          label: const Text('Back'),
-                        )
-                      else
-                        const SizedBox.shrink(),
-                      Row(
-                        mainAxisSize: MainAxisSize.min,
+            body: Form(
+              key: _formKey,
+              child: Column(
+                children: [
+                  Expanded(
+                    child: SingleChildScrollView(
+                      padding: const EdgeInsets.all(24),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          TextButton(
-                            onPressed: _isSaving ? null : () => Navigator.pop(context, false),
-                            child: const Text('Cancel'),
-                          ),
-                          if (_currentStep == 0)
-                            FilledButton.icon(
-                              onPressed: _isStep1Complete ? () => setState(() => _currentStep = 1) : null,
-                              icon: const Icon(Icons.arrow_forward),
-                              label: const Text('Next'),
-                            )
-                          else if (_currentStep == 1)
-                            FilledButton.icon(
-                              onPressed: () => setState(() => _currentStep = 2),
-                              icon: const Icon(Icons.arrow_forward),
-                              label: const Text('Next'),
-                            )
+                          _buildEssentials(),
+                          const SizedBox(height: 32),
+                          if (isEditing)
+                            _buildGroups()
                           else
-                            FilledButton(
-                              onPressed: _isSaving ? null : _save,
-                              child: Text(_isSaving ? 'Saving...' : 'Save Event'),
+                            Text(
+                              'After saving, open Edit event to add images, '
+                              'guests, speakers, an agenda, sponsors and more.',
+                              style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
                             ),
                         ],
                       ),
-                    ],
+                    ),
                   ),
-                ),
-              ],
+                  // Bottom actions
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: theme.scaffoldBackgroundColor,
+                      border: Border(top: BorderSide(color: context.palette.border)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        TextButton(
+                          onPressed: _isSaving ? null : _close,
+                          child: const Text('Cancel'),
+                        ),
+                        const SizedBox(width: 8),
+                        FilledButton(
+                          key: const ValueKey('event-form-save'),
+                          onPressed: _isSaving ? null : _save,
+                          child: Text(_isSaving
+                              ? 'Saving...'
+                              : isEditing
+                                  ? 'Save'
+                                  : 'Save draft'),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
         ),
@@ -993,101 +1086,37 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  Widget _buildStepIndicator(int step, String title, String subtitle) {
-    final isActive = _currentStep == step;
-    final isCompleted = _currentStep > step;
-    final color = isCompleted || isActive ? context.palette.primary : context.palette.textMuted;
-    final isNarrow = MediaQuery.of(context).size.width < 600;
-    final canNavigate = step == 0 || _isStep1Complete;
-    return GestureDetector(
-      onTap: canNavigate ? () => setState(() => _currentStep = step) : null,
-      child: Row(
-        mainAxisSize: MainAxisSize.min,
-        children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: isCompleted ? context.palette.primary : (isActive ? context.palette.primary.withValues(alpha: 0.15) : Colors.transparent),
-              border: Border.all(color: color, width: 2),
-            ),
-            child: Center(
-              child: isCompleted
-                  ? Icon(Icons.check, size: 18, color: context.palette.onPrimary)
-                  : Text('${step + 1}', style: TextStyle(fontWeight: FontWeight.bold, color: isActive ? context.palette.primary : context.palette.textMuted, fontSize: 14)),
-            ),
-          ),
-          const SizedBox(width: 6),
-          Flexible(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Text(
-                  title,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  softWrap: false,
-                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: isActive || isCompleted ? context.palette.primary : context.palette.textMuted),
-                ),
-                if (!isNarrow)
-                  Text(
-                    subtitle,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    softWrap: false,
-                    style: TextStyle(fontSize: 10, color: context.palette.textMuted),
-                  ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStep1() {
+  /// What every event needs: what, when, where, how many, and the price.
+  Widget _buildEssentials() {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        // ── Event Details Section ──
-        _buildSectionHeader('Event Details'),
-        const SizedBox(height: 16),
         _buildTextField(_title, 'Event Title', hint: 'e.g., NITK Alumni Meetup', required: true),
         const SizedBox(height: 12),
-        _buildTextField(_tagline, 'Tagline', hint: 'Brief one-line summary', maxLines: 1),
-        const SizedBox(height: 12),
-        _buildTextField(_description, 'Description', hint: 'Detailed event description', maxLines: 4, required: true),
-        
+        _buildTextField(
+          _description,
+          'Description',
+          hint: _descriptionRequired
+              ? 'Detailed event description'
+              : 'Detailed event description (needed before you publish)',
+          maxLines: 4,
+          required: _descriptionRequired,
+        ),
+
         const SizedBox(height: 28),
-        // ── Date & Time Section ──
-        _buildSectionHeader('Date & Time'),
-        const SizedBox(height: 16),
-        
-        // Timezone selector
-        _buildTimezoneDropdown(),
+        _buildSectionHeader('When'),
         const SizedBox(height: 12),
-        
-        // Full day toggle
         _buildToggleField('Full Day Event', _isFullDay, (val) {
           setState(() => _isFullDay = val);
         }),
         const SizedBox(height: 12),
-        
-        // Date/time fields
         // Full day: dates only (an event can run several days).
         if (_isFullDay)
-          Column(
+          Row(
             children: [
-              Row(
-                children: [
-                  Expanded(child: _buildDateField(_startDate, 'Start Date', required: true)),
-                  const SizedBox(width: 12),
-                  Expanded(child: _buildDateField(_endDate, 'End Date', required: true)),
-                ],
-              ),
-              const SizedBox(height: 12),
+              Expanded(child: _buildDateField(_startDate, 'Start Date', required: true)),
+              const SizedBox(width: 12),
+              Expanded(child: _buildDateField(_endDate, 'End Date', required: true)),
             ],
           )
         else
@@ -1095,69 +1124,57 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             children: [
               Row(
                 children: [
-                  Expanded(
-                    child: _buildDateField(_startDate, 'Start Date', required: true),
-                  ),
+                  Expanded(child: _buildDateField(_startDate, 'Start Date', required: true)),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTimeField(_startTime, 'Start Time', required: true),
-                  ),
+                  Expanded(child: _buildTimeField(_startTime, 'Start Time', required: true)),
                 ],
               ),
               const SizedBox(height: 12),
               Row(
                 children: [
-                  Expanded(
-                    child: _buildDateField(_endDate, 'End Date', required: true),
-                  ),
+                  Expanded(child: _buildDateField(_endDate, 'End Date', required: true)),
                   const SizedBox(width: 12),
-                  Expanded(
-                    child: _buildTimeField(_endTime, 'End Time', required: true),
-                  ),
+                  Expanded(child: _buildTimeField(_endTime, 'End Time', required: true)),
                 ],
               ),
             ],
           ),
-        
+        const SizedBox(height: 8),
+        if (_showTimezone)
+          Padding(
+            padding: const EdgeInsets.only(top: 4),
+            child: _buildTimezoneDropdown(),
+          )
+        else
+          Wrap(
+            crossAxisAlignment: WrapCrossAlignment.center,
+            children: [
+              Text(
+                'Times are in ${_timezone.text}.',
+                style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+              ),
+              TextButton(
+                key: const ValueKey('event-timezone-change'),
+                onPressed: () => setState(() => _showTimezone = true),
+                child: const Text('Change'),
+              ),
+            ],
+          ),
+
         const SizedBox(height: 28),
-        // ── Location Section ──
-        _buildSectionHeader('Location'),
-        const SizedBox(height: 16),
-        
-        _buildToggleField('Virtual Event', _isVirtual, (val) {
+        _buildSectionHeader('Where'),
+        const SizedBox(height: 12),
+        _buildToggleField('Online event', _isVirtual, (val) {
           setState(() => _isVirtual = val);
         }),
         const SizedBox(height: 12),
-        
         if (_isVirtual)
           _buildTextField(_virtualUrl, 'Meeting URL', hint: 'e.g., https://zoom.us/j/...', required: true)
         else
           _buildLocationPicker(),
-        
+
         const SizedBox(height: 28),
-        // ── Registration Section ──
-        _buildSectionHeader('Registration'),
-        const SizedBox(height: 16),
-        
-        Row(
-          children: [
-            Expanded(
-              child: _buildDateTimeField(
-                _registrationOpensAt, 
-                'Registration Opens', 
-                hint: 'YYYY-MM-DD HH:mm',
-              ),
-            ),
-            const SizedBox(width: 12),
-            Expanded(
-              child: _buildDateTimeField(
-                _registrationClosesAt, 
-                'Registration Closes', 
-                hint: 'YYYY-MM-DD HH:mm',
-              ),
-            ),
-          ],
-        ),
+        _buildSectionHeader('Seats and price'),
         const SizedBox(height: 12),
         _buildTextField(
           _capacity,
@@ -1169,73 +1186,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           validator: validateCapacity,
         ),
         const SizedBox(height: 12),
-        DropdownButtonFormField<int>(
-          key: const ValueKey('event-max-guests'),
-          initialValue: _maxGuests,
-          decoration: const InputDecoration(
-            labelText: 'Guests per registration',
-            helperText: 'How many guests each person may bring. Guests take seats too.',
-          ),
-          items: [
-            for (var n = 0; n <= 4; n++)
-              DropdownMenuItem(
-                value: n,
-                child: Text(n == 0 ? 'None' : '$n'),
-              ),
-          ],
-          onChanged: (value) => setState(() => _maxGuests = value ?? 0),
-        ),
-        
-        const SizedBox(height: 28),
-        // ── Images Section ──
-        _buildSectionHeader('Images'),
-        const SizedBox(height: 16),
-        
-        _buildTextField(_thumbnailUrl, 'Thumbnail URL', hint: 'Square image URL for event cards'),
-        const SizedBox(height: 12),
-        _buildTextField(_bannerUrl, 'Banner URL', hint: 'Wide image URL for event header'),
-        
-      ],
-    );
-  }
-
-  Widget _buildStep2() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Sponsors Section ──
-        _buildSectionHeader('Sponsors'),
-        const SizedBox(height: 16),
-        _buildSponsorsSection(),
-
-        const SizedBox(height: 28),
-        // ── Partners Section ──
-        _buildSectionHeader('Partners'),
-        const SizedBox(height: 16),
-        _buildPartnersSection(),
-        
-        const SizedBox(height: 28),
-        // ── Speakers Section ──
-        _buildSectionHeader('Speakers'),
-        const SizedBox(height: 16),
-        _buildSpeakersSection(),
-        
-        const SizedBox(height: 28),
-        // ── Sessions Section ──
-        _buildSectionHeader('Sessions'),
-        const SizedBox(height: 16),
-        _buildSessionsSection(),
-      ],
-    );
-  }
-
-  Widget _buildStep3() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // ── Pricing: the one place the price is set ──
-        _buildSectionHeader('Pricing'),
-        const SizedBox(height: 16),
         _buildToggleField('Free Event', _isFree, (val) {
           setState(() => _isFree = val);
         }),
@@ -1249,6 +1199,130 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           const SizedBox(height: 16),
           _buildFeesSection(),
         ],
+      ],
+    );
+  }
+
+  /// The optional groups this event has, then "+" for the rest.
+  Widget _buildGroups() {
+    final shown = _Group.values.where(_shows).toList();
+    final hidden = _Group.values.where((g) => !_shows(g)).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final group in shown) ...[
+          _buildGroup(group),
+          const SizedBox(height: 28),
+        ],
+        if (hidden.isNotEmpty) ...[
+          Text(
+            'Add more only if this event needs it:',
+            style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+          ),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              for (final group in hidden)
+                OutlinedButton.icon(
+                  key: ValueKey('event-add-${group.name}'),
+                  onPressed: () => setState(() => _addedGroups.add(group)),
+                  icon: const Icon(Icons.add, size: 18),
+                  label: Text(group.label),
+                ),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildGroup(_Group group) {
+    return Column(
+      key: ValueKey('event-group-${group.name}'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Expanded(child: _buildSectionHeader(group.label)),
+            TextButton(
+              key: ValueKey('event-remove-${group.name}'),
+              onPressed: () => _removeGroup(group),
+              child: const Text('Remove'),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        switch (group) {
+          _Group.images => Column(
+              children: [
+                _buildTextField(_thumbnailUrl, 'Thumbnail URL', hint: 'Square image URL for event cards'),
+                const SizedBox(height: 12),
+                _buildTextField(_bannerUrl, 'Banner URL', hint: 'Wide image URL for event header'),
+              ],
+            ),
+          _Group.registrationDates => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: _buildDateTimeField(
+                        _registrationOpensAt,
+                        'Registration Opens',
+                        hint: 'When published',
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: _buildDateTimeField(
+                        _registrationClosesAt,
+                        'Registration Closes',
+                        hint: 'When the event starts',
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                Text(
+                  'Leave a date empty for the usual: opens when the event is '
+                  'published, closes when it starts.',
+                  style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+                ),
+              ],
+            ),
+          _Group.guests => DropdownButtonFormField<int>(
+              key: const ValueKey('event-max-guests'),
+              initialValue: _maxGuests,
+              decoration: const InputDecoration(
+                labelText: 'Guests per registration',
+                helperText: 'How many guests each person may bring. Guests take seats too.',
+              ),
+              items: [
+                for (var n = 0; n <= 4; n++)
+                  DropdownMenuItem(
+                    value: n,
+                    child: Text(n == 0 ? 'None' : '$n'),
+                  ),
+              ],
+              onChanged: (value) => setState(() => _maxGuests = value ?? 0),
+            ),
+          _Group.speakers => _buildSpeakersSection(),
+          _Group.agenda => _buildSessionsSection(),
+          _Group.sponsors => Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('Sponsors', style: TextStyle(fontSize: 13, color: context.palette.textSecondary)),
+                const SizedBox(height: 8),
+                _buildSponsorsSection(),
+                const SizedBox(height: 20),
+                Text('Partners', style: TextStyle(fontSize: 13, color: context.palette.textSecondary)),
+                const SizedBox(height: 8),
+                _buildPartnersSection(),
+              ],
+            ),
+        },
       ],
     );
   }
@@ -1798,6 +1872,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           ];
         }
         _detailsLoading = false;
+        _setBaselineWhenLoaded();
       });
     } catch (error, stackTrace) {
       AppLogger.error('Could not load speakers, sessions and fees', error, stackTrace);
@@ -1812,6 +1887,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             {'fee_name': 'Registration', 'fee_type': 'PARTICIPATION', 'fee_amount': _ticketPrice.text.trim()},
           ];
         }
+        _setBaselineWhenLoaded();
       });
     }
   }
@@ -1909,6 +1985,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         _loadedSponsorIds = _sponsors.map((r) => r[_sponsorKind.idKey]!).toSet();
         _loadedPartnerIds = _partners.map((r) => r[_partnerKind.idKey]!).toSet();
         _orgsLoading = false;
+        _setBaselineWhenLoaded();
       });
     } catch (error, stackTrace) {
       AppLogger.error('Could not load sponsors and partners', error, stackTrace);
@@ -1916,6 +1993,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       setState(() {
         _orgsLoading = false;
         _orgsLoadFailed = true;
+        _setBaselineWhenLoaded();
       });
     }
   }
@@ -2883,13 +2961,9 @@ void _showFeeDialog(int? editIndex) {
   }
 
   Future<void> _save() async {
-    // The step-1 fields aren't in the widget tree on step 3, so their
-    // validators don't run below. Check the publish-required fields here and
-    // send the admin back to step 1 with them highlighted.
     final missing = _missingRequiredFields();
     if (missing.isNotEmpty) {
-      setState(() => _currentStep = 0);
-      WidgetsBinding.instance.addPostFrameCallback((_) => _formKey.currentState?.validate());
+      _formKey.currentState?.validate();
       showNotice(context, 'Please fill in: ${missing.join(', ')}', kind: NoticeKind.warning);
       return;
     }
@@ -3010,7 +3084,7 @@ void _showFeeDialog(int? editIndex) {
 
     if (!_isFree && (_fees.isEmpty || _feesTotal <= 0)) {
       if (mounted) {
-        showNotice(context, 'A paid event needs at least one fee with an amount (Pricing step).', kind: NoticeKind.warning);
+        showNotice(context, 'A paid event needs at least one fee with an amount.', kind: NoticeKind.warning);
       }
       return;
     }
@@ -3028,8 +3102,8 @@ void _showFeeDialog(int? editIndex) {
       final auth = ref.read(authControllerProvider);
 
       final data = <String, dynamic>{
+        // No tagline: it is no longer edited, so a saved one is left as is.
         'title': _title.text.trim(),
-        'tagline': _tagline.text.trim().isEmpty ? null : _tagline.text.trim(),
         'description': _description.text.trim(),
         'start_datetime': _iso(startDateTime),
         'end_datetime': _iso(endDateTime),
@@ -3046,10 +3120,11 @@ void _showFeeDialog(int? editIndex) {
         'ticket_price': _isFree ? null : _feesTotal,
         'thumbnail_url': _thumbnailUrl.text.trim().isEmpty ? null : _thumbnailUrl.text.trim(),
         'banner_url': _bannerUrl.text.trim().isEmpty ? null : _bannerUrl.text.trim(),
-        if (_registrationOpensAt.text.trim().isNotEmpty)
-          'registration_opens_at': _isoOfField(_registrationOpensAt.text),
-        if (_registrationClosesAt.text.trim().isNotEmpty)
-          'registration_closes_at': _isoOfField(_registrationClosesAt.text),
+        // Empty: opens when published (null), closes when the event starts.
+        'registration_opens_at': _isoOfField(_registrationOpensAt.text),
+        'registration_closes_at': _registrationClosesAt.text.trim().isEmpty
+            ? _iso(startDateTime)
+            : _isoOfField(_registrationClosesAt.text),
       };
 
       final repo = ref.read(eventsRepositoryProvider);
