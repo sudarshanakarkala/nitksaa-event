@@ -1,3 +1,7 @@
+import 'dart:convert';
+import 'dart:typed_data';
+
+import 'package:file_saver/file_saver.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
@@ -9,9 +13,11 @@ import '../../../theme/app_palette.dart';
 import '../../auth/services/auth_controller.dart';
 import '../domain/nitika_models.dart';
 import 'nitika_controller.dart';
+import 'nitika_transcript.dart';
 import 'widgets/answer_links.dart';
 import 'widgets/answer_table.dart';
 import 'widgets/answer_text.dart';
+import '../../../core/logger/app_logger.dart';
 import '../../../shared/widgets/notice.dart';
 
 /// The shell's assistant for a signed-in user, or null when signed out.
@@ -64,6 +70,29 @@ class _NitikaPanelState extends ConsumerState<NitikaPanel> {
     return locale.toLanguageTag();
   }
 
+  /// Overall admins: saves the conversation as a text file (to train and
+  /// debug NITiKa). Nothing is sent anywhere.
+  Future<void> _saveChat() async {
+    final messages = ref.read(nitikaControllerProvider).messages;
+    final email = ref.read(authControllerProvider).session?.email;
+    final now = DateTime.now();
+    try {
+      final text = nitikaTranscript(messages, savedAt: now, savedBy: email);
+      await FileSaver.instance.saveFile(
+        name: nitikaTranscriptName(now),
+        bytes: Uint8List.fromList(utf8.encode(text)),
+        ext: 'txt',
+        mimeType: MimeType.text,
+      );
+      if (mounted) showNotice(context, 'Chat saved', kind: NoticeKind.success);
+    } catch (error, stackTrace) {
+      AppLogger.error('Could not save the NITiKa chat', error, stackTrace);
+      if (mounted) {
+        showNotice(context, 'Could not save the chat. Please try again.', kind: NoticeKind.error);
+      }
+    }
+  }
+
   Future<void> _send(String text) async {
     final controller = ref.read(nitikaControllerProvider.notifier);
     final state = ref.read(nitikaControllerProvider);
@@ -101,6 +130,9 @@ class _NitikaPanelState extends ConsumerState<NitikaPanel> {
     final p = context.palette;
     final inRail =
         MediaQuery.sizeOf(context).width >= AppShell.assistantRailFrom;
+    // Save chat is for overall admins only.
+    final overallAdmin =
+        ref.watch(authControllerProvider).session?.access.isAdmin ?? false;
 
     return Material(
       color: p.card,
@@ -117,6 +149,8 @@ class _NitikaPanelState extends ConsumerState<NitikaPanel> {
               inRail: inRail,
               canClear: !state.isEmpty,
               onClear: ref.read(nitikaControllerProvider.notifier).clear,
+              showSave: overallAdmin,
+              onSave: state.isEmpty ? null : _saveChat,
             ),
             Divider(height: 1, color: p.border),
             Expanded(
@@ -145,11 +179,17 @@ class _Header extends StatelessWidget {
     required this.inRail,
     required this.canClear,
     required this.onClear,
+    required this.showSave,
+    required this.onSave,
   });
 
   final bool inRail;
   final bool canClear;
   final VoidCallback onClear;
+
+  /// Save chat, for overall admins; [onSave] is null while the chat is empty.
+  final bool showSave;
+  final VoidCallback? onSave;
 
   @override
   Widget build(BuildContext context) {
@@ -185,6 +225,14 @@ class _Header extends StatelessWidget {
               ],
             ),
           ),
+          if (showSave)
+            IconButton(
+              tooltip: 'Save chat',
+              iconSize: 20,
+              color: p.textMuted,
+              icon: const Icon(Icons.download_outlined),
+              onPressed: onSave,
+            ),
           IconButton(
             tooltip: 'Clear conversation',
             iconSize: 20,
