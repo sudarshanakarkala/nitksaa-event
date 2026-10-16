@@ -1,6 +1,7 @@
 """Event-app JWT auth helpers."""
 from __future__ import annotations
 
+import uuid
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, Optional
 
@@ -72,6 +73,8 @@ def make_access_token(payload: Dict[str, Any]) -> str:
     data = {
         **payload,
         "exp": datetime.now(timezone.utc) + timedelta(minutes=settings.access_token_expire_minutes),
+        # This token's own id, so signing out can end just this one.
+        "jti": uuid.uuid4().hex,
     }
     return jwt.encode(data, settings.secret_key, algorithm=ALGORITHM)
 
@@ -98,10 +101,27 @@ def decode_access_token(token: str) -> Dict[str, Any]:
     return payload
 
 
+async def ensure_not_signed_out(payload: Dict[str, Any]) -> None:
+    """Refuses a token whose browser has signed out (POST /auth/logout).
+    Tokens issued before ids were added have none and run out by
+    themselves."""
+    jti = payload.get("jti")
+    if not jti:
+        return
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        revoked = await conn.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM revoked_tokens WHERE jti = $1)", str(jti)
+        )
+    if revoked:
+        raise HTTPException(status_code=401, detail="invalid_or_expired_token")
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials = Depends(_bearer),
 ) -> Dict[str, Any]:
     payload = decode_access_token(credentials.credentials)
+    await ensure_not_signed_out(payload)
     user = await _fetch_event_user(payload["firebase_uid"])
     if user:
         if user["is_suspended"]:

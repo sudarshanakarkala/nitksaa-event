@@ -13,7 +13,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
 from app.database import get_alumni_pool, get_pool
-from app.middleware.auth import decode_access_token
+from app.middleware.auth import decode_access_token, ensure_not_signed_out
 from app.schemas.payments import PaymentConfigImportRequest, ResolvePendingAttemptRequest
 from app.services.alumni_service import ACTIVE_ALUMNI_STATUSES
 
@@ -70,6 +70,7 @@ async def _get_dev_user(
         raise HTTPException(status_code=401, detail="not_authenticated")
 
     payload = decode_access_token(credentials.credentials)
+    await ensure_not_signed_out(payload)
     pool = await get_pool()
     async with pool.acquire() as conn:
         row = await conn.fetchrow(

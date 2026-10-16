@@ -113,6 +113,27 @@ void main() {
       expect(tabs.posted.last, 'signed-out');
     });
 
+    test('sign out ends the token on the server, and still signs out if '
+        'that fails', () async {
+      final auth = newController();
+      await signIn(auth, accountA);
+      // FakeBackend has no logout endpoint: it answers 404, like an error.
+      await auth.signOut();
+      expect(backend.requests, contains('POST /api/v1/auth/logout'));
+      expect(auth.isAuthenticated, isFalse);
+      expect(await AuthSessionStore().load(), isNull);
+    });
+
+    test('signed out in another tab: this tab ends its own token too',
+        () async {
+      final auth = newController();
+      await signIn(auth, accountA);
+      backend.requests.clear();
+      auth.onTabMessage('signed-out');
+      await Future<void>.delayed(Duration.zero);
+      expect(backend.requests, ['POST /api/v1/auth/logout']);
+    });
+
     test('a failed sign-in, rolled back, tells nobody', () async {
       backend.loginFault = const BackendFault.http(403, 'account_suspended');
       try {

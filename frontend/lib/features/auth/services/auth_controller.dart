@@ -252,6 +252,9 @@ class AuthController extends ChangeNotifier {
   Future<void> signOut() async {
     _errorMessage = null;
     _renewTimer?.cancel();
+    // End this browser's token on the server too (best effort, quick).
+    final token = _session?.accessToken;
+    if (token != null) await _backendAuthService.logout(token);
     await _clearStoredSession();
     try {
       await FirebaseAuthService.signOut();
@@ -341,7 +344,11 @@ class AuthController extends ChangeNotifier {
   void _onTabMessage(String message) {
     if (message == tabSignedOut) {
       // Signed out there: out here too. The stored session is already gone.
-      if (_session == null) return;
+      final session = _session;
+      if (session == null) return;
+      // This tab's token can differ from the one that tab ended (each tab
+      // renews its own): end it too.
+      unawaited(_backendAuthService.logout(session.accessToken));
       onSignedOutElsewhere?.call();
       _renewTimer?.cancel();
       _setUnauthenticated();

@@ -67,6 +67,22 @@ class BackendAuthService {
     return session;
   }
 
+  /// Ends [accessToken] on the server (this browser's session only). Best
+  /// effort: never throws, and gives up after a few seconds, so signing out
+  /// is never held up by the network.
+  Future<void> logout(String accessToken) async {
+    try {
+      await _dio
+          .post<void>(
+            '/api/v1/auth/logout',
+            options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+          )
+          .timeout(const Duration(seconds: 3));
+    } catch (_) {
+      // Offline or slow: the token still runs out by itself.
+    }
+  }
+
   /// Runs [request], turning a Dio failure into a [BackendAuthException] so
   /// the backend's `detail` code reaches the caller.
   Future<Response<Map<String, dynamic>>> _send(
