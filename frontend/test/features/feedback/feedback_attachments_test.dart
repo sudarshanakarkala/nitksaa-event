@@ -99,6 +99,8 @@ Future<void> _open(WidgetTester tester, _FakeApi api, _FakePicker picker) async 
 
 final _attach = find.byKey(const ValueKey('feedback-attach'));
 final _fileMessage = find.byKey(const ValueKey('feedback-file-message'));
+// The page title is also "Send feedback".
+final _send = find.widgetWithText(FilledButton, 'Send feedback');
 
 Future<void> _pick(WidgetTester tester, _FakePicker picker, List<PickedFile> files) async {
   picker.next = files;
@@ -200,7 +202,7 @@ void main() {
     await _open(tester, api, picker);
     await _pick(tester, picker, [_picked('screenshot.png', 'image/png', 2000)]);
 
-    await tester.tap(find.text('Send feedback'));
+    await tester.tap(_send);
     await tester.pump();
     expect(find.text('Sending… 50%'), findsOneWidget);
     expect(api.sent.single.message, 'The QR badge does not show.');
@@ -219,7 +221,7 @@ void main() {
     await _open(tester, api, picker);
     await _pick(tester, picker, [_picked('screenshot.png', 'image/png', 2000)]);
 
-    await tester.tap(find.text('Send feedback'));
+    await tester.tap(_send);
     await tester.pumpAndSettle();
     expect(
       tester.widget<Text>(_fileMessage).data,
@@ -236,7 +238,7 @@ void main() {
     await _open(tester, api, picker);
     await _pick(tester, picker, [_picked('clip.mp4', 'video/mp4', 2000)]);
 
-    await tester.tap(find.text('Send feedback'));
+    await tester.tap(_send);
     await tester.pumpAndSettle();
     expect(tester.widget<Text>(_fileMessage).data, attachmentTooLargeMessage);
   });
@@ -247,7 +249,7 @@ void main() {
     await _open(tester, api, picker);
     await _pick(tester, picker, [_picked('screenshot.png', 'image/png', 2000)]);
 
-    await tester.tap(find.text('Send feedback'));
+    await tester.tap(_send);
     await tester.pumpAndSettle();
     expect(find.textContaining('please email us'), findsOneWidget);
     expect(find.text('screenshot.png'), findsOneWidget);
