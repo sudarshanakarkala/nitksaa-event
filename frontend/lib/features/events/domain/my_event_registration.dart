@@ -14,7 +14,15 @@ class MyEventRegistration {
     this.event,
     this.publicEvent,
     this.guests = const [],
+    this.qrToken,
+    this.fullname,
   });
+
+  /// Your own entry pass; only while registered.
+  final String? qrToken;
+
+  /// The name on the registration.
+  final String? fullname;
 
   final int registrationId;
   final String? registrationNumber;
@@ -40,6 +48,17 @@ class MyEventRegistration {
 
   bool get isActive => status == 'registered';
 
+  /// Cancelled (unregistered, or a hold that ran out).
+  bool get isCancelled => status == 'cancelled';
+
+  /// Started but not paid, or the payment failed: Complete payment from the
+  /// event page (ISSUE-010).
+  bool get isPaymentDue =>
+      const {'seat_held', 'payment_pending', 'payment_failed'}.contains(status);
+
+  /// Paid, and the payment provider hasn't confirmed it yet (ISSUE-010).
+  bool get isConfirmingPayment => status == 'payment_verification';
+
   /// Unregister is offered on an active registration until the event
   /// starts. The backend's only rule is `registered` (refunds are full); a
   /// closed registration window does not stop it (ISSUE-012).
@@ -56,6 +75,26 @@ class MyEventRegistration {
   /// Cancelled, and a payment order was made for it. Only such a registration
   /// can have a refund. Whether it has one is for the backend to say: a seat
   /// hold that ran out without payment looks the same here.
+  /// Everyone's entry pass in this registration: yours first, then each
+  /// guest still coming. Empty unless registered.
+  List<EntryPassInfo> get entryPasses => [
+        if (isActive && (qrToken ?? '').isNotEmpty)
+          EntryPassInfo(
+            name: fullname ?? 'You',
+            qrToken: qrToken!,
+            number: registrationNumber,
+          ),
+        if (isActive)
+          for (final g in activeGuests)
+            if ((g.qrToken ?? '').isNotEmpty)
+              EntryPassInfo(
+                name: g.name,
+                qrToken: g.qrToken!,
+                number: g.registrationNumber,
+                guestOf: fullname,
+              ),
+      ];
+
   bool get mayHaveRefund => status == 'cancelled' && latestOrderId != null;
 
   MyEventRegistration copyWith({AppEvent? publicEvent, String? status}) {
@@ -72,6 +111,8 @@ class MyEventRegistration {
       event: event,
       publicEvent: publicEvent ?? this.publicEvent,
       guests: guests,
+      qrToken: qrToken,
+      fullname: fullname,
     );
   }
 
@@ -92,6 +133,8 @@ class MyEventRegistration {
           ? RegisteredEventSummary.fromJson(json['event'] as Map<String, dynamic>)
           : null,
       guests: EventGuest.listFromJson(json['guests']),
+      qrToken: json['qr_token']?.toString(),
+      fullname: json['fullname_snapshot']?.toString(),
     );
   }
 }
@@ -165,4 +208,21 @@ class RegisteredEventSummary {
       locationMapsUrl: json['location_maps_url'] as String?,
     );
   }
+}
+
+/// One person's entry pass, for showing as a QR.
+class EntryPassInfo {
+  const EntryPassInfo({
+    required this.name,
+    required this.qrToken,
+    this.number,
+    this.guestOf,
+  });
+
+  final String name;
+  final String qrToken;
+  final String? number;
+
+  /// For a guest: whose guest they are.
+  final String? guestOf;
 }
