@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../../../routes/app_routes.dart';
+import '../../../../routes/return_after_sign_in.dart';
 import '../../../../shared/widgets/page_insets.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
@@ -987,6 +988,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   Widget _buildRegistrationCTA(EventDetailState state) {
     final event = state.event;
     if (event == null) return const SizedBox.shrink();
+    final signedIn = ref.read(authControllerProvider).isAuthenticated;
+    // Signed out there is no eligibility check: the event's own status
+    // (open, full, closed, not_open_yet) says the same in the same words.
+    final eligibility =
+        state.eligibilityStatus ?? (signedIn ? null : event.registrationStatus);
 
     final isPastEvent = event.endDatetime != null
         ? event.endDatetime!.isBefore(DateTime.now())
@@ -1029,12 +1035,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     // After a cancellation the backend lets the attendee register again. The
     // Register button comes back only when the backend says so.
     final canRegisterAgain = hasCancelledRegistration &&
-        state.eligibilityStatus == 'eligible' &&
+        eligibility == 'eligible' &&
         !isPastEvent;
 
     // Once it's over there is nothing to register for: just say it ended.
     final isRegistered = hasActiveRegistration ||
-        (!paymentDue && state.eligibilityStatus == 'already_registered');
+        (!paymentDue && eligibility == 'already_registered');
     if (isPastEvent && !isRegistered) return _endedNotice();
 
     Widget ctaWidget;
@@ -1138,7 +1144,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ],
       );
-    } else if (state.eligibilityStatus == 'already_registered') {
+    } else if (eligibility == 'already_registered') {
       ctaWidget = Column(
         mainAxisSize: MainAxisSize.min,
         children: [
@@ -1161,7 +1167,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           _buildQRBadgeSection(state, event),
         ],
       );
-    } else if (state.eligibilityStatus == 'full') {
+    } else if (eligibility == 'full') {
       ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -1177,7 +1183,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ),
       );
-    } else if (state.eligibilityStatus == 'closed') {
+    } else if (eligibility == 'closed') {
       ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -1193,7 +1199,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ),
       );
-    } else if (state.eligibilityStatus == 'not_open_yet') {
+    } else if (eligibility == 'not_open_yet') {
       ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -1209,7 +1215,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ),
         ),
       );
-    } else if (state.eligibilityStatus == 'ineligible') {
+    } else if (eligibility == 'ineligible') {
       ctaWidget = Container(
         width: double.infinity,
         padding: const EdgeInsets.all(12),
@@ -1252,8 +1258,13 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
             padding: const EdgeInsets.symmetric(vertical: 16),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
           ),
-          onPressed: () => _showRegistrationForm(event, state),
-          child: const Text('Register', style: TextStyle(fontWeight: FontWeight.bold)),
+          onPressed: signedIn
+              ? () => _showRegistrationForm(event, state)
+              : () => _signInToRegister(event),
+          child: Text(
+            signedIn ? 'Register' : 'Sign in to register',
+            style: const TextStyle(fontWeight: FontWeight.bold),
+          ),
         ),
       );
       if (canRegisterAgain) {
@@ -1297,6 +1308,14 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       );
     }
     return ctaWidget;
+  }
+
+  /// Signed out: to sign-in, then back to this event. The event page is
+  /// public, so the router doesn't remember it; this does.
+  void _signInToRegister(AppEvent event) {
+    ReturnAfterSignIn.save(AppRoutes.eventDetail
+        .replaceFirst(':id', '${event.eventId}'));
+    context.go(AppRoutes.login);
   }
 
   /// The registration form: one dialog for every screen size. Alumni see
@@ -1704,7 +1723,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   }
 
   /// The registrant's guests under their own pass: each with their QR (to
-  /// show or forward) and, while still coming, ✕ to cancel just them.
+  /// show or forward) and, while still coming and until the event starts,
+  /// ✕ to cancel just them.
   List<Widget> _buildGuestsSection(EventDetailState state, AppEvent event) {
     final guests = EventGuest.listFromJson(state.myRegistration?['guests']);
     if (guests.isEmpty) return const [];
@@ -1769,7 +1789,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   ),
                   child: const Text('View refund'),
                 ),
-              if (guest.isActive)
+              // Like Unregister (canCancelAt): only until the event starts.
+              if (guest.isActive && event.startDatetime.isAfter(DateTime.now()))
                 IconButton(
                   tooltip: 'Cancel ${guest.name}',
                   icon: const Icon(Icons.close),

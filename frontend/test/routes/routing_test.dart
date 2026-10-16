@@ -141,7 +141,6 @@ void main() {
   group('ISSUE-021: signed out, a page that needs sign-in', () {
     for (final page in [
       AppRoutes.myEvents,
-      '/events/$eventX',
       '/events/$eventX/checkout',
       '/admin',
       '/admin/payments',
@@ -166,17 +165,15 @@ void main() {
       expect(find.text('my events page'), findsOneWidget);
     });
 
-    testWidgets('an event page: sign-in, then back to the event', (
-      tester,
-    ) async {
+    testWidgets('checkout: sign-in, then back to checkout', (tester) async {
       final auth = _signedOut();
-      final router = await _open(tester, auth, '/events/$eventX');
+      final router = await _open(tester, auth, '/events/$eventX/checkout');
       expect(_at(router), AppRoutes.login);
 
       auth.logIn(sessionA);
       await tester.pumpAndSettle();
 
-      expect(_at(router), '/events/$eventX');
+      expect(_at(router), '/events/$eventX/checkout');
     });
 
     testWidgets('/admin: sign-in, then an admin lands on Admin', (
@@ -220,12 +217,29 @@ void main() {
       AppRoutes.refund,
       AppRoutes.disclaimer,
       AppRoutes.feedback,
+      '/events/$eventX',
+      '/events/$eventX?from=whatsapp',
     ]) {
       test('$page is public', () {
         expect(_guard(_signedOut(), page), isNull);
         expect(ReturnAfterSignIn.take(), isNull);
       });
     }
+
+    test('an event page signed in: back to it after "Sign in to register"',
+        () {
+      // The page saves itself (it is public, so the router doesn't).
+      ReturnAfterSignIn.save('/events/$eventX');
+      expect(_guard(_signedOut(), AppRoutes.login), isNull);
+      expect(_guard(_signedIn(), AppRoutes.login), '/events/$eventX');
+    });
+
+    test('only checkout counts as checkout', () {
+      expect(RouteGuards.isCheckout('/events/$eventX/checkout'), isTrue);
+      expect(RouteGuards.isCheckout('/events/$eventX/checkout?x=1'), isTrue);
+      expect(RouteGuards.isCheckout('/events/$eventX'), isFalse);
+      expect(RouteGuards.isCheckout('/events/checkout'), isFalse);
+    });
 
     test('a check-in link stays on its page, signed out or checking', () {
       expect(_guard(_signedOut(), '/checkin/$eventX/qr-1'), isNull);
@@ -309,6 +323,30 @@ void main() {
         expect(ReturnAfterSignIn.take(), isNull);
       });
     }
+  });
+
+  group('signed out in another tab', () {
+    test('a page that needs sign-in goes to Events, others stay', () {
+      for (final page in [
+        AppRoutes.myEvents,
+        '/events/$eventX/checkout',
+        '/admin',
+        '/admin/payments',
+      ]) {
+        expect(RouteGuards.afterSignedOutElsewhere(page), AppRoutes.home,
+            reason: page);
+      }
+      for (final page in [
+        '/events/$eventX',
+        AppRoutes.home,
+        AppRoutes.privacy,
+        '/checkin/$eventX/qr-1',
+      ]) {
+        expect(RouteGuards.afterSignedOutElsewhere(page), isNull, reason: page);
+      }
+      // Nothing is remembered for the next sign-in.
+      expect(ReturnAfterSignIn.take(), isNull);
+    });
   });
 
   group('ISSUE-021: an unknown address', () {
