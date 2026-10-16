@@ -15,7 +15,6 @@ import '../../checkin/check_in_scanner_screen.dart';
 import '../../events/data/events_repository.dart';
 import '../../events/domain/event.dart';
 import '../data/registrations_api.dart';
-import '../domain/registration_filters.dart' show formatDate;
 import '../../../shared/widgets/list_search_field.dart';
 import 'admin_tab_frame.dart';
 import 'admin_widgets.dart';

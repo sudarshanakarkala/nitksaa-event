@@ -409,7 +409,7 @@ class EventsRepository {
       '/api/v1/events/$eventId/register',
       data: {
         'attendee_note': attendeeNote,
-        if (fullname != null) 'fullname': fullname,
+        'fullname': ?fullname,
         'phone': phone,
         if (guests.isNotEmpty) 'guests': [for (final g in guests) {'name': g}],
       },

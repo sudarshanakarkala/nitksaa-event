@@ -17,7 +17,6 @@ import '../data/dashboard_api.dart';
 import '../../events/data/events_repository.dart';
 import 'admin_tab_frame.dart';
 import 'admin_widgets.dart';
-import '../domain/registration_filters.dart' show formatDate;
 import '../../../shared/format.dart';
 
 /// Admin → Dashboard: how the events you administer are doing. The

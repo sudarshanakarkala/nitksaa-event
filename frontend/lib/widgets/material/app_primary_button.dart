@@ -9,12 +9,12 @@ class AppPrimaryButton extends StatelessWidget {
   final bool isDisabled;
 
   const AppPrimaryButton({
-    Key? key,
+    super.key,
     required this.onPressed,
     required this.child,
     this.isLoading = false,
     this.isDisabled = false,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {
