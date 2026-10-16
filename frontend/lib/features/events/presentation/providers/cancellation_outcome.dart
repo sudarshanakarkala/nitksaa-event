@@ -88,6 +88,8 @@ class CancellationOutcome {
     final data = error.response?.data;
     final detail = data is Map ? data['detail'] : null;
     return switch (detail) {
+      'event_started' =>
+        "This event has started, so you can't unregister now.",
       'registration_not_cancellable' =>
         "This registration can't be cancelled while payment is in progress.",
       'registration_not_found' =>

@@ -18,7 +18,7 @@ from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 
 from app.config import get_settings
 from app.database import get_pool
-from app.middleware.auth import decode_access_token
+from app.middleware.auth import decode_access_token, ensure_not_signed_out
 
 router = APIRouter(prefix="/api/v1/dev/diagnostics/week5", tags=["week5-diagnostics"])
 
@@ -40,6 +40,7 @@ async def _get_admin(
     if credentials is None:
         raise HTTPException(status_code=401, detail="not_authenticated")
     payload = decode_access_token(credentials.credentials)
+    await ensure_not_signed_out(payload)
     return {"firebase_uid": payload["firebase_uid"], "email": payload.get("email")}
 
 

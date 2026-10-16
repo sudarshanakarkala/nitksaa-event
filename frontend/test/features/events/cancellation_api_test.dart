@@ -368,6 +368,18 @@ void main() {
       expect(outcome.message, _noConnection);
     });
 
+    test('the event has started: refused in plain words', () async {
+      final outcome = await cancel(
+        FakeRegistrationBackend()..paidCancelRefusal = 'event_started',
+        paid: true,
+      );
+      expect(outcome.cancelled, isFalse);
+      expect(
+        outcome.message,
+        "This event has started, so you can't unregister now.",
+      );
+    });
+
     test('anything else gets the general message', () async {
       final serverError = await cancel(
         FakeRegistrationBackend()..cancelServerError = 503,
@@ -400,6 +412,7 @@ void main() {
         for (final type in DioExceptionType.values)
           DioException(requestOptions: request, type: type, message: 'boom'),
         for (final detail in const [
+          'event_started',
           'registration_not_cancellable',
           'registration_not_found',
           'no_captured_payment',
