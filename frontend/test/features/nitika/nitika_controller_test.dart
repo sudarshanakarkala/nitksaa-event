@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:event_app/features/auth/services/auth_controller.dart';
 import 'package:event_app/features/nitika/data/nitika_api.dart';
 import 'package:event_app/features/nitika/domain/nitika_models.dart';

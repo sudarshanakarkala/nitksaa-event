@@ -10,13 +10,13 @@ class AppScaffold extends StatelessWidget {
   final GlobalKey<ScaffoldMessengerState>? scaffoldMessengerKey;
 
   const AppScaffold({
-    Key? key,
+    super.key,
     this.appBar,
     this.body,
     this.floatingActionButton,
     this.extendBodyBehindAppBar = false,
     this.scaffoldMessengerKey,
-  }) : super(key: key);
+  });
 
   @override
   Widget build(BuildContext context) {

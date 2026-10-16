@@ -318,8 +318,8 @@ class _Panel extends StatelessWidget {
           ),
           if (busy)
             const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(strokeWidth: 2))
-          else if (action != null)
-            action!,
+          else
+            ?action,
         ],
       ),
     );

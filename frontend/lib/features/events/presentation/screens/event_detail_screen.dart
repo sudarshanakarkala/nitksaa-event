@@ -146,9 +146,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                 height: 320,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, __, ___) => Container(
+                                errorBuilder: (_, _, _) => Container(
                                   height: 320,
-                                  color: context.palette.textMuted.withOpacity(0.2),
+                                  color: context.palette.textMuted.withValues(alpha: 0.2),
                                   child: const Icon(Icons.photo, size: 64),
                                 ),
                               ),
@@ -271,9 +271,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       height: 180,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, __, ___) => Container(
+                      errorBuilder: (_, _, _) => Container(
                         height: 180,
-                        color: context.palette.textMuted.withOpacity(0.2),
+                        color: context.palette.textMuted.withValues(alpha: 0.2),
                         child: const Icon(Icons.photo, size: 48),
                       ),
                     ),
@@ -649,7 +649,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 width: 36,
                 height: 36,
                 fit: BoxFit.contain,
-                errorBuilder: (_, __, ___) =>
+                errorBuilder: (_, _, _) =>
                     Icon(Icons.business, size: 22, color: context.palette.primary),
               ),
             )
@@ -930,7 +930,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final photoUrl = speaker.photoUrl?.trim();
     final fallback = CircleAvatar(
       radius: radius,
-      backgroundColor: accentColor.withOpacity(0.15),
+      backgroundColor: accentColor.withValues(alpha: 0.15),
       child: Text(speaker.initials, style: initialsStyle),
     );
 
@@ -945,7 +945,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         height: radius * 2,
         fit: BoxFit.cover,
         webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
-        errorBuilder: (_, __, ___) => fallback,
+        errorBuilder: (_, _, _) => fallback,
       ),
     );
   }
@@ -1568,7 +1568,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     required String dateValue,
   }) {
     final cardBg = context.palette.surfaceSubtle;
-    final borderColor = context.palette.primary.withOpacity(0.3);
+    final borderColor = context.palette.primary.withValues(alpha: 0.3);
     final textColor = context.palette.textPrimary;
     final subTextColor = context.palette.textSecondary;
 

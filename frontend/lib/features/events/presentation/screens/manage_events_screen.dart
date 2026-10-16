@@ -1009,7 +1009,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             height: 32,
             decoration: BoxDecoration(
               shape: BoxShape.circle,
-              color: isCompleted ? context.palette.primary : (isActive ? context.palette.primary.withOpacity(0.15) : Colors.transparent),
+              color: isCompleted ? context.palette.primary : (isActive ? context.palette.primary.withValues(alpha: 0.15) : Colors.transparent),
               border: Border.all(color: color, width: 2),
             ),
             child: Center(
@@ -1398,7 +1398,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final currentValue = _timezone.text.isEmpty ? zones.first : _timezone.text;
     
     return DropdownButtonFormField<String>(
-      value: zones.contains(currentValue) ? currentValue : zones.first,
+      initialValue: zones.contains(currentValue) ? currentValue : zones.first,
       isDense: true,
       menuMaxHeight: 300,
       decoration: InputDecoration(
@@ -2342,7 +2342,7 @@ void _showFeeDialog(int? editIndex) {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedType,
+                    initialValue: selectedType,
                     isDense: true,
                     decoration: InputDecoration(
                       labelText: 'Fee Type *',
@@ -2445,7 +2445,7 @@ void _showFeeDialog(int? editIndex) {
                   ),
                   const SizedBox(height: 12),
                   DropdownButtonFormField<String>(
-                    value: selectedSpeaker.isEmpty ? null : selectedSpeaker,
+                    initialValue: selectedSpeaker.isEmpty ? null : selectedSpeaker,
                     decoration: InputDecoration(
                       labelText: 'Speaker *',
                       border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
@@ -2717,7 +2717,7 @@ void _showFeeDialog(int? editIndex) {
             child: ListView.separated(
               shrinkWrap: true,
               itemCount: _locationSuggestions.length,
-              separatorBuilder: (_, __) => Divider(height: 1, color: context.palette.border),
+              separatorBuilder: (_, _) => Divider(height: 1, color: context.palette.border),
               itemBuilder: (context, index) {
                 final suggestion = _locationSuggestions[index];
                 return ListTile(
