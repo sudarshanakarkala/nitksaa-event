@@ -158,6 +158,18 @@ async def cancel_registration(
             existing = await refund_repo.get_latest_for_registration(registration_id)
             return _view(registration_id, existing)
 
+        # Once the event has started, attendees can't cancel (for themselves
+        # or a guest): the app hides the buttons, and this refuses an old tab
+        # or a direct call. Judged by the database clock against the stored
+        # start, so it is the same moment wherever the event or the attendee
+        # is. Admins don't cancel through this endpoint.
+        started = await conn.fetchval(
+            "SELECT start_datetime <= now() FROM events WHERE event_id = $1",
+            reg["event_id"],
+        )
+        if started:
+            raise HTTPException(status_code=409, detail="event_started")
+
         if reg["status"] != "registered":
             # seat_held / payment_pending / payment_verification / payment_failed
             # are pre-confirmation states; there is nothing captured to refund
