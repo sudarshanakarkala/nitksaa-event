@@ -7,7 +7,8 @@ import '../../../../shared/widgets/status_badge.dart';
 import '../../../../shared/format.dart';
 
 /// Where the person stands with an event, for the card's badge and buttons.
-enum EventAttendance { none, registered, cancelled }
+/// Your registration, as the card's badge shows it.
+enum EventAttendance { none, registered, paymentDue, confirmingPayment, cancelled }
 
 /// An admin action in the card's "more" menu.
 class EventCardAction {
@@ -63,6 +64,7 @@ class EventCard extends StatelessWidget {
     this.mine = false,
     this.viewLabel = 'View Details',
     this.onUnregister,
+    this.onShowBadge,
     this.unregistering = false,
     this.onViewRefund,
     this.onJoin,
@@ -151,6 +153,9 @@ class EventCard extends StatelessWidget {
   final VoidCallback? onUnregister;
   final bool unregistering;
   final VoidCallback? onViewRefund;
+
+  /// Shows your QR badge(s): the button is there when this is set.
+  final VoidCallback? onShowBadge;
 
   /// Join meeting: a registered attendee's link to a virtual event.
   final VoidCallback? onJoin;
@@ -258,6 +263,10 @@ class EventCard extends StatelessWidget {
     switch (attendance) {
       case EventAttendance.registered:
         badges.add(StatusBadge(label: 'Registered', tone: p.info));
+      case EventAttendance.paymentDue:
+        badges.add(StatusBadge(label: 'Payment due', tone: p.warning));
+      case EventAttendance.confirmingPayment:
+        badges.add(StatusBadge(label: 'Confirming payment', tone: p.info));
       case EventAttendance.cancelled:
         badges.add(StatusBadge(label: 'Unregistered', tone: p.error));
       case EventAttendance.none:
@@ -358,6 +367,13 @@ class EventCard extends StatelessWidget {
                 ),
               ),
           ],
+        ),
+      if (onShowBadge != null)
+        OutlinedButton.icon(
+          onPressed: onShowBadge,
+          style: compact,
+          icon: const Icon(Icons.qr_code_2, size: 16),
+          label: const Text('QR badge'),
         ),
       if (onJoin != null)
         OutlinedButton.icon(

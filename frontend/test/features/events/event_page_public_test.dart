@@ -118,6 +118,36 @@ void main() {
     }
   });
 
+  testWidgets('an event image that fails to load leaves no grey box (F9)', (
+    tester,
+  ) async {
+    // Test runs answer every image request with an error.
+    final backend = FakeRegistrationBackend(
+      isFree: true,
+      bannerUrl: 'https://example.invalid/banner.png',
+    );
+    await _openEventPage(tester, backend, signedIn: false);
+    await tester.pumpAndSettle();
+
+    expect(find.byIcon(Icons.photo), findsNothing);
+    expect(find.text('Sign in to register'), findsOneWidget);
+  });
+
+  testWidgets('paid, still being confirmed: says so, with no QR and no '
+      'Complete payment (ISSUE-010)', (tester) async {
+    // The server's eligibility says already_registered for this status.
+    final backend = FakeRegistrationBackend()
+      ..eligibilityOverride = (status: 'already_registered', message: '');
+    backend.seedRegistration(sessionA.accessToken,
+        status: 'payment_verification', paid: true);
+    await _openEventPage(tester, backend);
+
+    expect(find.text('Payment received, confirming…'), findsOneWidget);
+    expect(find.textContaining('You are registered'), findsNothing);
+    expect(find.text('View QR badge'), findsNothing);
+    expect(find.text('Complete payment'), findsNothing);
+  });
+
   group('guest ✕', () {
     testWidgets('shows before the event starts', (tester) async {
       final backend = FakeRegistrationBackend(isFree: true, maxGuests: 2);

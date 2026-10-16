@@ -136,10 +136,18 @@ class MyEventsNotifier extends StateNotifier<MyEventsState> {
   }
 }
 
+/// A new, empty list only when the **person** changes (or signs out), so a
+/// different person never sees the last one's list (ISSUE-001). Other
+/// sign-in updates (session renewal, other tabs, a role refresh) keep it:
+/// they used to empty it until a reload. The notifier reads the current
+/// session token each time it fetches, so a renewed token needs no rebuild.
 final myEventsProvider =
     StateNotifierProvider<MyEventsNotifier, MyEventsState>((ref) {
+  ref.watch(authControllerProvider.select(
+    (auth) => auth.isAuthenticated ? auth.session?.firebaseUid : null,
+  ));
   return MyEventsNotifier(
     ref.watch(eventsRepositoryProvider),
-    ref.watch(authControllerProvider),
+    ref.read(authControllerProvider),
   );
 });

@@ -16,6 +16,7 @@ import '../widgets/event_card.dart';
 import '../widgets/refund_status_dialog.dart';
 import '../../../../shared/format.dart';
 import '../../../../shared/widgets/list_search_field.dart';
+import '../widgets/entry_pass_qr.dart' show showEntryPasses;
 import '../widgets/unregister_flow.dart';
 
 /// Your registrations, one card per event, in the Events page's layout
@@ -85,7 +86,8 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
         return false;
       }
       if (_status.isNotEmpty &&
-          !_status.contains(e.registration.isActive ? 'registered' : 'cancelled')) {
+          // Unfinished payments aren't cancelled: they count as Active.
+          !_status.contains(e.registration.isCancelled ? 'cancelled' : 'registered')) {
         return false;
       }
       if (query.isEmpty) return true;
@@ -128,7 +130,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
         ref.watch(createdEventIdsProvider).valueOrNull ?? const <int>{};
     final entries = myEventEntries(state.registrations);
     final visible = _visible(entries);
-    final activeCount = entries.where((e) => e.registration.isActive).length;
+    final activeCount = entries.where((e) => !e.registration.isCancelled).length;
 
     return Scaffold(
       body: ListPage(
@@ -232,7 +234,8 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     final summary = registration.event;
     final event = registration.publicEvent;
     final active = registration.isActive;
-    final when = active ? registration.registeredAt : registration.cancelledAt;
+    final when =
+        registration.isCancelled ? registration.cancelledAt : registration.registeredAt;
     final joinUrl = registration.joinUrl?.trim() ?? '';
     final canJoin = active && joinUrl.isNotEmpty && entry.isUpcoming(DateTime.now());
     final refundFrom = entry.refundFrom;
@@ -248,12 +251,19 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       price: event?.ticketPrice,
       registrationStatus: event?.registrationStatus,
       registrationClosesAt: event?.registrationClosesAt,
-      attendance:
-          active ? EventAttendance.registered : EventAttendance.cancelled,
+      attendance: active
+          ? EventAttendance.registered
+          : registration.isPaymentDue
+              ? EventAttendance.paymentDue
+              : registration.isConfirmingPayment
+                  ? EventAttendance.confirmingPayment
+                  : EventAttendance.cancelled,
+      // A payment to finish is finished on the event page.
+      viewLabel: registration.isPaymentDue ? 'Complete payment' : 'View Details',
       mine: created.contains(registration.eventId),
       footerNote: when == null
           ? null
-          : '${active ? 'Registered' : 'Cancelled'} ${formatShortDate(when)}'
+          : '${active ? 'Registered' : registration.isCancelled ? 'Cancelled' : 'Started'} ${formatShortDate(when)}'
               '${active && registration.activeGuests.isNotEmpty ? ' · +${registration.activeGuests.length} ${registration.activeGuests.length == 1 ? 'guest' : 'guests'}' : ''}',
       onView: () => context.push('/events/${registration.eventId}'),
       onUnregister:
@@ -267,6 +277,15 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
       onJoin: canJoin
           ? () => launchUrl(Uri.parse(joinUrl), mode: LaunchMode.externalApplication)
           : null,
+      // At the door: everyone's QR in this registration.
+      onShowBadge: registration.entryPasses.isEmpty
+          ? null
+          : () => showEntryPasses(
+                context,
+                eventId: registration.eventId,
+                eventTitle: entry.title,
+                passes: registration.entryPasses,
+              ),
       onViewRefund: refundFrom == null
           ? null
           : () => showRefundStatus(

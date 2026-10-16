@@ -146,11 +146,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                                 height: 320,
                                 width: double.infinity,
                                 fit: BoxFit.cover,
-                                errorBuilder: (_, _, _) => Container(
-                                  height: 320,
-                                  color: context.palette.textMuted.withValues(alpha: 0.2),
-                                  child: const Icon(Icons.photo, size: 64),
-                                ),
+                                // An image that fails to load is left out (F9).
+                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
                               ),
                             ),
                           const SizedBox(height: 24),
@@ -271,11 +268,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       height: 180,
                       width: double.infinity,
                       fit: BoxFit.cover,
-                      errorBuilder: (_, _, _) => Container(
-                        height: 180,
-                        color: context.palette.textMuted.withValues(alpha: 0.2),
-                        child: const Icon(Icons.photo, size: 48),
-                      ),
+                      // An image that fails to load is left out (F9).
+                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
                     ),
                   ),
                 const SizedBox(height: 16),
@@ -1032,6 +1026,10 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     // checkout picks this registration up again. Not registered yet.
     final paymentDue = const {'seat_held', 'payment_pending', 'payment_failed'}
         .contains(registrationStatus);
+    // Paid, but the payment provider hasn't confirmed it yet (ISSUE-010).
+    // Not registered yet either: no QR, and no Complete payment, since the
+    // money is already taken. A reload shows the result.
+    final confirmingPayment = registrationStatus == 'payment_verification';
     // After a cancellation the backend lets the attendee register again. The
     // Register button comes back only when the backend says so.
     final canRegisterAgain = hasCancelledRegistration &&
@@ -1040,7 +1038,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
     // Once it's over there is nothing to register for: just say it ended.
     final isRegistered = hasActiveRegistration ||
-        (!paymentDue && eligibility == 'already_registered');
+        (!paymentDue && !confirmingPayment && eligibility == 'already_registered');
     if (isPastEvent && !isRegistered) return _endedNotice();
 
     Widget ctaWidget;
@@ -1108,6 +1106,35 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           _buildQRBadgeSection(state, event),
           ..._buildGuestsSection(state, event),
         ],
+      );
+    } else if (confirmingPayment) {
+      ctaWidget = Container(
+        width: double.infinity,
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: context.palette.info.withValues(alpha: 0.14),
+          borderRadius: BorderRadius.circular(8),
+          border: Border.all(color: context.palette.info.withValues(alpha: 0.3)),
+        ),
+        child: Column(
+          children: [
+            Text(
+              'Payment received, confirming…',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: context.palette.info,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              'This usually takes a minute. Reload the page to see your '
+              'registration and QR badge.',
+              textAlign: TextAlign.center,
+              style: TextStyle(color: context.palette.textSecondary, fontSize: 13),
+            ),
+          ],
+        ),
       );
     } else if (paymentDue) {
       // Red when the payment failed, yellow when it just isn't finished

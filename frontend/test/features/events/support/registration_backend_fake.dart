@@ -87,7 +87,11 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     this.registrationStatus = 'open',
     this.startDatetime = '2099-01-10T12:30:00Z',
     this.endDatetime = '2099-01-10T15:30:00Z',
+    this.bannerUrl,
   });
+
+  /// `banner_url` of the public event (none by default).
+  final String? bannerUrl;
 
   final int eventId;
   final bool isFree;
@@ -670,6 +674,9 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       'event_id': eventId,
       'status': status,
       'attendee_note': note,
+      // The server sends the QR only while registered; the app checks too.
+      'qr_token': 'qr-$id',
+      'fullname_snapshot': 'Test Attendee',
       // A later registration has a later time.
       'registered_at': DateTime.utc(
         2098,
@@ -727,6 +734,7 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       'ticket_price': isFree ? null : ticketPrice,
       'max_guests': maxGuests,
       'registration_status': registrationStatus,
+      'banner_url': ?bannerUrl,
       'registered_count': seatsTaken,
     };
   }
