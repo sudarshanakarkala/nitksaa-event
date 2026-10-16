@@ -1,7 +1,7 @@
 // Event setup, phase 1 (EVENT_FORM_REDESIGN.md): the create/edit form.
 //
-// - Create shows the essentials only and saves a draft (no description
-//   needed), with the usual registration times and no tagline.
+// - Create shows the essentials only and saves a draft (the description is
+//   optional), with the usual registration times and no tagline.
 // - Edit shows the groups that hold data, "+" for the rest; a group can be
 //   added and removed (asking first when it holds data, cleared on save).
 // - Registration closing at the start shows as no custom dates.
@@ -182,7 +182,7 @@ void main() {
     expect(find.text('Next'), findsNothing);
   });
 
-  testWidgets('a draft saves without a description, with the usual times',
+  testWidgets('saves without a description, with the usual times',
       (tester) async {
     final repo = _FormRepo();
     final result = await _open(tester, repo);
@@ -196,7 +196,7 @@ void main() {
 
     final data = repo.created!;
     expect(data['title'], 'Breakfast meet');
-    expect(data['description'], '');
+    expect(data['description'], isNull);
     expect(data['capacity'], 100);
     expect(data['max_guests'], 0);
     expect(data['is_free'], true);
@@ -268,6 +268,7 @@ void main() {
     await tester.tap(_key('event-remove-images'));
     await tester.pumpAndSettle();
     expect(find.text('Remove images?'), findsOneWidget);
+    expect(find.text('The thumbnail and banner will be removed when you save.'), findsOneWidget);
     await tester.tap(_key('event-group-remove-confirm'));
     await tester.pumpAndSettle();
     expect(_key('event-group-images'), findsNothing);
@@ -353,7 +354,8 @@ void main() {
     expect(result, [false]);
   });
 
-  testWidgets('a published event still needs its description', (tester) async {
+  testWidgets('a published event can be saved without a description',
+      (tester) async {
     final repo = _FormRepo();
     final published = AppEvent(
       eventId: 43,
@@ -370,9 +372,20 @@ void main() {
       registeredCount: 0,
     );
     await _open(tester, repo, event: published);
-    expect(_field('Description *'), findsOneWidget);
+    expect(_field('Description (optional)'), findsOneWidget);
     await tester.tap(_key('event-form-save'));
     await tester.pumpAndSettle();
-    expect(repo.updated, isNull);
+    expect(repo.updated, isNotNull);
+    expect(repo.updated!['description'], isNull);
+  });
+
+  testWidgets('a missing field is refused and nothing is saved', (tester) async {
+    final repo = _FormRepo();
+    await _open(tester, repo);
+    // No title, no capacity.
+    await tester.tap(_key('event-form-save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Event Title is required'), findsOneWidget);
+    expect(repo.created, isNull);
   });
 }

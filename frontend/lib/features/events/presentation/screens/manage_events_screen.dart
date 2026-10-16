@@ -714,6 +714,15 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   
   // Location search state
   final _locationSearchController = TextEditingController();
+
+  /// The location field, so its "required" error can clear once a place is
+  /// chosen (it is only checked again on Save otherwise).
+  final _locationFieldKey = GlobalKey<FormFieldState<String>>();
+
+  void _recheckLocationField() {
+    final field = _locationFieldKey.currentState;
+    if (field != null && field.hasError) field.validate();
+  }
   var _locationSuggestions = <Map<String, String>>[];
   var _isSearchingLocation = false;
   var _locationSelected = false;
@@ -892,8 +901,16 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         context: context,
         builder: (context) => AlertDialog(
           title: Text('Remove ${group.label.toLowerCase()}?'),
-          content: Text('What\'s in ${group.label.toLowerCase()} will be removed '
-              'from the event when you save.'),
+          content: Text(switch (group) {
+            _Group.images => 'The thumbnail and banner will be removed when you save.',
+            _Group.registrationDates => 'Registration will go back to opening on '
+                'publish and closing at the start, when you save.',
+            _Group.guests => 'People won\'t be able to bring guests once you save.',
+            _Group.speakers => 'All speakers will be removed from this event when you save.',
+            _Group.agenda => 'All sessions will be removed from this event when you save.',
+            _Group.sponsors =>
+              'All sponsors and partners will be removed from this event when you save.',
+          }),
           actions: [
             TextButton(
               onPressed: () => Navigator.pop(context, false),
@@ -981,17 +998,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     super.dispose();
   }
 
-  /// A published event keeps its description; a draft can be saved without
-  /// one (it is needed to publish).
-  bool get _descriptionRequired => widget.event?.status == 'published';
-
   /// Labels of the fields still missing to save, e.g. ['Capacity']: the
   /// publish rule (`_validate_for_publish` in
   /// backend/app/services/events_service.py, see
-  /// event_publish_requirements.dart), less the description for a draft.
+  /// event_publish_requirements.dart).
   List<String> _missingRequiredFields() => missingPublishFields(
         title: _title.text,
-        description: _description.text,
         startDate: _startDate.text,
         endDate: _endDate.text,
         timezone: _timezone.text,
@@ -999,7 +1011,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         isVirtual: _isVirtual,
         location: _location.text,
         virtualUrl: _virtualUrl.text,
-      ).where((label) => _descriptionRequired || label != 'Description').toList();
+      );
 
   @override
   Widget build(BuildContext context) {
@@ -1095,12 +1107,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         const SizedBox(height: 12),
         _buildTextField(
           _description,
-          'Description',
-          hint: _descriptionRequired
-              ? 'Detailed event description'
-              : 'Detailed event description (needed before you publish)',
+          'Description (optional)',
+          hint: 'What the event is about, who it is for',
           maxLines: 4,
-          required: _descriptionRequired,
         ),
 
         const SizedBox(height: 28),
@@ -2714,6 +2723,7 @@ void _showFeeDialog(int? editIndex) {
       children: [
         // Location search field
         TextFormField(
+          key: _locationFieldKey,
           controller: _locationSearchController,
           decoration: InputDecoration(
             labelText: 'Search Location *',
@@ -2768,6 +2778,7 @@ void _showFeeDialog(int? editIndex) {
                     _locationSuggestions = [];
                     _locationSelected = true;
                   });
+                  _recheckLocationField();
                 },
                 icon: const Icon(Icons.edit_outlined, size: 16),
                 label: Text(
@@ -2945,6 +2956,7 @@ void _showFeeDialog(int? editIndex) {
       _locationSuggestions = [];
       _locationSelected = true;
     });
+    _recheckLocationField();
   }
 
   Widget _buildToggleField(String label, bool value, Function(bool) onChanged) {
@@ -2960,15 +2972,40 @@ void _showFeeDialog(int? editIndex) {
     );
   }
 
+  /// Checks every field; if any is wrong, scrolls to the topmost one so the
+  /// admin sees it. Returns whether all were fine.
+  bool _checkFieldsAndShowFirstProblem() {
+    final invalid = _formKey.currentState?.validateGranularly() ?? const {};
+    if (invalid.isEmpty) return true;
+    BuildContext? first;
+    double? top;
+    for (final field in invalid) {
+      final box = field.context.findRenderObject();
+      if (box is! RenderBox || !box.attached) continue;
+      final y = box.localToGlobal(Offset.zero).dy;
+      if (top == null || y < top) {
+        top = y;
+        first = field.context;
+      }
+    }
+    if (first != null) {
+      Scrollable.ensureVisible(
+        first,
+        alignment: 0.2,
+        duration: const Duration(milliseconds: 300),
+      );
+    }
+    return false;
+  }
+
   Future<void> _save() async {
     final missing = _missingRequiredFields();
+    final fieldsOk = _checkFieldsAndShowFirstProblem();
     if (missing.isNotEmpty) {
-      _formKey.currentState?.validate();
       showNotice(context, 'Please fill in: ${missing.join(', ')}', kind: NoticeKind.warning);
       return;
     }
-
-    if (!_formKey.currentState!.validate()) return;
+    if (!fieldsOk) return;
 
     // Parse and validate dates
     final startDate = _parseDate(_startDate.text);
@@ -3104,7 +3141,7 @@ void _showFeeDialog(int? editIndex) {
       final data = <String, dynamic>{
         // No tagline: it is no longer edited, so a saved one is left as is.
         'title': _title.text.trim(),
-        'description': _description.text.trim(),
+        'description': _description.text.trim().isEmpty ? null : _description.text.trim(),
         'start_datetime': _iso(startDateTime),
         'end_datetime': _iso(endDateTime),
         'timezone': _timezone.text.trim(),

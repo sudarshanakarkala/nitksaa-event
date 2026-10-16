@@ -376,3 +376,24 @@ def test_free_event_duplicate_registration_rejected(client, monkeypatch):
         assert r2.json()["detail"] == "already_registered"
     finally:
         _clear_bootstrap(monkeypatch)
+
+
+def test_publish_without_description(client, monkeypatch):
+    """The description is optional: an event with a title, time, place and
+    capacity can be published."""
+    _as_platform_admin(monkeypatch)
+    headers = _bearer(_PLATFORM_ADMIN)
+    base = {
+        "title": "TEST EVTMGMT NO DESCRIPTION", "start_datetime": _FUTURE_START,
+        "end_datetime": _FUTURE_END, "is_virtual": False, "capacity": 20,
+    }
+    try:
+        r = client.post("/api/v1/admin/events", json={**base, "location_text": "Test Venue"}, headers=headers)
+        assert r.status_code == 201, r.text
+        ok_id = r.json()["event_id"]
+        r = client.post(f"/api/v1/admin/events/{ok_id}/publish", headers=headers)
+        assert r.status_code == 200, r.text
+        assert r.json()["status"] == "published"
+    finally:
+        _db_exec("DELETE FROM events WHERE title = 'TEST EVTMGMT NO DESCRIPTION'")
+        _clear_bootstrap(monkeypatch)
