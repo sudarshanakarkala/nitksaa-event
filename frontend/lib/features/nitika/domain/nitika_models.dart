@@ -19,25 +19,29 @@ class ChatTurn {
 class NitikaPageContext {
   const NitikaPageContext({required this.page, this.eventId});
 
-  /// The event id from `/events/:id`, `/events/:id/checkout` and
-  /// `/admin/events/:id/registrations`; null on every other page.
+  /// [location] is the page's address, with its query. The event id comes
+  /// from `/events/:id` and `/events/:id/checkout`, or from `?event=` on the
+  /// admin tabs that pick an event (Registrations, Check-in); null elsewhere.
+  /// [page] is the path only, so filters in the query never reach NITiKa.
   factory NitikaPageContext.fromLocation(String location) {
-    for (final pattern in _eventPages) {
-      final match = pattern.firstMatch(location);
-      if (match != null) {
-        return NitikaPageContext(
-          page: location,
-          eventId: int.tryParse(match.group(1)!),
-        );
-      }
+    final uri = Uri.tryParse(location) ?? Uri(path: location);
+    final path = uri.path;
+    final match = _eventPage.firstMatch(path);
+    if (match != null) {
+      return NitikaPageContext(page: path, eventId: int.tryParse(match.group(1)!));
     }
-    return NitikaPageContext(page: location);
+    if (_adminEventTabs.contains(path.replaceAll(RegExp(r'/$'), ''))) {
+      final id = int.tryParse(uri.queryParameters['event'] ?? '');
+      return NitikaPageContext(page: path, eventId: id != null && id > 0 ? id : null);
+    }
+    return NitikaPageContext(page: path);
   }
 
-  static final _eventPages = [
-    RegExp(r'^/events/(\d+)(?:/checkout)?/?$'),
-    RegExp(r'^/admin/events/(\d+)/registrations/?$'),
-  ];
+  static final _eventPage = RegExp(r'^/events/(\d+)(?:/checkout)?/?$');
+  static const _adminEventTabs = {'/admin/registrations', '/admin/checkin'};
+
+  /// The public event page (or its checkout), where the event starter fits.
+  bool get isEventPage => _eventPage.hasMatch(page);
 
   final String page;
   final int? eventId;

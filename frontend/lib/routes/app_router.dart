@@ -44,7 +44,8 @@ abstract class AppRouter {
             location: state.uri.path,
             assistant: nitikaAssistant(
               signedIn: ref.watch(authControllerProvider).isAuthenticated,
-              location: state.uri.path,
+              // With the query: the admin tabs keep the chosen event in ?event=.
+              location: state.uri.toString(),
             ),
             child: child,
           ),
