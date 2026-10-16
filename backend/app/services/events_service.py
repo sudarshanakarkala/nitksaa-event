@@ -296,7 +296,8 @@ class EventsService:
         return [self._to_dict(r) for r in rows]
 
     def _validate_for_publish(self, event: Dict[str, Any]) -> None:
-        required = ["title", "description", "start_datetime", "end_datetime", "timezone", "capacity"]
+        # No description needed: a meetup's title, time and place can say enough.
+        required = ["title", "start_datetime", "end_datetime", "timezone", "capacity"]
         if event.get("is_virtual"):
             required.append("virtual_url")
         else:

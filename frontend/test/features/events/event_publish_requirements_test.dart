@@ -1,13 +1,12 @@
 // The Create/Edit Event form must not save an event the backend can't
-// publish. These are the rules behind its step-1 Next button and the check
-// in _save(); they mirror _validate_for_publish in the backend.
+// publish. These are the rules behind the check in _save(); they mirror
+// _validate_for_publish in the backend.
 
 import 'package:event_app/features/events/domain/event_publish_requirements.dart';
 import 'package:flutter_test/flutter_test.dart';
 
 List<String> _missing({
   String title = 'Alumni Meetup',
-  String description = 'Annual meetup',
   String startDate = '2026-11-01',
   String endDate = '2026-11-01',
   String timezone = 'Asia/Kolkata',
@@ -18,7 +17,6 @@ List<String> _missing({
 }) =>
     missingPublishFields(
       title: title,
-      description: description,
       startDate: startDate,
       endDate: endDate,
       timezone: timezone,
@@ -84,8 +82,8 @@ void main() {
 
     test('several missing fields are listed in form order', () {
       expect(
-        _missing(title: '', description: ' ', timezone: '', capacity: ''),
-        ['Title', 'Description', 'Timezone', 'Capacity'],
+        _missing(title: '', timezone: '', capacity: ''),
+        ['Title', 'Timezone', 'Capacity'],
       );
     });
 

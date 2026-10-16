@@ -1,11 +1,10 @@
 // The fields an event needs before it can be published.
 //
 // Keep this in step with `_validate_for_publish` in
-// `backend/app/services/events_service.py`: title, description, start,
-// end, timezone, a positive capacity, and a location (in person) or a
-// meeting URL (virtual). The event form checks these before it lets the
-// admin leave step 1 or save, so it never saves an event that can't be
-// published.
+// `backend/app/services/events_service.py`: title, start, end, timezone,
+// a positive capacity, and a location (in person) or a meeting URL
+// (virtual). The description is optional. The event form checks these
+// before it saves, so it never saves an event that can't be published.
 
 /// Error text for a capacity that isn't a whole number of at least 1.
 const capacityErrorText = 'Capacity must be a whole number of at least 1';
@@ -24,7 +23,6 @@ String? validateCapacity(String? value) =>
 /// Empty when everything needed to publish is filled in.
 List<String> missingPublishFields({
   required String title,
-  required String description,
   required String startDate,
   required String endDate,
   required String timezone,
@@ -36,7 +34,6 @@ List<String> missingPublishFields({
   bool blank(String s) => s.trim().isEmpty;
   return [
     if (blank(title)) 'Title',
-    if (blank(description)) 'Description',
     if (blank(startDate)) 'Start date',
     if (blank(endDate)) 'End date',
     if (blank(timezone)) 'Timezone',

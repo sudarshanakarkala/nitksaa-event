@@ -171,10 +171,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           _organiserLine(event, isAdmin: isAdmin),
                           const SizedBox(height: 16),
                           _buildMaterialMetaGrid(event),
-                          const SizedBox(height: 24),
-                          const Divider(),
-                          const SizedBox(height: 16),
-                          _buildAboutSection(event),
+                          if (_hasDescription(event)) ...[
+                            const SizedBox(height: 24),
+                            const Divider(),
+                            const SizedBox(height: 16),
+                            _buildAboutSection(event),
+                          ],
                           if (VenueSection.hasVenue(event)) ...[
                             const SizedBox(height: 24),
                             const Divider(),
@@ -304,10 +306,12 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   const SizedBox(height: 16),
                 ],
                 if (!unpublished) _buildRegistrationCTA(state),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 16),
-                _buildAboutSection(event),
+                if (_hasDescription(event)) ...[
+                  const SizedBox(height: 16),
+                  const Divider(),
+                  const SizedBox(height: 16),
+                  _buildAboutSection(event),
+                ],
                 if (VenueSection.hasVenue(event)) ...[
                   const SizedBox(height: 16),
                   const Divider(),
@@ -518,6 +522,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
+  /// The description is optional; without one there is no About part.
+  bool _hasDescription(AppEvent event) => (event.description ?? '').trim().isNotEmpty;
+
   Widget _buildAboutSection(AppEvent event) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -528,7 +535,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ),
         const SizedBox(height: 10),
         Text(
-          event.description ?? 'No description provided for this event.',
+          event.description!.trim(),
           style: const TextStyle(fontSize: 14, height: 1.5),
         ),
       ],
