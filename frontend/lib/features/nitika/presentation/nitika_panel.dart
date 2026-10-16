@@ -31,7 +31,7 @@ Widget? nitikaAssistant({
 class NitikaPanel extends ConsumerStatefulWidget {
   const NitikaPanel({super.key, required this.location});
 
-  /// The current route path, sent as page context.
+  /// The current address (path and query), sent as page context.
   final String location;
 
   @override
@@ -268,8 +268,7 @@ class _Starters extends ConsumerWidget {
     final session = ref.watch(authControllerProvider).session;
     // Any admin gets the admin starter; the backend scopes the answer.
     final isAdmin = session?.access.isAnyAdmin ?? false;
-    final onEventPage =
-        NitikaPageContext.fromLocation(location).eventId != null;
+    final onEventPage = NitikaPageContext.fromLocation(location).isEventPage;
     final starters = [
       if (onEventPage) eventPageStarter,
       "What's coming up?",
