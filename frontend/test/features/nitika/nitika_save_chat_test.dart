@@ -107,6 +107,7 @@ void main() {
     expect(saveButton(tester).onPressed, isNull);
 
     await tester.enterText(find.byType(TextField), 'How many events this month?');
+    await tester.pump(); // Send is enabled once the text is in
     await tester.tap(find.byTooltip('Send'));
     await tester.pumpAndSettle();
     expect(saveButton(tester).onPressed, isNotNull);
