@@ -1125,6 +1125,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           _description,
           'Description (optional)',
           hint: 'What the event is about, who it is for',
+          // The event page shows it as simple Markdown (SimpleMarkdown).
+          helper: 'You can use **bold**, ## headings, - lists and [links](https://…).',
           maxLines: 4,
         ),
 
@@ -1425,6 +1427,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     TextEditingController controller,
     String label, {
     String? hint,
+    String? helper,
     bool required = false,
     int maxLines = 1,
     TextInputType? keyboardType,
@@ -1438,6 +1441,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       decoration: InputDecoration(
         labelText: displayLabel,
         hintText: hint,
+        helperText: helper,
+        helperMaxLines: 2,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),

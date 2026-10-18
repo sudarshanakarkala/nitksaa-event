@@ -403,6 +403,11 @@ void main() {
     expect(repo.updated!['slug'], 'bangalore-breakfast-oct-2026');
   });
 
+  testWidgets('the description says Markdown can be used', (tester) async {
+    await _open(tester, _FormRepo());
+    expect(find.textContaining('**bold**, ## headings'), findsOneWidget);
+  });
+
   testWidgets('an unchanged link is not sent', (tester) async {
     final repo = _FormRepo();
     await _open(tester, repo, event: _event());
