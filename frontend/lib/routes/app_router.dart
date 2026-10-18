@@ -5,6 +5,7 @@ import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/checkin/check_in_screen.dart';
 import '../features/events/presentation/screens/event_list_screen.dart';
 import '../features/events/presentation/screens/event_detail_screen.dart';
+import '../features/events/presentation/screens/event_link_screen.dart';
 import '../features/events/presentation/screens/checkout_screen.dart';
 import '../features/admin/admin_tabs.dart';
 import '../features/admin/presentation/admin_screen.dart';
@@ -95,6 +96,11 @@ abstract class AppRouter {
               final eventId = int.tryParse(idStr) ?? 0;
               return EventDetailScreen(eventId: eventId);
             },
+          ),
+          GoRoute(
+            path: AppRoutes.eventLink,
+            builder: (context, state) =>
+                EventLinkScreen(slug: state.pathParameters['slug'] ?? ''),
           ),
           GoRoute(
             path: AppRoutes.checkout,

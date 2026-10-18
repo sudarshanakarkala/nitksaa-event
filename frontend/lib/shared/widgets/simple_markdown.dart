@@ -13,9 +13,14 @@ import '../../theme/app_text_styles.dart';
 /// `**bold**`, `*italic*`, `[links](url)`. HTML comments are skipped.
 /// Deliberately no package dependency.
 class SimpleMarkdown extends StatefulWidget {
-  const SimpleMarkdown(this.data, {super.key});
+  const SimpleMarkdown(this.data, {super.key, this.keepLineBreaks = false});
 
   final String data;
+
+  /// Each new line inside a paragraph starts a new line, as typed (event
+  /// descriptions, often written line by line). Off for the policy files,
+  /// whose paragraphs wrap across lines.
+  final bool keepLineBreaks;
 
   @override
   State<SimpleMarkdown> createState() => _SimpleMarkdownState();
@@ -52,7 +57,7 @@ class _SimpleMarkdownState extends State<SimpleMarkdown> {
     super.dispose();
   }
 
-  static List<_Block> _parse(String source) {
+  static List<_Block> _parse(String source, {required bool keepLineBreaks}) {
     final withoutComments =
         source.replaceAll(RegExp(r'<!--[\s\S]*?-->'), '').replaceAll('\r\n', '\n');
     final lines = withoutComments.split('\n');
@@ -98,7 +103,7 @@ class _SimpleMarkdownState extends State<SimpleMarkdown> {
           !isBullet(lines[i]) &&
           !isRule(lines[i])) {
         final l = lines[i];
-        final hardBreak = l.endsWith('  ');
+        final hardBreak = keepLineBreaks || l.endsWith('  ');
         buffer.write(l.trim());
         buffer.write(hardBreak ? '\n' : ' ');
         i++;
@@ -175,7 +180,7 @@ class _SimpleMarkdownState extends State<SimpleMarkdown> {
       height: 1.4,
     );
 
-    final blocks = _parse(widget.data);
+    final blocks = _parse(widget.data, keepLineBreaks: widget.keepLineBreaks);
     final children = <Widget>[];
 
     for (var i = 0; i < blocks.length; i++) {

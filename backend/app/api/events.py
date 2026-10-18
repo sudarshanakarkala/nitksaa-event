@@ -47,6 +47,16 @@ async def list_public_events(
     return {"events": events, "total": total, "page": page, "per_page": per_page}
 
 
+@router.get("/events/public/by-slug/{slug}")
+async def get_public_event_id_by_slug(slug: str) -> Dict[str, Any]:
+    """The event behind a readable link (/e/<slug>): published events only."""
+    pool = await get_pool()
+    async with pool.acquire() as conn:
+        svc = EventsService(conn)
+        event_id = await svc.get_public_event_id_by_slug(slug.lower())
+    return {"event_id": event_id}
+
+
 @router.get("/events/public/{event_id}")
 async def get_public_event(event_id: int) -> Dict[str, Any]:
     pool = await get_pool()

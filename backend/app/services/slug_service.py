@@ -1,6 +1,10 @@
 import re
 import asyncpg
 
+# An event link someone types: lower-case letters and numbers, single
+# hyphens between them (e.g. "bangalore-breakfast-oct-2026").
+SLUG_PATTERN = r"^[a-z0-9]+(?:-[a-z0-9]+)*$"
+
 _NON_SLUG = re.compile(r"[^\w\s-]")
 _WHITESPACE = re.compile(r"[\s_]+")
 

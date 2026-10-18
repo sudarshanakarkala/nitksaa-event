@@ -388,4 +388,65 @@ void main() {
     expect(find.text('Event Title is required'), findsOneWidget);
     expect(repo.created, isNull);
   });
+
+  // The event's link (/e/<slug>): editable in a draft, fixed once published.
+  testWidgets('a draft link can be changed and is saved tidied', (tester) async {
+    final repo = _FormRepo();
+    await _open(tester, repo, event: _event());
+    expect(find.textContaining('/e/breakfast'), findsOneWidget);
+    await tester.tap(_key('event-link-change'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_key('event-link'), 'Bangalore Breakfast Oct 2026');
+    await tester.pumpAndSettle();
+    await tester.tap(_key('event-form-save'));
+    await tester.pumpAndSettle();
+    expect(repo.updated!['slug'], 'bangalore-breakfast-oct-2026');
+  });
+
+  testWidgets('an unchanged link is not sent', (tester) async {
+    final repo = _FormRepo();
+    await _open(tester, repo, event: _event());
+    await tester.tap(_key('event-form-save'));
+    await tester.pumpAndSettle();
+    expect(repo.updated, isNotNull);
+    expect(repo.updated!.containsKey('slug'), isFalse);
+  });
+
+  testWidgets('a bad link is refused and nothing is saved', (tester) async {
+    final repo = _FormRepo();
+    await _open(tester, repo, event: _event());
+    await tester.tap(_key('event-link-change'));
+    await tester.pumpAndSettle();
+    await tester.enterText(_key('event-link'), 'ab');
+    await tester.tap(_key('event-form-save'));
+    await tester.pumpAndSettle();
+    expect(find.text('Use at least 3 letters or numbers'), findsOneWidget);
+    expect(repo.updated, isNull);
+  });
+
+  testWidgets('a published event\'s link is fixed', (tester) async {
+    final repo = _FormRepo();
+    final published = AppEvent(
+      eventId: 44,
+      slug: 'nitkonnect-2027',
+      title: 'NITKonnect 2027',
+      status: 'published',
+      publishedAt: DateTime(2026, 10, 1),
+      startDatetime: _start,
+      endDatetime: _start.add(const Duration(hours: 2)),
+      timezone: 'Asia/Kolkata',
+      isVirtual: true,
+      virtualUrl: 'https://meet.example.com/x',
+      capacity: 50,
+      registrationStatus: 'open',
+      registeredCount: 0,
+    );
+    await _open(tester, repo, event: published);
+    expect(find.textContaining('/e/nitkonnect-2027'), findsOneWidget);
+    expect(find.textContaining('can\'t change once the event is published'), findsOneWidget);
+    expect(_key('event-link-change'), findsNothing);
+    await tester.tap(_key('event-form-save'));
+    await tester.pumpAndSettle();
+    expect(repo.updated!.containsKey('slug'), isFalse);
+  });
 }

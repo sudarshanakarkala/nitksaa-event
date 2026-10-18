@@ -11,11 +11,16 @@ import 'features/auth/services/auth_controller.dart';
 import 'firebase_options.dart';
 import 'routes/app_router.dart';
 import 'routes/route_guards.dart';
+import 'shared/web/browser.dart';
 import 'theme/app_theme.dart';
 import 'theme/theme_provider.dart';
 
 Future<void> main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // A readable event link without `#` (…/e/<slug>): move it to the app's
+  // own address before the router reads it.
+  moveReadableLinkIntoApp();
 
   AppLogger.info('Starting NITKSAA Event App...');
 

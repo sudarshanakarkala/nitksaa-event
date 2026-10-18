@@ -14,6 +14,9 @@ abstract class AppRoutes {
   static const String eventDetail = '/events/:id';
   static const String checkout = '/events/:id/checkout';
 
+  /// An event's readable link, e.g. `/e/nitkonnect-2027` (see `eventLink`).
+  static const String eventLink = '/e/:slug';
+
   /// Opened from an entry pass QR; see `CheckInScreen`.
   static const String checkIn = '/checkin/:eventId/:token';
   static const String checkInPrefix = '/checkin/';
