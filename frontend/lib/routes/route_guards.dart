@@ -61,7 +61,7 @@ abstract class RouteGuards {
 
     if (isProtected) return _signInFirst(uri);
     if (isSplash) return null;
-    if (isLogin || isDeveloper) return null;
+    if (isLogin) return null;
 
     return null;
   }
