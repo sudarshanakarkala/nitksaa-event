@@ -14,6 +14,8 @@ Words in **bold** are what you see on screen.
 - Open **events.nitkalumni.in**. You can browse and open any event without signing in.
 - The **Events** page shows **Upcoming** events first. **Open** shows the ones taking registrations.
 - Tap **View Details** to open an event: date, time, place, price and what it's about.
+- Got a link like **events.nitkalumni.in/e/…** (on WhatsApp, or from another site)? It opens that event directly. If it says "This event isn't available", the link may be mistyped or the event isn't open yet.
+- **Tell a friend:** on the event page, **Share** (on a phone: WhatsApp and others) or **Copy link** (on a computer).
 
 ---
 
@@ -110,4 +112,5 @@ NITiKA answers questions only. It can't register you, cancel a registration, tak
 | Paid, but not shown as registered | Wait a minute and reload. Still not? Send **Feedback** (don't pay again) |
 | "This event has started, so you can't unregister now." | Cancelling closes when the event starts |
 | Can't find your QR | **My Events** › **QR badge** |
+| Want to organise an event | Events are set up by organisers. Ask for organiser access through **Feedback** |
 | Anything else | **Feedback** at the bottom of every page (you can attach screenshots) |

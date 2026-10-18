@@ -38,7 +38,7 @@ Three steps: **create** the essentials, **edit** to add extras, **publish**. Sav
 Admin › **Events** › **Create event** (also on the public Events page).
 
 1. **Event Title** (required).
-2. **Description (optional)**. If empty, the event page hides "About the Event".
+2. **Description (optional)**. If empty, the event page hides "About the Event". New lines show as typed. You can also use `**bold**`, `## Heading`, `- list item` and `[link text](https://…)`; save the draft and open its page to see how it looks.
 3. **When:** Start Date and Time, End Date and Time; or switch on **Full Day Event** for dates only. Moving the start moves the end. Times are India time; **Change** picks another timezone.
 4. **Where:** type in **Search Location** and pick a suggestion (or **Use as location**). Online: switch on **Online event** and paste the **Meeting URL** (only organisers and registered people see it).
 5. **Capacity:** the most people who can attend, **guests included**.
@@ -65,6 +65,12 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 - **Remove** on a group asks first if it holds anything, and clears it when you **Save**.
 - Closing with unsaved changes asks **Discard your changes?** — **Keep editing** goes back.
 
+**The event's link.** Under the title, Edit shows the event's link, e.g. `events.nitkalumni.in/e/bangalore-breakfast-oct-2026`, with a copy button.
+- It's made from the title when you first save. **Change** sets your own: letters, numbers and hyphens (spaces become hyphens as you type).
+- **Set it before you publish.** Once the event has been published, the link can't change, so links already shared keep working.
+- A link another event already uses is refused: "This link is already used by another event." For a repeat event, add the month (e.g. `…-oct-2026`).
+- Give practice or demo events their own link (e.g. `demo-…`), so the real event gets the clean one.
+
 ### Step 3: Publish
 
 **⋯** › **Publish**. If something is missing: "Can't publish yet. Please fill in: …". Fix it with Edit, then publish again.
@@ -86,6 +92,7 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 - Allowing guests: **+ Guests** › **Guests per registration** (up to 4).
 - Leave **Registration Closes** empty, so registration closes when the event starts. Never set it after the start.
 - Capacity counts every person, guests included.
+- **Sharing:** a published event's page has **Share** on phones (WhatsApp and others) and **Copy link** on computers. Drafts don't, because their link doesn't open for anyone else yet.
 
 ---
 
