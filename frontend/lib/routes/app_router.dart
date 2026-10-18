@@ -1,10 +1,8 @@
-import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import '../features/auth/presentation/screens/login_screen.dart';
 import '../features/auth/presentation/screens/splash_screen.dart';
 import '../features/checkin/check_in_screen.dart';
-import '../features/developer/presentation/developer_diagnostics_screen.dart';
 import '../features/events/presentation/screens/event_list_screen.dart';
 import '../features/events/presentation/screens/event_detail_screen.dart';
 import '../features/events/presentation/screens/checkout_screen.dart';
@@ -139,12 +137,6 @@ abstract class AppRouter {
           ),
         ],
       ),
-      if (kDebugMode)
-        GoRoute(
-          path: AppRoutes.developer,
-          name: 'developer',
-          builder: (context, state) => const DeveloperDiagnosticsScreen(),
-        ),
     ],
   );
 }
