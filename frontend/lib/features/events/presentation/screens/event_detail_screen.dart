@@ -20,6 +20,9 @@ import '../widgets/unregister_flow.dart' show confirmAndCancelGuest;
 import '../widgets/venue_section.dart';
 import '../../../../shared/widgets/form_fields.dart';
 import '../../../../shared/widgets/notice.dart';
+import '../../../../shared/widgets/simple_markdown.dart';
+import '../../../../shared/web/browser.dart';
+import '../../domain/event_link.dart' show eventLinkUrl;
 import '../../../../shared/format.dart';
 
 class EventDetailScreen extends ConsumerStatefulWidget {
@@ -534,10 +537,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
         ),
         const SizedBox(height: 10),
-        Text(
-          event.description!.trim(),
-          style: const TextStyle(fontSize: 14, height: 1.5),
-        ),
+        // Simple Markdown (headings, lists, **bold**, links), as the schema
+        // says; plain text shows as typed, line breaks kept (F10).
+        SimpleMarkdown(event.description!.trim(), keepLineBreaks: true),
       ],
     );
   }
@@ -705,7 +707,9 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   Widget _organiserLine(AppEvent event, {required bool isAdmin}) {
     final p = context.palette;
     final who = event.creatorName(ref.read(authControllerProvider).session?.firebaseUid);
-    if (who == null && !isAdmin) return const SizedBox.shrink();
+    // A draft's link doesn't open for anyone else yet, so no Share.
+    final shareable = event.status == 'published';
+    if (who == null && !isAdmin && !shareable) return const SizedBox.shrink();
     final link = event.virtualUrl?.trim() ?? '';
     final line = Padding(
       padding: const EdgeInsets.only(top: 8),
@@ -733,6 +737,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               icon: const Icon(Icons.edit_outlined, size: 16),
               label: const Text('Edit event'),
             ),
+          if (shareable) _shareButton(event),
         ],
       ),
     );
@@ -740,6 +745,29 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [line, _organiserMeetingLink(link)],
+    );
+  }
+
+  /// Share: the phone's share sheet (WhatsApp…); Copy link on computers.
+  /// Both use the event's readable link (`/e/<slug>`).
+  Widget _shareButton(AppEvent event) {
+    final url = eventLinkUrl(event.slug);
+    if (canShareNatively()) {
+      return TextButton.icon(
+        onPressed: () => shareNatively(title: event.title, url: url),
+        icon: const Icon(Icons.share_outlined, size: 16),
+        label: const Text('Share'),
+      );
+    }
+    return TextButton.icon(
+      onPressed: () async {
+        await Clipboard.setData(ClipboardData(text: url));
+        if (mounted) {
+          showNotice(context, 'Link copied: $url', kind: NoticeKind.success);
+        }
+      },
+      icon: const Icon(Icons.link, size: 16),
+      label: const Text('Copy link'),
     );
   }
 

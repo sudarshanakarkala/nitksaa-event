@@ -39,6 +39,9 @@ const _codeMessages = <String, String>{
   'registration_not_open_yet': 'Registration for this event hasn\'t opened yet.',
   'event_not_published': 'This event isn\'t open for registration.',
   'event_not_found': 'We couldn\'t find this event.',
+  // Changing an event's link (events_service.update_event).
+  'slug_taken': 'This link is already used by another event. Choose another.',
+  'slug_locked': 'The link can\'t change once the event has been published.',
   'payment_not_configured':
       'Payment isn\'t set up for this event yet. Please try again later.',
   'registration_not_found':

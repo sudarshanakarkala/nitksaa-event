@@ -246,6 +246,13 @@ class EventsRepository:
         )
         return list(rows), total
 
+    async def get_public_event_id_by_slug(self, slug: str) -> Optional[int]:
+        # The same rule as get_public_event: published events only.
+        return await self.conn.fetchval(
+            "SELECT event_id FROM events WHERE slug = $1 AND status = 'published'",
+            slug,
+        )
+
     async def get_public_event(self, event_id: int) -> Optional[asyncpg.Record]:
         return await self.conn.fetchrow(
             f"""

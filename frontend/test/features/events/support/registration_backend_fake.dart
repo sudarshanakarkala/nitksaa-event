@@ -88,10 +88,14 @@ class FakeRegistrationBackend implements HttpClientAdapter {
     this.startDatetime = '2099-01-10T12:30:00Z',
     this.endDatetime = '2099-01-10T15:30:00Z',
     this.bannerUrl,
+    this.description,
   });
 
   /// `banner_url` of the public event (none by default).
   final String? bannerUrl;
+
+  /// `description` of the public event (none by default).
+  final String? description;
 
   final int eventId;
   final bool isFree;
@@ -284,6 +288,12 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       return _json(failure.status, {'detail': failure.detail});
     }
 
+    if (request.line.startsWith('GET /api/v1/events/public/by-slug/')) {
+      final slug = request.line.split('/').last;
+      return slug == 'event-$eventId'
+          ? _json(200, {'event_id': eventId})
+          : _json(404, {'detail': 'event_not_found'});
+    }
     if (request.line == 'GET /api/v1/events/public/$eventId') {
       return _json(200, {'event': _publicEvent()});
     }
@@ -735,6 +745,7 @@ class FakeRegistrationBackend implements HttpClientAdapter {
       'max_guests': maxGuests,
       'registration_status': registrationStatus,
       'banner_url': ?bannerUrl,
+      'description': ?description,
       'registered_count': seatsTaken,
     };
   }

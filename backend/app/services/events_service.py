@@ -73,6 +73,8 @@ def _update_context(event_id: int, before: Dict[str, Any], after: Dict[str, Any]
         def price(row):
             return "free" if row.get("is_free") else (str(row.get("ticket_price")) if row.get("ticket_price") is not None else None)
         ctx["price"] = {"from": price(before), "to": price(after)}
+    if "slug" in changed:
+        ctx["slug"] = {"from": before.get("slug"), "to": after.get("slug")}
     if "registration_closes_at" in changed:
         now = datetime.now(timezone.utc)
         was_closed = before.get("registration_closes_at") is not None and before["registration_closes_at"] <= now
@@ -186,6 +188,15 @@ class EventsService:
             raise HTTPException(status_code=404, detail="event_not_found")
 
         fields = data.model_dump(exclude_unset=True)
+        if "slug" in fields:
+            if fields["slug"] == existing["slug"]:
+                del fields["slug"]
+            elif existing["published_at"] is not None:
+                # Shared links must keep working: once an event has been
+                # published (even if unpublished since), its link is fixed.
+                raise HTTPException(status_code=409, detail="slug_locked")
+            elif await self.repo.slug_exists(fields["slug"]):
+                raise HTTPException(status_code=409, detail="slug_taken")
         if not fields:
             return _enrich(self._to_dict(existing))
 
@@ -199,7 +210,11 @@ class EventsService:
             if abs(closes_at - now) <= _CLOSE_NOW_TOLERANCE:
                 fields["registration_closes_at"] = now
 
-        record = await self.repo.update_event(event_id, fields)
+        try:
+            record = await self.repo.update_event(event_id, fields)
+        except asyncpg.exceptions.UniqueViolationError:
+            # Another event took the same link in the meantime.
+            raise HTTPException(status_code=409, detail="slug_taken")
         await self._audit(user["firebase_uid"], "event_updated", event_id,
                           _update_context(event_id, dict(existing), dict(record), fields))
         # A price change on a published paid event must reach checkout.
@@ -347,6 +362,12 @@ class EventsService:
         d["partners"] = [dict(r) for r in partner_rows]
 
     # ── Public: Get ──────────────────────────────────────────────────────────
+
+    async def get_public_event_id_by_slug(self, slug: str) -> int:
+        event_id = await self.repo.get_public_event_id_by_slug(slug)
+        if event_id is None:
+            raise HTTPException(status_code=404, detail="event_not_found")
+        return event_id
 
     async def get_public_event(self, event_id: int) -> Dict[str, Any]:
         record = await self.repo.get_public_event(event_id)

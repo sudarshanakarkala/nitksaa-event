@@ -784,7 +784,9 @@ def test_patch_cannot_override_server_owned_fields(client, monkeypatch):
 
         r = client.patch(
             f"/api/v1/admin/events/{event_id}",
-            json={"event_id": before["event_id"] + 999, "slug": "hacked-slug",
+            # The slug (the event's link) is editable before the first
+            # publish and locked after: see tests/test_event_links.py.
+            json={"event_id": before["event_id"] + 999,
                   "created_by_firebase_uid": "forged-owner", "created_at": "2000-01-01T00:00:00Z"},
             headers=admin_headers,
         )

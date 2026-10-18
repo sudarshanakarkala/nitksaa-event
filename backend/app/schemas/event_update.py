@@ -3,9 +3,15 @@ from pydantic import BaseModel, Field, model_validator
 from typing import Optional
 from datetime import datetime
 
+from app.services.slug_service import SLUG_PATTERN
+
 
 class EventUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=255)
+    # The event's link (/e/<slug>). Only a never-published event may change
+    # it (checked in EventsService.update_event).
+    slug: Optional[str] = Field(default=None, min_length=3, max_length=60,
+                                pattern=SLUG_PATTERN)
     tagline: Optional[str] = None
     description: Optional[str] = None
     start_datetime: Optional[datetime] = None
@@ -33,6 +39,8 @@ class EventUpdate(BaseModel):
         # without this an explicit null would reach the database.
         if "capacity" in self.model_fields_set and self.capacity is None:
             raise ValueError("capacity cannot be empty")
+        if "slug" in self.model_fields_set and self.slug is None:
+            raise ValueError("slug cannot be empty")
         if self.start_datetime and self.end_datetime:
             if self.end_datetime <= self.start_datetime:
                 raise ValueError("end_datetime must be after start_datetime")

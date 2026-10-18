@@ -257,6 +257,20 @@ class EventsRepository {
     return AppEvent.fromJson(response.data?['event'] as Map<String, dynamic>);
   }
 
+  /// The published event behind a readable link (`/e/<slug>`). Null when
+  /// there is none (unknown, a draft, or mistyped).
+  Future<int?> findPublicEventIdBySlug(String slug) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/events/public/by-slug/${Uri.encodeComponent(slug)}',
+      );
+      return (response.data?['event_id'] as num?)?.toInt();
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) return null;
+      rethrow;
+    }
+  }
+
   Future<AppEvent> getPublicEvent(int eventId) async {
     final response = await _dio.get<Map<String, dynamic>>(
       '/api/v1/events/public/$eventId',

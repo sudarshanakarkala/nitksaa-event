@@ -3,7 +3,8 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:flutter/material.dart';
-import 'package:flutter/services.dart' show FilteringTextInputFormatter, TextInputFormatter;
+import 'package:flutter/services.dart'
+    show Clipboard, ClipboardData, FilteringTextInputFormatter, LengthLimitingTextInputFormatter, TextInputFormatter;
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
@@ -18,6 +19,7 @@ import '../../../auth/domain/admin_access.dart';
 import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
+import '../../domain/event_link.dart';
 import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
 import '../widgets/event_card.dart';
@@ -645,6 +647,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   // Basic info
   late final TextEditingController _title;
   late final TextEditingController _description;
+
+  /// The event's link (`/e/<slug>`), when editing. It can change until the
+  /// event is first published, then it's fixed so shared links keep working.
+  late final TextEditingController _slug;
+  bool _changingSlug = false;
+  bool get _slugLocked =>
+      widget.event != null &&
+      (widget.event!.publishedAt != null || widget.event!.status != 'draft');
   
   // Datetime
   late final TextEditingController _startDate;
@@ -734,6 +744,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     
     _title = TextEditingController(text: event?.title ?? '');
     _description = TextEditingController(text: event?.description ?? '');
+    _slug = TextEditingController(text: event?.slug ?? '');
     
     // Times are shown and typed in the event's own timezone, wherever the
     // person editing is.
@@ -830,7 +841,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   }
 
   List<TextEditingController> get _textFields => [
-        _title, _description, _startDate, _endDate, _startTime, _endTime,
+        _title, _description, _slug, _startDate, _endDate, _startTime, _endTime,
         _timezone, _location, _locationMapsUrl, _virtualUrl,
         _registrationOpensAt, _registrationClosesAt, _thumbnailUrl, _bannerUrl,
         _capacity,
@@ -980,6 +991,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   void dispose() {
     _title.dispose();
     _description.dispose();
+    _slug.dispose();
     _startDate.dispose();
     _endDate.dispose();
     _startTime.dispose();
@@ -1104,11 +1116,17 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         _buildTextField(_title, 'Event Title', hint: 'e.g., NITK Alumni Meetup', required: true),
+        if (widget.event != null) ...[
+          const SizedBox(height: 8),
+          _buildLinkField(),
+        ],
         const SizedBox(height: 12),
         _buildTextField(
           _description,
           'Description (optional)',
           hint: 'What the event is about, who it is for',
+          // The event page shows it as simple Markdown (SimpleMarkdown).
+          helper: 'You can use **bold**, ## headings, - lists and [links](https://…).',
           maxLines: 4,
         ),
 
@@ -1208,6 +1226,64 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           const SizedBox(height: 16),
           _buildFeesSection(),
         ],
+      ],
+    );
+  }
+
+  /// Link: shown with Copy; Change makes it editable while the event has
+  /// never been published. New events get theirs from the title on save.
+  Widget _buildLinkField() {
+    final p = context.palette;
+    if (_changingSlug) {
+      return TextFormField(
+        key: const ValueKey('event-link'),
+        controller: _slug,
+        autofocus: true,
+        inputFormatters: [SlugInputFormatter(), LengthLimitingTextInputFormatter(60)],
+        decoration: InputDecoration(
+          labelText: 'Link',
+          prefixText: eventLinkPrefix(),
+          helperText: 'Letters, numbers and hyphens, e.g. bangalore-breakfast-oct-2026',
+          border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+          contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+        ),
+        validator: (value) => slugProblem((value ?? '').trim()),
+      );
+    }
+    final url = eventLinkUrl(_slug.text);
+    return Row(
+      crossAxisAlignment: CrossAxisAlignment.center,
+      children: [
+        Icon(Icons.link, size: 18, color: p.textSecondary),
+        const SizedBox(width: 8),
+        Expanded(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SelectableText(url, style: TextStyle(fontSize: 13, color: p.textPrimary)),
+              Text(
+                _slugLocked
+                    ? 'The link can\'t change once the event is published.'
+                    : 'You can change the link until the event is published.',
+                style: TextStyle(fontSize: 11, color: p.textMuted),
+              ),
+            ],
+          ),
+        ),
+        if (!_slugLocked)
+          TextButton(
+            key: const ValueKey('event-link-change'),
+            onPressed: () => setState(() => _changingSlug = true),
+            child: const Text('Change'),
+          ),
+        IconButton(
+          tooltip: 'Copy link',
+          icon: const Icon(Icons.copy, size: 16),
+          onPressed: () async {
+            await Clipboard.setData(ClipboardData(text: url));
+            if (mounted) showNotice(context, 'Link copied', kind: NoticeKind.success);
+          },
+        ),
       ],
     );
   }
@@ -1351,6 +1427,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     TextEditingController controller,
     String label, {
     String? hint,
+    String? helper,
     bool required = false,
     int maxLines = 1,
     TextInputType? keyboardType,
@@ -1364,6 +1441,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       decoration: InputDecoration(
         labelText: displayLabel,
         hintText: hint,
+        helperText: helper,
+        helperMaxLines: 2,
         border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
         contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       ),
@@ -3141,6 +3220,11 @@ void _showFeeDialog(int? editIndex) {
       final data = <String, dynamic>{
         // No tagline: it is no longer edited, so a saved one is left as is.
         'title': _title.text.trim(),
+        // The link, only when it was changed (it's locked once published).
+        if (widget.event != null &&
+            !_slugLocked &&
+            _slug.text.trim() != widget.event!.slug)
+          'slug': _slug.text.trim(),
         'description': _description.text.trim().isEmpty ? null : _description.text.trim(),
         'start_datetime': _iso(startDateTime),
         'end_datetime': _iso(endDateTime),
