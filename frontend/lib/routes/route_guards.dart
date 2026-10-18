@@ -23,12 +23,9 @@ abstract class RouteGuards {
 
     final isSplash = location == AppRoutes.splash;
     final isLogin = location == AppRoutes.login;
-    final isDeveloper = location == AppRoutes.developer;
     // Pages that need sign-in: My Events and an event's checkout. An event's
     // own page is public (its Register says "Sign in to register").
     final isProtected = location == AppRoutes.myEvents || isCheckout(location);
-
-    if (isDeveloper && !kDebugMode) return AppRoutes.login;
 
     // Policy and feedback pages open directly, even while sign-in is still
     // being checked, so links and page refreshes land on the right page.

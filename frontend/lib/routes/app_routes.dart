@@ -11,7 +11,6 @@ abstract class AppRoutes {
   static const String adminRegistrations = '/admin/registrations';
   /// Old per-event registrations page; redirects to [adminRegistrations].
   static const String eventRegistrations = '/admin/events/:id/registrations';
-  static const String developer = '/developer';
   static const String eventDetail = '/events/:id';
   static const String checkout = '/events/:id/checkout';
 
