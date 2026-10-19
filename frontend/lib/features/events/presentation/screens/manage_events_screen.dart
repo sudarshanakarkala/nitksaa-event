@@ -23,7 +23,6 @@ import '../../domain/event_link.dart';
 import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
 import '../widgets/event_card.dart';
-import '../widgets/event_brand.dart';
 import '../../domain/event_time_zone.dart';
 import '../../../../shared/widgets/notice.dart';
 
@@ -680,11 +679,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   late final TextEditingController _thumbnailUrl;
   late final TextEditingController _bannerUrl;
 
-  // Branding (B6): logos for light and dark backgrounds, a page colour
-  // (stored as brand_accent).
+  // Branding (B6): logos for light and dark backgrounds.
   late final TextEditingController _brandLogoUrl;
   late final TextEditingController _brandLogoDarkUrl;
-  late final TextEditingController _brandAccent;
   
   // Capacity & Pricing
   late final TextEditingController _capacity;
@@ -722,6 +719,15 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
 
   /// Groups added with "+" in this sitting (see [_Group]).
   final _addedGroups = <_Group>{};
+
+  /// Long groups opened with Show (see [_foldFrom]).
+  final _openGroups = <_Group>{};
+
+  /// Each group's place in the form, to bring a newly added one into view.
+  final _groupKeys = {for (final g in _Group.values) g: GlobalKey()};
+
+  /// Groups with more items than this start folded to one line.
+  static const _foldFrom = 5;
 
   /// The timezone picker shows once asked for, or for an event not in IST.
   var _showTimezone = false;
@@ -800,7 +806,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _bannerUrl = TextEditingController(text: event?.bannerUrl ?? '');
     _brandLogoUrl = TextEditingController(text: event?.brandLogoUrl ?? '');
     _brandLogoDarkUrl = TextEditingController(text: event?.brandLogoDarkUrl ?? '');
-    _brandAccent = TextEditingController(text: event?.brandAccent ?? '');
     
     _capacity = TextEditingController(text: event?.capacity?.toString() ?? '');
     _maxGuests = (event?.maxGuests ?? 0).clamp(0, 4);
@@ -855,7 +860,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         _title, _description, _slug, _startDate, _endDate, _startTime, _endTime,
         _timezone, _location, _locationMapsUrl, _virtualUrl,
         _registrationOpensAt, _registrationClosesAt, _thumbnailUrl, _bannerUrl,
-        _brandLogoUrl, _brandLogoDarkUrl, _brandAccent,
+        _brandLogoUrl, _brandLogoDarkUrl,
         _capacity,
       ];
 
@@ -907,9 +912,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   bool _hasData(_Group group) => switch (group) {
         _Group.images =>
           _thumbnailUrl.text.trim().isNotEmpty || _bannerUrl.text.trim().isNotEmpty,
-        _Group.branding => _brandLogoUrl.text.trim().isNotEmpty ||
-            _brandLogoDarkUrl.text.trim().isNotEmpty ||
-            _brandAccent.text.trim().isNotEmpty,
+        _Group.branding =>
+          _brandLogoUrl.text.trim().isNotEmpty || _brandLogoDarkUrl.text.trim().isNotEmpty,
         _Group.registrationDates => _registrationOpensAt.text.trim().isNotEmpty ||
             _registrationClosesAt.text.trim().isNotEmpty,
         _Group.guests => _maxGuests > 0,
@@ -929,7 +933,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           title: Text('Remove ${group.label.toLowerCase()}?'),
           content: Text(switch (group) {
             _Group.images => 'The thumbnail and banner will be removed when you save.',
-            _Group.branding => 'The logos and page colour will be removed when you save.',
+            _Group.branding => 'The logos will be removed when you save.',
             _Group.registrationDates => 'Registration will go back to opening on '
                 'publish and closing at the start, when you save.',
             _Group.guests => 'People won\'t be able to bring guests once you save.',
@@ -962,7 +966,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         case _Group.branding:
           _brandLogoUrl.clear();
           _brandLogoDarkUrl.clear();
-          _brandAccent.clear();
         case _Group.registrationDates:
           _registrationOpensAt.clear();
           _registrationClosesAt.clear();
@@ -1027,7 +1030,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _bannerUrl.dispose();
     _brandLogoUrl.dispose();
     _brandLogoDarkUrl.dispose();
-    _brandAccent.dispose();
     _capacity.dispose();
     _ticketPrice.dispose();
     super.dispose();
@@ -1311,17 +1313,15 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  /// The optional groups this event has, then "+" for the rest.
+  /// "+" for the groups this event doesn't have yet, then the ones it has.
+  /// The "+" row comes first, so it's never below long lists; a group just
+  /// added is scrolled into view.
   Widget _buildGroups() {
     final shown = _Group.values.where(_shows).toList();
     final hidden = _Group.values.where((g) => !_shows(g)).toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        for (final group in shown) ...[
-          _buildGroup(group),
-          const SizedBox(height: 28),
-        ],
         if (hidden.isNotEmpty) ...[
           Text(
             'Add more only if this event needs it:',
@@ -1335,18 +1335,61 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               for (final group in hidden)
                 OutlinedButton.icon(
                   key: ValueKey('event-add-${group.name}'),
-                  onPressed: () => setState(() => _addedGroups.add(group)),
+                  onPressed: () => _addGroup(group),
                   icon: const Icon(Icons.add, size: 18),
                   label: Text(group.label),
                 ),
             ],
           ),
+          const SizedBox(height: 28),
+        ],
+        for (final group in shown) ...[
+          KeyedSubtree(key: _groupKeys[group], child: _buildGroup(group)),
+          const SizedBox(height: 28),
         ],
       ],
     );
   }
 
+  /// Shows [group] and brings it into view.
+  void _addGroup(_Group group) {
+    setState(() => _addedGroups.add(group));
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final target = _groupKeys[group]?.currentContext;
+      if (target == null || !target.mounted) return;
+      Scrollable.ensureVisible(
+        target,
+        duration: const Duration(milliseconds: 250),
+        curve: Curves.easeOut,
+        alignment: 0.05,
+      );
+    });
+  }
+
+  /// How many entries a list group holds (0 for the others).
+  int _itemCount(_Group group) => switch (group) {
+        _Group.speakers => _speakers.length,
+        _Group.agenda => _sessions.length,
+        _Group.sponsors => _sponsors.length + _partners.length,
+        _ => 0,
+      };
+
+  /// "83 speakers", for a folded group.
+  String _itemSummary(_Group group) {
+    String n(int count, String one, String many) => '$count ${count == 1 ? one : many}';
+    return switch (group) {
+      _Group.speakers => n(_speakers.length, 'speaker', 'speakers'),
+      _Group.agenda => n(_sessions.length, 'session', 'sessions'),
+      _Group.sponsors =>
+        '${n(_sponsors.length, 'sponsor', 'sponsors')} and ${n(_partners.length, 'partner', 'partners')}',
+      _ => '',
+    };
+  }
+
   Widget _buildGroup(_Group group) {
+    // A long list (NITKonnect's 83 speakers) starts as one line.
+    final foldable = _itemCount(group) > _foldFrom;
+    final folded = foldable && !_openGroups.contains(group);
     return Column(
       key: ValueKey('event-group-${group.name}'),
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -1354,6 +1397,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         Row(
           children: [
             Expanded(child: _buildSectionHeader(group.label)),
+            if (foldable)
+              TextButton(
+                key: ValueKey('event-fold-${group.name}'),
+                onPressed: () => setState(() {
+                  folded ? _openGroups.add(group) : _openGroups.remove(group);
+                }),
+                child: Text(folded ? 'Show' : 'Hide'),
+              ),
             TextButton(
               key: ValueKey('event-remove-${group.name}'),
               onPressed: () => _removeGroup(group),
@@ -1362,7 +1413,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           ],
         ),
         const SizedBox(height: 12),
-        switch (group) {
+        if (folded)
+          Text(
+            _itemSummary(group),
+            style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
+          )
+        else switch (group) {
           _Group.images => Column(
               children: [
                 _buildTextField(_thumbnailUrl, 'Thumbnail URL', hint: 'Square image URL for event cards'),
@@ -1455,7 +1511,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         .any((v) => v != null && v.trim().isNotEmpty);
   }
 
-  /// Branding (B6): two logo links and a page colour, with a swatch.
+  /// Branding (B6): the two logo links.
   Widget _buildBranding() {
     final p = context.palette;
     return Column(
@@ -1474,48 +1530,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           hint: '/brand/nitkonnect/logo_white.png',
           helper: 'Optional, e.g. a white logo. Without it the logo above is used.',
         ),
-        const SizedBox(height: 12),
-        ValueListenableBuilder<TextEditingValue>(
-          valueListenable: _brandAccent,
-          builder: (context, value, _) {
-            final colour = EventBrand.parseAccent(value.text);
-            return TextFormField(
-              key: const ValueKey('event-brand-accent'),
-              controller: _brandAccent,
-              decoration: InputDecoration(
-                labelText: 'Page colour',
-                hintText: '#2A1A4F',
-                helperText: 'As #RRGGBB: the event page\'s background in light and dark mode. '
-                    'A deep colour reads best. Empty: the site\'s colours.',
-                helperMaxLines: 2,
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-                suffixIcon: colour == null
-                    ? null
-                    : Padding(
-                        padding: const EdgeInsets.all(10),
-                        child: DecoratedBox(
-                          decoration: BoxDecoration(
-                            color: colour,
-                            borderRadius: BorderRadius.circular(4),
-                            border: Border.all(color: p.border),
-                          ),
-                          child: const SizedBox(width: 24, height: 24),
-                        ),
-                      ),
-              ),
-              validator: (v) {
-                final text = v?.trim() ?? '';
-                if (text.isEmpty || EventBrand.parseAccent(text) != null) return null;
-                return 'Use the form #RRGGBB, e.g. #2A1A4F';
-              },
-            );
-          },
-        ),
         const SizedBox(height: 8),
         Text(
           'The wide banner (about 1600 × 400) goes in Images → Banner URL; '
-          'a branded event shows it whole. On a dark page colour, use a dark banner.',
+          'a branded event shows it whole.',
           style: TextStyle(fontSize: 12, color: p.textSecondary),
         ),
       ],
@@ -3346,7 +3364,9 @@ void _showFeeDialog(int? editIndex) {
           'brand_logo_url': _brandLogoUrl.text.trim().isEmpty ? null : _brandLogoUrl.text.trim(),
           'brand_logo_dark_url':
               _brandLogoDarkUrl.text.trim().isEmpty ? null : _brandLogoDarkUrl.text.trim(),
-          'brand_accent': _brandAccent.text.trim().isEmpty ? null : _brandAccent.text.trim().toUpperCase(),
+          // No colours: the logo carries the brand (19 Oct). Clears any
+          // colour saved before.
+          'brand_accent': null,
         },
         // Empty: opens when published (null), closes when the event starts.
         'registration_opens_at': _isoOfField(_registrationOpensAt.text),

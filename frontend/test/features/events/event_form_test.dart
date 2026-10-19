@@ -468,27 +468,65 @@ void main() {
       }
     });
 
-    testWidgets('added, the page colour checked, then saved', (tester) async {
+    testWidgets('added and saved; any old colour is cleared', (tester) async {
       final repo = _FormRepo();
       await _open(tester, repo, event: _event());
       await tester.tap(_key('event-add-branding'));
       await tester.pumpAndSettle();
       expect(_key('event-group-branding'), findsOneWidget);
+      expect(find.text('Page colour'), findsNothing);
 
       await tester.enterText(_field('Logo URL'), '/brand/nitkonnect/logo.png');
-      await tester.enterText(_key('event-brand-accent'), 'yellow');
-      await tester.tap(_key('event-form-save'));
-      await tester.pumpAndSettle();
-      expect(find.text('Use the form #RRGGBB, e.g. #2A1A4F'), findsOneWidget);
-      expect(repo.updated, isNull);
-
-      await tester.enterText(_key('event-brand-accent'), '#2a1a4f');
       await tester.tap(_key('event-form-save'));
       await tester.pumpAndSettle();
       final data = repo.updated!;
       expect(data['brand_logo_url'], '/brand/nitkonnect/logo.png');
       expect(data['brand_logo_dark_url'], isNull);
-      expect(data['brand_accent'], '#2A1A4F');
+      expect(data.containsKey('brand_accent'), isTrue);
+      expect(data['brand_accent'], isNull);
+    });
+  });
+
+  group('Edit event layout', () {
+    testWidgets('the + buttons come before the groups', (tester) async {
+      await _open(tester, _FormRepo(), event: _event(thumbnailUrl: 'https://x/t.png'));
+      final plus = tester.getTopLeft(_key('event-add-agenda')).dy;
+      final images = tester.getTopLeft(_key('event-group-images')).dy;
+      expect(plus, lessThan(images));
+    });
+
+    testWidgets('a long list starts folded to one line; Show opens it', (tester) async {
+      final repo = _FormRepo()
+        ..details = {
+          'speakers': [
+            for (var i = 1; i <= 6; i++)
+              {'person_id': i, 'fullname': 'Speaker $i', 'title': 'CTO', 'organisation': 'Acme'},
+          ],
+          'sessions': [],
+          'fees': [],
+        };
+      await _open(tester, repo, event: _event());
+      expect(find.text('6 speakers'), findsOneWidget);
+      expect(find.text('Speaker 1'), findsNothing);
+
+      await tester.tap(_key('event-fold-speakers'));
+      await tester.pumpAndSettle();
+      expect(find.text('Speaker 1'), findsOneWidget);
+      expect(find.text('6 speakers'), findsNothing);
+    });
+
+    testWidgets('a short list shows as before', (tester) async {
+      final repo = _FormRepo()
+        ..details = {
+          'speakers': [
+            {'person_id': 1, 'fullname': 'Asha Rao', 'title': 'Panelist', 'organisation': 'NITK'},
+          ],
+          'sessions': [],
+          'fees': [],
+        };
+      await _open(tester, repo, event: _event());
+      expect(find.text('Asha Rao'), findsOneWidget);
+      expect(_key('event-fold-speakers'), findsNothing);
     });
   });
 }
