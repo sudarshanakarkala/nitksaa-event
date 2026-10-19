@@ -670,8 +670,8 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final agenda = AgendaSection(sessions: event.sessions);
     final speakers = SpeakersSection(speakers: event.speakers);
     final sections = AgendaSection.isBig(event.sessions)
-        ? <Widget>[agenda, speakers, sponsors, if (fees != null) fees]
-        : <Widget>[sponsors, if (fees != null) fees, agenda, speakers];
+        ? <Widget>[agenda, speakers, sponsors, ?fees]
+        : <Widget>[sponsors, ?fees, agenda, speakers];
     return [
       for (var i = 0; i < sections.length; i++) ...[
         if (i > 0) ...[

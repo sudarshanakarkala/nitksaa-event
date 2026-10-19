@@ -200,7 +200,7 @@ class _SlotHeader extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
           ),
         ),
-        if (trailing != null) trailing!,
+        ?trailing,
       ],
     );
   }

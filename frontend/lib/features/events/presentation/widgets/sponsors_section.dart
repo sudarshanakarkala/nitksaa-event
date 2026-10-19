@@ -290,7 +290,7 @@ class _SponsorCard extends StatelessWidget {
     );
 
     if (hasSite) {
-      return GestureDetector(onTap: () => onOpenLink(site!), child: card);
+      return GestureDetector(onTap: () => onOpenLink(site), child: card);
     }
     return card;
   }
