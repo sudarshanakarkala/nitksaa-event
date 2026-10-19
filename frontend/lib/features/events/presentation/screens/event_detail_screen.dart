@@ -18,6 +18,9 @@ import '../widgets/entry_pass_qr.dart';
 import '../widgets/refund_status_dialog.dart' show showRefundStatus;
 import '../widgets/unregister_flow.dart' show confirmAndCancelGuest;
 import '../widgets/venue_section.dart';
+import '../widgets/agenda_section.dart';
+import '../widgets/speakers_section.dart';
+import '../widgets/sponsors_section.dart';
 import '../../../../shared/widgets/form_fields.dart';
 import '../../../../shared/widgets/notice.dart';
 import '../../../../shared/widgets/simple_markdown.dart';
@@ -189,21 +192,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                           const SizedBox(height: 24),
                           const Divider(),
                           const SizedBox(height: 16),
-                          _buildSponsorsSection(event, isDark),
-                          const SizedBox(height: 24),
-                          const Divider(),
-                          const SizedBox(height: 16),
-                          if (event.fees.isNotEmpty) ...[
-                            _buildFeesSection(event),
-                            const SizedBox(height: 24),
-                            const Divider(),
-                            const SizedBox(height: 16),
-                          ],
-                          _buildAgendaSection(event),
-                          const SizedBox(height: 24),
-                          const Divider(),
-                          const SizedBox(height: 16),
-                          _buildSpeakersSection(event),
+                          ..._contentSections(event, gap: 24),
                           const SizedBox(height: 32),
                           _backLink(),
                           const SizedBox(height: 32),
@@ -324,21 +313,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                 const SizedBox(height: 16),
                 const Divider(),
                 const SizedBox(height: 16),
-                _buildSponsorsSection(event, isDark),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 16),
-                if (event.fees.isNotEmpty) ...[
-                  _buildFeesSection(event),
-                  const SizedBox(height: 16),
-                  const Divider(),
-                  const SizedBox(height: 16),
-                ],
-                _buildAgendaSection(event),
-                const SizedBox(height: 16),
-                const Divider(),
-                const SizedBox(height: 16),
-                _buildSpeakersSection(event),
+                ..._contentSections(event, gap: 16),
                 const SizedBox(height: 24),
                 _backLink(),
                 const SizedBox(height: 16),
@@ -544,164 +519,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
-  Widget _buildSponsorsSection(AppEvent event, bool isDark) {
-    if (event.sponsors.isEmpty && event.partners.isEmpty) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Sponsors',
-            style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
-          ),
-          const SizedBox(height: 12),
-          Text('Sponsor details will be updated soon.',
-              style: TextStyle(fontSize: 14, color: context.palette.textMuted)),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Sponsors',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
-        ),
-        const SizedBox(height: 12),
-        if (event.sponsors.isNotEmpty) ...[
-          Text('SPONSORS',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: context.palette.textSecondary,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 8),
-          _buildSponsorGrid(event.sponsors, isDark, isSponsor: true),
-          const SizedBox(height: 16),
-        ],
-        if (event.partners.isNotEmpty) ...[
-          Text('PARTNERS',
-              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600,
-                  color: context.palette.textSecondary,
-                  letterSpacing: 0.5)),
-          const SizedBox(height: 8),
-          _buildSponsorGrid(event.partners, isDark, isSponsor: false),
-        ],
-      ],
-    );
-  }
-
-  Widget _buildSponsorGrid(List<dynamic> items, bool isDark, {required bool isSponsor}) {
-    if (items.isEmpty) return const SizedBox.shrink();
-
-    final screenWidth = MediaQuery.of(context).size.width;
-    final crossAxisCount = screenWidth > 900 ? 3 : (screenWidth > 600 ? 2 : 1);
-
-    return GridView.builder(
-      shrinkWrap: true,
-      physics: const NeverScrollableScrollPhysics(),
-      gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: crossAxisCount,
-        crossAxisSpacing: 12,
-        mainAxisSpacing: 12,
-        childAspectRatio: 3.2,
-      ),
-      itemCount: items.length,
-      itemBuilder: (context, index) {
-        final item = items[index];
-        if (isSponsor) {
-          return _buildSponsorGridCard(
-            name: (item as EventSponsor).name,
-            typeLabel: item.sponsorTypeLabel,
-            logoUrl: item.logoUrl,
-            websiteUrl: item.websiteUrl,
-            isDark: isDark,
-          );
-        } else {
-          return _buildSponsorGridCard(
-            name: (item as EventPartner).name,
-            typeLabel: item.partnerTypeLabel,
-            logoUrl: item.logoUrl,
-            websiteUrl: item.websiteUrl,
-            isDark: isDark,
-          );
-        }
-      },
-    );
-  }
-
-  Widget _buildSponsorGridCard({
-    required String name,
-    required String typeLabel,
-    String? logoUrl,
-    String? websiteUrl,
-    required bool isDark,
-  }) {
-    final bg = context.palette.surfaceHover;
-    final card = Container(
-      padding: const EdgeInsets.all(12),
-      decoration: BoxDecoration(
-        color: bg,
-        borderRadius: BorderRadius.circular(12),
-      ),
-      child: Row(
-        children: [
-          if (logoUrl != null && logoUrl.isNotEmpty)
-            ClipRRect(
-              borderRadius: BorderRadius.circular(8),
-              child: Image.network(
-                logoUrl,
-                width: 36,
-                height: 36,
-                fit: BoxFit.contain,
-                errorBuilder: (_, _, _) =>
-                    Icon(Icons.business, size: 22, color: context.palette.primary),
-              ),
-            )
-          else
-            Icon(Icons.business, size: 22, color: context.palette.primary),
-          const SizedBox(width: 10),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Text(
-                  name,
-                  style: TextStyle(
-                    fontWeight: FontWeight.bold,
-                    fontSize: 13,
-                    color: (websiteUrl != null && websiteUrl.isNotEmpty)
-                        ? context.palette.primary
-                        : null,
-                    decoration: (websiteUrl != null && websiteUrl.isNotEmpty)
-                        ? TextDecoration.underline
-                        : null,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 1),
-                Text(
-                  typeLabel,
-                  style: TextStyle(fontSize: 11, color: context.palette.textMuted),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-              ],
-            ),
-          ),
-        ],
-      ),
-    );
-
-    if (websiteUrl != null && websiteUrl.isNotEmpty) {
-      return GestureDetector(
-        onTap: () => _launchUrl(websiteUrl),
-        child: card,
-      );
-    }
-    return card;
-  }
-
   /// "Organised by …" for everyone; "Edit event" for the event's admins,
   /// opening the same form as Admin → Events.
   Widget _organiserLine(AppEvent event, {required bool isAdmin}) {
@@ -840,6 +657,33 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     );
   }
 
+  /// Sponsors, fees, Agenda and Speakers, with a divider between each.
+  /// A big event (parallel sessions) puts the Agenda first, then Speakers,
+  /// Sponsors and the fees (B1); small events keep today's order.
+  List<Widget> _contentSections(AppEvent event, {required double gap}) {
+    final sponsors = SponsorsSection(
+      sponsors: event.sponsors,
+      partners: event.partners,
+      onOpenLink: _launchUrl,
+    );
+    final fees = event.fees.isNotEmpty ? _buildFeesSection(event) : null;
+    final agenda = AgendaSection(sessions: event.sessions);
+    final speakers = SpeakersSection(speakers: event.speakers);
+    final sections = AgendaSection.isBig(event.sessions)
+        ? <Widget>[agenda, speakers, sponsors, if (fees != null) fees]
+        : <Widget>[sponsors, if (fees != null) fees, agenda, speakers];
+    return [
+      for (var i = 0; i < sections.length; i++) ...[
+        if (i > 0) ...[
+          SizedBox(height: gap),
+          const Divider(),
+          const SizedBox(height: 16),
+        ],
+        sections[i],
+      ],
+    ];
+  }
+
   /// Fee tiers: what the ticket price covers. Their total is the price.
   Widget _buildFeesSection(AppEvent event) {
     final p = context.palette;
@@ -871,111 +715,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           ],
         ),
       ],
-    );
-  }
-
-  Widget _buildAgendaSection(AppEvent event) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Agenda',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
-        ),
-        const SizedBox(height: 12),
-        if (event.sessions.isEmpty)
-          Text('Agenda will be updated soon.', style: TextStyle(fontSize: 14, color: context.palette.textMuted))
-        else
-          ...event.sessions.map((item) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 12.0),
-            child: Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  _formatSessionTime(item),
-                  style: TextStyle(color: context.palette.primary, fontWeight: FontWeight.bold, fontSize: 13),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Text(_formatSessionTitle(item), style: const TextStyle(fontSize: 14)),
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildSpeakersSection(AppEvent event) {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          'Speakers',
-          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: context.palette.primary),
-        ),
-        const SizedBox(height: 12),
-        if (event.speakers.isEmpty)
-          Text('Speaker details will be updated soon.', style: TextStyle(fontSize: 14, color: context.palette.textMuted))
-        else
-          ...event.speakers.map((sp) {
-          return Padding(
-            padding: const EdgeInsets.only(bottom: 16.0),
-            child: Row(
-              children: [
-                _buildSpeakerAvatar(
-                  sp,
-                  radius: 20,
-                  accentColor: context.palette.primary,
-                  initialsStyle: TextStyle(color: context.palette.primary, fontWeight: FontWeight.bold),
-                ),
-                const SizedBox(width: 16),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(sp.fullname, style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
-                      const SizedBox(height: 2),
-                      Text(sp.subtitle, style: TextStyle(fontSize: 12, color: context.palette.textMuted)),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-      ],
-    );
-  }
-
-  Widget _buildSpeakerAvatar(
-    EventPerson speaker, {
-    required double radius,
-    required Color accentColor,
-    required TextStyle initialsStyle,
-  }) {
-    final photoUrl = speaker.photoUrl?.trim();
-    final fallback = CircleAvatar(
-      radius: radius,
-      backgroundColor: accentColor.withValues(alpha: 0.15),
-      child: Text(speaker.initials, style: initialsStyle),
-    );
-
-    if (photoUrl == null || photoUrl.isEmpty) {
-      return fallback;
-    }
-
-    return ClipOval(
-      child: Image.network(
-        photoUrl,
-        width: radius * 2,
-        height: radius * 2,
-        fit: BoxFit.cover,
-        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
-        errorBuilder: (_, _, _) => fallback,
-      ),
     );
   }
 
@@ -1556,19 +1295,6 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final sameDay = end.year == start.year && end.month == start.month && end.day == start.day;
     if (sameDay) return formatTimeRange(start, end);
     return 'Starts ${formatTimeRange(start, null)}, ends ${formatTimeRange(end, null)}';
-  }
-
-  String _formatSessionTime(EventSession session) {
-    return formatTimeRange(session.startDatetime, session.endDatetime);
-  }
-
-  String _formatSessionTitle(EventSession session) {
-    final parts = [
-      session.title,
-      if (session.speakerName != null && session.speakerName!.trim().isNotEmpty)
-        session.speakerName!.trim(),
-    ];
-    return parts.join(' - ');
   }
 
   String _formatRemainingTime(DateTime target) {
