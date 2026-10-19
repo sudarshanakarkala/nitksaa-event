@@ -8,6 +8,8 @@
 // - Speakers under each session (B2): the first 3, "+N more", a moderator
 //   labelled; sessions without linked people keep their speaker line.
 // - Sponsors across tiers get a heading per tier.
+// - Session details (B4): a Break band by type, type and pillar on the card,
+//   "Presented by", a pillar filter; a sponsor's label instead of its tier.
 import 'package:event_app/features/events/domain/event.dart';
 import 'package:event_app/features/events/presentation/widgets/agenda_section.dart';
 import 'package:event_app/features/events/presentation/widgets/speakers_section.dart';
@@ -238,6 +240,118 @@ void main() {
       final silver = tester.getTopLeft(find.text('SILVER SPONSOR')).dy;
       expect(title, lessThan(gold));
       expect(gold, lessThan(silver));
+    });
+  });
+
+  group('Session details (B4)', () {
+    EventSession typed(int id, String title, DateTime start,
+            {String? type, String? pillar, List<int> presentedBy = const [], String? speaker}) =>
+        EventSession(
+          sessionId: id,
+          title: title,
+          startDatetime: start,
+          endDatetime: start.add(const Duration(minutes: 40)),
+          sessionType: type,
+          pillar: pillar,
+          presentedBy: presentedBy,
+          speakerName: speaker,
+        );
+
+    List<EventSession> agenda() => [
+          typed(1, 'Opening', _t(9, 0), type: 'KEYNOTE', pillar: 'Main Event'),
+          typed(2, 'Networking lunch', _t(13, 0), type: 'BREAK'),
+          typed(3, 'Future of Work', _t(14, 0), type: 'PANEL', pillar: 'Career Konnect', presentedBy: [7, 8]),
+          typed(4, 'Pitches', _t(14, 0), type: 'SHOWCASE', pillar: 'Startup Showcase'),
+        ];
+
+    final sponsors = [_sponsor(7, 'Acme', 'GOLD_SPONSOR'), _sponsor(8, 'Beta Labs', 'SILVER_SPONSOR')];
+
+    testWidgets('a Break by type is a band, whatever its title', (tester) async {
+      await _show(tester, AgendaSection(sessions: agenda(), sponsors: sponsors), width: 1400);
+      expect(find.text('Networking lunch · 1:00 PM – 1:40 PM'), findsOneWidget);
+    });
+
+    testWidgets('a typed session is not a band, even titled Lunch', (tester) async {
+      await _show(
+        tester,
+        AgendaSection(sessions: [
+          typed(1, 'Lunch with the founders', _t(13, 0), type: 'PANEL'),
+          typed(2, 'Other', _t(13, 0)),
+        ]),
+        width: 1400,
+      );
+      expect(find.byIcon(Icons.local_cafe_outlined), findsNothing);
+      expect(find.text('Lunch with the founders'), findsOneWidget);
+    });
+
+    testWidgets('type and pillar above the title; Presented by under it', (tester) async {
+      await _show(tester, AgendaSection(sessions: agenda(), sponsors: sponsors), width: 1400);
+      expect(find.text('Panel · Career Konnect'), findsOneWidget);
+      expect(find.text('Keynote · Main Event'), findsOneWidget);
+      expect(find.text('Presented by Acme & Beta Labs'), findsOneWidget);
+    });
+
+    testWidgets('pillar chips filter the agenda; breaks always show', (tester) async {
+      await _show(tester, AgendaSection(sessions: agenda(), sponsors: sponsors), width: 1400);
+      expect(find.widgetWithText(ChoiceChip, 'All'), findsOneWidget);
+      expect(find.widgetWithText(ChoiceChip, 'Career Konnect'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'Career Konnect'));
+      await tester.pumpAndSettle();
+      expect(find.text('Future of Work'), findsOneWidget);
+      expect(find.text('Pitches'), findsNothing);
+      expect(find.text('Opening'), findsNothing);
+      expect(find.text('Networking lunch · 1:00 PM – 1:40 PM'), findsOneWidget);
+
+      await tester.tap(find.widgetWithText(ChoiceChip, 'All'));
+      await tester.pumpAndSettle();
+      expect(find.text('Pitches'), findsOneWidget);
+    });
+
+    testWidgets('one pillar or none: no filter', (tester) async {
+      await _show(
+        tester,
+        AgendaSection(sessions: [
+          typed(1, 'A', _t(14, 0), pillar: 'Main Event'),
+          typed(2, 'B', _t(14, 0)),
+        ]),
+        width: 1400,
+      );
+      expect(find.byType(ChoiceChip), findsNothing);
+    });
+
+    testWidgets('the small agenda is unchanged by the new fields', (tester) async {
+      await _show(
+        tester,
+        AgendaSection(sessions: [
+          typed(1, 'Welcome', _t(8, 0), type: 'TALK', pillar: 'Main Event', presentedBy: [7], speaker: 'A. Rao'),
+          typed(2, 'Breakfast', _t(8, 40), type: 'BREAK'),
+        ], sponsors: sponsors),
+        width: 390,
+      );
+      expect(find.text('Welcome - A. Rao'), findsOneWidget);
+      expect(find.textContaining('Presented by'), findsNothing);
+      expect(find.byType(ChoiceChip), findsNothing);
+    });
+
+    testWidgets("a sponsor's label shows instead of its tier", (tester) async {
+      await _show(
+        tester,
+        SponsorsSection(
+          sponsors: [
+            EventSponsor(
+              sponsorId: 1, eventId: 1, sponsorType: 'GOLD_SPONSOR', name: 'Acme',
+              displayOrder: 1, label: 'Co-presenter',
+            ),
+            _sponsor(2, 'Beta Labs', 'GOLD_SPONSOR'),
+          ],
+          partners: const [],
+          onOpenLink: (_) {},
+        ),
+        width: 1400,
+      );
+      expect(find.text('Co-presenter'), findsOneWidget);
+      expect(find.text('Gold Sponsor'), findsOneWidget);
     });
   });
 }

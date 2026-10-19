@@ -5,6 +5,8 @@
 /// - Sponsors across tiers (NITKonnect): one heading per tier in order
 ///   (Title, Gold, Silver, Bronze, Associate, then any other), the title
 ///   sponsor on a wider card; partners grouped by type the same way.
+/// - A sponsor's label (B4, e.g. "Co-presenter") shows on its card instead
+///   of the tier.
 library;
 
 import 'package:flutter/material.dart';
@@ -194,7 +196,7 @@ class SponsorsSection extends StatelessWidget {
 
   Widget _sponsorCard(EventSponsor s, {bool large = false}) => _SponsorCard(
         name: s.name,
-        typeLabel: s.sponsorTypeLabel,
+        typeLabel: s.shownLabel,
         logoUrl: s.logoUrl,
         websiteUrl: s.websiteUrl,
         large: large,
