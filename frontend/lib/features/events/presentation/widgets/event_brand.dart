@@ -1,20 +1,24 @@
 /// An event's own branding (B6): logos for light and dark backgrounds and
-/// one accent colour. Off unless set: [EventBrand.of] is null for an event
+/// a page colour. Off unless set: [EventBrand.of] is null for an event
 /// without branding, and it then looks exactly as before.
 ///
-/// The accent tints fills (bands, pills, the card's empty banner). Used as
-/// text or an icon it must stay readable on the background it sits on in
-/// both modes; [readableOn] falls back to the theme's colour when it isn't
-/// (Konnect yellow on a light page).
+/// The page colour (stored as `brand_accent`) is the event page's
+/// background in both light and dark mode; [pagePalette] derives its
+/// cards, borders and text from it. Only the event page uses it: the site
+/// header and footer, the registration pop-up, checkout and every other
+/// page keep the site's colours.
 library;
 
 import 'package:flutter/material.dart';
 
+import '../../../../theme/app_palette.dart';
+import '../../../../theme/app_theme.dart';
 import '../../domain/event.dart';
 
 class EventBrand {
   const EventBrand({this.accent, this.logoUrl, this.logoDarkUrl});
 
+  /// The event page's colour (`brand_accent`).
   final Color? accent;
 
   /// For light backgrounds.
@@ -44,23 +48,35 @@ class EventBrand {
     return Color(int.parse(h.substring(1), radix: 16) | 0xFF000000);
   }
 
-  /// [color] when it reads clearly on [background] (contrast 3:1, enough
-  /// for bold or large text and icons); otherwise [fallback].
-  static Color readableOn(Color color, Color background, Color fallback) =>
-      contrast(color, background) >= 3 ? color : fallback;
-
-  /// WCAG contrast ratio, 1 to 21.
-  static double contrast(Color a, Color b) {
-    final la = a.computeLuminance();
-    final lb = b.computeLuminance();
-    final hi = la > lb ? la : lb;
-    final lo = la > lb ? lb : la;
-    return (hi + 0.05) / (lo + 0.05);
+  /// The event page's colours over [page]: the page itself, slightly
+  /// lighter cards and surfaces, borders, and text that reads on it. A dark
+  /// page gets light text (from the dark palette), a light one dark text.
+  static AppPalette pagePalette(Color page) {
+    final dark = page.computeLuminance() < 0.3;
+    final base = dark ? AppPalette.dark : AppPalette.light;
+    final towards = dark ? Colors.white : Colors.black;
+    Color step(double t) => Color.lerp(page, towards, t)!;
+    return base.copyWith(
+      canvas: page,
+      background: page,
+      surface: step(0.05),
+      surfaceSubtle: step(0.03),
+      surfaceHover: step(0.09),
+      card: step(0.07),
+      border: step(0.18),
+      borderHover: step(0.26),
+      textSecondary: Color.lerp(towards, page, 0.25),
+      textMuted: Color.lerp(towards, page, 0.42),
+    );
   }
 
-  /// Black or white, whichever reads better on [fill] (text on an accent).
-  static Color onFill(Color fill) =>
-      contrast(Colors.black, fill) >= contrast(Colors.white, fill) ? Colors.black : Colors.white;
+  /// The theme for an event page in [page] colour, whatever the site's
+  /// mode.
+  static ThemeData pageTheme(Color page) {
+    final palette = pagePalette(page);
+    final brightness = page.computeLuminance() < 0.3 ? Brightness.dark : Brightness.light;
+    return AppTheme.forPalette(palette, brightness);
+  }
 
   static String? _clean(String? url) {
     final u = url?.trim() ?? '';
