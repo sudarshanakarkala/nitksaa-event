@@ -113,4 +113,72 @@ void main() {
       expect(slot.isBreak, isFalse);
     });
   });
+
+  group('B4', () {
+    EventSession typed(String title, {String? type, String? pillar}) => EventSession(
+          sessionId: title.hashCode,
+          title: title,
+          startDatetime: DateTime(2027, 2, 14, 10),
+          sessionType: type,
+          pillar: pillar,
+        );
+
+    test('the type decides a break when it is set', () {
+      expect(Agenda.looksLikeBreak(typed('Networking lunch', type: 'BREAK')), isTrue);
+      expect(Agenda.looksLikeBreak(typed('Lunch talk', type: 'TALK')), isFalse);
+      expect(Agenda.looksLikeBreak(typed('Tea')), isTrue); // no type: the title guess
+    });
+
+    test('pillars in the order they first appear, once each', () {
+      expect(
+        Agenda.pillars([
+          typed('a', pillar: 'Main Event'),
+          typed('b'),
+          typed('c', pillar: 'Career Konnect'),
+          typed('d', pillar: 'Main Event'),
+        ]),
+        ['Main Event', 'Career Konnect'],
+      );
+    });
+
+    test('names joined with commas and a final &', () {
+      expect(Agenda.joinNames(['A']), 'A');
+      expect(Agenda.joinNames(['A', 'B']), 'A & B');
+      expect(Agenda.joinNames(['A', 'B', 'C']), 'A, B & C');
+    });
+
+    test('session and sponsor read the B4 fields', () {
+      final session = EventSession.fromJson({
+        'session_id': 1,
+        'title': 'Panel',
+        'start_datetime': '2027-02-14T10:00:00+05:30',
+        'session_type': 'panel',
+        'pillar': '  ',
+        'presented_by': [3, 4],
+      });
+      expect(session.sessionType, 'PANEL');
+      expect(session.typeLabel, 'Panel');
+      expect(session.pillar, isNull);
+      expect(session.presentedBy, [3, 4]);
+
+      final old = EventSession.fromJson({
+        'session_id': 2,
+        'title': 'Talk',
+        'start_datetime': '2027-02-14T10:00:00+05:30',
+      });
+      expect(old.sessionType, isNull);
+      expect(old.presentedBy, isEmpty);
+
+      final sponsor = EventSponsor.fromJson({
+        'sponsor_id': 1, 'event_id': 1, 'sponsor_type': 'GOLD_SPONSOR', 'name': 'Acme',
+        'label': 'Co-presenter',
+      });
+      expect(sponsor.shownLabel, 'Co-presenter');
+      expect(
+        EventSponsor.fromJson({'sponsor_id': 2, 'event_id': 1, 'sponsor_type': 'GOLD_SPONSOR', 'name': 'B'})
+            .shownLabel,
+        'Gold Sponsor',
+      );
+    });
+  });
 }

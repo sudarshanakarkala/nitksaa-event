@@ -379,6 +379,25 @@ class EventsService:
         sponsor_rows = await SponsorsRepository(self.conn).list_public_by_event(event_id)
         d["sponsors"] = [dict(r) for r in sponsor_rows]
 
+        # Who presents each session (B4): sponsor ids, in order, visible
+        # sponsors only. The details are in d["sponsors"] above.
+        presenter_rows = await self.conn.fetch(
+            """
+            SELECT ss.session_id, ss.sponsor_id
+              FROM session_sponsors ss
+              JOIN sessions s ON s.session_id = ss.session_id
+              JOIN event_sponsors sp ON sp.sponsor_id = ss.sponsor_id
+             WHERE s.event_id = $1::int AND sp.is_visible = true
+             ORDER BY ss.session_id, ss.display_order, ss.sponsor_id
+            """,
+            event_id,
+        )
+        presenters: Dict[int, List[int]] = {}
+        for r in presenter_rows:
+            presenters.setdefault(r["session_id"], []).append(r["sponsor_id"])
+        for session in d["sessions"]:
+            session["presented_by"] = presenters.get(session["session_id"], [])
+
         partner_rows = await PartnersRepository(self.conn).list_public_by_event(event_id)
         d["partners"] = [dict(r) for r in partner_rows]
 

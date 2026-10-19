@@ -8,6 +8,7 @@ class EventSponsor {
     this.websiteUrl,
     this.description,
     required this.displayOrder,
+    this.label,
   });
 
   final int sponsorId;
@@ -18,6 +19,15 @@ class EventSponsor {
   final String? websiteUrl;
   final String? description;
   final int displayOrder;
+
+  /// Shown instead of the tier when set, e.g. "Co-presenter" (B4).
+  final String? label;
+
+  /// What the page calls this sponsor: its [label], or else its tier.
+  String get shownLabel {
+    final own = label?.trim() ?? '';
+    return own.isNotEmpty ? own : sponsorTypeLabel;
+  }
 
   String get sponsorTypeLabel {
     switch (sponsorType) {
@@ -49,6 +59,7 @@ class EventSponsor {
       websiteUrl: json['website_url'] as String?,
       description: json['description'] as String?,
       displayOrder: json['display_order'] as int? ?? 0,
+      label: json['label'] as String?,
     );
   }
 }
@@ -304,6 +315,9 @@ class EventSession {
     required this.startDatetime,
     this.endDatetime,
     this.people = const [],
+    this.sessionType,
+    this.pillar,
+    this.presentedBy = const [],
   });
 
   final int sessionId;
@@ -317,6 +331,22 @@ class EventSession {
 
   /// Who is on this session, in order (B2): ids into [AppEvent.people].
   final List<SessionPersonRef> people;
+
+  /// KEYNOTE, TALK, PANEL, FIRESIDE, WORKSHOP, SHOWCASE, NETWORKING, AWARDS
+  /// or BREAK; null when not set (B4).
+  final String? sessionType;
+
+  /// "Career Konnect"; null when not set (B4).
+  final String? pillar;
+
+  /// The sponsors presenting this session, in order: ids into
+  /// [AppEvent.sponsors] (B4).
+  final List<int> presentedBy;
+
+  bool get isBreakType => sessionType == 'BREAK';
+
+  /// "Panel", "Fireside chat"…, or null.
+  String? get typeLabel => SessionTypes.label(sessionType);
 
   factory EventSession.fromJson(Map<String, dynamic> json) {
     final start = json['start_datetime'] ?? json['starts_at'];
@@ -334,8 +364,33 @@ class EventSession {
           .whereType<Map<String, dynamic>>()
           .map(SessionPersonRef.fromJson)
           .toList(),
+      sessionType: _blankToNull(json['session_type'] as String?)?.toUpperCase(),
+      pillar: _blankToNull(json['pillar'] as String?),
+      presentedBy: (json['presented_by'] as List<dynamic>? ?? []).whereType<int>().toList(),
     );
   }
+
+  static String? _blankToNull(String? v) {
+    final t = v?.trim() ?? '';
+    return t.isEmpty ? null : t;
+  }
+}
+
+/// The session types (B4), as the server accepts them, with their names.
+abstract final class SessionTypes {
+  static const Map<String, String> labels = {
+    'KEYNOTE': 'Keynote',
+    'TALK': 'Talk',
+    'PANEL': 'Panel',
+    'FIRESIDE': 'Fireside chat',
+    'WORKSHOP': 'Workshop',
+    'SHOWCASE': 'Showcase',
+    'NETWORKING': 'Networking',
+    'AWARDS': 'Awards',
+    'BREAK': 'Break',
+  };
+
+  static String? label(String? type) => type == null ? null : labels[type];
 }
 
 /// One person on a session: who, and as what (moderator, panelist…).

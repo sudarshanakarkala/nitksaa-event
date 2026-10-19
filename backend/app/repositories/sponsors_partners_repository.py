@@ -7,6 +7,12 @@ from app.schemas.sponsors_partners import (
 )
 
 
+def _label(v: Optional[str]) -> Optional[str]:
+    """A sponsor's label, trimmed; blank means none (show the tier)."""
+    v = (v or "").strip()
+    return v or None
+
+
 class SponsorsRepository:
     def __init__(self, conn: asyncpg.Connection):
         self.conn = conn
@@ -25,7 +31,7 @@ class SponsorsRepository:
         return await self.conn.fetch(
             """
             SELECT sponsor_id, event_id, sponsor_type, name,
-                   logo_url, website_url, description, display_order
+                   logo_url, website_url, description, display_order, label
             FROM event_sponsors
             WHERE event_id = $1 AND is_visible = true
             ORDER BY
@@ -54,16 +60,19 @@ class SponsorsRepository:
             """
             INSERT INTO event_sponsors (
                 event_id, sponsor_type, name, logo_url,
-                website_url, description, display_order, is_visible
-            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                website_url, description, display_order, is_visible, label
+            ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
             RETURNING *
             """,
             event_id, data.sponsor_type, data.name, data.logo_url,
             data.website_url, data.description, data.display_order, data.is_visible,
+            _label(data.label),
         )
 
     async def update(self, sponsor_id: int, data: SponsorUpdate) -> Optional[asyncpg.Record]:
         fields = data.model_dump(exclude_unset=True)
+        if "label" in fields:
+            fields["label"] = _label(fields["label"])
         if not fields:
             return await self.get(sponsor_id)
 

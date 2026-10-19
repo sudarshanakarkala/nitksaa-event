@@ -703,6 +703,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final agenda = AgendaSection(
       sessions: event.sessions,
       people: event.people.isNotEmpty ? event.people : event.speakers,
+      sponsors: event.sponsors,
     );
     final speakers = SpeakersSection(speakers: event.speakers);
     final sections = AgendaSection.isBig(event.sessions)

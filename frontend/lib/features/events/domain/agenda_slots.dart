@@ -6,9 +6,10 @@
 ///   in the order the server sent them.
 /// - Slots are grouped by day; the page only shows day headings when there
 ///   is more than one day.
-/// - A **break** (tea, lunch…) is a slot of one session with no speaker whose
-///   title starts with Tea, Lunch, Break or Dinner. Interim: replaced by the
-///   session type in B4.
+/// - A **break** (tea, lunch…) is a slot of one session of type Break (B4).
+///   A session with no type still counts as a break when it has no speaker
+///   and its title starts with Tea, Lunch, Break or Dinner (data from
+///   before B4).
 ///
 /// Small events (no two sessions at the same time) keep today's simple list;
 /// see [Agenda.hasParallel].
@@ -62,8 +63,25 @@ abstract final class Agenda {
   }
 
   static bool looksLikeBreak(EventSession session) {
+    if (session.sessionType != null) return session.isBreakType;
     final speaker = session.speakerName?.trim() ?? '';
     return speaker.isEmpty && _breakTitle.hasMatch(session.title.trim());
+  }
+
+  /// The sessions' pillars, in the order they first appear (B4).
+  static List<String> pillars(List<EventSession> sessions) {
+    final seen = <String>[];
+    for (final s in sessions) {
+      final pillar = s.pillar;
+      if (pillar != null && !seen.contains(pillar)) seen.add(pillar);
+    }
+    return seen;
+  }
+
+  /// "A", "A & B", "A, B & C".
+  static String joinNames(List<String> names) {
+    if (names.length <= 1) return names.join();
+    return '${names.sublist(0, names.length - 1).join(', ')} & ${names.last}';
   }
 
   /// [sessions] grouped by day, then by start minute, in time order.

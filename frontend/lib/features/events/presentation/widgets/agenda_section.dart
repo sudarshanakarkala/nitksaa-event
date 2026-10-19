@@ -9,6 +9,10 @@
 ///   sideways on phones, with the next card peeking in and "1 of 6".
 ///   A break is a full-width band. The hall (`track`) and the subtitle
 ///   (`description`) show when set.
+/// - Session details (B4): a card shows its type and pillar above the title
+///   and "Presented by …" under it; a session of type Break is a band; when
+///   sessions have two or more pillars, chips above the agenda filter by
+///   pillar (break bands always show).
 library;
 
 import 'dart:async';
@@ -23,12 +27,20 @@ import '../../domain/event.dart';
 import 'speakers_section.dart' show SpeakerAvatar;
 
 class AgendaSection extends StatelessWidget {
-  const AgendaSection({super.key, required this.sessions, this.people = const []});
+  const AgendaSection({
+    super.key,
+    required this.sessions,
+    this.people = const [],
+    this.sponsors = const [],
+  });
 
   final List<EventSession> sessions;
 
   /// The event's people, for the speakers under each session (B2).
   final List<EventPerson> people;
+
+  /// The event's sponsors, for "Presented by" on each session (B4).
+  final List<EventSponsor> sponsors;
 
   /// Whether this agenda gets the big-event layout (and the page puts it
   /// first).
@@ -56,6 +68,7 @@ class AgendaSection extends StatelessWidget {
         else
           _AgendaPeople(
             byId: {for (final person in people) person.personId: person},
+            sponsorsById: {for (final sponsor in sponsors) sponsor.sponsorId: sponsor},
             child: _BigAgenda(sessions: sessions),
           ),
       ],
@@ -95,14 +108,30 @@ class AgendaSection extends StatelessWidget {
   }
 }
 
-class _BigAgenda extends StatelessWidget {
+class _BigAgenda extends StatefulWidget {
   const _BigAgenda({required this.sessions});
 
   final List<EventSession> sessions;
 
   @override
+  State<_BigAgenda> createState() => _BigAgendaState();
+}
+
+class _BigAgendaState extends State<_BigAgenda> {
+  /// The pillar chosen in the filter; null for all.
+  String? _pillar;
+
+  @override
   Widget build(BuildContext context) {
-    final days = Agenda.build(sessions);
+    final pillars = Agenda.pillars(widget.sessions);
+    final pillar = pillars.contains(_pillar) ? _pillar : null;
+    final shown = pillar == null
+        ? widget.sessions
+        : [
+            for (final s in widget.sessions)
+              if (s.pillar == pillar || Agenda.looksLikeBreak(s)) s,
+          ];
+    final days = Agenda.build(shown);
     final severalDays = days.length > 1;
     return LayoutBuilder(
       builder: (context, constraints) {
@@ -110,6 +139,15 @@ class _BigAgenda extends StatelessWidget {
         return Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
+            if (pillars.length > 1)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 16),
+                child: _PillarFilter(
+                  pillars: pillars,
+                  selected: pillar,
+                  onSelected: (value) => setState(() => _pillar = value),
+                ),
+              ),
             for (final day in days) ...[
               if (severalDays) _DayHeading(date: day.date, first: identical(day, days.first)),
               for (final slot in day.slots)
@@ -121,6 +159,36 @@ class _BigAgenda extends StatelessWidget {
           ],
         );
       },
+    );
+  }
+}
+
+/// "All · Main Event · Career Konnect …": one chip per pillar.
+class _PillarFilter extends StatelessWidget {
+  const _PillarFilter({required this.pillars, required this.selected, required this.onSelected});
+
+  final List<String> pillars;
+  final String? selected;
+  final ValueChanged<String?> onSelected;
+
+  @override
+  Widget build(BuildContext context) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 8,
+      children: [
+        ChoiceChip(
+          label: const Text('All'),
+          selected: selected == null,
+          onSelected: (_) => onSelected(null),
+        ),
+        for (final pillar in pillars)
+          ChoiceChip(
+            label: Text(pillar),
+            selected: selected == pillar,
+            onSelected: (on) => onSelected(on ? pillar : null),
+          ),
+      ],
     );
   }
 }
@@ -435,6 +503,11 @@ class _SessionCard extends StatelessWidget {
     final subtitle = session.description?.trim() ?? '';
     final speaker = session.speakerName?.trim() ?? '';
     final linked = _AgendaPeople.resolve(context, session.people);
+    final presenters = _AgendaPeople.presenters(context, session.presentedBy);
+    final eyebrow = [
+      ?session.typeLabel,
+      ?session.pillar,
+    ].join(' · ');
     final end = session.endDatetime;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -446,6 +519,14 @@ class _SessionCard extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (eyebrow.isNotEmpty) ...[
+            Text(
+              eyebrow,
+              style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: p.primary, letterSpacing: 0.2),
+              overflow: TextOverflow.ellipsis,
+            ),
+            const SizedBox(height: 4),
+          ],
           if (hall.isNotEmpty) ...[
             Row(
               children: [
@@ -473,6 +554,13 @@ class _SessionCard extends StatelessWidget {
               maxLines: compact ? 3 : null,
               overflow: compact ? TextOverflow.ellipsis : null,
               style: TextStyle(fontSize: 13, color: p.textSecondary),
+            ),
+          ],
+          if (presenters.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Presented by ${Agenda.joinNames([for (final s in presenters) s.name])}',
+              style: TextStyle(fontSize: 12, fontStyle: FontStyle.italic, color: p.textSecondary),
             ),
           ],
           if (linked.isNotEmpty) ...[
@@ -506,9 +594,22 @@ class _SessionCard extends StatelessWidget {
 
 /// The event's people by id, for the session cards below it.
 class _AgendaPeople extends InheritedWidget {
-  const _AgendaPeople({required this.byId, required super.child});
+  const _AgendaPeople({required this.byId, this.sponsorsById = const {}, required super.child});
 
   final Map<int, EventPerson> byId;
+
+  /// The event's sponsors by id, for "Presented by" (B4).
+  final Map<int, EventSponsor> sponsorsById;
+
+  /// [ids] as the event's sponsors, in order; ids not found are left out.
+  static List<EventSponsor> presenters(BuildContext context, List<int> ids) {
+    if (ids.isEmpty) return const [];
+    final byId = context.dependOnInheritedWidgetOfExactType<_AgendaPeople>()?.sponsorsById ?? const {};
+    return [
+      for (final id in ids)
+        if (byId[id] case final sponsor?) sponsor,
+    ];
+  }
 
   /// [refs] as people with their role on the session, in order; ids not
   /// found (e.g. hidden) are left out.
@@ -525,7 +626,7 @@ class _AgendaPeople extends InheritedWidget {
   }
 
   @override
-  bool updateShouldNotify(_AgendaPeople old) => old.byId != byId;
+  bool updateShouldNotify(_AgendaPeople old) => old.byId != byId || old.sponsorsById != sponsorsById;
 }
 
 /// A session's speakers: photo or initials, name, title and company; a

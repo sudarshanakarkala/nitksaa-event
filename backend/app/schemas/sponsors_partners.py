@@ -21,6 +21,8 @@ class SponsorCreate(BaseModel):
     logo_url: Optional[str] = None
     website_url: Optional[str] = None
     description: Optional[str] = None
+    # Shown instead of the tier, e.g. "Co-presenter" (B4).
+    label: Optional[str] = None
     display_order: int = 0
     is_visible: bool = True
 
@@ -39,6 +41,7 @@ class SponsorUpdate(BaseModel):
     logo_url: Optional[str] = None
     website_url: Optional[str] = None
     description: Optional[str] = None
+    label: Optional[str] = None
     display_order: Optional[int] = None
     is_visible: Optional[bool] = None
 
@@ -61,6 +64,7 @@ class SponsorResponse(BaseModel):
     logo_url: Optional[str] = None
     website_url: Optional[str] = None
     description: Optional[str] = None
+    label: Optional[str] = None
     display_order: int
     is_visible: bool
     created_at: datetime

@@ -606,7 +606,7 @@ def test_public_event_payload_leaks_no_admin_or_private_fields(client, monkeypat
     for sponsor in body.get("sponsors", []):
         assert set(sponsor.keys()) <= {
             "sponsor_id", "event_id", "sponsor_type", "name", "logo_url",
-            "website_url", "description", "display_order",
+            "website_url", "description", "display_order", "label",
         }
 
 
