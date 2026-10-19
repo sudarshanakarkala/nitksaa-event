@@ -4,7 +4,7 @@
 
 # NITKSAA Events — Admin guide
 
-**For:** organisers and door volunteers. **App:** events.nitkalumni.in. **Updated:** 18 Oct 2026.
+**For:** organisers and door volunteers. **App:** events.nitkalumni.in. **Updated:** 19 Oct 2026.
 Words in **bold** are what you see on screen.
 
 ---
@@ -24,7 +24,7 @@ Words in **bold** are what you see on screen.
 | Can create events, admin of none yet | All except Payments and Roles |
 | Finance only | Payments |
 
-- **On a phone:** Actions, Events, Registrations and Check-in are in the row; the rest are under **More ▾**.
+- **On a phone:** Actions, Events, Registrations and Check-in are in the row; the rest are under **More ▾**. In Events, **Create event** is the gold **+** next to the search box; the count of events is in the **All** button. The date buttons are one row: **Pick dates** opens the slider and From – To. The links at the bottom slide away while you scroll down a list (not on Check-in).
 - **Where Admin opens:** **Actions**. On an event day (one of your events is on, or starts within 3 hours) it goes straight to **Check-in** for that event.
 
 ---
@@ -50,11 +50,12 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 
 ### Step 2: Edit (add only what this event needs)
 
-**⋯** on the event › **Edit**, or **Edit event** on its page. Under the essentials, "Add more only if this event needs it:" shows **+** buttons:
+**⋯** on the event › **Edit**, or **Edit event** on its page. Right under the essentials, "Add more only if this event needs it:" shows a **+** button for each part the event doesn't have yet; the parts it has come below, each with **Remove**.
 
 | Button | Sets | If you don't add it |
 |---|---|---|
-| + Images | Thumbnail URL (cards), Banner URL (event page) | A plain card with the date |
+| + Images | Thumbnail URL (cards), Banner URL (event page, about 1600 × 400) | A plain card with the date |
+| + Branding | Logo URL (for light backgrounds), Logo URL for dark backgrounds (e.g. a white logo) | No logo |
 | + Registration dates | Registration Opens / Registration Closes | Opens when published, closes when the event starts |
 | + Guests | Guests per registration: None, 1–4 | Nobody can bring guests |
 | + Speakers | Name, title, organisation | No speakers shown |
@@ -62,6 +63,9 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 | + Sponsors & partners | Name, type, logo URL, website | No sponsors shown |
 
 - Images must already be online somewhere; paste their links (no upload yet).
+- **Branding:** with a logo set, the event card shows the logo (the white one in dark mode) instead of the banner, and the event page shows the banner whole, never cropped. Pages keep the site's colours. NITKonnect's own files: `/brand/nitkonnect/logo.png`, `/brand/nitkonnect/logo_white.png` and `/brand/nitkonnect/banner.png`.
+- A part you add with **+** appears and scrolls into view.
+- Long lists (more than 5 speakers, sessions or sponsors) show as one line, e.g. "83 speakers"; **Show** opens the list, **Hide** folds it again.
 - **Remove** on a group asks first if it holds anything, and clears it when you **Save**.
 - Closing with unsaved changes asks **Discard your changes?** — **Keep editing** goes back.
 
@@ -93,6 +97,7 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 - Leave **Registration Closes** empty, so registration closes when the event starts. Never set it after the start.
 - Capacity counts every person, guests included.
 - **Sharing:** a published event's page has **Share** on phones (WhatsApp and others) and **Copy link** on computers. Drafts don't, because their link doesn't open for anyone else yet.
+- **Big events:** when two or more sessions start at the same time, the event page groups the agenda by time (side by side on a computer, swipe on a phone) and shows each session's hall when one is set. A session with no speaker named Tea, Lunch, Break or Dinner shows as a band. More than 12 speakers get **Search speakers** and **Show all**; sponsors of more than one tier are grouped by tier. Small events look as before.
 
 ---
 
