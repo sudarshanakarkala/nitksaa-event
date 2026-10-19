@@ -355,6 +355,27 @@ class EventsService:
         _SPEAKER_ROLES = frozenset({"SPEAKER", "PANELIST", "CHIEF_GUEST", "GUEST_OF_HONOUR"})
         d["speakers"] = [p for p in people if p["role"] in _SPEAKER_ROLES]
 
+        # Who is on each session (B2): person id and role, in order, visible
+        # people only. The details are in d["people"] above.
+        link_rows = await self.conn.fetch(
+            """
+            SELECT sp.session_id, sp.person_id, sp.role::text AS role
+              FROM session_people sp
+              JOIN sessions s ON s.session_id = sp.session_id
+              JOIN event_people p ON p.person_id = sp.person_id
+             WHERE s.event_id = $1::int AND p.is_visible = true
+             ORDER BY sp.session_id, sp.display_order, sp.person_id
+            """,
+            event_id,
+        )
+        by_session: Dict[int, List[Dict[str, Any]]] = {}
+        for r in link_rows:
+            by_session.setdefault(r["session_id"], []).append(
+                {"person_id": r["person_id"], "role": r["role"]}
+            )
+        for session in d["sessions"]:
+            session["people"] = by_session.get(session["session_id"], [])
+
         sponsor_rows = await SponsorsRepository(self.conn).list_public_by_event(event_id)
         d["sponsors"] = [dict(r) for r in sponsor_rows]
 
