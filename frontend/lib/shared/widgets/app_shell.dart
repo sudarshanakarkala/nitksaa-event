@@ -181,7 +181,6 @@ class _AppShellState extends State<AppShell> {
             if (width < PhoneChrome.phoneBelow)
               CollapsibleChrome(
                 hidden: _footerHidden,
-                fromTop: false,
                 child: const SafeArea(top: false, child: SiteFooter()),
               )
             else

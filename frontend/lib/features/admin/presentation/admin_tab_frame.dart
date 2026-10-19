@@ -36,9 +36,8 @@ class AdminTabFrame extends StatelessWidget {
     this.phoneAction,
   });
 
-  /// Phones: the toolbar, the Admin title and tabs and the footer fold away
-  /// while scrolling down the list ([ListPage.collapseOnPhone]). Off for
-  /// Check-in.
+  /// Phones: the footer folds away while scrolling down the list
+  /// ([ListPage.collapseOnPhone]). Off for Check-in.
   final bool collapseOnPhone;
 
   /// Phones: show [count] ([ListPage.countOnPhone]).
