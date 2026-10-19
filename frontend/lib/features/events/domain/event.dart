@@ -130,6 +130,9 @@ class AppEvent {
     this.isFullDay = false,
     this.thumbnailUrl,
     this.bannerUrl,
+    this.brandLogoUrl,
+    this.brandLogoDarkUrl,
+    this.brandAccent,
     this.capacity,
     this.isFree = true,
     this.ticketPrice,
@@ -168,6 +171,12 @@ class AppEvent {
   final bool isFullDay;
   final String? thumbnailUrl;
   final String? bannerUrl;
+
+  /// Branding (B6), all optional: the logo on light and on dark
+  /// backgrounds, and one accent colour (#RRGGBB). See `EventBrand`.
+  final String? brandLogoUrl;
+  final String? brandLogoDarkUrl;
+  final String? brandAccent;
   final int? capacity;
   /// Nullable on purpose: (1) older server payloads may omit `is_free` for
   /// events created before the column existed, and (2) Dart on the web (DDC)
@@ -219,6 +228,9 @@ class AppEvent {
       isFullDay: json['is_full_day'] as bool? ?? false,
       thumbnailUrl: json['thumbnail_url'] as String?,
       bannerUrl: json['banner_url'] as String?,
+      brandLogoUrl: json['brand_logo_url'] as String?,
+      brandLogoDarkUrl: json['brand_logo_dark_url'] as String?,
+      brandAccent: json['brand_accent'] as String?,
       capacity: json['capacity'] as int?,
       isFree: json['is_free'] as bool? ?? true,
       ticketPrice: _parseTicketPrice(json['ticket_price']),

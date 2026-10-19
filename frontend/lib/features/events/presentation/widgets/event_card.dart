@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../../../theme/app_palette.dart';
 import '../../../../theme/app_text_styles.dart';
 import '../../domain/event.dart';
+import 'event_brand.dart';
 import '../../../../shared/widgets/status_badge.dart';
 import '../../../../shared/format.dart';
 
@@ -25,17 +26,31 @@ class EventCardAction {
   final bool destructive;
 }
 
-/// Look of one event's card. Today every event uses the theme; a branded
-/// event (e.g. NITKonnect) can later pass its own accent and logo here
-/// without changing the card.
+/// Look of one event's card. Every event uses the theme unless it has its
+/// own branding (B6, [EventBrand]): then its accent and logo.
 class EventCardBrand {
-  const EventCardBrand({this.accent, this.logoUrl});
+  const EventCardBrand({this.accent, this.logoUrl, this.logoDarkUrl});
+
+  /// [event]'s branding on the card; the theme when it has none.
+  factory EventCardBrand.of(AppEvent event) {
+    final brand = EventBrand.of(event);
+    if (brand == null) return const EventCardBrand();
+    return EventCardBrand(
+      accent: brand.accent,
+      logoUrl: brand.logoUrl,
+      logoDarkUrl: brand.logoDarkUrl,
+    );
+  }
 
   /// Banner tint and date-tile month colour. Null: the theme's gold.
   final Color? accent;
 
-  /// Shown on the banner when the event has no image.
+  /// Shown on the banner when the event has no image (light mode; dark
+  /// mode prefers [logoDarkUrl]).
   final String? logoUrl;
+  final String? logoDarkUrl;
+
+  bool get hasLogo => logoUrl != null || logoDarkUrl != null;
 }
 
 /// The one event card, used by Events, My Events and the admin Events tab
@@ -99,7 +114,10 @@ class EventCard extends StatelessWidget {
       end: event.endDatetime,
       isVirtual: event.isVirtual,
       location: event.locationText,
-      imageUrl: event.thumbnailUrl ?? event.bannerUrl,
+      // A branded event's wide banner would lose its edges in the card, so
+      // without a thumbnail the card shows its logo instead.
+      imageUrl: event.thumbnailUrl ??
+          (EventCardBrand.of(event).hasLogo ? null : event.bannerUrl),
       isFree: event.isFree,
       price: event.ticketPrice,
       registrationStatus: event.registrationStatus,
@@ -116,6 +134,7 @@ class EventCard extends StatelessWidget {
       registeredCount: event.registeredCount,
       capacity: event.capacity,
       adminActions: adminActions,
+      brand: EventCardBrand.of(event),
     );
   }
 
@@ -571,7 +590,9 @@ class _Banner extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     final accent = brand.accent ?? p.primary;
-    final placeholder = _Placeholder(accent: accent, isVirtual: isVirtual, logoUrl: brand.logoUrl);
+    final dark = Theme.of(context).brightness == Brightness.dark;
+    final logo = dark ? (brand.logoDarkUrl ?? brand.logoUrl) : (brand.logoUrl ?? brand.logoDarkUrl);
+    final placeholder = _Placeholder(accent: accent, isVirtual: isVirtual, logoUrl: logo);
     final url = imageUrl?.trim();
     return SizedBox(
       height: height,
@@ -590,7 +611,11 @@ class _Banner extends StatelessWidget {
             Positioned(
               left: 12,
               top: 12,
-              child: _DateTile(date: start!, accent: accent),
+              // The month in the accent only where it reads on the tile.
+              child: _DateTile(
+                date: start!,
+                accent: EventBrand.readableOn(accent, p.surface, p.primary),
+              ),
             ),
         ],
       ),
@@ -617,7 +642,15 @@ class _Placeholder extends StatelessWidget {
       child: Align(
         alignment: const Alignment(0.55, 0.1),
         child: logoUrl != null
-            ? Image.network(logoUrl!, height: 56, errorBuilder: (_, _, _) => const SizedBox())
+            // Square or wide logos: kept clear of the date tile.
+            ? ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 190, maxHeight: 56),
+                child: Image.network(
+                  logoUrl!,
+                  fit: BoxFit.contain,
+                  errorBuilder: (_, _, _) => const SizedBox(),
+                ),
+              )
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
