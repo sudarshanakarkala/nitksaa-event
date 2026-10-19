@@ -402,6 +402,8 @@ class _AdminCheckInTabState extends ConsumerState<AdminCheckInTab> {
     final numberStyle = TextStyle(color: p.primary, fontWeight: FontWeight.w600);
 
     return AdminTabFrame(
+      // Used at the door: the toolbar stays put on phones.
+      collapseOnPhone: false,
       search: ListSearchField(
         controller: _search,
         hint: 'Find a person: name, email, phone or number',

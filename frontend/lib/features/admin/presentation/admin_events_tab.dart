@@ -274,6 +274,16 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
               label: const Text('Create event'),
             )
           : null,
+      // Phones: "All 44" already counts them; Create event is a small +.
+      countOnPhone: false,
+      phoneAction: canCreate
+          ? ListIconAction(
+              icon: Icons.add,
+              tooltip: 'Create event',
+              onPressed: _create,
+              filled: true,
+            )
+          : null,
       belowPills: _events.isEmpty ? null : _dateFilter(),
       filters: (context) => _filterRail(),
       onOpenFilters: () => showFilterSheet(

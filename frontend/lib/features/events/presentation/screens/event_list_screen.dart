@@ -328,6 +328,25 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               label: const Text('Create event'),
             ),
         ],
+        // Phones: the pills already count the events; drafts and Create
+        // event are small squares in the search row.
+        countOnPhone: false,
+        phoneActions: [
+          if (drafts > 0)
+            ListIconAction(
+              icon: Icons.edit_note_outlined,
+              tooltip: drafts == 1 ? '1 draft' : '$drafts drafts',
+              badge: drafts,
+              onPressed: () => context.go('/admin/events?filter=draft'),
+            ),
+          if (access.isEventCreator)
+            ListIconAction(
+              icon: Icons.add,
+              tooltip: 'Create event',
+              onPressed: _adminActions.create,
+              filled: true,
+            ),
+        ],
         quickFilters: [
           for (final s in _Show.values)
             QuickFilterPill(

@@ -505,6 +505,9 @@ class _FilterDateRangeState extends State<FilterDateRange> {
   bool _fromBad = false;
   bool _toBad = false;
 
+  /// Phones: the slider and From – To are open ("Pick dates").
+  bool _pickOpen = false;
+
   static DateTime _day(DateTime d) => DateTime(d.year, d.month, d.day);
 
   static bool _same(DateTimeRange a, DateTimeRange b) =>
@@ -711,7 +714,9 @@ class _FilterDateRangeState extends State<FilterDateRange> {
       ],
     );
 
-    if (MediaQuery.sizeOf(context).width >= 900) {
+    final screenWidth = MediaQuery.sizeOf(context).width;
+    if (screenWidth < 600) return _phoneLine(range, slider, boxes);
+    if (screenWidth >= 900) {
       return Row(
         children: [
           if (widget.leading != null) ...[widget.leading!, const SizedBox(width: 6)],
@@ -733,6 +738,60 @@ class _FilterDateRangeState extends State<FilterDateRange> {
           ),
         slider,
         Align(alignment: Alignment.centerLeft, child: boxes),
+      ],
+    );
+  }
+
+  /// Phones: one line of chips (Date ↑/↓, the presets, "Pick dates"),
+  /// scrolling sideways; the slider and From – To open under it from
+  /// "Pick dates", and stay open while a picked range is on. Tapping the lit
+  /// "Pick dates" closes them and, if a picked range is on, clears it, as
+  /// tapping a lit preset does.
+  Widget _phoneLine(DateTimeRange? range, Widget slider, Widget boxes) {
+    final picked = range != null && !widget.presets.any((preset) => _same(range, preset.$2));
+    final open = _pickOpen || picked;
+    final chips = <Widget>[
+      ?widget.leading,
+      for (final (name, window) in widget.presets)
+        FilterChipToggle(
+          label: name,
+          selected: range != null && _same(range, window),
+          onChanged: (on) {
+            setState(() => _pickOpen = false);
+            widget.onChanged(on ? window : null);
+          },
+        ),
+      FilterChipToggle(
+        label: 'Pick dates',
+        selected: open,
+        onChanged: (_) {
+          if (open) {
+            setState(() => _pickOpen = false);
+            if (picked) widget.onChanged(null);
+          } else {
+            setState(() => _pickOpen = true);
+          }
+        },
+      ),
+    ];
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        SingleChildScrollView(
+          scrollDirection: Axis.horizontal,
+          child: Row(
+            children: [
+              for (var i = 0; i < chips.length; i++) ...[
+                if (i > 0) const SizedBox(width: 6),
+                chips[i],
+              ],
+            ],
+          ),
+        ),
+        if (open) ...[
+          slider,
+          Align(alignment: Alignment.centerLeft, child: boxes),
+        ],
       ],
     );
   }

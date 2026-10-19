@@ -11,7 +11,11 @@ class PageHeader extends StatelessWidget {
     required this.title,
     this.eyebrow,
     this.subtitle,
+    this.dense = false,
   });
+
+  /// Phones, where room matters (Admin): a smaller title and rule gap.
+  final bool dense;
 
   final String title;
   final String? eyebrow;
@@ -36,10 +40,10 @@ class PageHeader extends StatelessWidget {
           title,
           style: AppTextStyles.headlineLarge.copyWith(
             color: p.textPrimary,
-            fontSize: compact ? 28 : 35,
+            fontSize: dense ? 22 : (compact ? 28 : 35),
           ),
         ),
-        const SizedBox(height: 12),
+        SizedBox(height: dense ? 6 : 12),
         // Gold divider: 48×2, gold fading to transparent.
         Container(
           width: 48,

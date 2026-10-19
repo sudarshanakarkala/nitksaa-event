@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../features/policies/policy_screen.dart';
 import '../../routes/app_routes.dart';
 import '../../theme/app_palette.dart';
+import 'phone_chrome.dart';
 import 'site_footer.dart';
 import 'site_header.dart';
 
@@ -45,6 +46,25 @@ class AppShell extends StatefulWidget {
 class _AppShellState extends State<AppShell> {
   /// The rail's state; kept across pages, like the website's.
   bool _railOpen = false;
+
+  /// Phones: a list page scrolled down hides the footer ([PhoneChrome]).
+  bool _footerHidden = false;
+
+  @override
+  void didUpdateWidget(AppShell old) {
+    super.didUpdateWidget(old);
+    // A new page starts with the footer in place.
+    if (old.location != widget.location) _footerHidden = false;
+  }
+
+  bool _onPhoneChrome(PhoneChromeNotification n) {
+    if (n.footerHidden != _footerHidden) {
+      PhoneChrome.safely(() {
+        if (mounted) setState(() => _footerHidden = n.footerHidden);
+      });
+    }
+    return false;
+  }
 
   // Browser tab title per page. Set on every navigation, so leaving a page
   // always puts the right title back.
@@ -104,7 +124,9 @@ class _AppShellState extends State<AppShell> {
             ),
             Expanded(
               // The header and footer handle the safe-area insets.
-              child: MediaQuery.removePadding(
+              child: NotificationListener<PhoneChromeNotification>(
+                onNotification: _onPhoneChrome,
+                child: MediaQuery.removePadding(
                 context: context,
                 removeTop: true,
                 removeBottom: true,
@@ -153,9 +175,17 @@ class _AppShellState extends State<AppShell> {
                           ),
                         ],
                       ),
+                ),
               ),
             ),
-            const SafeArea(top: false, child: SiteFooter()),
+            if (width < PhoneChrome.phoneBelow)
+              CollapsibleChrome(
+                hidden: _footerHidden,
+                fromTop: false,
+                child: const SafeArea(top: false, child: SiteFooter()),
+              )
+            else
+              const SafeArea(top: false, child: SiteFooter()),
           ],
         ),
       ),
