@@ -1,4 +1,5 @@
-"""Event branding (B6): logos for light and dark backgrounds and an accent.
+"""Event branding (B6): logos for light and dark backgrounds and a page
+colour (stored as brand_accent).
 
 All optional: an event without them reads as before (nulls). Set with the
 event's PATCH, shown on the admin and public event; the accent must be
@@ -12,9 +13,9 @@ from tests.test_payment_refunds import (
 )
 
 _BRAND = {
-    "brand_logo_url": "/brand/nitkonnect-2027/logo.png",
-    "brand_logo_dark_url": "/brand/nitkonnect-2027/logo_white.png",
-    "brand_accent": "#FEEF00",
+    "brand_logo_url": "/brand/nitkonnect/logo.png",
+    "brand_logo_dark_url": "/brand/nitkonnect/logo_white.png",
+    "brand_accent": "#2A1A4F",
 }
 
 

@@ -680,7 +680,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   late final TextEditingController _thumbnailUrl;
   late final TextEditingController _bannerUrl;
 
-  // Branding (B6): logos for light and dark backgrounds, an accent colour.
+  // Branding (B6): logos for light and dark backgrounds, a page colour
+  // (stored as brand_accent).
   late final TextEditingController _brandLogoUrl;
   late final TextEditingController _brandLogoDarkUrl;
   late final TextEditingController _brandAccent;
@@ -928,7 +929,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           title: Text('Remove ${group.label.toLowerCase()}?'),
           content: Text(switch (group) {
             _Group.images => 'The thumbnail and banner will be removed when you save.',
-            _Group.branding => 'The logos and accent colour will be removed when you save.',
+            _Group.branding => 'The logos and page colour will be removed when you save.',
             _Group.registrationDates => 'Registration will go back to opening on '
                 'publish and closing at the start, when you save.',
             _Group.guests => 'People won\'t be able to bring guests once you save.',
@@ -1454,7 +1455,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         .any((v) => v != null && v.trim().isNotEmpty);
   }
 
-  /// Branding (B6): two logo links and an accent colour, with a swatch.
+  /// Branding (B6): two logo links and a page colour, with a swatch.
   Widget _buildBranding() {
     final p = context.palette;
     return Column(
@@ -1463,14 +1464,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         _buildTextField(
           _brandLogoUrl,
           'Logo URL',
-          hint: '/brand/nitkonnect-2027/logo.png',
+          hint: '/brand/nitkonnect/logo.png',
           helper: 'For light backgrounds. Shown on the event card, and on the page when there is no banner.',
         ),
         const SizedBox(height: 12),
         _buildTextField(
           _brandLogoDarkUrl,
           'Logo URL for dark backgrounds',
-          hint: '/brand/nitkonnect-2027/logo_white.png',
+          hint: '/brand/nitkonnect/logo_white.png',
           helper: 'Optional, e.g. a white logo. Without it the logo above is used.',
         ),
         const SizedBox(height: 12),
@@ -1482,9 +1483,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               key: const ValueKey('event-brand-accent'),
               controller: _brandAccent,
               decoration: InputDecoration(
-                labelText: 'Accent colour',
-                hintText: '#FEEF00',
-                helperText: 'As #RRGGBB. Used for the agenda\'s time pills and breaks, and the card.',
+                labelText: 'Page colour',
+                hintText: '#2A1A4F',
+                helperText: 'As #RRGGBB: the event page\'s background in light and dark mode. '
+                    'A deep colour reads best. Empty: the site\'s colours.',
                 helperMaxLines: 2,
                 border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
@@ -1505,7 +1507,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               validator: (v) {
                 final text = v?.trim() ?? '';
                 if (text.isEmpty || EventBrand.parseAccent(text) != null) return null;
-                return 'Use the form #RRGGBB, e.g. #FEEF00';
+                return 'Use the form #RRGGBB, e.g. #2A1A4F';
               },
             );
           },
@@ -1513,7 +1515,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         const SizedBox(height: 8),
         Text(
           'The wide banner (about 1600 × 400) goes in Images → Banner URL; '
-          'a branded event shows it whole.',
+          'a branded event shows it whole. On a dark page colour, use a dark banner.',
           style: TextStyle(fontSize: 12, color: p.textSecondary),
         ),
       ],

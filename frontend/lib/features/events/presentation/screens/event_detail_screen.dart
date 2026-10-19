@@ -29,16 +29,44 @@ import '../../../../shared/web/browser.dart';
 import '../../domain/event_link.dart' show eventLinkUrl;
 import '../../../../shared/format.dart';
 
-class EventDetailScreen extends ConsumerStatefulWidget {
+/// The event page. A branded event with a page colour (B6) gets its own
+/// colours over the whole page, whatever the site's mode; its pop-ups
+/// (registration, passes, refunds, Edit event) keep the site's colours, so
+/// they open from [_EventPage.siteContext], outside the page's colours.
+class EventDetailScreen extends ConsumerWidget {
   const EventDetailScreen({super.key, required this.eventId});
 
   final int eventId;
 
   @override
-  ConsumerState<EventDetailScreen> createState() => _EventDetailScreenState();
+  Widget build(BuildContext context, WidgetRef ref) {
+    final colour = ref.watch(
+      eventDetailProvider(eventId).select((s) => EventBrand.parseAccent(s.event?.brandAccent)),
+    );
+    // Always a Theme, so the page keeps its state when the colour arrives.
+    return Theme(
+      data: colour == null ? Theme.of(context) : EventBrand.pageTheme(colour),
+      child: _EventPage(eventId: eventId, siteContext: context),
+    );
+  }
 }
 
-class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
+class _EventPage extends ConsumerStatefulWidget {
+  const _EventPage({required this.eventId, required this.siteContext});
+
+  final int eventId;
+
+  /// Outside the page's own colours: pop-ups open from here.
+  final BuildContext siteContext;
+
+  @override
+  ConsumerState<_EventPage> createState() => _EventDetailScreenState();
+}
+
+class _EventDetailScreenState extends ConsumerState<_EventPage> {
+  /// Where pop-ups open, so they keep the site's colours.
+  BuildContext get _popupContext => widget.siteContext;
+
   Future<void> _launchUrl(String urlString) async {
     final Uri url = Uri.parse(urlString);
     try {
@@ -575,7 +603,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           if (isAdmin)
             TextButton.icon(
               onPressed: () => EventAdminActions(
-                context: context,
+                context: _popupContext,
                 ref: ref,
                 onChanged: () => ref
                     .read(eventDetailProvider(widget.eventId).notifier)
@@ -699,7 +727,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       onOpenLink: _launchUrl,
     );
     final fees = event.fees.isNotEmpty ? _buildFeesSection(event) : null;
-    final agenda = AgendaSection(sessions: event.sessions, accent: EventBrand.of(event)?.accent);
+    final agenda = AgendaSection(sessions: event.sessions);
     final speakers = SpeakersSection(speakers: event.speakers);
     final sections = AgendaSection.isBig(event.sessions)
         ? <Widget>[agenda, speakers, sponsors, ?fees]
@@ -1172,7 +1200,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final notifier = ref.read(eventDetailProvider(widget.eventId).notifier);
 
     showDialog<void>(
-      context: context,
+      context: _popupContext,
       builder: (dialogContext) => _RegistrationFormDialog(
         eventHeader: header,
         infoBox: infoBox,
@@ -1603,7 +1631,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
               if (!guest.isActive && _isPaidEvent(event))
                 TextButton(
                   onPressed: () => showRefundStatus(
-                    context,
+                    _popupContext,
                     ref,
                     registrationId: guest.registrationId,
                   ),
@@ -1615,7 +1643,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   tooltip: 'Cancel ${guest.name}',
                   icon: const Icon(Icons.close),
                   onPressed: () => confirmAndCancelGuest(
-                    context,
+                    _popupContext,
                     ref,
                     guest: guest,
                     refundLabel: refundLabel,
@@ -1633,7 +1661,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   /// A guest's entry pass, to show at the door or screenshot and forward.
   void _showGuestPassDialog(AppEvent event, EventGuest guest, String leader) {
     showDialog<void>(
-      context: context,
+      context: _popupContext,
       builder: (context) => Dialog(
         backgroundColor: context.palette.card,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
@@ -1705,7 +1733,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     final qrToken = registration?['qr_token']?.toString();
 
     showDialog(
-      context: context,
+      context: _popupContext,
       builder: (context) {
         return Dialog(
           backgroundColor: context.palette.card,

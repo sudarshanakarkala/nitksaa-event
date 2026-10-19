@@ -468,27 +468,27 @@ void main() {
       }
     });
 
-    testWidgets('added, the accent checked, then saved', (tester) async {
+    testWidgets('added, the page colour checked, then saved', (tester) async {
       final repo = _FormRepo();
       await _open(tester, repo, event: _event());
       await tester.tap(_key('event-add-branding'));
       await tester.pumpAndSettle();
       expect(_key('event-group-branding'), findsOneWidget);
 
-      await tester.enterText(_field('Logo URL'), '/brand/nitkonnect-2027/logo.png');
+      await tester.enterText(_field('Logo URL'), '/brand/nitkonnect/logo.png');
       await tester.enterText(_key('event-brand-accent'), 'yellow');
       await tester.tap(_key('event-form-save'));
       await tester.pumpAndSettle();
-      expect(find.text('Use the form #RRGGBB, e.g. #FEEF00'), findsOneWidget);
+      expect(find.text('Use the form #RRGGBB, e.g. #2A1A4F'), findsOneWidget);
       expect(repo.updated, isNull);
 
-      await tester.enterText(_key('event-brand-accent'), '#feef00');
+      await tester.enterText(_key('event-brand-accent'), '#2a1a4f');
       await tester.tap(_key('event-form-save'));
       await tester.pumpAndSettle();
       final data = repo.updated!;
-      expect(data['brand_logo_url'], '/brand/nitkonnect-2027/logo.png');
+      expect(data['brand_logo_url'], '/brand/nitkonnect/logo.png');
       expect(data['brand_logo_dark_url'], isNull);
-      expect(data['brand_accent'], '#FEEF00');
+      expect(data['brand_accent'], '#2A1A4F');
     });
   });
 }

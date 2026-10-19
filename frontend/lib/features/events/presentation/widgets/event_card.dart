@@ -27,19 +27,16 @@ class EventCardAction {
 }
 
 /// Look of one event's card. Every event uses the theme unless it has its
-/// own branding (B6, [EventBrand]): then its accent and logo.
+/// own branding (B6, [EventBrand]): then its logo.
 class EventCardBrand {
   const EventCardBrand({this.accent, this.logoUrl, this.logoDarkUrl});
 
-  /// [event]'s branding on the card; the theme when it has none.
+  /// [event]'s logos on the card (the page colour stays on its page);
+  /// the theme when it has none.
   factory EventCardBrand.of(AppEvent event) {
     final brand = EventBrand.of(event);
     if (brand == null) return const EventCardBrand();
-    return EventCardBrand(
-      accent: brand.accent,
-      logoUrl: brand.logoUrl,
-      logoDarkUrl: brand.logoDarkUrl,
-    );
+    return EventCardBrand(logoUrl: brand.logoUrl, logoDarkUrl: brand.logoDarkUrl);
   }
 
   /// Banner tint and date-tile month colour. Null: the theme's gold.
@@ -611,11 +608,7 @@ class _Banner extends StatelessWidget {
             Positioned(
               left: 12,
               top: 12,
-              // The month in the accent only where it reads on the tile.
-              child: _DateTile(
-                date: start!,
-                accent: EventBrand.readableOn(accent, p.surface, p.primary),
-              ),
+              child: _DateTile(date: start!, accent: accent),
             ),
         ],
       ),
