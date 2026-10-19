@@ -20,6 +20,7 @@ Words in **bold** are what you see on screen.
 
 **Big events (e.g. NITKonnect):**
 - **Agenda:** grouped by time. When several sessions run at once ("6 sessions at once"), they sit side by side on a computer; on a phone, swipe sideways ("1 of 6"). The hall shows when known; tea and lunch breaks show as bands.
+- **Who's speaking:** each session lists its speakers under it (photo or initials, name, title and company; the moderator is marked). Panels show the first 3; tap **+N more** to see the rest.
 - **Speakers:** the first 12, then **Show all**; type a name or company in **Search speakers**.
 - **Sponsors:** grouped by tier (title sponsor first).
 

@@ -97,7 +97,7 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 - Leave **Registration Closes** empty, so registration closes when the event starts. Never set it after the start.
 - Capacity counts every person, guests included.
 - **Sharing:** a published event's page has **Share** on phones (WhatsApp and others) and **Copy link** on computers. Drafts don't, because their link doesn't open for anyone else yet.
-- **Big events:** when two or more sessions start at the same time, the event page groups the agenda by time (side by side on a computer, swipe on a phone) and shows each session's hall when one is set. A session with no speaker named Tea, Lunch, Break or Dinner shows as a band. More than 12 speakers get **Search speakers** and **Show all**; sponsors of more than one tier are grouped by tier. Small events look as before.
+- **Big events:** when two or more sessions start at the same time, the event page groups the agenda by time (side by side on a computer, swipe on a phone) and shows each session's hall when one is set. A session with no speaker named Tea, Lunch, Break or Dinner shows as a band. Each session lists the speakers linked to it (first 3, then **+N more**; hidden speakers are left out); a session with no linked speakers shows its speaker line as before. More than 12 speakers get **Search speakers** and **Show all**; sponsors of more than one tier are grouped by tier. Small events look as before.
 
 ---
 
