@@ -20,11 +20,15 @@ import '../../../../shared/format.dart';
 import '../../../../theme/app_palette.dart';
 import '../../domain/agenda_slots.dart';
 import '../../domain/event.dart';
+import 'speakers_section.dart' show SpeakerAvatar;
 
 class AgendaSection extends StatelessWidget {
-  const AgendaSection({super.key, required this.sessions});
+  const AgendaSection({super.key, required this.sessions, this.people = const []});
 
   final List<EventSession> sessions;
+
+  /// The event's people, for the speakers under each session (B2).
+  final List<EventPerson> people;
 
   /// Whether this agenda gets the big-event layout (and the page puts it
   /// first).
@@ -50,7 +54,10 @@ class AgendaSection extends StatelessWidget {
         else if (!isBig(sessions))
           ..._simpleList(context)
         else
-          _BigAgenda(sessions: sessions),
+          _AgendaPeople(
+            byId: {for (final person in people) person.personId: person},
+            child: _BigAgenda(sessions: sessions),
+          ),
       ],
     );
   }
@@ -409,7 +416,8 @@ class _ParallelSwipeState extends State<_ParallelSwipe> {
   }
 }
 
-/// One session: hall, title, subtitle, speaker, and its own end time when
+/// One session: hall, title, subtitle, its speakers (B2; or the old single
+/// speaker line when it has no linked people), and its own end time when
 /// the slot's sessions end at different times.
 class _SessionCard extends StatelessWidget {
   const _SessionCard({required this.session, required this.showOwnEnd, this.compact = false});
@@ -426,6 +434,7 @@ class _SessionCard extends StatelessWidget {
     final hall = session.track?.trim() ?? '';
     final subtitle = session.description?.trim() ?? '';
     final speaker = session.speakerName?.trim() ?? '';
+    final linked = _AgendaPeople.resolve(context, session.people);
     final end = session.endDatetime;
     return Container(
       padding: const EdgeInsets.all(12),
@@ -466,7 +475,10 @@ class _SessionCard extends StatelessWidget {
               style: TextStyle(fontSize: 13, color: p.textSecondary),
             ),
           ],
-          if (speaker.isNotEmpty) ...[
+          if (linked.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _SessionSpeakers(people: linked),
+          ] else if (speaker.isNotEmpty) ...[
             const SizedBox(height: 6),
             Row(
               crossAxisAlignment: CrossAxisAlignment.start,
@@ -490,4 +502,122 @@ class _SessionCard extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The event's people by id, for the session cards below it.
+class _AgendaPeople extends InheritedWidget {
+  const _AgendaPeople({required this.byId, required super.child});
+
+  final Map<int, EventPerson> byId;
+
+  /// [refs] as people with their role on the session, in order; ids not
+  /// found (e.g. hidden) are left out.
+  static List<(EventPerson, SessionPersonRef)> resolve(
+    BuildContext context,
+    List<SessionPersonRef> refs,
+  ) {
+    if (refs.isEmpty) return const [];
+    final byId = context.dependOnInheritedWidgetOfExactType<_AgendaPeople>()?.byId ?? const {};
+    return [
+      for (final ref in refs)
+        if (byId[ref.personId] case final person?) (person, ref),
+    ];
+  }
+
+  @override
+  bool updateShouldNotify(_AgendaPeople old) => old.byId != byId;
+}
+
+/// A session's speakers: photo or initials, name, title and company; a
+/// moderator labelled. More than 3: the first 3, then "+N more" to see the
+/// rest.
+class _SessionSpeakers extends StatefulWidget {
+  const _SessionSpeakers({required this.people});
+
+  final List<(EventPerson, SessionPersonRef)> people;
+
+  static const int shownFirst = 3;
+
+  @override
+  State<_SessionSpeakers> createState() => _SessionSpeakersState();
+}
+
+class _SessionSpeakersState extends State<_SessionSpeakers> {
+  bool _all = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final people = widget.people;
+    final more = people.length - _SessionSpeakers.shownFirst;
+    final shown = _all || more <= 0 ? people : people.take(_SessionSpeakers.shownFirst).toList();
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final (person, ref) in shown)
+          Padding(
+            padding: const EdgeInsets.only(bottom: 6),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                SpeakerAvatar(
+                  speaker: person,
+                  radius: 12,
+                  accentColor: p.primary,
+                  initialsStyle: TextStyle(color: p.primary, fontWeight: FontWeight.bold, fontSize: 10),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text.rich(
+                        TextSpan(
+                          text: person.fullname,
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.textPrimary),
+                          children: [
+                            if (ref.isModerator)
+                              TextSpan(
+                                text: ' · Moderator',
+                                style: TextStyle(fontWeight: FontWeight.normal, color: p.textMuted),
+                              ),
+                          ],
+                        ),
+                        maxLines: 2,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                      if (_details(person).isNotEmpty)
+                        Text(
+                          _details(person),
+                          maxLines: 2,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 11, color: p.textSecondary),
+                        ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+        if (more > 0)
+          InkWell(
+            onTap: () => setState(() => _all = !_all),
+            borderRadius: BorderRadius.circular(4),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Text(
+                _all ? 'Show fewer' : '+$more more',
+                style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: p.primary),
+              ),
+            ),
+          ),
+      ],
+    );
+  }
+
+  /// "Title · Company", whichever are set.
+  static String _details(EventPerson person) => [
+        if ((person.title ?? '').trim().isNotEmpty) person.title!.trim(),
+        if ((person.organisation ?? '').trim().isNotEmpty) person.organisation!.trim(),
+      ].join(' · ');
 }

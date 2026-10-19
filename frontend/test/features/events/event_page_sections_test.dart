@@ -5,6 +5,8 @@
 // - Big events: parallel sessions swipe on a phone ("1 of 6") and sit in a
 //   grid on a computer; hall, subtitle and break bands show.
 // - Speakers: the first 12, "Show all", search by name or company.
+// - Speakers under each session (B2): the first 3, "+N more", a moderator
+//   labelled; sessions without linked people keep their speaker line.
 // - Sponsors across tiers get a heading per tier.
 import 'package:event_app/features/events/domain/event.dart';
 import 'package:event_app/features/events/presentation/widgets/agenda_section.dart';
@@ -118,6 +120,50 @@ void main() {
       expect(find.text('2:00 PM'), findsOneWidget);
       expect(find.text('Until 2:30 PM'), findsOneWidget);
       expect(find.text('Until 3:00 PM'), findsOneWidget);
+    });
+  });
+
+  group('Speakers under each session (B2)', () {
+    // Two sessions at 2:00 PM, so the big layout is on.
+    List<EventSession> agenda() => [
+          EventSession(
+            sessionId: 1,
+            title: 'Big panel',
+            startDatetime: _t(14, 0),
+            endDatetime: _t(14, 40),
+            people: [
+              for (var i = 1; i <= 5; i++)
+                SessionPersonRef(personId: i, role: i == 1 ? 'MODERATOR' : 'PANELIST'),
+            ],
+          ),
+          _s(2, 'Workshop', _t(14, 0), end: _t(14, 40), speaker: 'A. Rao'),
+        ];
+    final people = [for (var i = 1; i <= 5; i++) _p(i, 'Person $i', org: 'Org $i')];
+
+    testWidgets('the first 3, then +2 more; a moderator labelled', (tester) async {
+      await _show(tester, AgendaSection(sessions: agenda(), people: people), width: 1400);
+      expect(find.text('Person 2'), findsOneWidget);
+      expect(find.text('Person 3'), findsOneWidget);
+      expect(find.text('Person 4'), findsNothing);
+      expect(find.text('Person 1 · Moderator'), findsOneWidget);
+      expect(find.text('CTO · Org 2'), findsOneWidget);
+
+      await tester.tap(find.text('+2 more'));
+      await tester.pumpAndSettle();
+      expect(find.text('Person 5'), findsOneWidget);
+      expect(find.text('Show fewer'), findsOneWidget);
+    });
+
+    testWidgets('a session without linked people keeps its speaker line', (tester) async {
+      await _show(tester, AgendaSection(sessions: agenda(), people: people), width: 1400);
+      expect(find.text('A. Rao'), findsOneWidget);
+    });
+
+    testWidgets('people not found (hidden) are left out', (tester) async {
+      await _show(tester, AgendaSection(sessions: agenda(), people: people.take(2).toList()), width: 1400);
+      expect(find.text('Person 2'), findsOneWidget);
+      expect(find.text('Person 3'), findsNothing);
+      expect(find.textContaining('more'), findsNothing);
     });
   });
 

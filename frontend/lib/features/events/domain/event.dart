@@ -148,6 +148,7 @@ class AppEvent {
     this.createdByName,
     this.sessions = const [],
     this.speakers = const [],
+    this.people = const [],
     this.sponsors = const [],
     this.partners = const [],
     this.fees = const [],
@@ -202,6 +203,10 @@ class AppEvent {
   final String? createdByName;
   final List<EventSession> sessions;
   final List<EventPerson> speakers;
+
+  /// Every visible person on the event (speakers, moderators, hosts…):
+  /// what a session's [EventSession.people] refer to (B2).
+  final List<EventPerson> people;
   final List<EventSponsor> sponsors;
   final List<EventPartner> partners;
 
@@ -258,6 +263,10 @@ class AppEvent {
           .whereType<Map<String, dynamic>>()
           .map(EventPerson.fromJson)
           .toList(),
+      people: (json['people'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(EventPerson.fromJson)
+          .toList(),
       sponsors: (json['sponsors'] as List<dynamic>? ?? [])
           .whereType<Map<String, dynamic>>()
           .map(EventSponsor.fromJson)
@@ -294,6 +303,7 @@ class EventSession {
     this.track,
     required this.startDatetime,
     this.endDatetime,
+    this.people = const [],
   });
 
   final int sessionId;
@@ -304,6 +314,9 @@ class EventSession {
   final String? track;
   final DateTime startDatetime;
   final DateTime? endDatetime;
+
+  /// Who is on this session, in order (B2): ids into [AppEvent.people].
+  final List<SessionPersonRef> people;
 
   factory EventSession.fromJson(Map<String, dynamic> json) {
     final start = json['start_datetime'] ?? json['starts_at'];
@@ -317,8 +330,27 @@ class EventSession {
       track: (json['track'] ?? json['track_name']) as String?,
       startDatetime: DateTime.parse(start as String).toLocal(),
       endDatetime: end != null ? DateTime.parse(end as String).toLocal() : null,
+      people: (json['people'] as List<dynamic>? ?? [])
+          .whereType<Map<String, dynamic>>()
+          .map(SessionPersonRef.fromJson)
+          .toList(),
     );
   }
+}
+
+/// One person on a session: who, and as what (moderator, panelist…).
+class SessionPersonRef {
+  const SessionPersonRef({required this.personId, required this.role});
+
+  final int personId;
+  final String role;
+
+  bool get isModerator => role == 'MODERATOR';
+
+  factory SessionPersonRef.fromJson(Map<String, dynamic> json) => SessionPersonRef(
+        personId: json['person_id'] as int,
+        role: json['role'] as String? ?? 'SPEAKER',
+      );
 }
 
 class EventPerson {

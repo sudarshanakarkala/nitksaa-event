@@ -699,7 +699,11 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       onOpenLink: _launchUrl,
     );
     final fees = event.fees.isNotEmpty ? _buildFeesSection(event) : null;
-    final agenda = AgendaSection(sessions: event.sessions);
+    // Everyone visible on the event; older servers send only speakers.
+    final agenda = AgendaSection(
+      sessions: event.sessions,
+      people: event.people.isNotEmpty ? event.people : event.speakers,
+    );
     final speakers = SpeakersSection(speakers: event.speakers);
     final sections = AgendaSection.isBig(event.sessions)
         ? <Widget>[agenda, speakers, sponsors, ?fees]
