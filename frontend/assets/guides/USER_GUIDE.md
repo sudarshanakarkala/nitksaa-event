@@ -4,7 +4,7 @@
 
 # NITKSAA Events — How to register
 
-**For:** anyone attending a NITKSAA event, alumni or not. **Site:** events.nitkalumni.in. **Updated:** 16 Oct 2026.
+**For:** anyone attending a NITKSAA event, alumni or not. **Site:** events.nitkalumni.in. **Updated:** 19 Oct 2026.
 Words in **bold** are what you see on screen.
 
 ---
@@ -14,8 +14,14 @@ Words in **bold** are what you see on screen.
 - Open **events.nitkalumni.in**. You can browse and open any event without signing in.
 - The **Events** page shows **Upcoming** events first. **Open** shows the ones taking registrations.
 - Tap **View Details** to open an event: date, time, place, price and what it's about.
+- **Dates:** tap **This week**, **This month** or **Next 90 days**; for other dates, **Pick dates** opens a slider and From – To boxes.
 - Got a link like **events.nitkalumni.in/e/…** (on WhatsApp, or from another site)? It opens that event directly. If it says "This event isn't available", the link may be mistyped or the event isn't open yet.
 - **Tell a friend:** on the event page, **Share** (on a phone: WhatsApp and others) or **Copy link** (on a computer).
+
+**Big events (e.g. NITKonnect):**
+- **Agenda:** grouped by time. When several sessions run at once ("6 sessions at once"), they sit side by side on a computer; on a phone, swipe sideways ("1 of 6"). The hall shows when known; tea and lunch breaks show as bands.
+- **Speakers:** the first 12, then **Show all**; type a name or company in **Search speakers**.
+- **Sponsors:** grouped by tier (title sponsor first).
 
 ---
 
@@ -113,4 +119,4 @@ NITiKA answers questions only. It can't register you, cancel a registration, tak
 | "This event has started, so you can't unregister now." | Cancelling closes when the event starts |
 | Can't find your QR | **My Events** › **QR badge** |
 | Want to organise an event | Events are set up by organisers. Ask for organiser access through **Feedback** |
-| Anything else | **Feedback** at the bottom of every page (you can attach screenshots) |
+| Anything else | **Feedback** at the bottom of every page (you can attach screenshots). On a phone the bottom links slide away while you scroll down a list; scroll up a little, or to the end, to bring them back |
