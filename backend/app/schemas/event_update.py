@@ -5,6 +5,9 @@ from datetime import datetime
 
 from app.services.slug_service import SLUG_PATTERN
 
+# An accent colour: #RRGGBB (the database checks the same).
+BRAND_ACCENT_PATTERN = r"^#[0-9A-Fa-f]{6}$"
+
 
 class EventUpdate(BaseModel):
     title: Optional[str] = Field(default=None, min_length=1, max_length=255)
@@ -23,6 +26,11 @@ class EventUpdate(BaseModel):
     virtual_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     banner_url: Optional[str] = None
+    # Branding (B6), all optional: logos for light and dark backgrounds and
+    # one accent colour. Empty strings clear them.
+    brand_logo_url: Optional[str] = Field(default=None, max_length=2048)
+    brand_logo_dark_url: Optional[str] = Field(default=None, max_length=2048)
+    brand_accent: Optional[str] = Field(default=None, pattern=BRAND_ACCENT_PATTERN)
     capacity: Optional[int] = Field(default=None, gt=0)
     show_attendee_list: Optional[bool] = None
     max_guests: Optional[int] = Field(default=None, ge=0, le=4)
@@ -46,4 +54,9 @@ class EventUpdate(BaseModel):
                 raise ValueError("end_datetime must be after start_datetime")
         if self.is_free is True:
             self.ticket_price = None
+        # Blank branding fields mean "none".
+        for name in ("brand_logo_url", "brand_logo_dark_url"):
+            value = getattr(self, name)
+            if value is not None and not value.strip():
+                setattr(self, name, None)
         return self

@@ -20,11 +20,16 @@ import '../../../../shared/format.dart';
 import '../../../../theme/app_palette.dart';
 import '../../domain/agenda_slots.dart';
 import '../../domain/event.dart';
+import 'event_brand.dart';
 
 class AgendaSection extends StatelessWidget {
-  const AgendaSection({super.key, required this.sessions});
+  const AgendaSection({super.key, required this.sessions, this.accent});
 
   final List<EventSession> sessions;
+
+  /// A branded event's accent (B6): time pills filled with it, break bands
+  /// tinted with it. Null: the theme.
+  final Color? accent;
 
   /// Whether this agenda gets the big-event layout (and the page puts it
   /// first).
@@ -50,7 +55,7 @@ class AgendaSection extends StatelessWidget {
         else if (!isBig(sessions))
           ..._simpleList(context)
         else
-          _BigAgenda(sessions: sessions),
+          _BigAgenda(sessions: sessions, accent: accent),
       ],
     );
   }
@@ -89,9 +94,10 @@ class AgendaSection extends StatelessWidget {
 }
 
 class _BigAgenda extends StatelessWidget {
-  const _BigAgenda({required this.sessions});
+  const _BigAgenda({required this.sessions, this.accent});
 
   final List<EventSession> sessions;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
@@ -108,7 +114,7 @@ class _BigAgenda extends StatelessWidget {
               for (final slot in day.slots)
                 Padding(
                   padding: const EdgeInsets.only(bottom: 16),
-                  child: _SlotView(slot: slot, width: width),
+                  child: _SlotView(slot: slot, width: width, accent: accent),
                 ),
             ],
           ],
@@ -138,10 +144,11 @@ class _DayHeading extends StatelessWidget {
 }
 
 class _SlotView extends StatelessWidget {
-  const _SlotView({required this.slot, required this.width});
+  const _SlotView({required this.slot, required this.width, this.accent});
 
   final AgendaSlot slot;
   final double width;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
@@ -149,13 +156,13 @@ class _SlotView extends StatelessWidget {
     final time = sharedEnd != null ? formatTimeRange(slot.start, sharedEnd) : formatTime(slot.start);
     final showOwnEnd = sharedEnd == null;
 
-    if (slot.isBreak) return _BreakBand(session: slot.sessions.single, time: time);
+    if (slot.isBreak) return _BreakBand(session: slot.sessions.single, time: time, accent: accent);
 
     if (!slot.isParallel) {
       return Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Align(alignment: Alignment.centerLeft, child: _TimePill(text: time)),
+          Align(alignment: Alignment.centerLeft, child: _TimePill(text: time, accent: accent)),
           const SizedBox(height: 8),
           _SessionCard(session: slot.sessions.single, showOwnEnd: showOwnEnd),
         ],
@@ -163,14 +170,20 @@ class _SlotView extends StatelessWidget {
     }
 
     if (width < AgendaSection.gridFrom) {
-      return _ParallelSwipe(slot: slot, time: time, width: width, showOwnEnd: showOwnEnd);
+      return _ParallelSwipe(
+        slot: slot,
+        time: time,
+        width: width,
+        showOwnEnd: showOwnEnd,
+        accent: accent,
+      );
     }
 
     final columns = width >= 900 ? 3 : 2;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        _SlotHeader(time: time, count: slot.sessions.length),
+        _SlotHeader(time: time, count: slot.sessions.length, accent: accent),
         const SizedBox(height: 8),
         _SessionGrid(sessions: slot.sessions, columns: columns, showOwnEnd: showOwnEnd),
       ],
@@ -180,18 +193,19 @@ class _SlotView extends StatelessWidget {
 
 /// The time pill, and "N sessions at once" for parallel sessions.
 class _SlotHeader extends StatelessWidget {
-  const _SlotHeader({required this.time, required this.count, this.trailing});
+  const _SlotHeader({required this.time, required this.count, this.trailing, this.accent});
 
   final String time;
   final int count;
   final Widget? trailing;
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
     return Row(
       children: [
-        _TimePill(text: time),
+        _TimePill(text: time, accent: accent),
         const SizedBox(width: 10),
         Expanded(
           child: Text(
@@ -207,40 +221,54 @@ class _SlotHeader extends StatelessWidget {
 }
 
 class _TimePill extends StatelessWidget {
-  const _TimePill({required this.text});
+  const _TimePill({required this.text, this.accent});
 
   final String text;
+
+  /// Branded: filled with the accent, text black or white to suit it.
+  final Color? accent;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final brand = accent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
       decoration: BoxDecoration(
-        color: p.primary.withValues(alpha: 0.1),
+        color: brand ?? p.primary.withValues(alpha: 0.1),
         borderRadius: BorderRadius.circular(6),
       ),
       child: Text(
         text,
-        style: TextStyle(fontSize: 13, fontWeight: FontWeight.bold, color: p.primary),
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: brand == null ? p.primary : EventBrand.onFill(brand),
+        ),
       ),
     );
   }
 }
 
 class _BreakBand extends StatelessWidget {
-  const _BreakBand({required this.session, required this.time});
+  const _BreakBand({required this.session, required this.time, this.accent});
 
   final EventSession session;
   final String time;
 
+  /// Branded: the band tinted with the accent.
+  final Color? accent;
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
+    final brand = accent;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(
-        color: p.surfaceSubtle,
+        color: brand == null
+            ? p.surfaceSubtle
+            : Color.alphaBlend(brand.withValues(alpha: 0.16), p.surfaceSubtle),
         borderRadius: BorderRadius.circular(8),
       ),
       child: Row(
@@ -301,12 +329,14 @@ class _ParallelSwipe extends StatefulWidget {
     required this.time,
     required this.width,
     required this.showOwnEnd,
+    this.accent,
   });
 
   final AgendaSlot slot;
   final String time;
   final double width;
   final bool showOwnEnd;
+  final Color? accent;
 
   @override
   State<_ParallelSwipe> createState() => _ParallelSwipeState();
@@ -361,6 +391,7 @@ class _ParallelSwipeState extends State<_ParallelSwipe> {
         _SlotHeader(
           time: widget.time,
           count: _count,
+          accent: widget.accent,
           trailing: Text(
             '${_index + 1} of $_count',
             style: TextStyle(fontSize: 12, color: p.textMuted),

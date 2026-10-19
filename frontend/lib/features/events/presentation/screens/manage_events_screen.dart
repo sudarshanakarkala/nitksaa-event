@@ -23,6 +23,7 @@ import '../../domain/event_link.dart';
 import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
 import '../widgets/event_card.dart';
+import '../widgets/event_brand.dart';
 import '../../domain/event_time_zone.dart';
 import '../../../../shared/widgets/notice.dart';
 
@@ -622,6 +623,7 @@ const _partnerKind = _OrgKind(
 /// holds data or was just added; removing it clears its data on save.
 enum _Group {
   images('Images'),
+  branding('Branding'),
   registrationDates('Registration dates'),
   guests('Guests'),
   speakers('Speakers'),
@@ -677,6 +679,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   // Images
   late final TextEditingController _thumbnailUrl;
   late final TextEditingController _bannerUrl;
+
+  // Branding (B6): logos for light and dark backgrounds, an accent colour.
+  late final TextEditingController _brandLogoUrl;
+  late final TextEditingController _brandLogoDarkUrl;
+  late final TextEditingController _brandAccent;
   
   // Capacity & Pricing
   late final TextEditingController _capacity;
@@ -790,6 +797,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     
     _thumbnailUrl = TextEditingController(text: event?.thumbnailUrl ?? '');
     _bannerUrl = TextEditingController(text: event?.bannerUrl ?? '');
+    _brandLogoUrl = TextEditingController(text: event?.brandLogoUrl ?? '');
+    _brandLogoDarkUrl = TextEditingController(text: event?.brandLogoDarkUrl ?? '');
+    _brandAccent = TextEditingController(text: event?.brandAccent ?? '');
     
     _capacity = TextEditingController(text: event?.capacity?.toString() ?? '');
     _maxGuests = (event?.maxGuests ?? 0).clamp(0, 4);
@@ -844,6 +854,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         _title, _description, _slug, _startDate, _endDate, _startTime, _endTime,
         _timezone, _location, _locationMapsUrl, _virtualUrl,
         _registrationOpensAt, _registrationClosesAt, _thumbnailUrl, _bannerUrl,
+        _brandLogoUrl, _brandLogoDarkUrl, _brandAccent,
         _capacity,
       ];
 
@@ -895,6 +906,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   bool _hasData(_Group group) => switch (group) {
         _Group.images =>
           _thumbnailUrl.text.trim().isNotEmpty || _bannerUrl.text.trim().isNotEmpty,
+        _Group.branding => _brandLogoUrl.text.trim().isNotEmpty ||
+            _brandLogoDarkUrl.text.trim().isNotEmpty ||
+            _brandAccent.text.trim().isNotEmpty,
         _Group.registrationDates => _registrationOpensAt.text.trim().isNotEmpty ||
             _registrationClosesAt.text.trim().isNotEmpty,
         _Group.guests => _maxGuests > 0,
@@ -914,6 +928,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           title: Text('Remove ${group.label.toLowerCase()}?'),
           content: Text(switch (group) {
             _Group.images => 'The thumbnail and banner will be removed when you save.',
+            _Group.branding => 'The logos and accent colour will be removed when you save.',
             _Group.registrationDates => 'Registration will go back to opening on '
                 'publish and closing at the start, when you save.',
             _Group.guests => 'People won\'t be able to bring guests once you save.',
@@ -943,6 +958,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         case _Group.images:
           _thumbnailUrl.clear();
           _bannerUrl.clear();
+        case _Group.branding:
+          _brandLogoUrl.clear();
+          _brandLogoDarkUrl.clear();
+          _brandAccent.clear();
         case _Group.registrationDates:
           _registrationOpensAt.clear();
           _registrationClosesAt.clear();
@@ -1005,6 +1024,9 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _registrationClosesAt.dispose();
     _thumbnailUrl.dispose();
     _bannerUrl.dispose();
+    _brandLogoUrl.dispose();
+    _brandLogoDarkUrl.dispose();
+    _brandAccent.dispose();
     _capacity.dispose();
     _ticketPrice.dispose();
     super.dispose();
@@ -1347,6 +1369,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                 _buildTextField(_bannerUrl, 'Banner URL', hint: 'Wide image URL for event header'),
               ],
             ),
+          _Group.branding => _buildBranding(),
           _Group.registrationDates => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -1420,6 +1443,80 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         fontWeight: FontWeight.w600,
         letterSpacing: 0.5,
       ),
+    );
+  }
+
+  /// The event was saved with branding (so clearing it must be sent).
+  bool get _hadBranding {
+    final e = widget.event;
+    if (e == null) return false;
+    return [e.brandLogoUrl, e.brandLogoDarkUrl, e.brandAccent]
+        .any((v) => v != null && v.trim().isNotEmpty);
+  }
+
+  /// Branding (B6): two logo links and an accent colour, with a swatch.
+  Widget _buildBranding() {
+    final p = context.palette;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        _buildTextField(
+          _brandLogoUrl,
+          'Logo URL',
+          hint: '/brand/nitkonnect-2027/logo.png',
+          helper: 'For light backgrounds. Shown on the event card, and on the page when there is no banner.',
+        ),
+        const SizedBox(height: 12),
+        _buildTextField(
+          _brandLogoDarkUrl,
+          'Logo URL for dark backgrounds',
+          hint: '/brand/nitkonnect-2027/logo_white.png',
+          helper: 'Optional, e.g. a white logo. Without it the logo above is used.',
+        ),
+        const SizedBox(height: 12),
+        ValueListenableBuilder<TextEditingValue>(
+          valueListenable: _brandAccent,
+          builder: (context, value, _) {
+            final colour = EventBrand.parseAccent(value.text);
+            return TextFormField(
+              key: const ValueKey('event-brand-accent'),
+              controller: _brandAccent,
+              decoration: InputDecoration(
+                labelText: 'Accent colour',
+                hintText: '#FEEF00',
+                helperText: 'As #RRGGBB. Used for the agenda\'s time pills and breaks, and the card.',
+                helperMaxLines: 2,
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                suffixIcon: colour == null
+                    ? null
+                    : Padding(
+                        padding: const EdgeInsets.all(10),
+                        child: DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: colour,
+                            borderRadius: BorderRadius.circular(4),
+                            border: Border.all(color: p.border),
+                          ),
+                          child: const SizedBox(width: 24, height: 24),
+                        ),
+                      ),
+              ),
+              validator: (v) {
+                final text = v?.trim() ?? '';
+                if (text.isEmpty || EventBrand.parseAccent(text) != null) return null;
+                return 'Use the form #RRGGBB, e.g. #FEEF00';
+              },
+            );
+          },
+        ),
+        const SizedBox(height: 8),
+        Text(
+          'The wide banner (about 1600 × 400) goes in Images → Banner URL; '
+          'a branded event shows it whole.',
+          style: TextStyle(fontSize: 12, color: p.textSecondary),
+        ),
+      ],
     );
   }
 
@@ -3241,6 +3338,14 @@ void _showFeeDialog(int? editIndex) {
         'ticket_price': _isFree ? null : _feesTotal,
         'thumbnail_url': _thumbnailUrl.text.trim().isEmpty ? null : _thumbnailUrl.text.trim(),
         'banner_url': _bannerUrl.text.trim().isEmpty ? null : _bannerUrl.text.trim(),
+        // Branding only when the event has (or had) it, so other events
+        // save exactly as before.
+        if (_shows(_Group.branding) || _hadBranding) ...{
+          'brand_logo_url': _brandLogoUrl.text.trim().isEmpty ? null : _brandLogoUrl.text.trim(),
+          'brand_logo_dark_url':
+              _brandLogoDarkUrl.text.trim().isEmpty ? null : _brandLogoDarkUrl.text.trim(),
+          'brand_accent': _brandAccent.text.trim().isEmpty ? null : _brandAccent.text.trim().toUpperCase(),
+        },
         // Empty: opens when published (null), closes when the event starts.
         'registration_opens_at': _isoOfField(_registrationOpensAt.text),
         'registration_closes_at': _registrationClosesAt.text.trim().isEmpty

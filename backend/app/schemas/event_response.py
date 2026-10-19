@@ -20,6 +20,9 @@ class EventResponse(BaseModel):
     virtual_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     banner_url: Optional[str] = None
+    brand_logo_url: Optional[str] = None
+    brand_logo_dark_url: Optional[str] = None
+    brand_accent: Optional[str] = None
     capacity: Optional[int] = None
     show_attendee_list: bool = False
     max_guests: int = 0
@@ -56,6 +59,9 @@ class PublicEventResponse(BaseModel):
     is_virtual: bool
     thumbnail_url: Optional[str] = None
     banner_url: Optional[str] = None
+    brand_logo_url: Optional[str] = None
+    brand_logo_dark_url: Optional[str] = None
+    brand_accent: Optional[str] = None
     capacity: Optional[int] = None
     show_attendee_list: bool = False
     max_guests: int = 0

@@ -23,6 +23,7 @@ _PUBLIC_COLUMNS = """
     e.status, e.start_datetime, e.end_datetime, e.timezone,
     e.location_text, e.location_maps_url, e.is_virtual,
     e.thumbnail_url, e.banner_url, e.capacity,
+    e.brand_logo_url, e.brand_logo_dark_url, e.brand_accent,
     e.show_attendee_list, e.max_guests,
     e.registration_opens_at, e.registration_closes_at,
     e.is_full_day, e.is_free, e.ticket_price,

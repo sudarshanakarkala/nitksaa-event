@@ -21,6 +21,7 @@ import '../widgets/venue_section.dart';
 import '../widgets/agenda_section.dart';
 import '../widgets/speakers_section.dart';
 import '../widgets/sponsors_section.dart';
+import '../widgets/event_brand.dart';
 import '../../../../shared/widgets/form_fields.dart';
 import '../../../../shared/widgets/notice.dart';
 import '../../../../shared/widgets/simple_markdown.dart';
@@ -144,18 +145,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          if (event.bannerUrl != null || event.thumbnailUrl != null)
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(12),
-                              child: Image.network(
-                                event.bannerUrl ?? event.thumbnailUrl!,
-                                height: 320,
-                                width: double.infinity,
-                                fit: BoxFit.cover,
-                                // An image that fails to load is left out (F9).
-                                errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                              ),
-                            ),
+                          ?_headerImage(event, height: 320),
                           const SizedBox(height: 24),
                           Text(
                             event.title,
@@ -254,18 +244,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
                   _statusNotice(event),
                 ],
                 const SizedBox(height: 16),
-                if (event.bannerUrl != null || event.thumbnailUrl != null)
-                  ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: Image.network(
-                      event.bannerUrl ?? event.thumbnailUrl!,
-                      height: 180,
-                      width: double.infinity,
-                      fit: BoxFit.cover,
-                      // An image that fails to load is left out (F9).
-                      errorBuilder: (_, _, _) => const SizedBox.shrink(),
-                    ),
-                  ),
+                ?_headerImage(event, height: 180),
                 const SizedBox(height: 16),
                 Text(
                   event.title,
@@ -323,6 +302,59 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         ),
       );
     }
+  }
+
+  /// The picture at the top of the page.
+  /// - Without branding, as before: the banner (or thumbnail) [height] high,
+  ///   cropped to fill.
+  /// - A branded event (B6): its wide banner shown whole (4:1, the size it
+  ///   is made for), so the logo at its edge is never cut off, on phones
+  ///   too; with no banner, its logo for this mode.
+  /// - An image that fails to load is left out (F9).
+  Widget? _headerImage(AppEvent event, {required double height}) {
+    final brand = EventBrand.of(event);
+    if (brand != null) {
+      final banner = event.bannerUrl?.trim() ?? '';
+      if (banner.isNotEmpty) {
+        return ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: AspectRatio(
+            aspectRatio: 4,
+            child: Image.network(
+              banner,
+              width: double.infinity,
+              fit: BoxFit.cover,
+              errorBuilder: (_, _, _) => const SizedBox.shrink(),
+            ),
+          ),
+        );
+      }
+      final logo = brand.logoFor(Theme.of(context).brightness);
+      if (logo == null) return null;
+      return Align(
+        alignment: Alignment.centerLeft,
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: height >= 300 ? 72 : 48, maxWidth: 360),
+          child: Image.network(
+            logo,
+            fit: BoxFit.contain,
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
+          ),
+        ),
+      );
+    }
+    final url = event.bannerUrl ?? event.thumbnailUrl;
+    if (url == null) return null;
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(12),
+      child: Image.network(
+        url,
+        height: height,
+        width: double.infinity,
+        fit: BoxFit.cover,
+        errorBuilder: (_, _, _) => const SizedBox.shrink(),
+      ),
+    );
   }
 
   // ── Page frame (website detail page) ──────────────────────────────────
@@ -667,7 +699,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       onOpenLink: _launchUrl,
     );
     final fees = event.fees.isNotEmpty ? _buildFeesSection(event) : null;
-    final agenda = AgendaSection(sessions: event.sessions);
+    final agenda = AgendaSection(sessions: event.sessions, accent: EventBrand.of(event)?.accent);
     final speakers = SpeakersSection(speakers: event.speakers);
     final sections = AgendaSection.isBig(event.sessions)
         ? <Widget>[agenda, speakers, sponsors, ?fees]
