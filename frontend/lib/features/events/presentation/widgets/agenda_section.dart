@@ -606,8 +606,7 @@ class _AgendaPeople extends InheritedWidget {
     if (ids.isEmpty) return const [];
     final byId = context.dependOnInheritedWidgetOfExactType<_AgendaPeople>()?.sponsorsById ?? const {};
     return [
-      for (final id in ids)
-        if (byId[id] case final sponsor?) sponsor,
+      for (final id in ids) ?byId[id],
     ];
   }
 

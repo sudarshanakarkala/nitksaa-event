@@ -2087,7 +2087,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       if (!names.any((n) => n.toLowerCase() == old)) continue;
       session[key] = _joinLines([
         for (final n in names)
-          if (n.toLowerCase() != old) n else if (to != null) to,
+          if (n.toLowerCase() != old) n else ?to,
       ]);
       if (key == 'people') {
         session['speaker_name'] = _lines(session['people']).join(', ');
