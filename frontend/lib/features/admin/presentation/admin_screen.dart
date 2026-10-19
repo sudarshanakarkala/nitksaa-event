@@ -38,27 +38,6 @@ class AdminScreen extends ConsumerStatefulWidget {
 class _AdminScreenState extends ConsumerState<AdminScreen> {
   bool _landingChecked = false;
 
-  /// Phones: a tab's list scrolled down hides the title and tabs
-  /// ([PhoneChrome]).
-  bool _headerHidden = false;
-
-  @override
-  void didUpdateWidget(AdminScreen old) {
-    super.didUpdateWidget(old);
-    // Another tab starts with the title and tabs in place.
-    if (old.tab != widget.tab) _headerHidden = false;
-  }
-
-  bool _onPhoneChrome(PhoneChromeNotification n) {
-    if (n.headerHidden != _headerHidden) {
-      PhoneChrome.safely(() {
-        if (mounted) setState(() => _headerHidden = n.headerHidden);
-      });
-    }
-    // The footer is the app shell's: let it hear too.
-    return false;
-  }
-
   @override
   void initState() {
     super.initState();
@@ -107,7 +86,7 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     // Website AdminPage: a sticky zone (page header, then the tab row with
     // a bottom border) and the tab's content scrolling beneath it, both in
     // the same 1520px container as the site header. Phones: a shorter
-    // title, and the zone folds away while a list scrolls down.
+    // title.
     final header = DecoratedBox(
       decoration: BoxDecoration(
         border: Border(bottom: BorderSide(color: p.border)),
@@ -132,16 +111,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (phone)
-          CollapsibleChrome(hidden: _headerHidden, child: header)
-        else
-          header,
-        Expanded(
-          child: NotificationListener<PhoneChromeNotification>(
-            onNotification: _onPhoneChrome,
-            child: _content(widget.tab),
-          ),
-        ),
+        header,
+        Expanded(child: _content(widget.tab)),
       ],
     );
   }

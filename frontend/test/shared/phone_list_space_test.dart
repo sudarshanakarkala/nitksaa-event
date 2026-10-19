@@ -1,9 +1,9 @@
 // Phones: list pages give the screen to the list.
 //
-// - Scrolling down a long list folds the toolbar away and tells the page
-//   around it (Admin title and tabs, footer); scrolling up or reaching the
-//   top brings it back; the footer also comes back at the end.
-// - Short lists, computers and Check-in (opted out) keep everything in place.
+// - The toolbar stays put while the list scrolls (no jerk at the top).
+// - Scrolling down a long list folds the footer away (it tells the app
+//   shell); scrolling up, or reaching the top or end, brings it back.
+// - Short lists, computers and Check-in (opted out) keep the footer.
 // - Phones: no count where the pills count; small actions in the search row.
 // - Phones: the date line is one row of chips; "Pick dates" opens the slider.
 import 'package:event_app/shared/widgets/filter_controls.dart';
@@ -64,81 +64,68 @@ Future<List<PhoneChromeNotification>> _showList(
   return heard;
 }
 
-double _toolbarHeight(WidgetTester tester) =>
-    tester.getSize(find.byType(CollapsibleChrome)).height;
-
 void main() {
   group('PhoneChromeTracker', () {
-    test('hides after scrolling down a long list, shows on the way back', () {
+    test('hides the footer after scrolling down a long list, shows it on the way back', () {
       final t = PhoneChromeTracker();
       expect(t.onScroll(_m(pixels: 10), 10), isFalse);
       expect(t.onScroll(_m(pixels: 40), 30), isTrue);
-      expect((t.headerHidden, t.footerHidden), (true, true));
+      expect(t.footerHidden, isTrue);
       expect(t.onScroll(_m(pixels: 30), -10), isFalse);
-      expect(t.onScroll(_m(pixels: 5), -25), isTrue);
-      expect((t.headerHidden, t.footerHidden), (false, false));
+      expect(t.onScroll(_m(pixels: 10), -25), isTrue);
+      expect(t.footerHidden, isFalse);
     });
 
-    test('the top shows everything; the end shows the footer', () {
+    test('the top and the end show the footer', () {
       final t = PhoneChromeTracker()..onScroll(_m(pixels: 100), 100);
-      t.onScroll(_m(pixels: 2000), 50);
-      expect((t.headerHidden, t.footerHidden), (true, false));
-      t.onScroll(_m(pixels: 0), -2000);
-      expect((t.headerHidden, t.footerHidden), (false, false));
+      expect(t.footerHidden, isTrue);
+      expect(t.onScroll(_m(pixels: 2000), 50), isTrue);
+      expect(t.footerHidden, isFalse);
+      t.onScroll(_m(pixels: 500), 100);
+      t.onScroll(_m(pixels: 0), -500);
+      expect(t.footerHidden, isFalse);
     });
 
-    test('a short list never folds away', () {
+    test('a short list keeps the footer', () {
       final t = PhoneChromeTracker();
       expect(t.onScroll(_m(pixels: 100, max: 300), 100), isFalse);
-      expect(t.headerHidden, isFalse);
+      expect(t.footerHidden, isFalse);
     });
 
-    test('a list that can no longer scroll shows everything again', () {
+    test('a list that can no longer scroll shows the footer again', () {
       final t = PhoneChromeTracker()..onScroll(_m(pixels: 100), 100);
       expect(t.onMetrics(_m(pixels: 0, max: 0)), isTrue);
-      expect(t.headerHidden, isFalse);
-    });
-
-    test('not while the keyboard is open', () {
-      final t = PhoneChromeTracker();
-      t.onScroll(_m(pixels: 100), 100, keyboardOpen: true);
-      expect(t.headerHidden, isFalse);
+      expect(t.footerHidden, isFalse);
     });
   });
 
   group('ListPage on a phone', () {
-    testWidgets('scrolling down folds the toolbar away; up brings it back', (tester) async {
+    testWidgets('the toolbar stays put; the footer folds away and comes back', (tester) async {
       final heard = await _showList(tester, width: 390);
-      final full = _toolbarHeight(tester);
-      expect(full, greaterThan(40));
+      final searchTop = tester.getTopLeft(find.byType(TextField)).dy;
 
       await tester.drag(find.text('Row 3'), const Offset(0, -300));
       await tester.pumpAndSettle();
-      expect(_toolbarHeight(tester), 0);
-      expect(heard.last.headerHidden, isTrue);
+      expect(tester.getTopLeft(find.byType(TextField)).dy, searchTop);
       expect(heard.last.footerHidden, isTrue);
 
       await tester.drag(find.byType(ListView), const Offset(0, 100));
       await tester.pumpAndSettle();
-      expect(_toolbarHeight(tester), full);
-      expect(heard.last.headerHidden, isFalse);
+      expect(tester.getTopLeft(find.byType(TextField)).dy, searchTop);
+      expect(heard.last.footerHidden, isFalse);
     });
 
-    testWidgets('a short list stays put', (tester) async {
+    testWidgets('a short list keeps the footer', (tester) async {
       final heard = await _showList(tester, width: 390, rows: 12);
       await tester.drag(find.text('Row 3'), const Offset(0, -200));
       await tester.pumpAndSettle();
-      expect(_toolbarHeight(tester), greaterThan(40));
       expect(heard, isEmpty);
     });
 
-    testWidgets('opted out (Check-in): nothing folds, nothing is sent', (tester) async {
+    testWidgets('opted out (Check-in): the footer stays, nothing is sent', (tester) async {
       final heard = await _showList(tester, width: 390, collapse: false);
       await tester.drag(find.text('Row 3'), const Offset(0, -300));
       await tester.pumpAndSettle();
-      expect(find.byType(CollapsibleChrome), findsNothing);
-      expect(find.byType(TextField), findsOneWidget);
-      expect(tester.getTopLeft(find.byType(TextField)).dy, lessThan(100));
       expect(heard, isEmpty);
     });
 
@@ -160,14 +147,13 @@ void main() {
     });
   });
 
-  testWidgets('computers: unchanged (no folding, count and Create event)', (tester) async {
+  testWidgets('computers: unchanged (footer stays, count and Create event)', (tester) async {
     final heard = await _showList(
       tester,
       width: 1200,
       countOnPhone: false,
       phoneActions: [ListIconAction(icon: Icons.add, tooltip: 'Create event', onPressed: () {})],
     );
-    expect(find.byType(CollapsibleChrome), findsNothing);
     expect(find.text('44 events'), findsOneWidget);
     expect(find.widgetWithText(FilledButton, 'Create event'), findsOneWidget);
     await tester.drag(find.text('Row 3'), const Offset(0, -300));

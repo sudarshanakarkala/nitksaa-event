@@ -40,9 +40,9 @@ class ListPage extends StatefulWidget {
     this.phoneActions,
   });
 
-  /// Phones: scrolling down the list folds the toolbar (and the page's
-  /// header and footer) away; scrolling up brings them back
-  /// ([PhoneChrome]). Off for Check-in, used at the door.
+  /// Phones: scrolling down the list folds the site footer away; scrolling
+  /// up, or reaching the top or end, brings it back ([PhoneChrome]). The
+  /// toolbar always stays put. Off for Check-in, used at the door.
   final bool collapseOnPhone;
 
   /// Phones: show [count]. Off where the pills already show the counts
@@ -130,30 +130,22 @@ class _ListPageState extends State<ListPage> {
   bool _panelOpen = false;
   final _chrome = PhoneChromeTracker();
 
-  /// Tells the page around the list what to fold away.
+  /// Tells the app shell whether to fold the footer away.
   void _announce() {
     if (!mounted) return;
-    PhoneChromeNotification(
-      headerHidden: _chrome.headerHidden,
-      footerHidden: _chrome.footerHidden,
-    ).dispatch(context);
+    PhoneChromeNotification(footerHidden: _chrome.footerHidden).dispatch(context);
   }
 
   bool _onBodyNotification(Notification n) {
     if (!widget.collapseOnPhone || !PhoneChrome.isPhone(context)) return false;
     var changed = false;
     if (n is ScrollUpdateNotification) {
-      final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
-      changed = _chrome.onScroll(n.metrics, n.scrollDelta ?? 0, keyboardOpen: keyboardOpen);
+      changed = _chrome.onScroll(n.metrics, n.scrollDelta ?? 0);
     } else if (n is ScrollMetricsNotification) {
       changed = _chrome.onMetrics(n.metrics);
     }
     if (changed) {
-      PhoneChrome.safely(() {
-        if (!mounted) return;
-        setState(() {});
-        _announce();
-      });
+      PhoneChrome.safely(_announce);
     }
     return false;
   }
@@ -173,9 +165,8 @@ class _ListPageState extends State<ListPage> {
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 600;
     final hasFilters = widget.filters != null;
-    final collapsing = compact && widget.collapseOnPhone;
-    // Wider again (or opted out): everything back in place.
-    if (!collapsing && (_chrome.headerHidden || _chrome.footerHidden)) {
+    // Wider again (or opted out): the footer back in place.
+    if (!(compact && widget.collapseOnPhone) && _chrome.footerHidden) {
       _chrome.showAll();
       PhoneChrome.safely(_announce);
     }
@@ -328,10 +319,7 @@ class _ListPageState extends State<ListPage> {
     final page = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        if (collapsing)
-          CollapsibleChrome(hidden: _chrome.headerHidden, child: toolbarBox)
-        else
-          toolbarBox,
+        toolbarBox,
         Expanded(
           child: _ReservedLeft(
             width: reservedLeft,
