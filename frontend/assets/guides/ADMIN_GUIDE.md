@@ -58,11 +58,12 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 | + Branding | Logo URL (for light backgrounds), Logo URL for dark backgrounds (e.g. a white logo) | No logo |
 | + Registration dates | Registration Opens / Registration Closes | Opens when published, closes when the event starts |
 | + Guests | Guests per registration: None, 1–4 | Nobody can bring guests |
-| + Speakers | Name, title, organisation | No speakers shown |
-| + Agenda | Sessions: title, speaker, start, end (add speakers first) | No agenda shown |
+| + Speakers | Name, title, organisation. Enough on its own for an event with a guest speaker and no agenda | No speakers shown |
+| + Agenda | Sessions: title, start, end and speakers (optional, one or more) | No agenda shown |
 | + Sponsors & partners | Name, type, logo URL, website | No sponsors shown |
 
 - Images must already be online somewhere; paste their links (no upload yet).
+- **Sessions:** a session can have no speaker (e.g. lunch) or several. In a session, **Add speaker** lists the event's speakers; **New speaker…** adds someone new, who then also appears under Speakers. Sessions may overlap (parallel sessions). A new session starts at the event's start, or where the last one ends.
 - **Branding:** with a logo set, the event card shows the logo (the white one in dark mode) instead of the banner, and the event page shows the banner whole, never cropped. Pages keep the site's colours. NITKonnect's own files: `/brand/nitkonnect/logo.png`, `/brand/nitkonnect/logo_white.png` and `/brand/nitkonnect/banner.png`.
 - A part you add with **+** appears and scrolls into view.
 - Long lists (more than 5 speakers, sessions or sponsors) show as one line, e.g. "83 speakers"; **Show** opens the list, **Hide** folds it again.
@@ -97,7 +98,7 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 - Leave **Registration Closes** empty, so registration closes when the event starts. Never set it after the start.
 - Capacity counts every person, guests included.
 - **Sharing:** a published event's page has **Share** on phones (WhatsApp and others) and **Copy link** on computers. Drafts don't, because their link doesn't open for anyone else yet.
-- **Big events:** when two or more sessions start at the same time, the event page groups the agenda by time (side by side on a computer, swipe on a phone) and shows each session's hall when one is set. A session with no speaker named Tea, Lunch, Break or Dinner shows as a band. Each session lists the speakers linked to it (first 3, then **+N more**; hidden speakers are left out); a session with no linked speakers shows its speaker line as before. More than 12 speakers get **Search speakers** and **Show all**; sponsors of more than one tier are grouped by tier. Small events look as before.
+- **Big events:** when two or more sessions start at the same time, the event page groups the agenda by time (side by side on a computer, swipe on a phone) and shows each session's hall when one is set. A session with no speaker named Tea, Lunch, Break or Dinner shows as a band. When an event's sessions have them, a session also shows its type and pillar (with pillar buttons to filter the agenda) and "Presented by" a sponsor, and a sponsor can show a label such as "Co-presenter" instead of its tier. These come with an event's agenda sheet; the form doesn't set them. Each session lists the speakers linked to it (first 3, then **+N more**; hidden speakers are left out); a session with no linked speakers shows its speaker line as before. More than 12 speakers get **Search speakers** and **Show all**; sponsors of more than one tier are grouped by tier. Small events look as before.
 
 ---
 
