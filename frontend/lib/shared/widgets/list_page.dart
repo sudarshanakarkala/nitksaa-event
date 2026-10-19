@@ -4,6 +4,7 @@ import '../../theme/app_palette.dart';
 import '../../theme/app_text_styles.dart';
 import 'page_header.dart';
 import 'page_insets.dart';
+import 'phone_chrome.dart';
 
 /// List page frame (Events): a fixed toolbar (page header, search, view
 /// toggle, Filters button, quick-filter pills, count and actions) and the
@@ -34,7 +35,23 @@ class ListPage extends StatefulWidget {
     this.reserveRail = true,
     this.wideActionOnPhone = false,
     this.belowPills,
+    this.collapseOnPhone = true,
+    this.countOnPhone = true,
+    this.phoneActions,
   });
+
+  /// Phones: scrolling down the list folds the toolbar (and the page's
+  /// header and footer) away; scrolling up brings them back
+  /// ([PhoneChrome]). Off for Check-in, used at the door.
+  final bool collapseOnPhone;
+
+  /// Phones: show [count]. Off where the pills already show the counts
+  /// (Events: "All 44").
+  final bool countOnPhone;
+
+  /// Phones: small square actions at the end of the search row
+  /// ([ListIconAction]), in place of [actions] on the count line.
+  final List<Widget>? phoneActions;
 
   /// A full-width line under the pills (Admin → Events: the date slider).
   final Widget? belowPills;
@@ -111,6 +128,35 @@ class ListPage extends StatefulWidget {
 
 class _ListPageState extends State<ListPage> {
   bool _panelOpen = false;
+  final _chrome = PhoneChromeTracker();
+
+  /// Tells the page around the list what to fold away.
+  void _announce() {
+    if (!mounted) return;
+    PhoneChromeNotification(
+      headerHidden: _chrome.headerHidden,
+      footerHidden: _chrome.footerHidden,
+    ).dispatch(context);
+  }
+
+  bool _onBodyNotification(Notification n) {
+    if (!widget.collapseOnPhone || !PhoneChrome.isPhone(context)) return false;
+    var changed = false;
+    if (n is ScrollUpdateNotification) {
+      final keyboardOpen = MediaQuery.viewInsetsOf(context).bottom > 0;
+      changed = _chrome.onScroll(n.metrics, n.scrollDelta ?? 0, keyboardOpen: keyboardOpen);
+    } else if (n is ScrollMetricsNotification) {
+      changed = _chrome.onMetrics(n.metrics);
+    }
+    if (changed) {
+      PhoneChrome.safely(() {
+        if (!mounted) return;
+        setState(() {});
+        _announce();
+      });
+    }
+    return false;
+  }
 
   void _openFilters() {
     final width = MediaQuery.sizeOf(context).width;
@@ -127,6 +173,12 @@ class _ListPageState extends State<ListPage> {
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 600;
     final hasFilters = widget.filters != null;
+    final collapsing = compact && widget.collapseOnPhone;
+    // Wider again (or opted out): everything back in place.
+    if (!collapsing && (_chrome.headerHidden || _chrome.footerHidden)) {
+      _chrome.showAll();
+      PhoneChrome.safely(_announce);
+    }
     // The panel only exists on wider screens.
     final panelOpen = _panelOpen && !compact && hasFilters;
 
@@ -180,7 +232,12 @@ class _ListPageState extends State<ListPage> {
     );
     final showPillRow = pills != null || filtersWithPills || (widget.picker != null && !pickerOwnLine);
 
-    final actionsBelow = widget.wideActionOnPhone && compact && widget.actions.isNotEmpty;
+    // Phones: small actions in the search row; the count only where the
+    // pills don't already show it.
+    final phoneActions = compact && showTopRow ? widget.phoneActions : null;
+    final rowActions = phoneActions != null ? const <Widget>[] : widget.actions;
+    final showCount = widget.count != null && (!compact || widget.countOnPhone);
+    final actionsBelow = widget.wideActionOnPhone && compact && rowActions.isNotEmpty;
 
     final toolbar = LayoutBuilder(
       builder: (context, constraints) => Padding(
@@ -218,6 +275,8 @@ class _ListPageState extends State<ListPage> {
                     const SizedBox(width: 8),
                     filterButtons,
                   ],
+                  if (phoneActions != null)
+                    for (final a in phoneActions) ...[const SizedBox(width: 8), a],
                 ],
               ),
             if (pickerOwnLine) ...[
@@ -232,7 +291,7 @@ class _ListPageState extends State<ListPage> {
               if (showTopRow || pickerOwnLine || showPillRow) const SizedBox(height: 8),
               widget.belowPills!,
             ],
-            if (widget.count != null || widget.actions.isNotEmpty) ...[
+            if (showCount || rowActions.isNotEmpty) ...[
               if (showTopRow || pickerOwnLine || showPillRow || widget.belowPills != null)
                 const SizedBox(height: 12),
               Row(
@@ -240,19 +299,19 @@ class _ListPageState extends State<ListPage> {
                   Expanded(
                     child: Align(
                       alignment: Alignment.centerLeft,
-                      child: widget.count ?? const SizedBox.shrink(),
+                      child: showCount ? widget.count! : const SizedBox.shrink(),
                     ),
                   ),
                   if (!actionsBelow)
-                    for (var i = 0; i < widget.actions.length; i++) ...[
+                    for (var i = 0; i < rowActions.length; i++) ...[
                       if (i > 0) const SizedBox(width: 8),
-                      widget.actions[i],
+                      rowActions[i],
                     ],
                 ],
               ),
               if (actionsBelow) ...[
                 const SizedBox(height: 12),
-                for (final a in widget.actions) a,
+                for (final a in rowActions) a,
               ],
             ],
           ],
@@ -261,15 +320,28 @@ class _ListPageState extends State<ListPage> {
     ),
     );
 
+    final toolbarBox = DecoratedBox(
+      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
+      child: toolbar,
+    );
+
     final page = Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
-          child: toolbar,
-        ),
+        if (collapsing)
+          CollapsibleChrome(hidden: _chrome.headerHidden, child: toolbarBox)
+        else
+          toolbarBox,
         Expanded(
-          child: _ReservedLeft(width: reservedLeft, child: widget.body),
+          child: _ReservedLeft(
+            width: reservedLeft,
+            // Always there (it only acts on phones), so the list keeps its
+            // place when the window crosses the phone width.
+            child: NotificationListener<Notification>(
+              onNotification: _onBodyNotification,
+              child: widget.body,
+            ),
+          ),
         ),
       ],
     );
@@ -527,6 +599,63 @@ class _ClearAllLinkState extends State<_ClearAllLink> {
             ),
           ),
         ),
+      ),
+    );
+  }
+}
+
+/// A small square action for [ListPage.phoneActions]: an icon with a
+/// tooltip, the size of the Filters button; [filled] for the main one
+/// (Create event); [badge] for a count (drafts).
+class ListIconAction extends StatelessWidget {
+  const ListIconAction({
+    super.key,
+    required this.icon,
+    required this.tooltip,
+    required this.onPressed,
+    this.filled = false,
+    this.badge,
+  });
+
+  final IconData icon;
+  final String tooltip;
+  final VoidCallback onPressed;
+  final bool filled;
+  final int? badge;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    final shape = RoundedRectangleBorder(borderRadius: BorderRadius.circular(6));
+    final count = badge ?? 0;
+    final iconWidget = Badge(
+      isLabelVisible: count > 0,
+      label: Text('$count'),
+      backgroundColor: p.primary,
+      textColor: p.onPrimary,
+      child: Icon(icon, size: 20),
+    );
+    return Tooltip(
+      message: tooltip,
+      child: SizedBox(
+        width: 44,
+        height: 44,
+        child: filled
+            ? FilledButton(
+                onPressed: onPressed,
+                style: FilledButton.styleFrom(padding: EdgeInsets.zero, shape: shape),
+                child: iconWidget,
+              )
+            : OutlinedButton(
+                onPressed: onPressed,
+                style: OutlinedButton.styleFrom(
+                  padding: EdgeInsets.zero,
+                  foregroundColor: p.textSecondary,
+                  side: BorderSide(color: p.border),
+                  shape: shape,
+                ),
+                child: iconWidget,
+              ),
       ),
     );
   }

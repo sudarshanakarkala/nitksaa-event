@@ -31,7 +31,22 @@ class AdminTabFrame extends StatelessWidget {
     this.loading = false,
     this.bigActionOnPhone = false,
     this.belowPills,
+    this.collapseOnPhone = true,
+    this.countOnPhone = true,
+    this.phoneAction,
   });
+
+  /// Phones: the toolbar, the Admin title and tabs and the footer fold away
+  /// while scrolling down the list ([ListPage.collapseOnPhone]). Off for
+  /// Check-in.
+  final bool collapseOnPhone;
+
+  /// Phones: show [count] ([ListPage.countOnPhone]).
+  final bool countOnPhone;
+
+  /// Phones: a small square version of [action] in the search row
+  /// ([ListIconAction]), in place of [action].
+  final Widget? phoneAction;
 
   /// A full-width line under the pills, for a tab that needs one (Events:
   /// the date slider). Written down in ADMIN_LAYOUT_DESIGN.md §4.
@@ -74,6 +89,9 @@ class AdminTabFrame extends StatelessWidget {
       actions: [?action],
       wideActionOnPhone: bigActionOnPhone,
       belowPills: belowPills,
+      collapseOnPhone: collapseOnPhone,
+      countOnPhone: countOnPhone,
+      phoneActions: phoneAction == null ? null : [phoneAction!],
       filters: filters,
       onOpenFilters: onOpenFilters,
       activeFilterCount: activeFilterCount,

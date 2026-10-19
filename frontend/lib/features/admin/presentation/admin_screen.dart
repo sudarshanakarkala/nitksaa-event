@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../shared/widgets/page_header.dart';
 import '../../../shared/widgets/page_insets.dart';
+import '../../../shared/widgets/phone_chrome.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
 import '../../auth/domain/admin_access.dart';
@@ -36,6 +37,27 @@ class AdminScreen extends ConsumerStatefulWidget {
 
 class _AdminScreenState extends ConsumerState<AdminScreen> {
   bool _landingChecked = false;
+
+  /// Phones: a tab's list scrolled down hides the title and tabs
+  /// ([PhoneChrome]).
+  bool _headerHidden = false;
+
+  @override
+  void didUpdateWidget(AdminScreen old) {
+    super.didUpdateWidget(old);
+    // Another tab starts with the title and tabs in place.
+    if (old.tab != widget.tab) _headerHidden = false;
+  }
+
+  bool _onPhoneChrome(PhoneChromeNotification n) {
+    if (n.headerHidden != _headerHidden) {
+      PhoneChrome.safely(() {
+        if (mounted) setState(() => _headerHidden = n.headerHidden);
+      });
+    }
+    // The footer is the app shell's: let it hear too.
+    return false;
+  }
 
   @override
   void initState() {
@@ -80,32 +102,46 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final access = auth.session?.access ?? AdminAccess.none;
     final tabs = AdminTab.visibleTabs(access);
     final p = context.palette;
+    final phone = PhoneChrome.isPhone(context);
 
     // Website AdminPage: a sticky zone (page header, then the tab row with
     // a bottom border) and the tab's content scrolling beneath it, both in
-    // the same 1520px container as the site header.
+    // the same 1520px container as the site header. Phones: a shorter
+    // title, and the zone folds away while a list scrolls down.
+    final header = DecoratedBox(
+      decoration: BoxDecoration(
+        border: Border(bottom: BorderSide(color: p.border)),
+      ),
+      child: AdminContainer(
+        child: Padding(
+          padding: EdgeInsets.only(top: phone ? 10 : 16, bottom: 8),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              if (phone)
+                const PageHeader(title: 'Admin', dense: true)
+              else
+                const PageHeader(eyebrow: 'NITKSAA Events', title: 'Admin'),
+              SizedBox(height: phone ? 10 : 16),
+              _AdminTabBar(tabs: tabs, selected: widget.tab),
+            ],
+          ),
+        ),
+      ),
+    );
     return Column(
       crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
-        DecoratedBox(
-          decoration: BoxDecoration(
-            border: Border(bottom: BorderSide(color: p.border)),
-          ),
-          child: AdminContainer(
-            child: Padding(
-              padding: const EdgeInsets.only(top: 16, bottom: 8),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  const PageHeader(eyebrow: 'NITKSAA Events', title: 'Admin'),
-                  const SizedBox(height: 16),
-                  _AdminTabBar(tabs: tabs, selected: widget.tab),
-                ],
-              ),
-            ),
+        if (phone)
+          CollapsibleChrome(hidden: _headerHidden, child: header)
+        else
+          header,
+        Expanded(
+          child: NotificationListener<PhoneChromeNotification>(
+            onNotification: _onPhoneChrome,
+            child: _content(widget.tab),
           ),
         ),
-        Expanded(child: _content(widget.tab)),
       ],
     );
   }
