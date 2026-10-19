@@ -1977,16 +1977,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         else
           ...List.generate(_sessions.length, (index) {
             final session = _sessions[index];
-            final details = [
-              ?SessionTypes.label(_blankToNull(session['session_type'])),
-              ?_blankToNull(session['pillar']),
-              ?_blankToNull(session['track']),
-            ].join(' · ');
             final people = _lines(session['people']);
             final speakers = people.isNotEmpty
                 ? people.join(', ')
                 : (_blankToNull(session['speaker_name']) ?? 'None');
-            final presenters = _lines(session['presented_by']);
             return Padding(
               padding: const EdgeInsets.only(bottom: 12),
               child: Container(
@@ -2006,22 +2000,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                             session['title'] ?? '',
                             style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 13),
                           ),
-                          if (details.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(details, style: TextStyle(fontSize: 12, color: p.primary)),
-                          ],
                           const SizedBox(height: 4),
                           Text(
                             'Speakers: $speakers',
                             style: TextStyle(fontSize: 12, color: p.textMuted),
                           ),
-                          if (presenters.isNotEmpty) ...[
-                            const SizedBox(height: 2),
-                            Text(
-                              'Presented by ${presenters.join(', ')}',
-                              style: TextStyle(fontSize: 12, color: p.textMuted),
-                            ),
-                          ],
                           const SizedBox(height: 2),
                           Text(
                             '${session['start_time'] ?? ''} - ${session['end_time'] ?? ''}',
@@ -2105,15 +2088,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return false;
   }
 
-  /// The pillars the event's sessions already use, for quick picking.
-  List<String> get _pillarsInUse {
-    final seen = <String>[];
-    for (final session in _sessions) {
-      final pillar = _blankToNull(session['pillar']);
-      if (pillar != null && !seen.contains(pillar)) seen.add(pillar);
-    }
-    return seen;
-  }
 
   /// Speakers, sessions and fee tiers as saved, with their server ids.
   Future<void> _loadDetails(int eventId) async {
@@ -2461,10 +2435,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            [
-                              _orgTypeLabel(item[kind.typeKey] ?? ''),
-                              if ((item['label'] ?? '').trim().isNotEmpty) '"${item['label']!.trim()}"',
-                            ].join(' · '),
+                            _orgTypeLabel(item[kind.typeKey] ?? ''),
                             style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                           ),
                           if ((item['logo_url'] ?? '').isNotEmpty)
@@ -2524,7 +2495,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final nameCtrl = TextEditingController(text: existing?['name'] ?? '');
     final logoUrlCtrl = TextEditingController(text: existing?['logo_url'] ?? '');
     final websiteUrlCtrl = TextEditingController(text: existing?['website_url'] ?? '');
-    final labelCtrl = TextEditingController(text: existing?['label'] ?? '');
     var selectedType = existing?[kind.typeKey] ?? kind.types.first;
     if (!kind.types.contains(selectedType)) selectedType = kind.types.first;
 
@@ -2571,15 +2541,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                     controller: websiteUrlCtrl,
                     decoration: field('Website URL', 'https://example.com'),
                   ),
-                  if (kind.hasLabel) ...[
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: labelCtrl,
-                      decoration: field('Label', 'e.g. Co-presenter').copyWith(
-                        helperText: 'Shown instead of the tier when set.',
-                      ),
-                    ),
-                  ],
                 ],
               ),
             ),
@@ -2605,7 +2566,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                             kind.typeKey: selectedType,
                             'logo_url': logoUrlCtrl.text.trim(),
                             'website_url': websiteUrlCtrl.text.trim(),
-                            if (kind.hasLabel) 'label': labelCtrl.text.trim(),
+                            // The label comes from the sheet (B7); kept as saved.
+                            if (kind.hasLabel) 'label': existing?['label'] ?? '',
                           };
                           if (editIndex == null) {
                             items.add(row);
@@ -2628,7 +2590,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  void _showSpeakerDialog(int? editIndex) {
+  /// Add or edit a speaker. Returns the saved name, or null if cancelled.
+  Future<String?> _showSpeakerDialog(int? editIndex) {
     final fullnameCtrl = TextEditingController(
       text: editIndex != null ? _speakers[editIndex]['fullname'] ?? '' : '',
     );
@@ -2642,7 +2605,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       text: editIndex != null ? _speakers[editIndex]['photo_url'] ?? '' : '',
     );
 
-    showDialog(
+    return showDialog<String>(
       context: context,
       builder: (context) => StatefulBuilder(
         builder: (context, setDialogState) {
@@ -2726,7 +2689,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       _renameInSessions('moderators', old, name);
                     }
                   });
-                  Navigator.pop(context);
+                  Navigator.pop(context, name);
                 } : null,
                 child: const Text('Save'),
               ),
@@ -2853,9 +2816,10 @@ void _showFeeDialog(int? editIndex) {
     );
   }
 
-  /// Add or edit a session: title, times and speakers (several, any of
-  /// them a moderator; none for a break), and under "More details" its
-  /// type, subtitle, hall, pillar and the sponsors presenting it (B4).
+  /// Add or edit a session: title, times and its speakers (none is fine).
+  /// A new speaker can be added from here. Big-event details (type, hall,
+  /// pillar, presented by, moderators) come from the Google Sheet (B7); the
+  /// form keeps whatever is saved and never shows them.
   void _showSessionDialog(int? editIndex) {
     final existing = editIndex != null ? _sessions[editIndex] : const <String, String>{};
     final titleCtrl = TextEditingController(text: existing['title'] ?? '');
@@ -2865,24 +2829,11 @@ void _showFeeDialog(int? editIndex) {
     final endTimeCtrl = TextEditingController(
       text: editIndex != null ? existing['end_time'] ?? '' : _getDefaultEndTime(startTimeCtrl.text),
     );
-    final subtitleCtrl = TextEditingController(text: existing['description'] ?? '');
-    final hallCtrl = TextEditingController(text: existing['track'] ?? '');
-    final pillarCtrl = TextEditingController(text: existing['pillar'] ?? '');
-    var sessionType = _blankToNull(existing['session_type']);
-    if (sessionType != null && !SessionTypes.labels.containsKey(sessionType)) sessionType = null;
-
-    // Only names still on the Speakers and Sponsors lists.
-    final speakerNames = [for (final sp in _speakers) sp['fullname'] ?? ''];
-    final sponsorNames = [for (final sp in _sponsors) sp['name'] ?? ''];
-    bool listed(List<String> names, String name) =>
-        names.any((n) => n.toLowerCase() == name.toLowerCase());
-    final people = [for (final n in _lines(existing['people'])) if (listed(speakerNames, n)) n];
-    final moderators = {for (final n in _lines(existing['moderators'])) if (listed(speakerNames, n)) n};
-    final presenters = [for (final n in _lines(existing['presented_by'])) if (listed(sponsorNames, n)) n];
-    final peopleChanged = <bool>[false];
-    final hasDetails = sessionType != null ||
-        [subtitleCtrl, hallCtrl, pillarCtrl].any((c) => c.text.trim().isNotEmpty) ||
-        presenters.isNotEmpty;
+    bool listed(String name) =>
+        _speakers.any((sp) => (sp['fullname'] ?? '').toLowerCase() == name.toLowerCase());
+    final people = [for (final n in _lines(existing['people'])) if (listed(n)) n];
+    var peopleChanged = false;
+    const newSpeaker = '__new_speaker__';
 
     InputDecoration field(String label, [String? hint]) => InputDecoration(
           labelText: label,
@@ -2899,13 +2850,15 @@ void _showFeeDialog(int? editIndex) {
           final canSave = titleCtrl.text.trim().isNotEmpty &&
               startTimeCtrl.text.trim().isNotEmpty &&
               endTimeCtrl.text.trim().isNotEmpty;
-          final addable = [for (final n in speakerNames) if (n.isNotEmpty && !people.contains(n)) n];
-          final pillars = _pillarsInUse;
+          final addable = [
+            for (final sp in _speakers)
+              if ((sp['fullname'] ?? '').isNotEmpty && !people.contains(sp['fullname'])) sp['fullname']!,
+          ];
 
           return AlertDialog(
             title: Text(editIndex == null ? 'Add Session' : 'Edit Session'),
             content: SizedBox(
-              width: 480,
+              width: 420,
               child: SingleChildScrollView(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -2945,147 +2898,50 @@ void _showFeeDialog(int? editIndex) {
                       onChanged: (_) => setDialogState(() {}),
                     ),
                     const SizedBox(height: 16),
-                    Text('Speakers', style: TextStyle(fontSize: 13, color: p.textSecondary)),
+                    Text('Speakers (optional)', style: TextStyle(fontSize: 13, color: p.textSecondary)),
                     const SizedBox(height: 4),
-                    if (people.isEmpty)
-                      Text(
-                        speakerNames.isEmpty
-                            ? 'None. Add people under Speakers to pick them here.'
-                            : 'None (fine for a break).',
-                        style: TextStyle(fontSize: 12, color: p.textMuted),
-                      ),
                     for (final name in people)
                       Row(
                         children: [
                           Expanded(child: Text(name, style: const TextStyle(fontSize: 13))),
-                          Checkbox(
-                            value: moderators.contains(name),
-                            onChanged: (on) => setDialogState(() {
-                              peopleChanged[0] = true;
-                              if (on == true) {
-                                moderators.add(name);
-                              } else {
-                                moderators.remove(name);
-                              }
-                            }),
-                          ),
-                          Text('Moderator', style: TextStyle(fontSize: 12, color: p.textSecondary)),
                           IconButton(
                             tooltip: 'Remove from this session',
                             icon: const Icon(Icons.close, size: 18),
                             onPressed: () => setDialogState(() {
-                              peopleChanged[0] = true;
+                              peopleChanged = true;
                               people.remove(name);
-                              moderators.remove(name);
                             }),
                           ),
                         ],
                       ),
-                    if (addable.isNotEmpty)
-                      Align(
-                        alignment: Alignment.centerLeft,
-                        child: PopupMenuButton<String>(
-                          tooltip: 'Add a speaker to this session',
-                          onSelected: (name) => setDialogState(() {
-                            peopleChanged[0] = true;
-                            people.add(name);
-                          }),
-                          itemBuilder: (_) => [
-                            for (final n in addable) PopupMenuItem(value: n, child: Text(n)),
-                          ],
-                          child: Padding(
-                            padding: const EdgeInsets.symmetric(vertical: 8),
-                            child: Row(
-                              mainAxisSize: MainAxisSize.min,
-                              children: [
-                                Icon(Icons.add, size: 18, color: p.primary),
-                                const SizedBox(width: 4),
-                                Text('Add speaker', style: TextStyle(fontSize: 13, color: p.primary)),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ),
-                    const SizedBox(height: 8),
-                    Theme(
-                      data: Theme.of(context).copyWith(dividerColor: Colors.transparent),
-                      child: ExpansionTile(
-                        initiallyExpanded: hasDetails,
-                        tilePadding: EdgeInsets.zero,
-                        childrenPadding: const EdgeInsets.only(top: 4),
-                        title: Text('More details', style: TextStyle(fontSize: 13, color: p.textSecondary)),
-                        subtitle: Text(
-                          'Type, subtitle, hall, pillar, presented by. For big events.',
-                          style: TextStyle(fontSize: 11, color: p.textMuted),
-                        ),
-                        children: [
-                          DropdownButtonFormField<String?>(
-                            initialValue: sessionType,
-                            decoration: field('Type'),
-                            items: [
-                              const DropdownMenuItem<String?>(value: null, child: Text('Not set')),
-                              for (final e in SessionTypes.labels.entries)
-                                DropdownMenuItem<String?>(value: e.key, child: Text(e.value)),
-                            ],
-                            onChanged: (value) => setDialogState(() => sessionType = value),
-                          ),
-                          if (sessionType == 'BREAK')
-                            Padding(
-                              padding: const EdgeInsets.only(top: 4),
-                              child: Text(
-                                'Shown as a band across the agenda.',
-                                style: TextStyle(fontSize: 11, color: p.textMuted),
-                              ),
-                            ),
-                          const SizedBox(height: 12),
-                          TextField(controller: subtitleCtrl, decoration: field('Subtitle')),
-                          const SizedBox(height: 12),
-                          TextField(controller: hallCtrl, decoration: field('Hall', 'e.g. Hall B')),
-                          const SizedBox(height: 12),
-                          TextField(
-                            controller: pillarCtrl,
-                            decoration: field('Pillar', 'e.g. Career Konnect'),
-                            onChanged: (_) => setDialogState(() {}),
-                          ),
-                          if (pillars.isNotEmpty) ...[
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                for (final pillar in pillars)
-                                  ActionChip(
-                                    label: Text(pillar, style: const TextStyle(fontSize: 12)),
-                                    onPressed: () => setDialogState(() => pillarCtrl.text = pillar),
-                                  ),
-                              ],
-                            ),
-                          ],
-                          if (sponsorNames.any((n) => n.isNotEmpty)) ...[
-                            const SizedBox(height: 12),
-                            Text('Presented by', style: TextStyle(fontSize: 13, color: p.textSecondary)),
-                            const SizedBox(height: 6),
-                            Wrap(
-                              spacing: 6,
-                              runSpacing: 6,
-                              children: [
-                                for (final name in sponsorNames)
-                                  if (name.isNotEmpty)
-                                    FilterChip(
-                                      label: Text(name, style: const TextStyle(fontSize: 12)),
-                                      selected: presenters.contains(name),
-                                      onSelected: (on) => setDialogState(() {
-                                        if (on) {
-                                          presenters.add(name);
-                                        } else {
-                                          presenters.remove(name);
-                                        }
-                                      }),
-                                    ),
-                              ],
-                            ),
-                          ],
+                    Align(
+                      alignment: Alignment.centerLeft,
+                      child: PopupMenuButton<String>(
+                        tooltip: 'Add a speaker to this session',
+                        onSelected: (choice) async {
+                          final name = choice == newSpeaker ? await _showSpeakerDialog(null) : choice;
+                          if (name == null) return;
+                          setDialogState(() {
+                            peopleChanged = true;
+                            if (!people.contains(name)) people.add(name);
+                          });
+                        },
+                        itemBuilder: (_) => [
+                          for (final n in addable) PopupMenuItem(value: n, child: Text(n)),
+                          if (addable.isNotEmpty) const PopupMenuDivider(),
+                          const PopupMenuItem(value: newSpeaker, child: Text('New speaker…')),
                         ],
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(vertical: 8),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Icon(Icons.add, size: 18, color: p.primary),
+                              const SizedBox(width: 4),
+                              Text('Add speaker', style: TextStyle(fontSize: 13, color: p.primary)),
+                            ],
+                          ),
+                        ),
                       ),
                     ),
                   ],
@@ -3109,26 +2965,23 @@ void _showFeeDialog(int? editIndex) {
                   }
 
                   setState(() {
+                    final moderators = _lines(existing['moderators']);
                     final session = <String, String>{
                       'title': titleCtrl.text.trim(),
                       'start_time': startTimeCtrl.text.trim(),
                       'end_time': endTimeCtrl.text.trim(),
-                      'session_type': sessionType ?? '',
-                      'description': subtitleCtrl.text.trim(),
-                      'track': hallCtrl.text.trim(),
-                      'pillar': pillarCtrl.text.trim(),
                       'people': _joinLines(people),
-                      'moderators': _joinLines(people.where(moderators.contains)),
-                      'presented_by': _joinLines(presenters),
-                      // The simple agenda (small events) shows this line.
-                      // Kept as it was unless the speakers were changed.
-                      'speaker_name': peopleChanged[0] || editIndex == null
+                      'moderators': _joinLines(moderators.where(people.contains)),
+                      // The simple agenda shows this line. Kept as it was
+                      // unless the speakers were changed.
+                      'speaker_name': peopleChanged || editIndex == null
                           ? people.join(', ')
                           : (existing['speaker_name'] ?? ''),
                     };
                     if (editIndex == null) {
                       _sessions.add(session);
                     } else {
+                      // Type, hall, pillar, presented by: kept as saved.
                       _sessions[editIndex] = {..._sessions[editIndex], ...session};
                     }
                   });
@@ -3157,8 +3010,8 @@ void _showFeeDialog(int? editIndex) {
         }
       }
     }
-    // Default to current time
-    return _formatDateTimeOnly(DateTime.now());
+    // Otherwise the event's start.
+    return _formatDateTimeOnly(_fieldsToDateTime(_startDate, _startTime) ?? DateTime.now());
   }
 
   String _getDefaultEndTime(String startTime) {
