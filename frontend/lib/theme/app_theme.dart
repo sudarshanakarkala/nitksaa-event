@@ -12,11 +12,6 @@ abstract class AppTheme {
   static ThemeData get light => _build(AppPalette.light, Brightness.light);
   static ThemeData get dark => _build(AppPalette.dark, Brightness.dark);
 
-  /// The same theme over another palette: a branded event's page colour
-  /// (`EventBrand.pagePalette`).
-  static ThemeData forPalette(AppPalette palette, Brightness brightness) =>
-      _build(palette, brightness);
-
   static const double radiusSm = 6;
   static const double radiusMd = 12;
   static const double radiusLg = 20;
