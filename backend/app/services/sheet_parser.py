@@ -297,11 +297,6 @@ def _event_values(tabs) -> Dict[str, Tuple[int, Any]]:
     return out
 
 
-def has_event_tab(tabs: Dict[str, List[List[Any]]]) -> bool:
-    """Whether the sheet has an Event tab with anything filled in."""
-    return any(_text(v) for _, v in _event_values(tabs).values())
-
-
 # ── The parse ───────────────────────────────────────────────────────────────
 
 def parse_sheet(
@@ -320,9 +315,10 @@ def parse_sheet(
     _parse_gap(result, ev)
     if need_event:
         _parse_event(result, ev)
-        if result.event:
-            timezone = result.event["timezone"]
-            event_start, event_end = result.event["start"], result.event["end"]
+        if not result.event:
+            return result  # the Event tab first: the sessions' dates depend on it
+        timezone = result.event["timezone"]
+        event_start, event_end = result.event["start"], result.event["end"]
     timezone = timezone or DEFAULT_TIMEZONE
 
     speakers = _parse_speakers(result, tabs)
@@ -357,7 +353,7 @@ def _parse_event(result: SheetResult, ev) -> None:
         return f"Event, row {ev[f][0]}" if f in ev else "Event"
 
     if not any(_text(v) for _, v in ev.values()):
-        result.error("Event tab: empty. Fill in at least the title, date and capacity to import.")
+        result.error("Event tab: empty. Fill in at least the title, date and capacity.")
         return
     e: Dict[str, Any] = {}
     ok = True

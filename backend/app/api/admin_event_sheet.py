@@ -3,7 +3,8 @@
   GET    /api/v1/admin/sheets/info                -> the email to share with, the templates
   POST   /api/v1/admin/sheets/preview             -> read a sheet for Events → Import (no event yet)
   POST   /api/v1/admin/events/{id}/sheet/refresh  -> link (or re-read) the sheet and save it
-  DELETE /api/v1/admin/events/{id}/sheet          -> unlink; what's there stays, editable again
+  DELETE /api/v1/admin/events/{id}/sheet          -> unlink; what's there stays, editable again;
+                                                     one way: an unlinked event can't be linked again
 
 While an event has a sheet linked, the sheet is the only source of its
 details: the Event tab (title, dates, place, seats, price, guests,
@@ -18,7 +19,7 @@ lists alone (409 sheet_linked, or the details save skipping them).
 - The price doesn't change once the event has been published: it stays, and
   a warning says so.
 - Capacity can't go below the people already registered.
-- No Event tab (or an empty one): the event's own details are left alone.
+- A sheet without its Event tab filled in can't be linked or refreshed.
 
 Refresh matches what is already there, so ids (and check-ins) survive:
 people and sponsors by name; sessions by start + title, then by title alone
@@ -42,7 +43,7 @@ from app.repositories.events_repository import EventsRepository
 from app.schemas.event_update import EventUpdate
 from app.services import alumni_directory, audit_service, sheet_reader
 from app.services.events_service import EventsService
-from app.services.sheet_parser import SheetResult, has_event_tab, name_key, parse_sheet, parse_wall
+from app.services.sheet_parser import SheetResult, name_key, parse_sheet, parse_wall
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -146,37 +147,29 @@ async def refresh_sheet(
         event = await EventsRepository(conn).get_event(event_id)
     if not event:
         raise HTTPException(status_code=404, detail="event_not_found")
+    if event["agenda_sheet_url"] is None and event["agenda_sheet_read_at"] is not None:
+        raise HTTPException(status_code=409, detail={
+            "code": "sheet_unlinked",
+            "message": "This event was unlinked from its sheet, so it can't be linked again. Edit it here.",
+        })
     link_in = body.url or event["agenda_sheet_url"]
     if not link_in:
         raise HTTPException(status_code=422, detail={"code": "sheet_link_invalid", "message": "Paste the sheet's link first."})
 
     link, tabs = await _read(link_in)
-    with_event = has_event_tab(tabs)
-    fmt = "%Y-%m-%d %H:%M"
-    if with_event:
-        # The Event tab sets the event's dates; sessions follow them.
-        result = parse_sheet(tabs, need_event=True)
-    else:
-        tz_now = ZoneInfo(event["timezone"])
-        result = parse_sheet(
-            tabs,
-            timezone=event["timezone"],
-            event_start=event["start_datetime"].astimezone(tz_now).strftime(fmt),
-            event_end=event["end_datetime"].astimezone(tz_now).strftime(fmt),
-        )
+    # The sheet is the source of everything: its Event tab sets the event
+    # (and its dates, which the sessions follow). A sheet without one stops.
+    result = parse_sheet(tabs, need_event=True)
     if result.errors:
         raise _bad_sheet(result)
 
-    update: Dict[str, Any] = {}
-    changes: List[Dict[str, str]] = []
-    if with_event and result.event:
-        update, changes = _event_changes(event, result)
-        if update.get("capacity") is not None and update["capacity"] < (event["registered_count"] or 0):
-            result.error(
-                f"Event: capacity {update['capacity']} is less than the "
-                f"{event['registered_count']} people already registered."
-            )
-            raise _bad_sheet(result)
+    update, changes = _event_changes(event, result)
+    if update.get("capacity") is not None and update["capacity"] < (event["registered_count"] or 0):
+        result.error(
+            f"Event: capacity {update['capacity']} is less than the "
+            f"{event['registered_count']} people already registered."
+        )
+        raise _bad_sheet(result)
     if changes and not body.confirm:
         return {
             "url": link,
@@ -187,7 +180,7 @@ async def refresh_sheet(
         }
     result.warnings.extend(await alumni_directory.fill_speakers(result.speakers))
 
-    tz = ZoneInfo(result.event["timezone"] if with_event and result.event else event["timezone"])
+    tz = ZoneInfo(result.event["timezone"])
     first_link = event["agenda_sheet_url"] is None
     async with pool.acquire() as conn:
         async with conn.transaction():
@@ -357,7 +350,9 @@ async def unlink_sheet(
     pool = await get_pool()
     async with pool.acquire() as conn:
         link = await conn.fetchval(
-            "UPDATE events e SET agenda_sheet_url = NULL, agenda_sheet_read_at = NULL, updated_at = now()"
+            # The read time stays: it marks the event as once linked, so it
+            # can't be linked again (Unlink is one way, Import to DIY).
+            "UPDATE events e SET agenda_sheet_url = NULL, updated_at = now()"
             " FROM (SELECT agenda_sheet_url FROM events WHERE event_id = $1::int) old"
             " WHERE e.event_id = $1::int RETURNING old.agenda_sheet_url",
             event_id,
