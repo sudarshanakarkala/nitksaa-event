@@ -1,4 +1,4 @@
--- 034_session_details.sql — session details for big events (B4, NITKonnect).
+-- 034_session_details.sql — session details for big events (NITKonnect).
 --
 -- Optional, so every event without them looks as before:
 -- - sessions.session_type: KEYNOTE, TALK, PANEL, FIRESIDE, WORKSHOP,

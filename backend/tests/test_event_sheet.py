@@ -1,4 +1,4 @@
-"""An event's Google Sheet (B7): reading the tabs, Refresh, the lock, unlink,
+"""An event's Google Sheet: reading the tabs, Refresh, the lock, unlink,
 import preview and the alumni lookup.
 
 Google is never called: `sheet_reader.read_tabs` is replaced with the tabs a

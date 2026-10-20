@@ -1,4 +1,4 @@
--- 033_event_branding.sql — an event's own branding (B6, NITKonnect).
+-- 033_event_branding.sql — an event's own branding (NITKonnect).
 --
 -- Optional, so every event without branding looks as before:
 -- - brand_logo_url: the logo on light backgrounds;

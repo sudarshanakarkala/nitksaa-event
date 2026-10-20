@@ -57,7 +57,7 @@ class Settings(BaseSettings):
     feedback_email_to: str = Field("nitksaa.infra@gmail.com", alias="FEEDBACK_EMAIL_TO")
     app_public_base_url: str = Field("http://localhost:8000", alias="APP_PUBLIC_BASE_URL")
 
-    # Event sheets (B7). The server reads Google Sheets as its own Cloud Run
+    # Event sheets. The server reads Google Sheets as its own Cloud Run
     # service account; organisers share their sheet with this email as Viewer.
     sheets_reader_email: str = Field(
         "nitksaa-events-api@project-d22bed42-f302-4e23-8dc.iam.gserviceaccount.com",

@@ -1,4 +1,4 @@
-// The big-event agenda grouping (B1): time slots, hall order, days, breaks.
+// The big-event agenda grouping: time slots, hall order, days, breaks.
 import 'package:event_app/features/events/domain/agenda_slots.dart';
 import 'package:event_app/features/events/domain/event.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -114,7 +114,7 @@ void main() {
     });
   });
 
-  group('B4', () {
+  group('Session details', () {
     EventSession typed(String title, {String? type, String? pillar}) => EventSession(
           sessionId: title.hashCode,
           title: title,
@@ -147,7 +147,7 @@ void main() {
       expect(Agenda.joinNames(['A', 'B', 'C']), 'A, B & C');
     });
 
-    test('session and sponsor read the B4 fields', () {
+    test('session and sponsor read their details', () {
       final session = EventSession.fromJson({
         'session_id': 1,
         'title': 'Panel',

@@ -1,4 +1,4 @@
-"""Session details (B4): type, pillar, hall, subtitle, the people on each
+"""Session details: type, pillar, hall, subtitle, the people on each
 session and the sponsors presenting it, saved through the event form's
 details endpoint; a sponsor's label.
 
@@ -100,7 +100,7 @@ def test_details_save_and_read_session_fields(client):
     assert roles["Meera Nayak"] == "MODERATOR"
     assert roles["Asha Rao"] == "SPEAKER"
 
-    # The event data: type, pillar, presenting sponsors by id, people as B2.
+    # The event data: type, pillar, presenting sponsors by id, people as under each session.
     event = _event(client, eid)
     by_title = {s["title"]: s for s in event["sessions"]}
     ids = {s["name"]: s["sponsor_id"] for s in event["sponsors"]}
@@ -114,7 +114,7 @@ def test_details_save_and_read_session_fields(client):
 
 
 def test_fields_left_out_are_kept(client):
-    """An older app sends only title, speaker and times: nothing B4 is lost."""
+    """An older app sends only title, speaker and times: no session detail is lost."""
     eid = _draft(client)["event_id"]
     _sponsor(client, eid, "Acme Corp")
     first = client.put(

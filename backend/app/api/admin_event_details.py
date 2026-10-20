@@ -15,7 +15,7 @@ Panelist, Chief guest, Guest of honour, Moderator); other people (hosts,
 organisers) are left alone. A session that already has door check-ins
 can't be removed (409 session_has_check_ins).
 
-Session details (B4): each session may also carry its type, pillar, hall
+Session details: each session may also carry its type, pillar, hall
 (`track`), subtitle (`description`), the people on it (`people`, by name,
 with a moderator flag) and the sponsors presenting it (`presented_by`, by
 name). Names are matched, ignoring case, against the event's people and
@@ -24,11 +24,11 @@ refused (422 unknown_speaker / unknown_sponsor) and nothing is saved. A
 field the request leaves out is left as it is, so an older app can't wipe
 these.
 
-Speakers' private and extra details (B7): email and phone (admin only),
+Speakers' private and extra details: email and phone (admin only),
 batch, LinkedIn, photo and bio; each left as it is when the request leaves
 it out.
 
-While a Google Sheet is linked (B7), the sheet owns speakers and sessions:
+While a Google Sheet is linked, the sheet owns speakers and sessions:
 this save then changes only the fees, whatever the request says.
 """
 from datetime import datetime
@@ -52,7 +52,7 @@ SESSION_TYPES = {
 }
 # Session columns a request may leave out (kept as they are when it does).
 _OPTIONAL_SESSION_COLUMNS = ("session_type", "pillar", "track", "description")
-# The same for speakers (B7).
+# The same for speakers.
 _OPTIONAL_SPEAKER_COLUMNS = ("email", "phone", "batch", "linkedin_url", "photo_url", "bio")
 FEE_TYPES = {"participation", "accommodation", "contributions", "food_pass", "merchandise", "other"}
 
@@ -64,7 +64,7 @@ class SpeakerIn(BaseModel):
     organisation: Optional[str] = None
     # Left out: kept as it is (new people are speakers).
     role: Optional[str] = None
-    # B7; each is left as it is when the request leaves it out.
+    # Each is left as it is when the request leaves it out.
     email: Optional[str] = Field(None, max_length=320)
     phone: Optional[str] = Field(None, max_length=64)
     batch: Optional[str] = Field(None, max_length=120)
@@ -94,7 +94,7 @@ class SessionIn(BaseModel):
     speaker_name: Optional[str] = None
     start_datetime: datetime
     end_datetime: datetime
-    # B4; each is left as it is when the request leaves it out.
+    # Each is left as it is when the request leaves it out.
     session_type: Optional[str] = None
     pillar: Optional[str] = None
     track: Optional[str] = None
@@ -216,7 +216,7 @@ def _key(name: str) -> str:
 
 async def _save_session_links(conn, event_id: int, saved: List[tuple]) -> None:
     """Replaces each session's people and presenting sponsors, for the
-    sessions whose request named them (B4)."""
+    sessions whose request named them."""
     if not any(s.people is not None or s.presented_by is not None for _, s in saved):
         return
 
@@ -311,7 +311,7 @@ async def put_event_details(
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
-            # A linked sheet owns speakers and sessions (B7): only fees here.
+            # A linked sheet owns speakers and sessions: only fees here.
             linked = await is_linked(conn, event_id)
             # ── Speakers ────────────────────────────────────────────────
             existing = {
@@ -419,7 +419,7 @@ async def put_event_details(
                     "DELETE FROM sessions WHERE session_id = ANY($1::int[])", list(removed)
                 )
 
-            # ── Who is on each session, who presents it (B4) ────────────
+            # ── Who is on each session, who presents it ────────────
             await _save_session_links(conn, event_id, saved)
 
             # ── Fees (nothing refers to them: replace the list) ─────────

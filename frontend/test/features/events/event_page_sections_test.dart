@@ -1,14 +1,14 @@
-// The event page's Agenda, Speakers and Sponsors (B1).
+// The event page's Agenda, Speakers and Sponsors.
 //
 // - Small events (the breakfast) keep today's list, with no search and no
 //   tier headings.
 // - Big events: parallel sessions swipe on a phone ("1 of 6") and sit in a
 //   grid on a computer; hall, subtitle and break bands show.
 // - Speakers: the first 12, "Show all", search by name or company.
-// - Speakers under each session (B2): the first 3, "+N more", a moderator
+// - Speakers under each session: the first 3, "+N more", a moderator
 //   labelled; sessions without linked people keep their speaker line.
 // - Sponsors across tiers get a heading per tier.
-// - Session details (B4): a Break band by type, type and pillar on the card,
+// - Session details: a Break band by type, type and pillar on the card,
 //   "Presented by", a pillar filter; a sponsor's label instead of its tier.
 import 'package:event_app/features/events/domain/event.dart';
 import 'package:event_app/features/events/presentation/widgets/agenda_section.dart';
@@ -125,7 +125,7 @@ void main() {
     });
   });
 
-  group('Speakers under each session (B2)', () {
+  group('Speakers under each session', () {
     // Two sessions at 2:00 PM, so the big layout is on.
     List<EventSession> agenda() => [
           EventSession(
@@ -243,7 +243,7 @@ void main() {
     });
   });
 
-  group('Session details (B4)', () {
+  group('Session details', () {
     EventSession typed(int id, String title, DateTime start,
             {String? type, String? pillar, List<int> presentedBy = const [], String? speaker}) =>
         EventSession(

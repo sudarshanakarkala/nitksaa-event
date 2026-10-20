@@ -355,7 +355,7 @@ class EventsService:
         _SPEAKER_ROLES = frozenset({"SPEAKER", "PANELIST", "CHIEF_GUEST", "GUEST_OF_HONOUR"})
         d["speakers"] = [p for p in people if p["role"] in _SPEAKER_ROLES]
 
-        # Who is on each session (B2): person id and role, in order, visible
+        # Who is on each session: person id and role, in order, visible
         # people only. The details are in d["people"] above.
         link_rows = await self.conn.fetch(
             """
@@ -379,7 +379,7 @@ class EventsService:
         sponsor_rows = await SponsorsRepository(self.conn).list_public_by_event(event_id)
         d["sponsors"] = [dict(r) for r in sponsor_rows]
 
-        # Who presents each session (B4): sponsor ids, in order, visible
+        # Who presents each session: sponsor ids, in order, visible
         # sponsors only. The details are in d["sponsors"] above.
         presenter_rows = await self.conn.fetch(
             """

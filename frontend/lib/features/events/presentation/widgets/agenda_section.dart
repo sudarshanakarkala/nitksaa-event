@@ -1,4 +1,4 @@
-/// The event page's Agenda (B1).
+/// The event page's Agenda.
 ///
 /// - Small events (no two sessions at the same time, e.g. the breakfast):
 ///   today's simple list, unchanged.
@@ -9,7 +9,7 @@
 ///   sideways on phones, with the next card peeking in and "1 of 6".
 ///   A break is a full-width band. The hall (`track`) and the subtitle
 ///   (`description`) show when set.
-/// - Session details (B4): a card shows its type and pillar above the title
+/// - Session details: a card shows its type and pillar above the title
 ///   and "Presented by …" under it; a session of type Break is a band; when
 ///   sessions have two or more pillars, chips above the agenda filter by
 ///   pillar (break bands always show).
@@ -36,10 +36,10 @@ class AgendaSection extends StatelessWidget {
 
   final List<EventSession> sessions;
 
-  /// The event's people, for the speakers under each session (B2).
+  /// The event's people, for the speakers under each session.
   final List<EventPerson> people;
 
-  /// The event's sponsors, for "Presented by" on each session (B4).
+  /// The event's sponsors, for "Presented by" on each session.
   final List<EventSponsor> sponsors;
 
   /// Whether this agenda gets the big-event layout (and the page puts it
@@ -484,7 +484,7 @@ class _ParallelSwipeState extends State<_ParallelSwipe> {
   }
 }
 
-/// One session: hall, title, subtitle, its speakers (B2; or the old single
+/// One session: hall, title, subtitle, its speakers (or the old single
 /// speaker line when it has no linked people), and its own end time when
 /// the slot's sessions end at different times.
 class _SessionCard extends StatelessWidget {
@@ -598,7 +598,7 @@ class _AgendaPeople extends InheritedWidget {
 
   final Map<int, EventPerson> byId;
 
-  /// The event's sponsors by id, for "Presented by" (B4).
+  /// The event's sponsors by id, for "Presented by".
   final Map<int, EventSponsor> sponsorsById;
 
   /// [ids] as the event's sponsors, in order; ids not found are left out.

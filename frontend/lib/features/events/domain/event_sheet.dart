@@ -1,6 +1,6 @@
 import 'package:dio/dio.dart';
 
-/// An event's Google Sheet (B7): what the server says about it.
+/// An event's Google Sheet: what the server says about it.
 ///
 /// While a sheet is linked, it is the only source of the event's speakers,
 /// agenda, sponsors and partners: the form shows them read-only and Refresh
@@ -57,7 +57,7 @@ class SheetSummary {
 }
 
 /// One change the sheet's Event tab makes to the event, e.g.
-/// ('Title', 'B7 Test', 'NITKonnect 2026').
+/// ('Title', 'Alumni Meetup', 'NITKonnect 2026').
 typedef SheetChange = ({String field, String from, String to});
 
 /// What a Refresh saved, or, when [needsConfirm], what it would change to the

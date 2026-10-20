@@ -1,4 +1,4 @@
-"""Fills speakers' details from the NITKSAA alumni directory (B7).
+"""Fills speakers' details from the NITKSAA alumni directory.
 
 The Partner API's `directory:profile` scope, batch lookup by email:
   POST {base}/alumni/profile/lookup  {"emails": [...]}  (up to 100; one request)

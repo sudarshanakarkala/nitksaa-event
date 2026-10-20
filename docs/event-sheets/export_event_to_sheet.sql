@@ -1,4 +1,4 @@
--- B7: export events from live into the sheet template's columns.
+-- Export events from live into the sheet template's columns.
 -- Read only (SELECTs), so no backup needed. Run in Cloud SQL Studio, event_db.
 --
 -- Step 0: find the two events' links (slugs).

@@ -1,4 +1,4 @@
-// Events and Google Sheets (B7): two modes, never mixed.
+// Events and Google Sheets: two modes, never mixed.
 //
 // - DIY (Create event): the form as before; no way to attach a sheet.
 // - Imported (Import): Edit event is read-only, with the sheet card (Open,

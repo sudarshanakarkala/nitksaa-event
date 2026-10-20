@@ -27,7 +27,7 @@ class EventCardAction {
 }
 
 /// Look of one event's card. Every event uses the theme unless it has its
-/// own branding (B6, [EventBrand]): then its logo.
+/// own branding ([EventBrand]): then its logo.
 class EventCardBrand {
   const EventCardBrand({this.accent, this.logoUrl, this.logoDarkUrl});
 
