@@ -297,6 +297,11 @@ def _event_values(tabs) -> Dict[str, Tuple[int, Any]]:
     return out
 
 
+def has_event_tab(tabs: Dict[str, List[List[Any]]]) -> bool:
+    """Whether the sheet has an Event tab with anything filled in."""
+    return any(_text(v) for _, v in _event_values(tabs).values())
+
+
 # ── The parse ───────────────────────────────────────────────────────────────
 
 def parse_sheet(
