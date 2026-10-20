@@ -128,22 +128,27 @@ class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
             style: TextStyle(fontSize: 12, color: p.textSecondary),
           ),
         ] else ...[
-          TextField(
-            key: const ValueKey('event-sheet-link'),
-            controller: _link,
-            enabled: !_busy,
-            decoration: InputDecoration(
-              labelText: 'Google Sheet link',
-              hintText: 'https://docs.google.com/spreadsheets/d/…',
-              border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-              contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
-            ),
-            onSubmitted: (_) => _refresh(),
+          Text(
+            'Keep the speakers, agenda and sponsors in a Google Sheet; the app reads it when you press Refresh.',
+            style: TextStyle(fontSize: 12, color: p.textSecondary),
           ),
-          const SizedBox(height: 10),
-          SheetHowTo(info: info),
+          const SizedBox(height: 14),
+          SheetSteps(
+            info: info,
+            linkField: TextField(
+              key: const ValueKey('event-sheet-link'),
+              controller: _link,
+              enabled: !_busy,
+              decoration: InputDecoration(
+                hintText: 'https://docs.google.com/spreadsheets/d/…',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              onSubmitted: (_) => _refresh(),
+            ),
+          ),
         ],
-        const SizedBox(height: 12),
+        const SizedBox(height: 16),
         Row(
           children: [
             FilledButton.tonalIcon(
@@ -169,59 +174,131 @@ class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
   }
 }
 
-/// "Share it as Viewer with …" and the templates.
-class SheetHowTo extends StatelessWidget {
-  const SheetHowTo({super.key, required this.info});
+/// The three steps to a linked sheet, in the order they're done:
+/// 1 make a copy of a template, 2 share it with the app, 3 paste its link
+/// ([linkField]).
+class SheetSteps extends StatelessWidget {
+  const SheetSteps({super.key, required this.info, required this.linkField});
 
   final SheetInfo? info;
+  final Widget linkField;
 
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final style = TextStyle(fontSize: 12, color: p.textSecondary);
     final email = info?.shareWith ?? '';
+    final templates = info?.templates ?? const [];
+    final hint = TextStyle(fontSize: 12, color: p.textSecondary);
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text('Share the sheet as Viewer with:', style: style),
-        const SizedBox(height: 2),
-        Row(
+        _SheetStep(
+          number: 1,
+          title: 'Make a copy of a template',
           children: [
-            Flexible(
-              child: SelectableText(
-                email.isEmpty ? '…' : email,
-                key: const ValueKey('event-sheet-share-with'),
-                style: TextStyle(fontSize: 12, color: p.textPrimary, fontWeight: FontWeight.w600),
+            Text('Or use a sheet you already made from one.', style: hint),
+            if (templates.isNotEmpty) ...[
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  for (final t in templates)
+                    OutlinedButton.icon(
+                      key: ValueKey('sheet-template-${t.name}'),
+                      onPressed: () => launchUrl(Uri.parse(t.url), webOnlyWindowName: '_blank'),
+                      icon: const Icon(Icons.open_in_new, size: 16),
+                      label: Text(t.name),
+                    ),
+                ],
               ),
-            ),
-            if (email.isNotEmpty)
-              IconButton(
-                tooltip: 'Copy',
-                visualDensity: VisualDensity.compact,
-                icon: const Icon(Icons.copy, size: 14),
-                onPressed: () async {
-                  await Clipboard.setData(ClipboardData(text: email));
-                  if (context.mounted) showNotice(context, 'Email copied', kind: NoticeKind.success);
-                },
-              ),
+            ],
           ],
         ),
-        if ((info?.templates ?? const []).isNotEmpty) ...[
-          const SizedBox(height: 6),
-          Wrap(
-            crossAxisAlignment: WrapCrossAlignment.center,
-            spacing: 4,
-            children: [
-              Text('No sheet yet? Make a copy of a template:', style: style),
-              for (final t in info!.templates)
-                TextButton(
-                  onPressed: () => launchUrl(Uri.parse(t.url), webOnlyWindowName: '_blank'),
-                  child: Text(t.name),
+        _SheetStep(
+          number: 2,
+          title: 'Share it with the app, as Viewer',
+          children: [
+            Container(
+              padding: const EdgeInsets.only(left: 12),
+              decoration: BoxDecoration(
+                border: Border.all(color: p.border),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Expanded(
+                    child: SelectableText(
+                      email.isEmpty ? '…' : email,
+                      key: const ValueKey('event-sheet-share-with'),
+                      style: TextStyle(fontSize: 13, color: p.textPrimary),
+                    ),
+                  ),
+                  TextButton.icon(
+                    onPressed: email.isEmpty
+                        ? null
+                        : () async {
+                            await Clipboard.setData(ClipboardData(text: email));
+                            if (context.mounted) showNotice(context, 'Email copied', kind: NoticeKind.success);
+                          },
+                    icon: const Icon(Icons.copy, size: 16),
+                    label: const Text('Copy'),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text('In the sheet: Share → paste this email → Viewer. Untick "Notify people".', style: hint),
+          ],
+        ),
+        _SheetStep(
+          number: 3,
+          title: "Paste the sheet's link",
+          last: true,
+          children: [linkField],
+        ),
+      ],
+    );
+  }
+}
+
+/// One numbered step: a circle with the number, a title, what to do.
+class _SheetStep extends StatelessWidget {
+  const _SheetStep({required this.number, required this.title, required this.children, this.last = false});
+
+  final int number;
+  final String title;
+  final List<Widget> children;
+  final bool last;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = context.palette;
+    return Padding(
+      padding: EdgeInsets.only(bottom: last ? 0 : 18),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          CircleAvatar(
+            radius: 12,
+            backgroundColor: p.primary.withValues(alpha: 0.15),
+            child: Text('$number', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: p.primary)),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Padding(
+                  padding: const EdgeInsets.only(top: 2, bottom: 6),
+                  child: Text(title, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
                 ),
-            ],
+                ...children,
+              ],
+            ),
           ),
         ],
-      ],
+      ),
     );
   }
 }
@@ -348,26 +425,26 @@ class _ImportSheetDialogState extends ConsumerState<_ImportSheetDialog> {
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
-                "The sheet's Event tab fills in the new event; its speakers, agenda and "
-                'sponsors come with it, and the sheet stays linked for Refresh.',
+                "The sheet's Event tab fills in the new event, and its speakers, agenda "
+                'and sponsors come with it.',
                 style: TextStyle(fontSize: 13, color: p.textSecondary),
               ),
-              const SizedBox(height: 14),
-              TextField(
-                key: const ValueKey('import-sheet-link'),
-                controller: _link,
-                enabled: !_busy,
-                autofocus: true,
-                decoration: InputDecoration(
-                  labelText: 'Google Sheet link',
-                  hintText: 'https://docs.google.com/spreadsheets/d/…',
-                  border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              const SizedBox(height: 18),
+              SheetSteps(
+                info: info,
+                linkField: TextField(
+                  key: const ValueKey('import-sheet-link'),
+                  controller: _link,
+                  enabled: !_busy,
+                  autofocus: true,
+                  decoration: InputDecoration(
+                    hintText: 'https://docs.google.com/spreadsheets/d/…',
+                    border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                    contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                  ),
+                  onSubmitted: (_) => _read(),
                 ),
-                onSubmitted: (_) => _read(),
               ),
-              const SizedBox(height: 10),
-              SheetHowTo(info: info),
               if (_problem != null) ...[
                 const SizedBox(height: 12),
                 SheetProblemBox(problem: _problem!),
