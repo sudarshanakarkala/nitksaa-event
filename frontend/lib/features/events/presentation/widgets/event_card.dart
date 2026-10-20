@@ -415,51 +415,47 @@ class EventCard extends StatelessWidget {
       FilledButton(onPressed: onView, style: compact, child: Text(viewLabel)),
     ];
 
+    // Two lines: the note on its own (never cut short by the buttons), then
+    // the buttons with the full width. The banner is shorter by about the
+    // note's height, so every card keeps the same height.
     return Container(
-      padding: const EdgeInsets.fromLTRB(16, 10, 12, 12),
+      padding: const EdgeInsets.fromLTRB(14, 8, 12, 12),
       decoration: BoxDecoration(border: Border(top: BorderSide(color: p.border))),
-      child: LayoutBuilder(
-        builder: (context, constraints) {
-          // Buttons take what they need (shrinking on a narrow card rather
-          // than overflowing); the note gets the rest.
-          final maxButtons = footerNote == null
-              ? constraints.maxWidth - 8
-              : constraints.maxWidth * 0.75;
-          return Row(
-            children: [
-              Expanded(
-                child: footerNote == null
-                    ? const SizedBox.shrink()
-                    : Text(
-                        footerNote!,
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                        style: AppTextStyles.bodySmall.copyWith(
-                          fontSize: 12.5,
-                          color: p.textMuted,
-                        ),
-                      ),
-              ),
-              const SizedBox(width: 8),
-              ConstrainedBox(
-                constraints: BoxConstraints(maxWidth: maxButtons < 0 ? 0 : maxButtons),
-                child: FittedBox(
-                  fit: BoxFit.scaleDown,
-                  alignment: Alignment.centerRight,
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      for (var i = 0; i < buttons.length; i++) ...[
-                        if (i > 0) const SizedBox(width: 6),
-                        buttons[i],
-                      ],
-                    ],
-                  ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (footerNote != null) ...[
+            Padding(
+              padding: const EdgeInsets.only(left: 2),
+              child: Text(
+                footerNote!,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: AppTextStyles.bodySmall.copyWith(
+                  fontSize: 12.5,
+                  height: 1.3,
+                  color: p.textMuted,
                 ),
               ),
-            ],
-          );
-        },
+            ),
+            const SizedBox(height: 4),
+          ],
+          // Shrinks only on a card narrower than the buttons, never overflows.
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            alignment: Alignment.centerRight,
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                for (var i = 0; i < buttons.length; i++) ...[
+                  if (i > 0) const SizedBox(width: 6),
+                  buttons[i],
+                ],
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }
@@ -590,7 +586,8 @@ class _Banner extends StatelessWidget {
     required this.brand,
   });
 
-  static const double height = 116;
+  // 92, not 116: the room went to the footer note (#98); logos are capped at 56.
+  static const double height = 92;
 
   final String? imageUrl;
   final DateTime? start;
