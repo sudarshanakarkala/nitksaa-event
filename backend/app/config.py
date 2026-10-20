@@ -57,6 +57,33 @@ class Settings(BaseSettings):
     feedback_email_to: str = Field("nitksaa.infra@gmail.com", alias="FEEDBACK_EMAIL_TO")
     app_public_base_url: str = Field("http://localhost:8000", alias="APP_PUBLIC_BASE_URL")
 
+    # Event sheets (B7). The server reads Google Sheets as its own Cloud Run
+    # service account; organisers share their sheet with this email as Viewer.
+    sheets_reader_email: str = Field(
+        "nitksaa-events-api@project-d22bed42-f302-4e23-8dc.iam.gserviceaccount.com",
+        alias="SHEETS_READER_EMAIL",
+    )
+    # The templates' "Make a copy" links, shown in the event form.
+    sheet_template_blank_url: str = Field(
+        "https://docs.google.com/spreadsheets/d/17QUB6YJrFxGZehcxT77Z4BlKJQI-EgQro8qxlGyrLT4/copy",
+        alias="SHEET_TEMPLATE_BLANK_URL",
+    )
+    sheet_template_breakfast_url: str = Field(
+        "https://docs.google.com/spreadsheets/d/1iBf8N1_IzJouq-eD-25yPjLbIvxgJN5TbONan1kY3-0/copy",
+        alias="SHEET_TEMPLATE_BREAKFAST_URL",
+    )
+    sheet_template_nitkonnect_url: str = Field(
+        "https://docs.google.com/spreadsheets/d/1pP3vRkZjWaPMsd4TvVyHcY5Xjpp_LYz731fmSx7Bddk/copy",
+        alias="SHEET_TEMPLATE_NITKONNECT_URL",
+    )
+    # NITKSAA alumni directory, Partner API (directory:profile scope): fills
+    # speakers' batch, LinkedIn and phone from their email. Off without a key.
+    # Server-only; never returned or logged.
+    nitksaa_partner_api_key: str = Field("", alias="NITKSAA_PARTNER_API_KEY")
+    alumni_directory_api_base: str = Field(
+        "https://directory.nitkalumni.in/api/v1/partner", alias="ALUMNI_DIRECTORY_API_BASE"
+    )
+
     # Payments — gateway-neutral foundation (Sprint 7). payment_gateway_mode
     # selects which app.gateways.registry entry payment initiation uses;
     # server-side config only, never client-supplied (see app/gateways/registry.py).

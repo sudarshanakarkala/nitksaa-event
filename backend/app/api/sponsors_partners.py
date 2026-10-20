@@ -22,6 +22,7 @@ from app.schemas.sponsors_partners import (
     PartnerCreate, PartnerResponse, PartnerUpdate,
 )
 from app.services import audit_service
+from app.api.admin_event_sheet import refuse_if_linked
 
 router = APIRouter(prefix="/api/v1/events", tags=["sponsors", "partners"])
 
@@ -55,6 +56,7 @@ async def create_sponsor(
     pool = await get_pool()
     async with pool.acquire() as conn:
         await _require_event(conn, event_id)
+        await refuse_if_linked(conn, event_id)
         row = await SponsorsRepository(conn).create(event_id, body)
     await audit_service.emit(
         actor_uid=user["firebase_uid"], event_type="sponsor_created",
@@ -76,6 +78,7 @@ async def update_sponsor(
         existing = await repo.get(sponsor_id)
         if not existing or existing["event_id"] != event_id:
             raise HTTPException(status_code=404, detail="sponsor_not_found")
+        await refuse_if_linked(conn, event_id)
         row = await repo.update(sponsor_id, body)
     await audit_service.emit(
         actor_uid=user["firebase_uid"], event_type="sponsor_updated",
@@ -96,6 +99,7 @@ async def delete_sponsor(
         existing = await repo.get(sponsor_id)
         if not existing or existing["event_id"] != event_id:
             raise HTTPException(status_code=404, detail="sponsor_not_found")
+        await refuse_if_linked(conn, event_id)
         await repo.delete(sponsor_id)
     await audit_service.emit(
         actor_uid=user["firebase_uid"], event_type="sponsor_deleted",
@@ -126,6 +130,7 @@ async def create_partner(
     pool = await get_pool()
     async with pool.acquire() as conn:
         await _require_event(conn, event_id)
+        await refuse_if_linked(conn, event_id)
         row = await PartnersRepository(conn).create(event_id, body)
     await audit_service.emit(
         actor_uid=user["firebase_uid"], event_type="partner_created",
@@ -147,6 +152,7 @@ async def update_partner(
         existing = await repo.get(partner_id)
         if not existing or existing["event_id"] != event_id:
             raise HTTPException(status_code=404, detail="partner_not_found")
+        await refuse_if_linked(conn, event_id)
         row = await repo.update(partner_id, body)
     await audit_service.emit(
         actor_uid=user["firebase_uid"], event_type="partner_updated",
@@ -167,6 +173,7 @@ async def delete_partner(
         existing = await repo.get(partner_id)
         if not existing or existing["event_id"] != event_id:
             raise HTTPException(status_code=404, detail="partner_not_found")
+        await refuse_if_linked(conn, event_id)
         await repo.delete(partner_id)
     await audit_service.emit(
         actor_uid=user["firebase_uid"], event_type="partner_deleted",

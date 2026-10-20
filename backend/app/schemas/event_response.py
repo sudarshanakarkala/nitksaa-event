@@ -40,6 +40,9 @@ class EventResponse(BaseModel):
     published_at: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
     cancelled_reason: Optional[str] = None
+    # B7: the linked Google Sheet (admin only; never on PublicEventResponse).
+    agenda_sheet_url: Optional[str] = None
+    agenda_sheet_read_at: Optional[datetime] = None
 
     model_config = {"from_attributes": True}
 

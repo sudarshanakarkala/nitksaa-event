@@ -23,6 +23,13 @@ sponsors as saved (the form saves sponsors before this). An unknown name is
 refused (422 unknown_speaker / unknown_sponsor) and nothing is saved. A
 field the request leaves out is left as it is, so an older app can't wipe
 these.
+
+Speakers' private and extra details (B7): email and phone (admin only),
+batch, LinkedIn, photo and bio; each left as it is when the request leaves
+it out.
+
+While a Google Sheet is linked (B7), the sheet owns speakers and sessions:
+this save then changes only the fees, whatever the request says.
 """
 from datetime import datetime
 from decimal import Decimal
@@ -34,6 +41,7 @@ from pydantic import BaseModel, Field, field_validator
 from app.database import get_pool
 from app.middleware.admin_auth import require_event_admin
 from app.services import audit_service
+from app.api.admin_event_sheet import is_linked
 
 router = APIRouter(prefix="/api/v1/admin", tags=["admin"])
 
@@ -44,6 +52,8 @@ SESSION_TYPES = {
 }
 # Session columns a request may leave out (kept as they are when it does).
 _OPTIONAL_SESSION_COLUMNS = ("session_type", "pillar", "track", "description")
+# The same for speakers (B7).
+_OPTIONAL_SPEAKER_COLUMNS = ("email", "phone", "batch", "linkedin_url", "photo_url", "bio")
 FEE_TYPES = {"participation", "accommodation", "contributions", "food_pass", "merchandise", "other"}
 
 
@@ -54,6 +64,13 @@ class SpeakerIn(BaseModel):
     organisation: Optional[str] = None
     # Left out: kept as it is (new people are speakers).
     role: Optional[str] = None
+    # B7; each is left as it is when the request leaves it out.
+    email: Optional[str] = Field(None, max_length=320)
+    phone: Optional[str] = Field(None, max_length=64)
+    batch: Optional[str] = Field(None, max_length=120)
+    linkedin_url: Optional[str] = Field(None, max_length=2048)
+    photo_url: Optional[str] = Field(None, max_length=2048)
+    bio: Optional[str] = Field(None, max_length=5000)
 
     @field_validator("role")
     @classmethod
@@ -124,7 +141,8 @@ def _blank_to_none(v: Optional[str]) -> Optional[str]:
 async def _read(conn, event_id: int) -> Dict[str, Any]:
     speakers = await conn.fetch(
         """
-        SELECT person_id, fullname, title, organisation, role::text AS role
+        SELECT person_id, fullname, title, organisation, role::text AS role,
+               email, phone, batch, linkedin_url, photo_url, bio, alumni_id
         FROM event_people
         WHERE event_id = $1::int AND role::text = ANY($2::text[])
         ORDER BY display_order, person_id
@@ -293,6 +311,8 @@ async def put_event_details(
     pool = await get_pool()
     async with pool.acquire() as conn:
         async with conn.transaction():
+            # A linked sheet owns speakers and sessions (B7): only fees here.
+            linked = await is_linked(conn, event_id)
             # ── Speakers ────────────────────────────────────────────────
             existing = {
                 r["person_id"]
@@ -302,31 +322,41 @@ async def put_event_details(
                 )
             }
             kept: set = set()
-            for order, sp in enumerate(body.speakers):
+            for order, sp in enumerate([] if linked else body.speakers):
+                extra = {
+                    col: _blank_to_none(getattr(sp, col))
+                    for col in _OPTIONAL_SPEAKER_COLUMNS
+                    if col in sp.model_fields_set
+                }
+                if "email" in extra and extra["email"]:
+                    extra["email"] = extra["email"].lower()
                 if sp.person_id is not None and sp.person_id in existing:
                     kept.add(sp.person_id)
+                    sets = "".join(f", {col} = ${7 + i}::text" for i, col in enumerate(extra))
                     await conn.execute(
-                        """
+                        f"""
                         UPDATE event_people
                         SET fullname = $2::text, title = $3::text, organisation = $4::text,
                             display_order = $5::int, updated_at = now(),
-                            role = COALESCE($6::text::person_role, role)
+                            role = COALESCE($6::text::person_role, role){sets}
                         WHERE person_id = $1::int
                         """,
                         sp.person_id, sp.fullname.strip(), _blank_to_none(sp.title),
-                        _blank_to_none(sp.organisation), order, sp.role,
+                        _blank_to_none(sp.organisation), order, sp.role, *extra.values(),
                     )
                 else:
+                    cols = "".join(f", {col}" for col in extra)
+                    params = "".join(f", ${7 + i}::text" for i in range(len(extra)))
                     await conn.execute(
-                        """
-                        INSERT INTO event_people (event_id, role, fullname, title, organisation, display_order, is_visible)
+                        f"""
+                        INSERT INTO event_people (event_id, role, fullname, title, organisation, display_order, is_visible{cols})
                         VALUES ($1::int, COALESCE($6::text, 'SPEAKER')::person_role,
-                                $2::text, $3::text, $4::text, $5::int, true)
+                                $2::text, $3::text, $4::text, $5::int, true{params})
                         """,
                         event_id, sp.fullname.strip(), _blank_to_none(sp.title),
-                        _blank_to_none(sp.organisation), order, sp.role,
+                        _blank_to_none(sp.organisation), order, sp.role, *extra.values(),
                     )
-            removed = existing - kept
+            removed = set() if linked else existing - kept
             if removed:
                 await conn.execute(
                     "DELETE FROM event_people WHERE person_id = ANY($1::int[])", list(removed)
@@ -341,7 +371,7 @@ async def put_event_details(
             }
             kept = set()
             saved: List[tuple] = []  # (session_id, SessionIn), for people and sponsors
-            for order, s in enumerate(body.sessions):
+            for order, s in enumerate([] if linked else body.sessions):
                 if s.end_datetime < s.start_datetime:
                     raise HTTPException(status_code=422, detail="session_ends_before_it_starts")
                 optional = {
@@ -377,7 +407,7 @@ async def put_event_details(
                         s.start_datetime, s.end_datetime, order, *optional.values(),
                     )
                 saved.append((session_id, s))
-            removed = existing - kept
+            removed = set() if linked else existing - kept
             if removed:
                 in_use = await conn.fetchval(
                     "SELECT EXISTS(SELECT 1 FROM check_ins WHERE session_id = ANY($1::int[]))",
