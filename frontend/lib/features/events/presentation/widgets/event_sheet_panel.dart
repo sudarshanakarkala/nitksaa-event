@@ -361,12 +361,9 @@ class SheetProblemBox extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(problem.message, style: TextStyle(fontSize: 13, color: p.textPrimary, fontWeight: FontWeight.w600)),
-          for (final e in problem.errors)
-            Padding(
-              padding: const EdgeInsets.only(top: 4),
-              child: Text('• $e', style: TextStyle(fontSize: 12, color: p.textPrimary)),
-            ),
           if (problem.errors.isNotEmpty) ...[
+            const SizedBox(height: 4),
+            _ShortList(lines: problem.errors, color: p.textPrimary),
             const SizedBox(height: 6),
             Text('Nothing was changed. Fix these in the sheet, then try again.',
                 style: TextStyle(fontSize: 12, color: p.textSecondary)),
@@ -391,10 +388,48 @@ class SheetWarnings extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Text('Saved. Worth a look:', style: TextStyle(fontSize: 12, color: p.textSecondary)),
-        for (final w in warnings)
+        _ShortList(lines: warnings, color: p.textSecondary),
+      ],
+    );
+  }
+}
+
+/// A bulleted list that shows the first few lines, then "Show all N".
+class _ShortList extends StatefulWidget {
+  const _ShortList({required this.lines, required this.color});
+
+  final List<String> lines;
+  final Color color;
+
+  /// Lines shown before "Show all".
+  static const shown = 5;
+
+  @override
+  State<_ShortList> createState() => _ShortListState();
+}
+
+class _ShortListState extends State<_ShortList> {
+  var _all = false;
+
+  @override
+  Widget build(BuildContext context) {
+    final lines = widget.lines;
+    final long = lines.length > _ShortList.shown;
+    final visible = _all || !long ? lines : lines.take(_ShortList.shown);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        for (final line in visible)
           Padding(
             padding: const EdgeInsets.only(top: 2),
-            child: Text('• $w', style: TextStyle(fontSize: 12, color: p.textSecondary)),
+            child: Text('• $line', style: TextStyle(fontSize: 12, color: widget.color)),
+          ),
+        if (long)
+          TextButton(
+            key: const ValueKey('sheet-list-more'),
+            style: TextButton.styleFrom(padding: EdgeInsets.zero, visualDensity: VisualDensity.compact),
+            onPressed: () => setState(() => _all = !_all),
+            child: Text(_all ? 'Show fewer' : 'Show all ${lines.length}'),
           ),
       ],
     );
