@@ -64,7 +64,7 @@ Future<void> showEntryPasses(
     builder: (context) {
       final p = context.palette;
       return Dialog(
-        backgroundColor: p.card,
+        backgroundColor: p.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: ConstrainedBox(
           constraints: const BoxConstraints(maxWidth: 420),
