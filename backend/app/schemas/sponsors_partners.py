@@ -21,7 +21,7 @@ class SponsorCreate(BaseModel):
     logo_url: Optional[str] = None
     website_url: Optional[str] = None
     description: Optional[str] = None
-    # Shown instead of the tier, e.g. "Co-presenter" (B4).
+    # Shown instead of the tier, e.g. "Co-presenter".
     label: Optional[str] = None
     display_order: int = 0
     is_visible: bool = True

@@ -1,4 +1,4 @@
-/// The agenda of a big event (NITKonnect), grouped for the event page (B1).
+/// The agenda of a big event (NITKonnect), grouped for the event page.
 ///
 /// - Sessions that start at the same minute share a **time slot**; parallel
 ///   sessions are the ones in a slot with others.
@@ -6,10 +6,10 @@
 ///   in the order the server sent them.
 /// - Slots are grouped by day; the page only shows day headings when there
 ///   is more than one day.
-/// - A **break** (tea, lunch…) is a slot of one session of type Break (B4).
+/// - A **break** (tea, lunch…) is a slot of one session of type Break.
 ///   A session with no type still counts as a break when it has no speaker
-///   and its title starts with Tea, Lunch, Break or Dinner (data from
-///   before B4).
+///   and its title starts with Tea, Lunch, Break or Dinner (data saved
+///   before sessions had a type).
 ///
 /// Small events (no two sessions at the same time) keep today's simple list;
 /// see [Agenda.hasParallel].
@@ -68,7 +68,7 @@ abstract final class Agenda {
     return speaker.isEmpty && _breakTitle.hasMatch(session.title.trim());
   }
 
-  /// The sessions' pillars, in the order they first appear (B4).
+  /// The sessions' pillars, in the order they first appear.
   static List<String> pillars(List<EventSession> sessions) {
     final seen = <String>[];
     for (final s in sessions) {

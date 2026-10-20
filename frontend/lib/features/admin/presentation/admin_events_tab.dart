@@ -218,7 +218,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
 
   Future<void> _create() => _actions.create();
 
-  /// Events → Import (B7), on computers only: a sheet is set up at a desk.
+  /// Events → Import, on computers only: a sheet is set up at a desk.
   Future<void> _import() => _actions.importFromSheet();
 
   List<EventCardAction> _actionsFor(AppEvent e) => _actions.actionsFor(e);

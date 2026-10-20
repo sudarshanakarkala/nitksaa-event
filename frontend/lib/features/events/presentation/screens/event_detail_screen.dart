@@ -307,7 +307,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
   /// The picture at the top of the page.
   /// - Without branding, as before: the banner (or thumbnail) [height] high,
   ///   cropped to fill.
-  /// - A branded event (B6): its wide banner shown whole (4:1, the size it
+  /// - A branded event: its wide banner shown whole (4:1, the size it
   ///   is made for), so the logo at its edge is never cut off, on phones
   ///   too; with no banner, its logo for this mode.
   /// - An image that fails to load is left out (F9).
@@ -691,7 +691,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
 
   /// Sponsors, fees, Agenda and Speakers, with a divider between each.
   /// A big event (parallel sessions) puts the Agenda first, then Speakers,
-  /// Sponsors and the fees (B1); small events keep today's order.
+  /// Sponsors and the fees; small events keep today's order.
   List<Widget> _contentSections(AppEvent event, {required double gap}) {
     final sponsors = SponsorsSection(
       sponsors: event.sponsors,

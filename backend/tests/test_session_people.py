@@ -1,4 +1,4 @@
-"""Speakers under each session (B2).
+"""Speakers under each session.
 
 Each session in the event data carries `people`: person id and role, in
 the link's order, visible people only. A session without links has an

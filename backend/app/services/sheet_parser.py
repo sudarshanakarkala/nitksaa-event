@@ -1,4 +1,4 @@
-"""Reads an event sheet's tabs into the event's details (B7).
+"""Reads an event sheet's tabs into the event's details.
 
 Pure: takes the cell values the Sheets API returned and gives back what the
 event will hold, or the problems, each naming the tab and row. No network,

@@ -172,7 +172,7 @@ class EventsRepository {
     return response.data ?? <String, dynamic>{};
   }
 
-  // ── The event's Google Sheet (B7) ──────────────────────────────────────
+  // ── The event's Google Sheet ──────────────────────────────────────
   // Failures come back as [SheetProblem] (plain words, nothing changed).
 
   Future<SheetInfo> getSheetInfo(String accessToken) async {

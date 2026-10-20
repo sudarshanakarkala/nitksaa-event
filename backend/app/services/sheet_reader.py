@@ -1,4 +1,4 @@
-"""Reads an event sheet's tabs from Google Sheets (B7).
+"""Reads an event sheet's tabs from Google Sheets.
 
 The server signs in as its own Cloud Run service account (Google's default
 credentials; no keys) with read-only access. Organisers share their sheet

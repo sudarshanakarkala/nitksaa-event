@@ -72,7 +72,7 @@ class EventAdminActions {
     if (await showEventFormDialog(context)) await _afterChange();
   }
 
-  /// Events → Import (B7): read a Google Sheet, then the Create form filled
+  /// Events → Import: read a Google Sheet, then the Create form filled
   /// in from it; saving the draft links the sheet and brings its lists.
   Future<void> importFromSheet() async {
     final preview = await showImportSheetDialog(context);

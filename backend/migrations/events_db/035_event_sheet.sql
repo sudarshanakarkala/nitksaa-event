@@ -1,4 +1,4 @@
--- 035_event_sheet.sql — an event's Google Sheet, and speakers' private details (B7).
+-- 035_event_sheet.sql — an event's Google Sheet, and speakers' private details.
 --
 -- Optional, so every event without a sheet looks and saves as before:
 -- - events.agenda_sheet_url: the linked Google Sheet. While it is set, the

@@ -1,4 +1,4 @@
-/// The event page's Speakers (B1).
+/// The event page's Speakers.
 ///
 /// - Up to [SpeakersSection.compactFrom] speakers (the breakfast): today's
 ///   list, unchanged.
@@ -209,7 +209,7 @@ class _SpeakerRow extends StatelessWidget {
                   overflow: compact ? TextOverflow.ellipsis : null,
                   style: TextStyle(fontSize: 12, color: p.textMuted),
                 ),
-                // NITK batch (B7), e.g. "Electrical & Electronics, 1981".
+                // NITK batch, e.g. "Electrical & Electronics, 1981".
                 if ((speaker.batch ?? '').trim().isNotEmpty) ...[
                   const SizedBox(height: 2),
                   Text(

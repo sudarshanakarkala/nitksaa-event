@@ -20,7 +20,7 @@ class EventSponsor {
   final String? description;
   final int displayOrder;
 
-  /// Shown instead of the tier when set, e.g. "Co-presenter" (B4).
+  /// Shown instead of the tier when set, e.g. "Co-presenter".
   final String? label;
 
   /// What the page calls this sponsor: its [label], or else its tier.
@@ -186,13 +186,13 @@ class AppEvent {
   final String? thumbnailUrl;
   final String? bannerUrl;
 
-  /// Branding (B6), all optional: the logo on light and on dark
+  /// Branding, all optional: the logo on light and on dark
   /// backgrounds, and one accent colour (#RRGGBB). See `EventBrand`.
   final String? brandLogoUrl;
   final String? brandLogoDarkUrl;
   final String? brandAccent;
 
-  /// The linked Google Sheet (B7) and when it was last read. Admin API
+  /// The linked Google Sheet and when it was last read. Admin API
   /// only. While set, the sheet owns the speakers, agenda and sponsors.
   final String? agendaSheetUrl;
   final DateTime? agendaSheetReadAt;
@@ -224,7 +224,7 @@ class AppEvent {
   final List<EventPerson> speakers;
 
   /// Every visible person on the event (speakers, moderators, hosts…):
-  /// what a session's [EventSession.people] refer to (B2).
+  /// what a session's [EventSession.people] refer to.
   final List<EventPerson> people;
   final List<EventSponsor> sponsors;
   final List<EventPartner> partners;
@@ -341,18 +341,18 @@ class EventSession {
   final DateTime startDatetime;
   final DateTime? endDatetime;
 
-  /// Who is on this session, in order (B2): ids into [AppEvent.people].
+  /// Who is on this session, in order: ids into [AppEvent.people].
   final List<SessionPersonRef> people;
 
   /// KEYNOTE, TALK, PANEL, FIRESIDE, WORKSHOP, SHOWCASE, NETWORKING, AWARDS
-  /// or BREAK; null when not set (B4).
+  /// or BREAK; null when not set.
   final String? sessionType;
 
-  /// "Career Konnect"; null when not set (B4).
+  /// "Career Konnect"; null when not set.
   final String? pillar;
 
   /// The sponsors presenting this session, in order: ids into
-  /// [AppEvent.sponsors] (B4).
+  /// [AppEvent.sponsors].
   final List<int> presentedBy;
 
   bool get isBreakType => sessionType == 'BREAK';
@@ -388,7 +388,7 @@ class EventSession {
   }
 }
 
-/// The session types (B4), as the server accepts them, with their names.
+/// The session types, as the server accepts them, with their names.
 abstract final class SessionTypes {
   static const Map<String, String> labels = {
     'KEYNOTE': 'Keynote',
@@ -442,7 +442,7 @@ class EventPerson {
   final String? photoUrl;
   final String? linkedinUrl;
 
-  /// NITK batch, e.g. "Electrical & Electronics, 1981" (B7: from the sheet
+  /// NITK batch, e.g. "Electrical & Electronics, 1981" (from the sheet
   /// or the alumni directory).
   final String? batch;
 

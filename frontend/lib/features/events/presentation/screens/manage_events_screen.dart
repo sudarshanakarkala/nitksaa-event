@@ -588,7 +588,7 @@ class _OrgKind {
   final String idKey;
   final List<String> types;
 
-  /// Sponsors have a label shown instead of the tier (B4).
+  /// Sponsors have a label shown instead of the tier.
   bool get hasLabel => apiPath == 'sponsors';
 }
 
@@ -637,7 +637,7 @@ enum _Group {
   const _Group(this.label);
   final String label;
 
-  /// While a Google Sheet is linked (B7), these come only from the sheet.
+  /// While a Google Sheet is linked, these come only from the sheet.
   bool get fromSheet => this == speakers || this == agenda || this == sponsors;
 }
 
@@ -646,7 +646,7 @@ class _EventFormDialog extends ConsumerStatefulWidget {
 
   final AppEvent? event;
 
-  /// Events → Import (B7): a new event filled in from a sheet's Event tab.
+  /// Events → Import: a new event filled in from a sheet's Event tab.
   /// Saving the draft links the sheet and reads its lists.
   final SheetPreview? fromSheet;
 
@@ -691,7 +691,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   late final TextEditingController _thumbnailUrl;
   late final TextEditingController _bannerUrl;
 
-  // Branding (B6): logos for light and dark backgrounds.
+  // Branding: logos for light and dark backgrounds.
   late final TextEditingController _brandLogoUrl;
   late final TextEditingController _brandLogoDarkUrl;
   
@@ -729,7 +729,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   
   var _isSaving = false;
 
-  /// The linked Google Sheet (B7) and when it was last read. While linked,
+  /// The linked Google Sheet and when it was last read. While linked,
   /// speakers, the agenda and sponsors are read-only here: they come from
   /// the sheet (Refresh) and Save leaves them alone.
   String? _sheetUrl;
@@ -888,7 +888,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     _setBaselineWhenLoaded();
   }
 
-  /// Events → Import (B7): the sheet's Event tab into the form, as the
+  /// Events → Import: the sheet's Event tab into the form, as the
   /// server read it (times are "yyyy-MM-dd HH:mm" in its timezone).
   void _fillFromSheet(Map<String, dynamic> e) {
     String text(String key) => (e[key] as Object?)?.toString() ?? '';
@@ -1184,7 +1184,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          // An imported event (B7) is changed only in its sheet.
+                          // An imported event is changed only in its sheet.
                           if (_sheetLinked && isEditing)
                             _buildImportedView()
                           else ...[
@@ -1252,7 +1252,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  // ── An imported event (B7): read-only ──────────────────────────────────
+  // ── An imported event: read-only ──────────────────────────────────
 
   /// Only the link was changed (it's the one thing set here, not in the sheet).
   bool get _linkChanged =>
@@ -1718,7 +1718,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   Widget _buildGroup(_Group group) {
     // A long list (NITKonnect's 83 speakers) starts as one line.
     final foldable = _itemCount(group) > _foldFrom;
-    // From the linked sheet (B7): shown, not changed here.
+    // From the linked sheet: shown, not changed here.
     final locked = _sheetLinked && group.fromSheet;
     final folded = foldable && !_openGroups.contains(group);
     return Column(
@@ -1859,7 +1859,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         .any((v) => v != null && v.trim().isNotEmpty);
   }
 
-  /// Branding (B6): the two logo links.
+  /// Branding: the two logo links.
   Widget _buildBranding() {
     final p = context.palette;
     return Column(
@@ -2046,7 +2046,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  /// [locked]: from the linked sheet (B7), shown without edit buttons.
+  /// [locked]: from the linked sheet, shown without edit buttons.
   Widget _buildSpeakersSection({bool locked = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2314,7 +2314,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  /// [locked]: from the linked sheet (B7), shown without edit buttons.
+  /// [locked]: from the linked sheet, shown without edit buttons.
   Widget _buildSessionsSection({bool locked = false}) {
     final p = context.palette;
     return Column(
@@ -2412,7 +2412,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return '${t[0]}${t.substring(1).toLowerCase()}';
   }
 
-  // ── Session links (B4) ──────────────────────────────────────────────
+  // ── Session links ──────────────────────────────────────────────
   // A session keeps its speakers, moderators and presenting sponsors as
   // names, one per line, so the form's rows stay simple string maps; the
   // server matches the names.
@@ -2459,7 +2459,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   }
 
 
-  // ── The Google Sheet (B7) ────────────────────────────────────────────
+  // ── The Google Sheet ────────────────────────────────────────────
 
   /// A Refresh saved: reload the event, its fees and lists as the sheet set
   /// them (nothing here is unsaved: an imported event isn't edited here).
@@ -2586,7 +2586,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               'title': text(r['title']),
               'organisation': text(r['organisation']),
               'role': text(r['role']),
-              // B7: kept so a save sends them back; email and phone are
+              // Kept so a save sends them back; email and phone are
               // organisers' only.
               for (final key in const ['email', 'phone', 'photo_url', 'batch', 'linkedin_url', 'bio'])
                 key: text(r[key]),
@@ -2618,7 +2618,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               ]),
             },
         ];
-        // Sessions saved before B4 name one speaker in speaker_name only:
+        // Sessions saved before sessions had linked speakers name one speaker in speaker_name only:
         // pick them up as the session's speaker when that is a listed name.
         for (final session in _sessions) {
           if ((session['people'] ?? '').isNotEmpty) continue;
@@ -2793,7 +2793,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   /// itself is saved. Returns false if any change failed.
   Future<bool> _saveOrgs(int eventId, String token) async {
     if (_orgsLoadFailed) return true; // nothing was loaded, so nothing changed
-    if (_sheetLinked) return true; // the sheet owns them (B7)
+    if (_sheetLinked) return true; // the sheet owns them
     final repo = ref.read(eventsRepositoryProvider);
     var ok = true;
     Future<void> sync(
@@ -2840,7 +2840,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return ok;
   }
 
-  /// [locked]: from the linked sheet (B7), shown without edit buttons.
+  /// [locked]: from the linked sheet, shown without edit buttons.
   Widget _buildOrgSection(List<Map<String, String>> items, _OrgKind kind, {bool locked = false}) {
     if (_orgsLoading) {
       return const Padding(
@@ -3057,7 +3057,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                             kind.typeKey: selectedType,
                             'logo_url': logoUrlCtrl.text.trim(),
                             'website_url': websiteUrlCtrl.text.trim(),
-                            // The label comes from the sheet (B7); kept as saved.
+                            // The label comes from the sheet; kept as saved.
                             if (kind.hasLabel) 'label': existing?['label'] ?? '',
                           };
                           if (editIndex == null) {
@@ -3095,7 +3095,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final photoUrlCtrl = TextEditingController(
       text: editIndex != null ? _speakers[editIndex]['photo_url'] ?? '' : '',
     );
-    // Organisers only (B7): never shown on the event page.
+    // Organisers only: never shown on the event page.
     final emailCtrl = TextEditingController(
       text: editIndex != null ? _speakers[editIndex]['email'] ?? '' : '',
     );
@@ -3342,7 +3342,7 @@ void _showFeeDialog(int? editIndex) {
 
   /// Add or edit a session: title, times and its speakers (none is fine).
   /// A new speaker can be added from here. Big-event details (type, hall,
-  /// pillar, presented by, moderators) come from the Google Sheet (B7); the
+  /// pillar, presented by, moderators) come from the Google Sheet; the
   /// form keeps whatever is saved and never shows them.
   void _showSessionDialog(int? editIndex) {
     final existing = editIndex != null ? _sessions[editIndex] : const <String, String>{};
@@ -3549,7 +3549,7 @@ void _showFeeDialog(int? editIndex) {
   }
 
   /// The end must be after the start. Sessions may overlap: big events run
-  /// several at once (B4).
+  /// several at once.
   String? _validateSessionTimes(String startTime, String endTime) {
     final start = DateTime.tryParse(startTime);
     final end = DateTime.tryParse(endTime);
@@ -3949,7 +3949,7 @@ void _showFeeDialog(int? editIndex) {
     }
 
     // Validate all sessions fall within event timeframe. A linked sheet's
-    // sessions aren't saved from here (B7); its Refresh warns instead.
+    // sessions aren't saved from here; its Refresh warns instead.
     if (_sessions.isNotEmpty && !_sheetLinked) {
       for (final session in _sessions) {
         final sessionStartStr = session['start_time'] ?? '';
@@ -4058,11 +4058,11 @@ void _showFeeDialog(int? editIndex) {
 
       // Sponsors and partners, then speakers, sessions and fee tiers, have
       // their own endpoints. Sponsors go first: a session names the
-      // sponsors presenting it (B4), new ones included.
+      // sponsors presenting it, new ones included.
       final orgsSaved = await _saveOrgs(saved.eventId, token);
       final detailsSaved = await _saveDetails(saved.eventId, token);
 
-      // Events → Import (B7): link the sheet and read its lists into the new draft.
+      // Events → Import: link the sheet and read its lists into the new draft.
       SheetProblem? sheetProblem;
       SheetRefresh? sheetRead;
       final fromSheet = widget.fromSheet;

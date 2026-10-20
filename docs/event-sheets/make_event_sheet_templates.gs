@@ -1,5 +1,5 @@
 /**
- * NITKSAA event sheet templates (B7).
+ * NITKSAA event sheet templates.
  *
  * One run makes three Google Sheets in your Drive:
  *   - NITKSAA event sheet – Blank

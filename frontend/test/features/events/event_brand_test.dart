@@ -1,4 +1,4 @@
-// Event branding (B6).
+// Event branding.
 //
 // - Off unless set: no branding, no EventBrand.
 // - The logo for the mode: the dark one on dark backgrounds.

@@ -455,7 +455,7 @@ void main() {
     expect(repo.updated!.containsKey('slug'), isFalse);
   });
 
-  group('Branding (B6)', () {
+  group('Branding', () {
     testWidgets('an event without branding saves no branding fields', (tester) async {
       final repo = _FormRepo();
       await _open(tester, repo, event: _event());

@@ -1,11 +1,11 @@
-/// The event page's Sponsors (B1).
+/// The event page's Sponsors.
 ///
 /// - Sponsors of one tier or none (the breakfast): today's section,
 ///   unchanged.
 /// - Sponsors across tiers (NITKonnect): one heading per tier in order
 ///   (Title, Gold, Silver, Bronze, Associate, then any other), the title
 ///   sponsor on a wider card; partners grouped by type the same way.
-/// - A sponsor's label (B4, e.g. "Co-presenter") shows on its card instead
+/// - A sponsor's label (e.g. "Co-presenter") shows on its card instead
 ///   of the tier.
 library;
 

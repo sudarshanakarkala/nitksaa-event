@@ -17,7 +17,7 @@ final sheetInfoProvider = FutureProvider<SheetInfo>((ref) async {
   return ref.read(eventsRepositoryProvider).getSheetInfo(token);
 });
 
-/// An imported event's sheet (B7), at the top of its Edit event: which sheet,
+/// An imported event's sheet, at the top of its Edit event: which sheet,
 /// when it was last read, **Open**, **Refresh** and **Unlink**.
 ///
 /// Refresh reads the sheet. If its Event tab would change the event (title,

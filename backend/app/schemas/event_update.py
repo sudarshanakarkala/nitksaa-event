@@ -26,7 +26,7 @@ class EventUpdate(BaseModel):
     virtual_url: Optional[str] = None
     thumbnail_url: Optional[str] = None
     banner_url: Optional[str] = None
-    # Branding (B6), all optional: logos for light and dark backgrounds and
+    # Branding, all optional: logos for light and dark backgrounds and
     # one accent colour. Empty strings clear them.
     brand_logo_url: Optional[str] = Field(default=None, max_length=2048)
     brand_logo_dark_url: Optional[str] = Field(default=None, max_length=2048)

@@ -1,4 +1,4 @@
-"""An event's Google Sheet (B7): import, link, Refresh, unlink.
+"""An event's Google Sheet: import, link, Refresh, unlink.
 
   GET    /api/v1/admin/sheets/info                -> the email to share with, the templates
   POST   /api/v1/admin/sheets/preview             -> read a sheet for Events → Import (no event yet)

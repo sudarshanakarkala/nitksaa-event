@@ -1,4 +1,4 @@
-/// An event's own branding (B6): its logos, for light and dark
+/// An event's own branding: its logos, for light and dark
 /// backgrounds. The logo (and the event's banner) carry the brand; pages
 /// keep the site's colours (decided 19 Oct). Off unless set: [EventBrand.of]
 /// is null for an event without logos, and it then looks exactly as before.

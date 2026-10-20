@@ -1,4 +1,4 @@
-"""Event branding (B6): logos for light and dark backgrounds and a page
+"""Event branding: logos for light and dark backgrounds and a page
 colour (stored as brand_accent).
 
 All optional: an event without them reads as before (nulls). Set with the
