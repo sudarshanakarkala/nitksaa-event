@@ -4,7 +4,7 @@
 
 # NITKSAA Events — Admin guide
 
-**For:** organisers and door volunteers. **App:** events.nitkalumni.in. **Updated:** 19 Oct 2026.
+**For:** organisers and door volunteers. **App:** events.nitkalumni.in. **Updated:** 20 Oct 2026.
 Words in **bold** are what you see on screen.
 
 ---
@@ -24,14 +24,19 @@ Words in **bold** are what you see on screen.
 | Can create events, admin of none yet | All except Payments and Roles |
 | Finance only | Payments |
 
-- **On a phone:** Actions, Events, Registrations and Check-in are in the row; the rest are under **More ▾**. In Events, **Create event** is the gold **+** next to the search box; the count of events is in the **All** button. The date buttons are one row: **Pick dates** opens the slider and From – To. The links at the bottom slide away while you scroll down a list (not on Check-in).
+- **On a phone:** Actions, Events, Registrations and Check-in are in the row; the rest are under **More ▾**. In Events, **Create event** is the gold **+** next to the search box (**Import** is on computers only); the count of events is in the **All** button. The date buttons are one row: **Pick dates** opens the slider and From – To. The links at the bottom slide away while you scroll down a list (not on Check-in).
 - **Where Admin opens:** **Actions**. On an event day (one of your events is on, or starts within 3 hours) it goes straight to **Check-in** for that event.
 
 ---
 
 ## 2. Set up an event
 
-Three steps: **create** the essentials, **edit** to add extras, **publish**. Saving never publishes: nobody sees the event until you press Publish.
+Two ways, never mixed:
+
+- **Create event:** you type everything in the app. Best for simple events (breakfasts, meetups). Three steps: **create** the essentials, **edit** to add extras, **publish** (below).
+- **Import:** everything comes from a Google Sheet: the event, speakers, agenda and sponsors. Best for big events, or if you prefer a sheet. See **Import from a Google Sheet** below.
+
+Saving never publishes: nobody sees the event until you press Publish.
 
 ### Step 1: Create
 
@@ -58,7 +63,7 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 | + Branding | Logo URL (for light backgrounds), Logo URL for dark backgrounds (e.g. a white logo) | No logo |
 | + Registration dates | Registration Opens / Registration Closes | Opens when published, closes when the event starts |
 | + Guests | Guests per registration: None, 1–4 | Nobody can bring guests |
-| + Speakers | Name, title, organisation. Enough on its own for an event with a guest speaker and no agenda | No speakers shown |
+| + Speakers | Name, title, organisation, photo link, and email and phone (organisers only, never on the event page). Enough on its own for an event with a guest speaker and no agenda | No speakers shown |
 | + Agenda | Sessions: title, start, end and speakers (optional, one or more) | No agenda shown |
 | + Sponsors & partners | Name, type, logo URL, website | No sponsors shown |
 
@@ -80,11 +85,34 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 
 **⋯** › **Publish**. If something is missing: "Can't publish yet. Please fill in: …". Fix it with Edit, then publish again.
 
+### Import from a Google Sheet
+
+Admin › **Events** (or the Events page) › **Import**, on a computer. The window shows three steps:
+
+1. **Make a copy of a template:** **Blank**, **Breakfast example** or **NITKonnect example**. Each opens Google's "Make a copy". Fill in your copy, not the template.
+2. **Share it with the app, as Viewer:** press **Copy** for the email shown, then in the sheet: **Share** › paste it › **Viewer** › untick "Notify people".
+3. **Paste the sheet's link** and press **Read the sheet**.
+
+The **Create event from a sheet** form opens, filled in from the sheet. Check it and press **Save draft**: the event is made with its speakers, agenda and sponsors, and stays linked to the sheet.
+
+**The sheet's tabs** (keep their names and headers; hover over a header to see what goes in it):
+- **Event** (required): title, date, times, venue, capacity, price, guests per registration. Under **More** (the **+** on the left): an end date for an event over several days, a map link, a meeting link (an online event leaves Venue blank), registration dates, description, image and logo links, and the gap between sessions.
+- **Sessions:** start, end, title, speakers; more columns for big events (moderator, type, hall, pillar, subtitle, presented by) under the **+** above the columns. Leave **Date** blank for a one-day event. A blank **End** runs to the next session. Dates copied from a template move to the event's own date.
+- **Speakers:** name, title, company, email; more under the **+** (role, phone, LinkedIn, photo link, batch, bio). For NITK alumni, the email fills in their batch, LinkedIn and phone where the sheet leaves them blank. Email and phone are for organisers only.
+- **Sponsors:** name, tier (sponsors and partners in one list), logo link, website, label.
+
+**An imported event is changed only in its sheet.** Its **Edit event** shows everything read-only, with a card at the top:
+- **Open:** opens the sheet. **Refresh:** reads it again. If the sheet changes the event itself (title, dates, place, seats…), you see **Apply the changes from your sheet?** with each change; nothing is saved until **Apply**. Speakers, the agenda and sponsors just refresh.
+- **The price doesn't change once the event is published**, even if the sheet says otherwise; Refresh says so. Capacity can't go below the people already registered.
+- If the sheet has a mistake, Refresh lists it by tab and row (e.g. "Sessions, row 14: no start time") and changes nothing. Fix the sheet and press Refresh again.
+- The event's link can still be set in Edit until you publish.
+- **Unlink and edit here instead:** the event keeps everything it has and from then on is edited in the app. **This can't be undone:** it can't be linked to a sheet again. Use it, for example, for an urgent fix on the day when nobody can edit the sheet.
+
 ### Later: the ⋯ menu
 
 | Item | What happens |
 |---|---|
-| Edit | Change anything. A new price applies to new payments only |
+| Edit | Change anything. A new price applies to new payments only. For an imported event, shows it read-only with **Refresh** |
 | Registrations | Opens this event's registrations |
 | Close registration / Reopen registration | Stops or restarts new registrations; existing ones stay |
 | Unpublish | Back to draft, hidden from Events; registrations kept |
@@ -98,7 +126,7 @@ Press **Save draft**. If something is missing, a message lists it and the form s
 - Leave **Registration Closes** empty, so registration closes when the event starts. Never set it after the start.
 - Capacity counts every person, guests included.
 - **Sharing:** a published event's page has **Share** on phones (WhatsApp and others) and **Copy link** on computers. Drafts don't, because their link doesn't open for anyone else yet.
-- **Big events:** when two or more sessions start at the same time, the event page groups the agenda by time (side by side on a computer, swipe on a phone) and shows each session's hall when one is set. A session with no speaker named Tea, Lunch, Break or Dinner shows as a band. When an event's sessions have them, a session also shows its type and pillar (with pillar buttons to filter the agenda) and "Presented by" a sponsor, and a sponsor can show a label such as "Co-presenter" instead of its tier. These come with an event's agenda sheet; the form doesn't set them. Each session lists the speakers linked to it (first 3, then **+N more**; hidden speakers are left out); a session with no linked speakers shows its speaker line as before. More than 12 speakers get **Search speakers** and **Show all**; sponsors of more than one tier are grouped by tier. Small events look as before.
+- **Big events:** when two or more sessions start at the same time, the event page groups the agenda by time (side by side on a computer, swipe on a phone) and shows each session's hall when one is set. A session with no speaker named Tea, Lunch, Break or Dinner shows as a band. When an event's sessions have them, a session also shows its type and pillar (with pillar buttons to filter the agenda) and "Presented by" a sponsor, and a sponsor can show a label such as "Co-presenter" instead of its tier. These come from an imported sheet; the form doesn't set them. Each session lists the speakers linked to it (first 3, then **+N more**; hidden speakers are left out); a session with no linked speakers shows its speaker line as before. More than 12 speakers get **Search speakers** and **Show all**; sponsors of more than one tier are grouped by tier. Small events look as before.
 
 ---
 

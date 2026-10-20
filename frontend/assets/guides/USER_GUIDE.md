@@ -4,7 +4,7 @@
 
 # NITKSAA Events — How to register
 
-**For:** anyone attending a NITKSAA event, alumni or not. **Site:** events.nitkalumni.in. **Updated:** 19 Oct 2026.
+**For:** anyone attending a NITKSAA event, alumni or not. **Site:** events.nitkalumni.in. **Updated:** 20 Oct 2026.
 Words in **bold** are what you see on screen.
 
 ---
@@ -21,7 +21,7 @@ Words in **bold** are what you see on screen.
 **Big events (e.g. NITKonnect):**
 - **Agenda:** grouped by time. When several sessions run at once ("6 sessions at once"), they sit side by side on a computer; on a phone, swipe sideways ("1 of 6"). The hall shows when known; tea and lunch breaks show as bands. A session may show its type and track (e.g. "Panel · Career Konnect") and who presents it; when there are several tracks, tap one at the top of the agenda to see only its sessions, or **All**.
 - **Who's speaking:** each session lists its speakers under it (photo or initials, name, title and company; the moderator is marked). Panels show the first 3; tap **+N more** to see the rest.
-- **Speakers:** the first 12, then **Show all**; type a name or company in **Search speakers**.
+- **Speakers:** name, title and company, and for NITK alumni their batch (e.g. "Electrical & Electronics, 1981"). Big events show the first 12, then **Show all**; type a name or company in **Search speakers**.
 - **Sponsors:** grouped by tier (title sponsor first); some show their role, e.g. "Co-presenter".
 
 ---
