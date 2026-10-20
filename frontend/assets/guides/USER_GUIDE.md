@@ -67,7 +67,7 @@ You won't get an email. Your registration and QR are in the app (§4).
 
 Every person, guests included, has their own QR. Show it at the entrance.
 
-- **My Events** (tap your initials at the top right › **My Events**) › the event › **QR badge**: shows your QR and every guest's.
+- **My Events** (tap your initials at the top right › **My Events**) › the event's card › **QR badge**: shows your QR and every guest's. On an online event the card shows **Join meeting** instead, and the QR badge is under **⋯**.
 - Or on the event page: **View QR badge** (yours), and **QR** next to each guest.
 - Tip: take a screenshot before you leave, in case the venue has poor signal.
 - Guests can be let in from your phone, or send each guest a screenshot of their QR.
@@ -79,7 +79,7 @@ Every person, guests included, has their own QR. Show it at the entrance.
 | You want to | Do this | Refund (paid events) |
 |---|---|---|
 | Drop one guest | Event page › **✕** next to the guest › **Cancel guest** | That guest's share, automatically |
-| Cancel your registration | Event card (Events or My Events) › **Unregister** › **Unregister**. Cancels your guests too | Everything not already refunded, automatically |
+| Cancel your registration | Event card (Events or My Events) › **⋯** › **Unregister** › **Unregister**. Cancels your guests too | Everything not already refunded, automatically |
 | Add a guest later | Unregister, then register again with the guest | — |
 
 - You can cancel **until the event starts**, even after registration has closed.
@@ -118,6 +118,6 @@ NITiKA answers questions only. It can't register you, cancel a registration, tak
 | "This is a Google (Gmail) address" | Use **Continue with Google** |
 | Paid, but not shown as registered | Wait a minute and reload. Still not? Send **Feedback** (don't pay again) |
 | "This event has started, so you can't unregister now." | Cancelling closes when the event starts |
-| Can't find your QR | **My Events** › **QR badge** |
+| Can't find your QR | **My Events** › **QR badge** (online events: **⋯** › **QR badge**) |
 | Want to organise an event | Events are set up by organisers. Ask for organiser access through **Feedback** |
 | Anything else | **Feedback** at the bottom of every page (you can attach screenshots). On a phone the bottom links slide away while you scroll down a list; scroll up a little, or to the end, to bring them back |

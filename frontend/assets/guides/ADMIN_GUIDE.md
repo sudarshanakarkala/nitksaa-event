@@ -248,7 +248,7 @@ For information: **Registration closing soon**, **Nearly full** (90%+ of seats),
 | "Event is at full capacity" | Raise **Capacity** in Edit, if there's room |
 | Someone paid but isn't registered | Their page shows "Payment received, confirming…"; it usually clears in a minute. If not, check Payments › Orders and tell the NITKSAA Digital Platform Team |
 | Someone's payment failed or they closed the window | They tap **Complete payment** on the event page |
-| Someone wants to cancel | They tap **Unregister** on the event's card (Events or My Events). Admins can't cancel for them |
+| Someone wants to cancel | On the event's card (Events or My Events) they tap **⋯** › **Unregister**. Admins can't cancel for them |
 | Someone wants to drop one guest | They tap the **✕** next to the guest on the event page |
 | Someone wants to add a guest after registering | Not possible: they unregister and register again with the guest |
 | Unregister after the start | Not possible, by design |
