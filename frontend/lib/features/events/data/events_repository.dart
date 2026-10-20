@@ -202,12 +202,18 @@ class EventsRepository {
   }
 
   /// Links [url] (or re-reads the linked sheet when null) and saves what it
-  /// holds, in one step.
-  Future<SheetRefresh> refreshEventSheet(int eventId, String? url, String accessToken) async {
+  /// holds. If the sheet's Event tab would change the event, nothing is
+  /// saved unless [confirm]: the result has `needsConfirm` and the changes.
+  Future<SheetRefresh> refreshEventSheet(
+    int eventId,
+    String? url,
+    String accessToken, {
+    bool confirm = false,
+  }) async {
     try {
       final response = await _dio.post<Map<String, dynamic>>(
         '/api/v1/admin/events/$eventId/sheet/refresh',
-        data: {'url': ?url},
+        data: {'url': ?url, 'confirm': confirm},
         options: Options(
           headers: {'Authorization': 'Bearer $accessToken'},
           // Big sheets and the alumni lookup can take a while.

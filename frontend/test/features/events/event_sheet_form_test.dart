@@ -1,13 +1,12 @@
-// An event's Google Sheet in the event form (B7, EVENT_FORM_REDESIGN.md phase 2).
+// Events and Google Sheets (B7): two modes, never mixed.
 //
-// - Linked: speakers, agenda and sponsors are read-only ("From your sheet"),
-//   can't be added, and Save leaves sponsors and partners alone.
-// - Link and Refresh: asks before replacing typed entries, reads and saves
-//   in one step, then shows the lists locked.
+// - DIY (Create event): the form as before; no way to attach a sheet.
+// - Imported (Import): Edit event is read-only, with the sheet card (Open,
+//   Refresh, Unlink). Refresh lists changes to the event before saving them.
 // - The sheet's problems are listed by tab and row.
-// - Unlink makes them editable again.
+// - Unlink is one way: the event becomes DIY, editable here.
 // - Import: the Create form filled from the sheet; Save draft links it.
-// - The speaker pop-up keeps email and phone.
+// - The speaker pop-up keeps email and phone (both modes).
 import 'package:event_app/features/auth/services/auth_controller.dart';
 import 'package:event_app/features/events/data/events_repository.dart';
 import 'package:event_app/features/events/domain/event.dart';
@@ -28,9 +27,15 @@ class _SheetRepo extends EventsRepository {
   Map<String, dynamic>? created;
   Map<String, dynamic>? savedDetails;
   final orgCalls = <String>[];
-  final refreshed = <({int eventId, String? url})>[];
+  final refreshed = <({int eventId, String? url, bool confirm})>[];
   var unlinked = 0;
   Object? refreshError;
+
+  /// What the Event tab would change (asked before saving).
+  List<SheetChange> eventChanges = const [];
+
+  /// The event as the admin API returns it after a Refresh.
+  AppEvent? eventAfterRefresh;
 
   /// What the server holds after a Refresh.
   Map<String, dynamic> detailsAfterRefresh = const {
@@ -93,10 +98,17 @@ class _SheetRepo extends EventsRepository {
       );
 
   @override
-  Future<SheetRefresh> refreshEventSheet(int eventId, String? url, String accessToken) async {
-    refreshed.add((eventId: eventId, url: url));
+  Future<AppEvent> getAdminEvent(int eventId, String accessToken) async =>
+      eventAfterRefresh ?? _event(sheet: _link);
+
+  @override
+  Future<SheetRefresh> refreshEventSheet(int eventId, String? url, String accessToken, {bool confirm = false}) async {
+    refreshed.add((eventId: eventId, url: url, confirm: confirm));
     final error = refreshError;
     if (error != null) throw error;
+    if (eventChanges.isNotEmpty && !confirm) {
+      return SheetRefresh(url: _link, summary: const SheetSummary(), needsConfirm: true, changes: eventChanges);
+    }
     details = detailsAfterRefresh;
     sponsors = [
       {'sponsor_id': 3, 'name': 'Acme Corp', 'sponsor_type': 'GOLD_SPONSOR', 'display_order': 0, 'label': 'Co-presenter'},
@@ -115,10 +127,10 @@ class _SheetRepo extends EventsRepository {
 
 final _start = DateTime.utc(2099, 1, 10, 3, 30); // 09:00 IST
 
-AppEvent _event({String? sheet}) => AppEvent(
+AppEvent _event({String? sheet, String title = 'NITKonnect'}) => AppEvent(
       eventId: 42,
       slug: 'konnect',
-      title: 'NITKonnect',
+      title: title,
       status: 'draft',
       startDatetime: _start,
       endDatetime: _start.add(const Duration(hours: 8)),
@@ -165,7 +177,14 @@ Future<List<bool>> _open(WidgetTester tester, _SheetRepo repo, {AppEvent? event,
 Finder _key(String key) => find.byKey(ValueKey(key));
 
 void main() {
-  testWidgets('a linked sheet locks speakers, agenda and sponsors', (tester) async {
+  testWidgets('a DIY event has no way to attach a sheet', (tester) async {
+    await _open(tester, _SheetRepo(), event: _event());
+    expect(find.text('Google Sheet'), findsNothing);
+    expect(_key('event-imported-view'), findsNothing);
+    expect(find.text('Event Title *'), findsOneWidget);
+  });
+
+  testWidgets('an imported event is read-only, with the sheet card', (tester) async {
     final repo = _SheetRepo()
       ..details = _SheetRepo().detailsAfterRefresh
       ..sponsors = [
@@ -173,62 +192,55 @@ void main() {
       ];
     await _open(tester, repo, event: _event(sheet: _link));
 
-    expect(_key('event-group-sheet'), findsOneWidget);
-    expect(find.text('Unlink'), findsOneWidget);
+    expect(_key('event-imported-view'), findsOneWidget);
+    expect(_key('event-sheet-linked'), findsOneWidget);
     expect(find.textContaining('Last read 1 Jan, 09:05'), findsOneWidget);
-    for (final group in ['speakers', 'agenda', 'sponsors']) {
-      expect(_key('event-from-sheet-$group'), findsOneWidget, reason: group);
-      expect(_key('event-remove-$group'), findsNothing, reason: group);
-      expect(_key('event-add-$group'), findsNothing, reason: group);
+    // Nothing to add or edit: no fields, no "+", no Add or Edit buttons.
+    expect(find.byType(TextFormField), findsNothing);
+    expect(find.textContaining('Add more only if'), findsNothing);
+    for (final label in ['Add Speaker', 'Add Session', 'Add Sponsor']) {
+      expect(find.text(label), findsNothing, reason: label);
     }
-    expect(find.text('Add Speaker'), findsNothing);
-    expect(find.text('Add Session'), findsNothing);
-    expect(find.text('Add Sponsor'), findsNothing);
     expect(find.byIcon(Icons.edit), findsNothing);
-    expect(find.text('Asha Rao'), findsOneWidget);
-    expect(find.textContaining('CS 2001'), findsOneWidget);
+    // What the sheet set, as text.
+    expect(find.text('Speakers · 1'), findsOneWidget);
+    expect(find.textContaining('CTO, Acme, CS 2001'), findsOneWidget);
     expect(find.textContaining('Hall A · Keynote'), findsOneWidget);
-
-    // Save leaves sponsors and partners alone; the sessions' dates aren't checked here.
-    await tester.tap(_key('event-form-save'));
-    await tester.pumpAndSettle();
-    expect(repo.orgCalls, isEmpty);
+    expect(find.text('Acme Corp'), findsOneWidget);
+    expect(find.text('Close'), findsOneWidget);
+    final save = tester.widget<FilledButton>(_key('event-form-save'));
+    expect(save.onPressed, isNull); // nothing to save
   });
 
-  testWidgets('link and refresh asks before replacing typed entries, then locks', (tester) async {
+  testWidgets('refresh lists changes to the event, then applies them', (tester) async {
     final repo = _SheetRepo()
-      ..details = {
-        'speakers': [
-          {'person_id': 1, 'fullname': 'Typed Person', 'title': '', 'organisation': 'X', 'role': 'SPEAKER'},
-        ],
-        'sessions': [],
-        'fees': [],
-      };
-    await _open(tester, repo, event: _event());
+      ..eventChanges = const [(field: 'Title', from: 'NITKonnect', to: 'NITKonnect 2027')]
+      ..eventAfterRefresh = _event(sheet: _link, title: 'NITKonnect 2027');
+    await _open(tester, repo, event: _event(sheet: _link));
 
-    await tester.tap(_key('event-add-sheet'));
-    await tester.pumpAndSettle();
-    expect(_key('event-sheet-share-with'), findsOneWidget);
-    expect(find.text('Blank'), findsOneWidget);
-
-    await tester.enterText(_key('event-sheet-link'), _link);
     await tester.tap(_key('event-sheet-refresh'));
     await tester.pumpAndSettle();
-    expect(find.textContaining('The sheet will replace the 1 speaker here'), findsOneWidget);
-    await tester.tap(_key('event-sheet-replace-confirm'));
-    await tester.pumpAndSettle();
+    expect(find.text('Apply the changes from your sheet?'), findsOneWidget);
+    expect(find.text('Title'), findsOneWidget);
+    expect(repo.refreshed.single.confirm, isFalse);
 
-    expect(repo.refreshed.single, (eventId: 42, url: _link));
-    expect(find.text('Typed Person'), findsNothing);
+    await tester.tap(_key('sheet-changes-apply'));
+    await tester.pumpAndSettle();
+    expect(repo.refreshed.last.confirm, isTrue);
+    expect(find.text('NITKonnect 2027'), findsOneWidget);
     expect(find.text('Asha Rao'), findsOneWidget);
-    expect(_key('event-from-sheet-speakers'), findsOneWidget);
     expect(_key('event-sheet-warnings'), findsOneWidget);
-    expect(find.text('Refresh'), findsOneWidget);
+  });
 
-    // A Refresh saved the lists: closing doesn't ask about them.
-    await tester.tap(find.text('Cancel'));
+  testWidgets('cancelling the changes saves nothing', (tester) async {
+    final repo = _SheetRepo()..eventChanges = const [(field: 'Capacity', from: '500', to: '1000')];
+    await _open(tester, repo, event: _event(sheet: _link));
+    await tester.tap(_key('event-sheet-refresh'));
     await tester.pumpAndSettle();
-    expect(find.text('Discard your changes?'), findsNothing);
+    await tester.tap(find.text('Cancel').last);
+    await tester.pumpAndSettle();
+    expect(repo.refreshed.length, 1);
+    expect(repo.refreshed.single.confirm, isFalse);
   });
 
   testWidgets("the sheet's problems are listed and nothing changes", (tester) async {
@@ -237,35 +249,31 @@ void main() {
         'Sessions, row 14: no start time.',
         "Sessions, row 9: speaker 'A. Rao' isn't on the Speakers tab.",
       ]);
-    await _open(tester, repo, event: _event());
-    await tester.tap(_key('event-add-sheet'));
-    await tester.pumpAndSettle();
-    await tester.enterText(_key('event-sheet-link'), _link);
+    await _open(tester, repo, event: _event(sheet: _link));
     await tester.tap(_key('event-sheet-refresh'));
     await tester.pumpAndSettle();
 
     expect(_key('event-sheet-problem'), findsOneWidget);
     expect(find.textContaining('Sessions, row 14: no start time.'), findsOneWidget);
     expect(find.textContaining('Nothing was changed'), findsOneWidget);
-    expect(_key('event-from-sheet-speakers'), findsNothing);
-    expect(find.text('Link and Refresh'), findsOneWidget);
   });
 
-  testWidgets('unlink asks, then the lists can be edited again', (tester) async {
+  testWidgets('unlink is one way: the event becomes editable here', (tester) async {
     final repo = _SheetRepo()..details = _SheetRepo().detailsAfterRefresh;
     await _open(tester, repo, event: _event(sheet: _link));
 
-    await tester.tap(find.text('Unlink'));
+    await tester.tap(_key('event-sheet-unlink'));
     await tester.pumpAndSettle();
+    expect(find.textContaining("can't be linked to a sheet again"), findsOneWidget);
     await tester.tap(_key('event-sheet-unlink-confirm'));
     await tester.pumpAndSettle();
 
     expect(repo.unlinked, 1);
-    expect(_key('event-group-sheet'), findsNothing);
-    expect(_key('event-add-sheet'), findsOneWidget);
-    expect(_key('event-from-sheet-speakers'), findsNothing);
+    expect(_key('event-imported-view'), findsNothing);
+    expect(find.text('Event Title *'), findsOneWidget);
     expect(find.text('Add Speaker'), findsOneWidget);
     expect(find.text('Asha Rao'), findsOneWidget);
+    expect(find.text('Google Sheet'), findsNothing);
   });
 
   testWidgets('import fills the create form; saving the draft links the sheet', (tester) async {
@@ -295,7 +303,8 @@ void main() {
     expect(data['is_free'], false);
     expect(data['ticket_price'], 100);
     expect(data['start_datetime'], startsWith('2099-11-15T07:30'));
-    expect(repo.refreshed.single, (eventId: 900, url: _link));
+    // The form already showed the sheet's event: linked without a second question.
+    expect(repo.refreshed.single, (eventId: 900, url: _link, confirm: true));
     expect(result, [true]);
   });
 
