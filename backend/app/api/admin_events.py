@@ -21,6 +21,7 @@ from app.repositories.registration_repository import RegistrationRepository
 from app.schemas.checkins import CheckInCreate, CheckInResponse, QRVerifyResponse
 from app.schemas.event_create import EventCreate
 from app.schemas.event_response import EventResponse
+from app.api.admin_event_sheet import refuse_if_linked
 from app.schemas.event_status import EventStatusUpdate
 from app.schemas.event_update import EventUpdate
 from app.schemas.events import SessionCreate, SessionResponse
@@ -137,6 +138,7 @@ async def create_session(
 ):
     pool = await get_pool()
     async with pool.acquire() as conn:
+        await refuse_if_linked(conn, event_id)
         svc = EventsService(conn)
         return await svc.create_session(event_id, body, user)
 

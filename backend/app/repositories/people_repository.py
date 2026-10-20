@@ -23,7 +23,7 @@ class PeopleRepository:
         return await self.conn.fetch(
             """
             SELECT person_id, event_id, role, fullname, title,
-                   organisation, bio, photo_url, linkedin_url, display_order
+                   organisation, bio, photo_url, linkedin_url, batch, display_order
             FROM event_people
             WHERE event_id = $1 AND is_visible = true
             ORDER BY display_order ASC, person_id ASC

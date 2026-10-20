@@ -18,6 +18,7 @@ from app.middleware.admin_auth import require_event_admin
 from app.repositories.people_repository import PeopleRepository
 from app.schemas.people import PersonCreate, PersonResponse, PersonUpdate
 from app.services import audit_service
+from app.api.admin_event_sheet import refuse_if_linked
 
 router = APIRouter(prefix="/api/v1/events", tags=["people"])
 
@@ -57,6 +58,7 @@ async def create_person(
     pool = await get_pool()
     async with pool.acquire() as conn:
         await _require_event(conn, event_id)
+        await refuse_if_linked(conn, event_id)
         repo = PeopleRepository(conn)
         row = await repo.create(event_id, body)
     await audit_service.emit(
@@ -77,6 +79,7 @@ async def update_person(
     async with pool.acquire() as conn:
         repo = PeopleRepository(conn)
         await _require_person(repo, person_id, event_id)
+        await refuse_if_linked(conn, event_id)
         row = await repo.update(person_id, body)
     await audit_service.emit(
         actor_uid=user["firebase_uid"], event_type="person_updated",
@@ -95,6 +98,7 @@ async def delete_person(
     async with pool.acquire() as conn:
         repo = PeopleRepository(conn)
         await _require_person(repo, person_id, event_id)
+        await refuse_if_linked(conn, event_id)
         await repo.delete(person_id)
     await audit_service.emit(
         actor_uid=user["firebase_uid"], event_type="person_deleted",
