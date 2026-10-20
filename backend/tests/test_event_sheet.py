@@ -406,17 +406,46 @@ def test_alumni_lookup_problems_are_warnings(monkeypatch):
     assert asyncio.run(alumni_directory.fill_speakers(_speakers())) == []
 
 
-def test_parse_dates_outside_the_event_warn_once_per_day():
-    rows = [["21 Feb 2026", f"{h}:00", f"{h}:45", f"Talk {h}", "", "", "", "", "", "", ""] for h in (9, 10, 11)]
-    rows.append(["22 Feb 2026", "9:00", "9:45", "Day two", "", "", "", "", "", "", ""])
-    rows.append(["1 Mar 2027", "9:00", "9:45", "On the day", "", "", "", "", "", "", ""])
+def _day(date_, start="9:00", end="", title=None):
+    return [date_, start, end, title or f"{date_} {start}", "", "", "", "", "", "", ""]
+
+
+def test_parse_moves_a_templates_dates_onto_the_event():
+    # One-day event on 1 Mar 2027; the copied template says 21 Feb 2026.
+    r = parse_sheet(_tabs(sessions=[_day("21 Feb 2026", "9:00"), _day("21 Feb 2026", "10:00")]),
+                    event_start="2027-03-01 08:00", event_end="2027-03-01 18:00")
+    assert r.errors == []
+    assert [s["start"] for s in r.sessions] == ["2027-03-01 09:00", "2027-03-01 10:00"]
+    assert r.warnings == ["Sessions on 21 Feb 2026 are shown on 1 Mar 2027, the event's date."]
+
+    # Two days onto a two-day event, in order.
+    r = parse_sheet(_tabs(sessions=[_day("21 Feb 2026"), _day("22 Feb 2026")]),
+                    event_start="2027-03-01 08:00", event_end="2027-03-02 18:00")
+    assert [(s["start"], s["end"]) for s in r.sessions] == [
+        ("2027-03-01 09:00", "2027-03-01 18:00"),  # each day's last session runs to the event's end time
+        ("2027-03-02 09:00", "2027-03-02 18:00"),
+    ]
+    assert r.warnings == [
+        "Sessions on 21 Feb 2026 are shown on 1 Mar 2027, the event's day 1.",
+        "Sessions on 22 Feb 2026 are shown on 2 Mar 2027, the event's day 2.",
+    ]
+
+
+def test_parse_more_days_than_the_event_still_warns():
+    rows = [_day("21 Feb 2026", f"{h}:00", f"{h}:45") for h in (9, 10, 11)] + [_day("22 Feb 2026")]
     r = parse_sheet(_tabs(sessions=rows), event_start="2027-03-01 08:00", event_end="2027-03-01 18:00")
     assert r.errors == []
     assert r.warnings == [
-        "3 sessions are on 21 Feb 2026, outside the event's dates.",
-        "Sessions, row 5: 22 Feb 2026 is outside the event's dates.",
+        "Sessions on 21 Feb 2026 are shown on 1 Mar 2027, the event's date.",
+        "Sessions on 22 Feb 2026 are shown on 2 Mar 2027, the event's date.",
+        "Sessions, row 5: 2 Mar 2027 is outside the event's dates.",
     ]
-    # A full-day event ends at midnight after its last day: that midnight isn't a day of the event.
-    r = parse_sheet(_tabs(sessions=[["2 Mar 2027", "9:00", "9:30", "Next day", "", "", "", "", "", "", ""]]),
-                    event_start="2027-03-01 00:00", event_end="2027-03-02 00:00")
-    assert r.warnings == ["Sessions, row 2: 2 Mar 2027 is outside the event's dates."]
+
+
+def test_parse_dates_inside_the_event_stay():
+    r = parse_sheet(_tabs(sessions=[_day("1 Mar 2027"), _day("", "10:00")]),
+                    event_start="2027-03-01 08:00", event_end="2027-03-01 18:00")
+    assert (r.errors, r.warnings) == ([], [])
+    # A full-day event ends at midnight after its last day: sessions on that day stay.
+    r = parse_sheet(_tabs(sessions=[_day("1 Mar 2027")]), event_start="2027-03-01 00:00", event_end="2027-03-02 00:00")
+    assert (r.warnings, r.sessions[0]["start"]) == ([], "2027-03-01 09:00")
