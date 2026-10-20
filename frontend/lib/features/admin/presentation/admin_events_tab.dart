@@ -218,6 +218,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
 
   Future<void> _create() => _actions.create();
 
+  /// Events → Import (B7), on computers only: a sheet is set up at a desk.
+  Future<void> _import() => _actions.importFromSheet();
+
   List<EventCardAction> _actionsFor(AppEvent e) => _actions.actionsFor(e);
 
   // ── Layout ───────────────────────────────────────────────────────────────
@@ -268,10 +271,22 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
           ? null
           : ResultCount(count: visible.length, one: 'event', many: 'events'),
       action: canCreate
-          ? FilledButton.icon(
-              onPressed: _create,
-              icon: const Icon(Icons.add, size: 18),
-              label: const Text('Create event'),
+          ? Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                OutlinedButton.icon(
+                  key: const ValueKey('admin-events-import'),
+                  onPressed: _import,
+                  icon: const Icon(Icons.table_chart_outlined, size: 18),
+                  label: const Text('Import'),
+                ),
+                const SizedBox(width: 8),
+                FilledButton.icon(
+                  onPressed: _create,
+                  icon: const Icon(Icons.add, size: 18),
+                  label: const Text('Create event'),
+                ),
+              ],
             )
           : null,
       // Phones: "All 44" already counts them; Create event is a small +.

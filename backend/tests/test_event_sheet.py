@@ -404,3 +404,19 @@ def test_alumni_lookup_problems_are_warnings(monkeypatch):
     from app.config import get_settings
     monkeypatch.setattr(get_settings(), "nitksaa_partner_api_key", "")
     assert asyncio.run(alumni_directory.fill_speakers(_speakers())) == []
+
+
+def test_parse_dates_outside_the_event_warn_once_per_day():
+    rows = [["21 Feb 2026", f"{h}:00", f"{h}:45", f"Talk {h}", "", "", "", "", "", "", ""] for h in (9, 10, 11)]
+    rows.append(["22 Feb 2026", "9:00", "9:45", "Day two", "", "", "", "", "", "", ""])
+    rows.append(["1 Mar 2027", "9:00", "9:45", "On the day", "", "", "", "", "", "", ""])
+    r = parse_sheet(_tabs(sessions=rows), event_start="2027-03-01 08:00", event_end="2027-03-01 18:00")
+    assert r.errors == []
+    assert r.warnings == [
+        "3 sessions are on 21 Feb 2026, outside the event's dates.",
+        "Sessions, row 5: 22 Feb 2026 is outside the event's dates.",
+    ]
+    # A full-day event ends at midnight after its last day: that midnight isn't a day of the event.
+    r = parse_sheet(_tabs(sessions=[["2 Mar 2027", "9:00", "9:30", "Next day", "", "", "", "", "", "", ""]]),
+                    event_start="2027-03-01 00:00", event_end="2027-03-02 00:00")
+    assert r.warnings == ["Sessions, row 2: 2 Mar 2027 is outside the event's dates."]

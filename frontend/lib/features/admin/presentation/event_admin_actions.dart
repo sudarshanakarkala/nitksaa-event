@@ -13,6 +13,7 @@ import '../../events/presentation/providers/created_events_provider.dart';
 import '../../events/presentation/providers/events_provider.dart';
 import '../../events/presentation/screens/manage_events_screen.dart' show showEventFormDialog;
 import '../../events/presentation/widgets/event_card.dart' show EventCardAction;
+import '../../events/presentation/widgets/event_sheet_panel.dart' show showImportSheetDialog;
 import '../data/actions_api.dart';
 import 'event_admins_dialog.dart';
 import '../../../shared/widgets/notice.dart';
@@ -69,6 +70,14 @@ class EventAdminActions {
 
   Future<void> create() async {
     if (await showEventFormDialog(context)) await _afterChange();
+  }
+
+  /// Events → Import (B7): read a Google Sheet, then the Create form filled
+  /// in from it; saving the draft links the sheet and brings its lists.
+  Future<void> importFromSheet() async {
+    final preview = await showImportSheetDialog(context);
+    if (preview == null || !context.mounted) return;
+    if (await showEventFormDialog(context, fromSheet: preview)) await _afterChange();
   }
 
   /// Opens the form on the full event. Lists and the public page carry the

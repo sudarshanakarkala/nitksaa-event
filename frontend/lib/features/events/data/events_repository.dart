@@ -2,6 +2,7 @@ import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import '../domain/event.dart';
+import '../domain/event_sheet.dart';
 import '../domain/my_event_registration.dart';
 import '../domain/refund_status.dart';
 
@@ -169,6 +170,66 @@ class EventsRepository {
       options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
     );
     return response.data ?? <String, dynamic>{};
+  }
+
+  // ── The event's Google Sheet (B7) ──────────────────────────────────────
+  // Failures come back as [SheetProblem] (plain words, nothing changed).
+
+  Future<SheetInfo> getSheetInfo(String accessToken) async {
+    try {
+      final response = await _dio.get<Map<String, dynamic>>(
+        '/api/v1/admin/sheets/info',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+      return SheetInfo.fromJson(response.data ?? const {});
+    } catch (error) {
+      throw SheetProblem.from(error);
+    }
+  }
+
+  /// Events → Import: reads the sheet without saving anything.
+  Future<SheetPreview> previewSheet(String url, String accessToken) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/admin/sheets/preview',
+        data: {'url': url},
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+      return SheetPreview.fromJson(response.data ?? const {});
+    } catch (error) {
+      throw SheetProblem.from(error);
+    }
+  }
+
+  /// Links [url] (or re-reads the linked sheet when null) and saves what it
+  /// holds, in one step.
+  Future<SheetRefresh> refreshEventSheet(int eventId, String? url, String accessToken) async {
+    try {
+      final response = await _dio.post<Map<String, dynamic>>(
+        '/api/v1/admin/events/$eventId/sheet/refresh',
+        data: {'url': ?url},
+        options: Options(
+          headers: {'Authorization': 'Bearer $accessToken'},
+          // Big sheets and the alumni lookup can take a while.
+          receiveTimeout: const Duration(seconds: 120),
+        ),
+      );
+      return SheetRefresh.fromJson(response.data ?? const {});
+    } catch (error) {
+      throw SheetProblem.from(error);
+    }
+  }
+
+  /// Unlinks the sheet; what it saved stays, editable again.
+  Future<void> unlinkEventSheet(int eventId, String accessToken) async {
+    try {
+      await _dio.delete<Map<String, dynamic>>(
+        '/api/v1/admin/events/$eventId/sheet',
+        options: Options(headers: {'Authorization': 'Bearer $accessToken'}),
+      );
+    } catch (error) {
+      throw SheetProblem.from(error);
+    }
   }
 
   // ── Sponsors and partners ([kind] is 'sponsors' or 'partners') ────────

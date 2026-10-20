@@ -209,6 +209,17 @@ class _SpeakerRow extends StatelessWidget {
                   overflow: compact ? TextOverflow.ellipsis : null,
                   style: TextStyle(fontSize: 12, color: p.textMuted),
                 ),
+                // NITK batch (B7), e.g. "Electrical & Electronics, 1981".
+                if ((speaker.batch ?? '').trim().isNotEmpty) ...[
+                  const SizedBox(height: 2),
+                  Text(
+                    speaker.batch!.trim(),
+                    key: const ValueKey('speaker-batch'),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: TextStyle(fontSize: 11, color: p.textMuted),
+                  ),
+                ],
               ],
             ),
           ),

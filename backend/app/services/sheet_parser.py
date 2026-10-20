@@ -644,6 +644,7 @@ def _parse_sessions(result, tabs, speakers, sponsors, partners, first_day, last_
     starts_by_day: Dict[date, List[int]] = {}
     for s in parsed:
         starts_by_day.setdefault(s["day"], []).append(s["start_min"])
+    outside: Dict[date, List[int]] = {}
     for s in parsed:
         start_w = wall(s["day"], s["start_min"])
         if s["end_min"] is not None:
@@ -669,8 +670,9 @@ def _parse_sessions(result, tabs, speakers, sponsors, partners, first_day, last_
             else:
                 end_w = wall(s["day"], s["start_min"] + 60)
                 result.warnings.append(f"Sessions, row {s['row']}: no end time and nothing after it; set to one hour.")
-        if first_day and last_moment and not (first_day <= s["day"] <= last_moment.date()):
-            result.warnings.append(f"Sessions, row {s['row']}: {s['day'].strftime('%d %b %Y')} is outside the event's dates.")
+        last_day = (last_moment - timedelta(minutes=1)).date() if last_moment else None
+        if first_day and last_day and not (first_day <= s["day"] <= last_day):
+            outside.setdefault(s["day"], []).append(s["row"])
         result.sessions.append({
             "row": s["row"],
             "title": s["title"],
@@ -683,3 +685,10 @@ def _parse_sessions(result, tabs, speakers, sponsors, partners, first_day, last_
             "people": s["people"],
             "presented_by": s["presented_by"],
         })
+    # One line per day outside the event, not one per session.
+    for day, rows in sorted(outside.items()):
+        when = day.strftime("%d %b %Y").lstrip("0")
+        if len(rows) == 1:
+            result.warnings.append(f"Sessions, row {rows[0]}: {when} is outside the event's dates.")
+        else:
+            result.warnings.append(f"{len(rows)} sessions are on {when}, outside the event's dates.")
