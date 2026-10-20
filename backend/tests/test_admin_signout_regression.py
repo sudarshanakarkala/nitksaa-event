@@ -120,8 +120,15 @@ def test_authenticated_non_admin_gets_403_not_401(client, method, path, body):
     resp = client.request(method, path, json=body, headers=_bearer(_NON_ADMIN))
     assert resp.status_code == 403, resp.text
     # Self-describing, non-auth detail — the frontend keeps the session on this.
+    # Since #49–#52: creating an event needs an event creator
+    # (event_creator_required); listing needs some admin role (admin_required).
     detail = resp.json()["detail"]
-    assert detail in {"payment_role_required", "event_admin_required"}, detail
+    assert detail in {
+        "payment_role_required",
+        "event_admin_required",
+        "event_creator_required",
+        "admin_required",
+    }, detail
 
 
 def test_event_scoped_denial_is_403_for_authenticated_non_admin(client, as_platform_admin):
