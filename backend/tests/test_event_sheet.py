@@ -16,6 +16,7 @@ from tests.test_event_links import _draft, _publish
 from tests.test_payment_refunds import (
     _FIXTURE_ADMIN,
     _TEST_ALUMNI,
+    _TEST_ALUMNI_2,
     _bearer,
     _db,
     _seed,  # noqa: F401  (autouse fixture: the test users and admin)
@@ -30,6 +31,12 @@ SPONSORS_H = ["Name *", "Tier *", "Logo link", "Website", "Label"]
 
 def _admin():
     return _bearer(_FIXTURE_ADMIN)
+
+
+# An Event tab like _draft's event (1 Mar 2027, 08:00–10:00 IST, venue V,
+# 20 seats, free); only its title differs.
+DRAFT_TAB = {"Title": "From the sheet", "Date": "1 Mar 2027", "Start time": "8:00 am",
+             "End time": "10:00 am", "Venue": "V", "Capacity": "20"}
 
 
 def _tabs(sessions=(), speakers=(), sponsors=(), event=None):
@@ -50,8 +57,9 @@ def _sheet(monkeypatch, tabs):
     monkeypatch.setattr(sheet_reader, "read_tabs", fake)
 
 
-def _refresh(client, eid, url=LINK):
-    return client.post(f"/api/v1/admin/events/{eid}/sheet/refresh", json={"url": url}, headers=_admin())
+def _refresh(client, eid, url=LINK, confirm=True):
+    return client.post(f"/api/v1/admin/events/{eid}/sheet/refresh", json={"url": url, "confirm": confirm},
+                       headers=_admin())
 
 
 def _public(client, eid):
@@ -177,7 +185,7 @@ def test_parse_event_tab_for_import():
 
 def test_refresh_links_and_saves_everything(client, monkeypatch):
     eid = _draft(client)["event_id"]
-    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS))
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS, event=DRAFT_TAB))
     r = _refresh(client, eid)
     assert r.status_code == 200, r.text
     body = r.json()
@@ -220,7 +228,7 @@ def test_refresh_links_and_saves_everything(client, monkeypatch):
 def test_refresh_again_updates_in_place_and_keeps_checked_in_sessions(client, monkeypatch):
     eid = _draft(client)["event_id"]
     _publish(client, eid)
-    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS))
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS, event=DRAFT_TAB))
     assert _refresh(client, eid).status_code == 200
     before = client.get(f"/api/v1/admin/events/{eid}/details", headers=_admin()).json()
     ids = {s["title"]: s["session_id"] for s in before["sessions"]}
@@ -240,7 +248,7 @@ def test_refresh_again_updates_in_place_and_keeps_checked_in_sessions(client, mo
     sessions[1][3] = "The Future of Work"
     sessions[1][5] = ""
     speakers = [r for r in SPEAKERS if r[0] != "Meera Nayak"]
-    _sheet(monkeypatch, _tabs(sessions, speakers, SPONSORS))
+    _sheet(monkeypatch, _tabs(sessions, speakers, SPONSORS, event=DRAFT_TAB))
     r = _refresh(client, eid)
     assert r.status_code == 200, r.text
     assert r.json()["warnings"] == ["'Workshop' isn't in the sheet any more but people checked in to it, so it was kept."]
@@ -257,11 +265,11 @@ def test_refresh_again_updates_in_place_and_keeps_checked_in_sessions(client, mo
 
 def test_a_bad_sheet_changes_nothing(client, monkeypatch):
     eid = _draft(client)["event_id"]
-    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS))
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS, event=DRAFT_TAB))
     assert _refresh(client, eid).status_code == 200
     broken = [list(r) for r in SESSIONS]
     broken[0][4] = "Nobody Here"
-    _sheet(monkeypatch, _tabs(broken, SPEAKERS, SPONSORS))
+    _sheet(monkeypatch, _tabs(broken, SPEAKERS, SPONSORS, event=DRAFT_TAB))
     r = _refresh(client, eid)
     assert r.status_code == 422
     assert r.json()["detail"]["errors"] == ["Sessions, row 2: speaker 'Nobody Here' isn't on the Speakers tab."]
@@ -286,7 +294,7 @@ def test_unreachable_sheet_is_explained(client, monkeypatch, code):
 
 def test_linked_sheet_locks_the_lists_until_unlinked(client, monkeypatch):
     eid = _draft(client)["event_id"]
-    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS))
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS, event=DRAFT_TAB))
     assert _refresh(client, eid).status_code == 200
     sponsor_id = next(s["sponsor_id"] for s in _public(client, eid)["sponsors"])
 
@@ -309,6 +317,11 @@ def test_linked_sheet_locks_the_lists_until_unlinked(client, monkeypatch):
     assert r.status_code == 200, r.text
     assert client.post(f"/api/v1/events/{eid}/sponsors", json=sponsor, headers=_admin()).status_code == 201
     assert len(_public(client, eid)["sessions"]) == 4  # unlinking keeps what's there
+
+    # One way: it can't be linked to a sheet again.
+    r = _refresh(client, eid)
+    assert r.status_code == 409
+    assert r.json()["detail"]["code"] == "sheet_unlinked"
 
 
 def test_details_save_keeps_speaker_extras_when_left_out(client):
@@ -449,3 +462,88 @@ def test_parse_dates_inside_the_event_stay():
     # A full-day event ends at midnight after its last day: sessions on that day stay.
     r = parse_sheet(_tabs(sessions=[_day("1 Mar 2027")]), event_start="2027-03-01 00:00", event_end="2027-03-02 00:00")
     assert (r.warnings, r.sessions[0]["start"]) == ([], "2027-03-01 09:00")
+
+
+# ── The Event tab on Refresh ────────────────────────────────────────────────
+
+EVENT_TAB = {
+    "Title *": "NITKonnect 2027", "Date *": "1 Mar 2027", "Start time": "8:00 am", "End time": "6:00 pm",
+    "Venue": "Taj Yeshwantpur", "Capacity *": "1000", "Ticket price (₹)": "2500", "Guests per registration": "1",
+}
+
+
+def _refresh_confirm(client, eid):
+    return _refresh(client, eid, confirm=True)
+
+
+def test_refresh_with_event_tab_shows_changes_then_saves_on_confirm(client, monkeypatch):
+    eid = _draft(client)["event_id"]  # "LINKS …", 1 Mar 2027 08:00–10:00 IST, venue V, 20 seats, free
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS, event=EVENT_TAB))
+
+    r = _refresh(client, eid, confirm=False)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["needs_confirm"] is True
+    changes = {c["field"]: (c["from"], c["to"]) for c in body["changes"]}
+    assert changes["Title"][1] == "NITKonnect 2027"
+    assert changes["Ends"] == ("1 Mar 2027, 10:00 am", "1 Mar 2027, 6:00 pm")
+    assert changes["Venue"] == ("V", "Taj Yeshwantpur")
+    assert changes["Capacity"] == ("20", "1000")
+    assert changes["Price"] == ("—", "₹2,500")
+    assert "Starts" not in changes  # same start
+    assert _public(client, eid)["title"].startswith("LINKS")  # nothing saved yet
+    assert _public(client, eid)["sessions"] == []
+
+    r = _refresh_confirm(client, eid)
+    assert r.status_code == 200, r.text
+    assert "needs_confirm" not in r.json()
+    event = _public(client, eid)
+    assert (event["title"], event["location_text"], event["capacity"], event["max_guests"]) == (
+        "NITKonnect 2027", "Taj Yeshwantpur", 1000, 1,
+    )
+    assert (event["is_free"], float(event["ticket_price"])) == (False, 2500.0)
+    assert [(f["name"], f["amount"]) for f in event["fees"]] == [("Registration", 2500.0)]
+    assert len(event["sessions"]) == 4
+
+    # Nothing changes now: no confirmation.
+    r = _refresh(client, eid, confirm=False)
+    assert r.status_code == 200 and "needs_confirm" not in r.json() and r.json()["changes"] == []
+
+
+def test_refresh_keeps_the_price_of_a_published_event(client, monkeypatch):
+    eid = _draft(client)["event_id"]
+    _publish(client, eid)
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS, event=EVENT_TAB))
+    r = _refresh(client, eid, confirm=False)
+    fields = [c["field"] for c in r.json()["changes"]]
+    assert "Price" not in fields and "Free or paid" not in fields and "Title" in fields
+    r = _refresh_confirm(client, eid)
+    assert r.status_code == 200, r.text
+    assert "The price stays free: it can't change once the event is published." in r.json()["warnings"]
+    event = _public(client, eid)
+    assert event["title"] == "NITKonnect 2027" and event["is_free"] is True
+
+
+def test_refresh_refuses_capacity_below_registrations(client, monkeypatch):
+    eid = _draft(client)["event_id"]  # 20 seats
+    _publish(client, eid)
+    for who, phone in ((_TEST_ALUMNI, "+919000000001"), (_TEST_ALUMNI_2, "+919000000002")):
+        reg = client.post(f"/api/v1/events/{eid}/register", json={"phone": phone}, headers=_bearer(who))
+        assert reg.status_code in (200, 201), reg.text
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS, event={**EVENT_TAB, "Capacity *": "1"}))
+    r = _refresh_confirm(client, eid)
+    assert r.status_code == 422, r.text
+    assert r.json()["detail"]["errors"] == ["Event: capacity 1 is less than the 2 people already registered."]
+    assert _public(client, eid)["capacity"] == 20
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS, event={**EVENT_TAB, "Capacity *": "2"}))
+    assert _refresh_confirm(client, eid).status_code == 200
+    assert _public(client, eid)["capacity"] == 2
+
+
+def test_refresh_needs_the_event_tab(client, monkeypatch):
+    eid = _draft(client)["event_id"]
+    _sheet(monkeypatch, _tabs(SESSIONS, SPEAKERS, SPONSORS))  # no Event tab
+    r = _refresh(client, eid)
+    assert r.status_code == 422
+    assert r.json()["detail"]["errors"] == ["Event tab: empty. Fill in at least the title, date and capacity."]
+    assert _public(client, eid)["sessions"] == []

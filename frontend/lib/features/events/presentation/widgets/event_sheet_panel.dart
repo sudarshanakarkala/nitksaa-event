@@ -17,75 +17,63 @@ final sheetInfoProvider = FutureProvider<SheetInfo>((ref) async {
   return ref.read(eventsRepositoryProvider).getSheetInfo(token);
 });
 
-/// Edit event → Google Sheet (B7).
+/// An imported event's sheet (B7), at the top of its Edit event: which sheet,
+/// when it was last read, **Open**, **Refresh** and **Unlink**.
 ///
-/// Not linked: paste the sheet's link, then **Link and Refresh**. Linked:
-/// the link, when it was last read, and **Refresh**. Each Refresh reads the
-/// sheet and saves what it holds in one step, so it doesn't wait for the
-/// form's Save. Unlinking is the group's Remove (see the form).
+/// Refresh reads the sheet. If its Event tab would change the event (title,
+/// dates, price…), the changes are listed first and saved only when agreed;
+/// speakers, the agenda and sponsors just refresh.
 class EventSheetPanel extends ConsumerStatefulWidget {
   const EventSheetPanel({
     super.key,
     required this.eventId,
     required this.linkedUrl,
     required this.readAt,
-    required this.confirmFirstLink,
     required this.onRefreshed,
+    required this.onUnlink,
   });
 
   final int eventId;
-
-  /// The linked sheet, or null.
-  final String? linkedUrl;
+  final String linkedUrl;
   final DateTime? readAt;
 
-  /// Before the first link: asks whether the sheet may replace what was
-  /// typed. False stops.
-  final Future<bool> Function() confirmFirstLink;
-
-  /// After a Refresh saved: the form reloads its lists.
+  /// After a Refresh saved: the form reloads what it shows.
   final Future<void> Function(SheetRefresh result) onRefreshed;
+
+  /// Unlink (asks first; one way).
+  final Future<void> Function() onUnlink;
 
   @override
   ConsumerState<EventSheetPanel> createState() => _EventSheetPanelState();
 }
 
 class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
-  final _link = TextEditingController();
   var _busy = false;
   SheetProblem? _problem;
   List<String> _warnings = const [];
 
-  bool get _linked => widget.linkedUrl != null;
-
-  @override
-  void dispose() {
-    _link.dispose();
-    super.dispose();
-  }
-
   Future<void> _refresh() async {
     final token = ref.read(authControllerProvider).session?.accessToken;
     if (token == null) return;
-    final url = _linked ? null : _link.text.trim();
-    if (!_linked && (url == null || url.isEmpty)) {
-      setState(() => _problem = const SheetProblem("Paste the sheet's link first."));
-      return;
-    }
-    if (!_linked && !await widget.confirmFirstLink()) return;
-    if (!mounted) return;
     setState(() {
       _busy = true;
       _problem = null;
     });
+    final repo = ref.read(eventsRepositoryProvider);
     try {
-      final result = await ref.read(eventsRepositoryProvider).refreshEventSheet(widget.eventId, url, token);
+      var result = await repo.refreshEventSheet(widget.eventId, null, token);
+      if (result.needsConfirm) {
+        if (!mounted) return;
+        // Not "reading" while it waits for an answer.
+        setState(() => _busy = false);
+        final ok = await confirmSheetChanges(context, result.changes);
+        if (!ok || !mounted) return;
+        setState(() => _busy = true);
+        result = await repo.refreshEventSheet(widget.eventId, null, token, confirm: true);
+      }
       await widget.onRefreshed(result);
       if (!mounted) return;
-      setState(() {
-        _warnings = result.warnings;
-        _link.clear();
-      });
+      setState(() => _warnings = result.warnings);
       showNotice(context, 'Read from your sheet: ${result.summary.describe()}.', kind: NoticeKind.success);
     } catch (error, stackTrace) {
       AppLogger.error('Event sheet: refresh failed', error, stackTrace);
@@ -95,108 +83,87 @@ class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
     }
   }
 
-  Widget _refreshButton() => FilledButton.tonalIcon(
-        key: const ValueKey('event-sheet-refresh'),
-        onPressed: _busy ? null : _refresh,
-        icon: _busy
-            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-            : const Icon(Icons.refresh, size: 18),
-        label: Text(_busy ? 'Reading the sheet…' : _linked ? 'Refresh' : 'Link and Refresh'),
-      );
-
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
-    final info = ref.watch(sheetInfoProvider).valueOrNull;
     return Column(
       key: const ValueKey('event-sheet-panel'),
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (_linked) ...[
-          // One card: what's linked and when it was read, with its actions.
-          Container(
-            key: const ValueKey('event-sheet-linked'),
-            width: double.infinity,
-            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
-            decoration: BoxDecoration(
-              border: Border.all(color: p.border),
-              borderRadius: BorderRadius.circular(10),
-            ),
-            child: Wrap(
-              alignment: WrapAlignment.spaceBetween,
-              crossAxisAlignment: WrapCrossAlignment.center,
-              spacing: 12,
-              runSpacing: 10,
-              children: [
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(Icons.table_chart_outlined, size: 22, color: p.primary),
-                    const SizedBox(width: 12),
-                    Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text('Linked to a Google Sheet',
-                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
-                        const SizedBox(height: 2),
-                        Text(
-                          widget.readAt == null ? 'Not read yet' : 'Last read ${sheetReadTime(widget.readAt!)}',
-                          style: TextStyle(fontSize: 12, color: p.textSecondary),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-                Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    OutlinedButton.icon(
-                      key: const ValueKey('event-sheet-open'),
-                      onPressed: () => launchUrl(Uri.parse(widget.linkedUrl!), webOnlyWindowName: '_blank'),
-                      icon: const Icon(Icons.open_in_new, size: 16),
-                      label: const Text('Open'),
-                    ),
-                    const SizedBox(width: 8),
-                    _refreshButton(),
-                  ],
-                ),
-              ],
-            ),
+        // One card: what's linked and when it was read, with its actions.
+        Container(
+          key: const ValueKey('event-sheet-linked'),
+          width: double.infinity,
+          padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+          decoration: BoxDecoration(
+            border: Border.all(color: p.border),
+            borderRadius: BorderRadius.circular(10),
           ),
-          const SizedBox(height: 8),
-          Text(
-            'Speakers, the agenda and sponsors come from this sheet. Change them there, then press Refresh.',
-            style: TextStyle(fontSize: 12, color: p.textSecondary),
-          ),
-        ] else ...[
-          Text(
-            'Keep the speakers, agenda and sponsors in a Google Sheet; the app reads it when you press Refresh.',
-            style: TextStyle(fontSize: 12, color: p.textSecondary),
-          ),
-          const SizedBox(height: 14),
-          SheetSteps(
-            info: info,
-            linkField: TextField(
-              key: const ValueKey('event-sheet-link'),
-              controller: _link,
-              enabled: !_busy,
-              decoration: InputDecoration(
-                hintText: 'https://docs.google.com/spreadsheets/d/…',
-                border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
-                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+          child: Wrap(
+            alignment: WrapAlignment.spaceBetween,
+            crossAxisAlignment: WrapCrossAlignment.center,
+            spacing: 12,
+            runSpacing: 10,
+            children: [
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.table_chart_outlined, size: 22, color: p.primary),
+                  const SizedBox(width: 12),
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text('Imported from a Google Sheet',
+                          style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
+                      const SizedBox(height: 2),
+                      Text(
+                        widget.readAt == null ? 'Not read yet' : 'Last read ${sheetReadTime(widget.readAt!)}',
+                        style: TextStyle(fontSize: 12, color: p.textSecondary),
+                      ),
+                    ],
+                  ),
+                ],
               ),
-              onSubmitted: (_) => _refresh(),
+              Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  OutlinedButton.icon(
+                    key: const ValueKey('event-sheet-open'),
+                    onPressed: () => launchUrl(Uri.parse(widget.linkedUrl), webOnlyWindowName: '_blank'),
+                    icon: const Icon(Icons.open_in_new, size: 16),
+                    label: const Text('Open'),
+                  ),
+                  const SizedBox(width: 8),
+                  FilledButton.tonalIcon(
+                    key: const ValueKey('event-sheet-refresh'),
+                    onPressed: _busy ? null : _refresh,
+                    icon: _busy
+                        ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.refresh, size: 18),
+                    label: Text(_busy ? 'Reading the sheet…' : 'Refresh'),
+                  ),
+                ],
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: 8),
+        Wrap(
+          crossAxisAlignment: WrapCrossAlignment.center,
+          spacing: 4,
+          children: [
+            Text(
+              'Everything about this event comes from the sheet. Change it there, then press Refresh.',
+              style: TextStyle(fontSize: 12, color: p.textSecondary),
             ),
-          ),
-        ],
-        if (!_linked) ...[
-          const SizedBox(height: 16),
-          Padding(
-            // Lined up with the steps' text, under step 3.
-            padding: const EdgeInsets.only(left: 36),
-            child: _refreshButton(),
-          ),
-        ],
+            TextButton(
+              key: const ValueKey('event-sheet-unlink'),
+              style: TextButton.styleFrom(visualDensity: VisualDensity.compact),
+              onPressed: _busy ? null : widget.onUnlink,
+              child: const Text('Unlink and edit here instead'),
+            ),
+          ],
+        ),
         if (_problem != null) ...[
           const SizedBox(height: 12),
           SheetProblemBox(problem: _problem!),
@@ -208,6 +175,56 @@ class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
       ],
     );
   }
+}
+
+/// Before a Refresh changes the event: the changes, then Apply or Cancel.
+Future<bool> confirmSheetChanges(BuildContext context, List<SheetChange> changes) async {
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (context) {
+      final p = context.palette;
+      return AlertDialog(
+        title: const Text('Apply the changes from your sheet?'),
+        content: SizedBox(
+          width: 480,
+          child: SingleChildScrollView(
+            child: Column(
+              key: const ValueKey('sheet-changes'),
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                for (final c in changes)
+                  Padding(
+                    padding: const EdgeInsets.only(bottom: 10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(c.field, style: TextStyle(fontSize: 12, color: p.textSecondary)),
+                        const SizedBox(height: 2),
+                        Text.rich(TextSpan(children: [
+                          TextSpan(text: c.from, style: TextStyle(color: p.textMuted, decoration: TextDecoration.lineThrough)),
+                          const TextSpan(text: '  →  '),
+                          TextSpan(text: c.to, style: TextStyle(color: p.textPrimary, fontWeight: FontWeight.w600)),
+                        ])),
+                      ],
+                    ),
+                  ),
+              ],
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            key: const ValueKey('sheet-changes-apply'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Apply'),
+          ),
+        ],
+      );
+    },
+  );
+  return ok == true;
 }
 
 /// The three steps to a linked sheet, in the order they're done:

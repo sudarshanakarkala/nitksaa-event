@@ -56,20 +56,39 @@ class SheetSummary {
   }
 }
 
-/// What a Refresh saved.
+/// One change the sheet's Event tab makes to the event, e.g.
+/// ('Title', 'B7 Test', 'NITKonnect 2026').
+typedef SheetChange = ({String field, String from, String to});
+
+/// What a Refresh saved, or, when [needsConfirm], what it would change to the
+/// event (nothing saved yet: ask, then Refresh again with confirm).
 class SheetRefresh {
-  const SheetRefresh({required this.url, this.readAt, required this.summary, this.warnings = const []});
+  const SheetRefresh({
+    required this.url,
+    this.readAt,
+    required this.summary,
+    this.warnings = const [],
+    this.needsConfirm = false,
+    this.changes = const [],
+  });
 
   final String url;
   final DateTime? readAt;
   final SheetSummary summary;
   final List<String> warnings;
+  final bool needsConfirm;
+  final List<SheetChange> changes;
 
   factory SheetRefresh.fromJson(Map<String, dynamic> json) => SheetRefresh(
         url: json['url'] as String? ?? '',
         readAt: DateTime.tryParse(json['read_at'] as String? ?? '')?.toLocal(),
         summary: SheetSummary.fromJson(json['summary'] as Map<String, dynamic>?),
         warnings: [for (final w in json['warnings'] as List<dynamic>? ?? const []) '$w'],
+        needsConfirm: json['needs_confirm'] == true,
+        changes: [
+          for (final c in (json['changes'] as List<dynamic>? ?? const []).whereType<Map<String, dynamic>>())
+            (field: '${c['field'] ?? ''}', from: '${c['from'] ?? ''}', to: '${c['to'] ?? ''}'),
+        ],
       );
 }
 

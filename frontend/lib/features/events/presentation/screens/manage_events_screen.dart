@@ -630,7 +630,6 @@ enum _Group {
   branding('Branding'),
   registrationDates('Registration dates'),
   guests('Guests'),
-  sheet('Google Sheet'),
   speakers('Speakers'),
   agenda('Agenda'),
   sponsors('Sponsors & partners');
@@ -735,6 +734,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   /// the sheet (Refresh) and Save leaves them alone.
   String? _sheetUrl;
   DateTime? _sheetReadAt;
+
+  /// The event as saved (refreshed after a sheet Refresh), for the
+  /// imported event's read-only view.
+  AppEvent? _current;
   bool get _sheetLinked => _sheetUrl != null && _sheetUrl!.trim().isNotEmpty;
 
   /// Groups added with "+" in this sitting (see [_Group]).
@@ -758,9 +761,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   /// and while a sheet is linked they can't change here.
   String? _baseline;
   String? _baselineLists;
-
-  /// After a Refresh: take a new lists snapshot once they've reloaded.
-  var _rebaseLists = false;
   
   // Location search state
   final _locationSearchController = TextEditingController();
@@ -877,6 +877,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     
     _sheetUrl = event?.agendaSheetUrl;
     _sheetReadAt = event?.agendaSheetReadAt;
+    _current = event;
     final fromSheet = widget.fromSheet;
     if (event == null && fromSheet != null) _fillFromSheet(fromSheet.event);
 
@@ -961,16 +962,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   String _listsSignature() => jsonEncode([_speakers, _sessions, _sponsors, _partners]);
 
   /// Takes the "nothing changed yet" snapshot once everything has loaded
-  /// (and the lists' again after a Refresh reloaded them).
+  /// (again after a sheet Refresh reloaded it all).
   void _setBaselineWhenLoaded() {
-    if (_detailsLoading || _orgsLoading) return;
-    if (_baseline == null) {
-      _baseline = _signature();
-      _baselineLists = _listsSignature();
-    } else if (_rebaseLists) {
-      _baselineLists = _listsSignature();
-      _rebaseLists = false;
-    }
+    if (_detailsLoading || _orgsLoading || _baseline != null) return;
+    _baseline = _signature();
+    _baselineLists = _listsSignature();
   }
 
   bool get _hasUnsavedChanges =>
@@ -1011,7 +1007,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         _Group.registrationDates => _registrationOpensAt.text.trim().isNotEmpty ||
             _registrationClosesAt.text.trim().isNotEmpty,
         _Group.guests => _maxGuests > 0,
-        _Group.sheet => _sheetLinked,
         _Group.speakers => _speakers.isNotEmpty,
         _Group.agenda => _sessions.isNotEmpty,
         _Group.sponsors => _sponsors.isNotEmpty || _partners.isNotEmpty,
@@ -1020,16 +1015,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   bool _shows(_Group group) => _addedGroups.contains(group) || _hasData(group);
 
   /// Removes a group; if it holds data, asks first. The data goes on save.
-  /// The Google Sheet group unlinks the sheet straight away instead.
   Future<void> _removeGroup(_Group group) async {
-    if (group == _Group.sheet) {
-      if (_sheetLinked) {
-        await _unlinkSheet();
-      } else {
-        setState(() => _addedGroups.remove(group));
-      }
-      return;
-    }
     if (_hasData(group)) {
       final ok = await showDialog<bool>(
         context: context,
@@ -1041,7 +1027,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             _Group.registrationDates => 'Registration will go back to opening on '
                 'publish and closing at the start, when you save.',
             _Group.guests => 'People won\'t be able to bring guests once you save.',
-            _Group.sheet => '',
             _Group.speakers => 'All speakers will be removed from this event when you save.',
             _Group.agenda => 'All sessions will be removed from this event when you save.',
             _Group.sponsors =>
@@ -1076,8 +1061,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           _registrationClosesAt.clear();
         case _Group.guests:
           _maxGuests = 0;
-        case _Group.sheet:
-          break;
         case _Group.speakers:
           _speakers.clear();
           // Sessions name their speakers; there are none now.
@@ -1201,6 +1184,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // An imported event (B7) is changed only in its sheet.
+                          if (_sheetLinked && isEditing)
+                            _buildImportedView()
+                          else ...[
                           _buildEssentials(),
                           const SizedBox(height: 32),
                           if (isEditing)
@@ -1219,6 +1206,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                               'guests, speakers, an agenda, sponsors and more.',
                               style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
                             ),
+                          ],
                         ],
                       ),
                     ),
@@ -1235,12 +1223,17 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       children: [
                         TextButton(
                           onPressed: _isSaving ? null : _close,
-                          child: const Text('Cancel'),
+                          child: Text(_sheetLinked && isEditing ? 'Close' : 'Cancel'),
                         ),
                         const SizedBox(width: 8),
                         FilledButton(
                           key: const ValueKey('event-form-save'),
-                          onPressed: _isSaving ? null : _save,
+                          // Imported: only the event's link can be saved here.
+                          onPressed: _isSaving
+                              ? null
+                              : _sheetLinked && isEditing
+                                  ? (_linkChanged ? _saveLinkOnly : null)
+                                  : _save,
                           child: Text(_isSaving
                               ? 'Saving...'
                               : isEditing
@@ -1257,6 +1250,215 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         ),
       ),
     );
+  }
+
+  // ── An imported event (B7): read-only ──────────────────────────────────
+
+  /// Only the link was changed (it's the one thing set here, not in the sheet).
+  bool get _linkChanged =>
+      widget.event != null && !_slugLocked && _slug.text.trim() != (_current ?? widget.event!).slug;
+
+  Future<void> _saveLinkOnly() async {
+    final slug = _slug.text.trim();
+    final problem = slugProblem(slug);
+    if (problem != null) {
+      showNotice(context, problem, kind: NoticeKind.warning);
+      return;
+    }
+    final token = ref.read(authControllerProvider).session?.accessToken;
+    if (token == null) return;
+    setState(() => _isSaving = true);
+    try {
+      await ref.read(eventsRepositoryProvider).updateAdminEvent(widget.event!.eventId, {'slug': slug}, token);
+      if (mounted) Navigator.pop(context, true);
+    } catch (error, stackTrace) {
+      AppLogger.error('Saving the event link failed', error, stackTrace);
+      if (!mounted) return;
+      setState(() => _isSaving = false);
+      showNotice(context, apiErrorMessage(error, action: 'save the link'), kind: NoticeKind.error);
+    }
+  }
+
+  /// Everything the sheet set, as text: nothing here can be added or changed.
+  /// The sheet card (Open, Refresh, Unlink) sits on top.
+  Widget _buildImportedView() {
+    final e = _current ?? widget.event!;
+    final p = context.palette;
+    final muted = TextStyle(fontSize: 12, color: p.textMuted);
+    String money(double v) => v == v.roundToDouble() ? '₹${v.toInt()}' : '₹${v.toStringAsFixed(2)}';
+    final images = [
+      if ((e.thumbnailUrl ?? '').isNotEmpty) 'Thumbnail',
+      if ((e.bannerUrl ?? '').isNotEmpty) 'Banner',
+      if ((e.brandLogoUrl ?? '').isNotEmpty) 'Logo',
+      if ((e.brandLogoDarkUrl ?? '').isNotEmpty) 'Logo for dark backgrounds',
+    ];
+    final opens = e.registrationOpensAt;
+    final closes = e.registrationClosesAt;
+    final closesAtStart = closes != null && closes.difference(e.startDatetime).inMinutes.abs() < 1;
+
+    return Column(
+      key: const ValueKey('event-imported-view'),
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        EventSheetPanel(
+          eventId: e.eventId,
+          linkedUrl: _sheetUrl!,
+          readAt: _sheetReadAt,
+          onRefreshed: _afterSheetRefresh,
+          onUnlink: _unlinkSheet,
+        ),
+        const SizedBox(height: 28),
+        Text(e.title, style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w600)),
+        const SizedBox(height: 8),
+        _buildLinkField(),
+        if ((e.description ?? '').trim().isNotEmpty) ...[
+          const SizedBox(height: 12),
+          Text(e.description!.trim(), maxLines: 6, overflow: TextOverflow.ellipsis,
+              style: TextStyle(fontSize: 13, color: p.textSecondary)),
+        ],
+        const SizedBox(height: 24),
+        _readOnly('When', _whenText(e)),
+        _readOnly('Where', e.isVirtual ? 'Online${(e.virtualUrl ?? '').isEmpty ? '' : ' · ${e.virtualUrl}'}' : (e.locationText ?? '—')),
+        _readOnly('Seats and price', [
+          '${e.capacity ?? '—'} seats',
+          (e.isFree ?? true) || (e.ticketPrice ?? 0) <= 0 ? 'Free' : money(e.ticketPrice!),
+          if (e.maxGuests > 0) 'up to ${e.maxGuests} guest${e.maxGuests == 1 ? '' : 's'} each',
+        ].join(' · ')),
+        _readOnly('Registration', [
+          opens == null ? 'Opens when published' : 'Opens ${_dayTime(opens, e.timezone)}',
+          closes == null || closesAtStart ? 'closes when the event starts' : 'closes ${_dayTime(closes, e.timezone)}',
+        ].join(', ')),
+        if (images.isNotEmpty) _readOnly('Images and logos', images.join(', ')),
+        const SizedBox(height: 12),
+        _readOnlyList(_Group.speakers, 'Speakers', [
+          for (final sp in _speakers)
+            (
+              sp['fullname'] ?? '',
+              [
+                for (final key in const ['title', 'organisation', 'batch'])
+                  if ((sp[key] ?? '').trim().isNotEmpty) sp[key]!.trim(),
+              ].join(', '),
+              // Organisers only: never on the event page.
+              [sp['email'], sp['phone']].where((v) => (v ?? '').trim().isNotEmpty).join(' · '),
+            ),
+        ]),
+        _readOnlyList(_Group.agenda, 'Agenda', [
+          for (final se in _sessions)
+            (
+              se['title'] ?? '',
+              [
+                '${_clockOf(se['start_time'])} – ${_clockOf(se['end_time'])}',
+                for (final key in const ['track', 'session_type'])
+                  if ((se[key] ?? '').trim().isNotEmpty) _titleCase(se[key]!),
+              ].join(' · '),
+              _lines(se['people']).join(', '),
+            ),
+        ]),
+        _readOnlyList(_Group.sponsors, 'Sponsors and partners', [
+          for (final o in [..._sponsors, ..._partners])
+            (
+              o['name'] ?? '',
+              _orgTypeLabel(o['sponsor_type'] ?? o['partner_type'] ?? ''),
+              (o['label'] ?? '').trim(),
+            ),
+        ]),
+        Text('To change any of this, edit the sheet and press Refresh.', style: muted),
+      ],
+    );
+  }
+
+  Widget _readOnly(String label, String value) => Padding(
+        padding: const EdgeInsets.only(bottom: 14),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(label, style: TextStyle(fontSize: 12, color: context.palette.textSecondary)),
+            const SizedBox(height: 2),
+            Text(value, style: const TextStyle(fontSize: 14)),
+          ],
+        ),
+      );
+
+  /// A list from the sheet: a heading with the count, the first few rows,
+  /// Show all.
+  Widget _readOnlyList(_Group group, String title, List<(String, String, String)> rows) {
+    if (rows.isEmpty) return const SizedBox.shrink();
+    final p = context.palette;
+    final open = _openGroups.contains(group);
+    final shown = open || rows.length <= _foldFrom ? rows : rows.take(_foldFrom).toList();
+    return Padding(
+      key: ValueKey('event-imported-${group.name}'),
+      padding: const EdgeInsets.only(bottom: 20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(child: _buildSectionHeader('$title · ${rows.length}')),
+              if (rows.length > _foldFrom)
+                TextButton(
+                  onPressed: () => setState(() => open ? _openGroups.remove(group) : _openGroups.add(group)),
+                  child: Text(open ? 'Show fewer' : 'Show all'),
+                ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          for (final (name, detail, extra) in shown)
+            Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(name, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                  if (detail.isNotEmpty) Text(detail, style: TextStyle(fontSize: 12, color: p.textMuted)),
+                  if (extra.isNotEmpty) Text(extra, style: TextStyle(fontSize: 12, color: p.textMuted)),
+                ],
+              ),
+            ),
+        ],
+      ),
+    );
+  }
+
+  /// "Sat, 21 Feb 2026 · 8:00 am – 9:30 pm" in the event's timezone.
+  String _whenText(AppEvent e) {
+    final zone = e.timezone;
+    DateTime inZone(DateTime d) => EventTimeZone.wallTime(d, zone) ?? d;
+    final start = inZone(e.startDatetime);
+    var end = e.endDatetime == null ? null : inZone(e.endDatetime!);
+    if (e.isFullDay) {
+      if (end != null && end.isAfter(start)) end = end.subtract(const Duration(days: 1));
+      final sameDay = end == null || _formatDateOnly(end) == _formatDateOnly(start);
+      return sameDay ? '${_dayName(start)} (full day)' : '${_dayName(start)} – ${_dayName(end)} (full days)';
+    }
+    if (end == null) return '${_dayName(start)} · ${_clock(start)}';
+    if (_formatDateOnly(end) == _formatDateOnly(start)) {
+      return '${_dayName(start)} · ${_clock(start)} – ${_clock(end)}';
+    }
+    return '${_dayName(start)}, ${_clock(start)} – ${_dayName(end)}, ${_clock(end)}';
+  }
+
+  String _dayTime(DateTime when, String zone) {
+    final w = EventTimeZone.wallTime(when, zone) ?? when;
+    return '${_dayName(w)}, ${_clock(w)}';
+  }
+
+  static const _weekdays = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+  static const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
+  /// "Sat, 21 Feb 2026".
+  static String _dayName(DateTime d) => '${_weekdays[d.weekday - 1]}, ${d.day} ${_months[d.month - 1]} ${d.year}';
+
+  /// "8:00 am".
+  static String _clock(DateTime d) {
+    final h = d.hour % 12 == 0 ? 12 : d.hour % 12;
+    return '$h:${d.minute.toString().padLeft(2, '0')} ${d.hour < 12 ? 'am' : 'pm'}';
+  }
+
+  /// "8:00 am" from the form's "yyyy-MM-dd HH:mm".
+  static String _clockOf(String? text) {
+    final d = DateTime.tryParse((text ?? '').replaceFirst(' ', 'T'));
+    return d == null ? '' : _clock(d);
   }
 
   /// What every event needs: what, when, where, how many, and the price.
@@ -1554,7 +1756,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               TextButton(
                 key: ValueKey('event-remove-${group.name}'),
                 onPressed: () => _removeGroup(group),
-                child: Text(group == _Group.sheet && _sheetLinked ? 'Unlink' : 'Remove'),
+                child: const Text('Remove'),
               ),
           ],
         ),
@@ -1618,13 +1820,6 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                   ),
               ],
               onChanged: (value) => setState(() => _maxGuests = value ?? 0),
-            ),
-          _Group.sheet => EventSheetPanel(
-              eventId: widget.event!.eventId,
-              linkedUrl: _sheetLinked ? _sheetUrl : null,
-              readAt: _sheetReadAt,
-              confirmFirstLink: _confirmSheetReplaces,
-              onRefreshed: _afterSheetRefresh,
             ),
           _Group.speakers => _buildSpeakersSection(locked: locked),
           _Group.agenda => _buildSessionsSection(locked: locked),
@@ -2266,50 +2461,68 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
 
   // ── The Google Sheet (B7) ────────────────────────────────────────────
 
-  /// Before the first link: the sheet replaces speakers, sessions and
-  /// sponsors typed here. Asks only when there are some.
-  Future<bool> _confirmSheetReplaces() async {
-    String n(int count, String one, String many) => '$count ${count == 1 ? one : many}';
-    final typed = [
-      if (_speakers.isNotEmpty) n(_speakers.length, 'speaker', 'speakers'),
-      if (_sessions.isNotEmpty) n(_sessions.length, 'session', 'sessions'),
-      if (_sponsors.length + _partners.length > 0)
-        n(_sponsors.length + _partners.length, 'sponsor or partner', 'sponsors and partners'),
-    ];
-    if (typed.isEmpty) return true;
-    final ok = await showDialog<bool>(
-      context: context,
-      builder: (context) => AlertDialog(
-        title: const Text('Use the sheet instead?'),
-        content: Text(
-          'The sheet will replace the ${typed.join(', ')} here. From then on they '
-          'are changed in the sheet, and you press Refresh.',
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
-          FilledButton(
-            key: const ValueKey('event-sheet-replace-confirm'),
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('Use the sheet'),
-          ),
-        ],
-      ),
-    );
-    return ok == true;
-  }
-
-  /// A Refresh saved: show the sheet as linked and reload the lists.
+  /// A Refresh saved: reload the event, its fees and lists as the sheet set
+  /// them (nothing here is unsaved: an imported event isn't edited here).
   Future<void> _afterSheetRefresh(SheetRefresh result) async {
     final eventId = widget.event?.eventId;
-    if (eventId == null || !mounted) return;
+    final token = ref.read(authControllerProvider).session?.accessToken;
+    if (eventId == null || token == null || !mounted) return;
+    try {
+      final fresh = await ref.read(eventsRepositoryProvider).getAdminEvent(eventId, token);
+      if (!mounted) return;
+      setState(() {
+        _current = fresh;
+        _fillFromEvent(fresh);
+      });
+    } catch (error, stackTrace) {
+      AppLogger.error('Event sheet: reloading the event failed', error, stackTrace);
+    }
+    if (!mounted) return;
     setState(() {
       _sheetUrl = result.url;
       _sheetReadAt = result.readAt ?? DateTime.now();
       _detailsLoading = true;
       _orgsLoading = true;
-      _rebaseLists = true;
+      _baseline = null; // taken again once everything has reloaded
     });
-    await Future.wait([_loadDetails(eventId, listsOnly: true), _loadOrgs(eventId)]);
+    await Future.wait([_loadDetails(eventId), _loadOrgs(eventId)]);
+  }
+
+  /// The form's fields from a saved event (as when it opened).
+  void _fillFromEvent(AppEvent e) {
+    final zone = e.timezone;
+    DateTime inZone(DateTime d) => EventTimeZone.wallTime(d, zone) ?? d;
+    final start = inZone(e.startDatetime);
+    var end = e.endDatetime != null ? inZone(e.endDatetime!) : start.add(const Duration(hours: 2));
+    if (e.isFullDay && end.isAfter(start)) end = end.subtract(const Duration(days: 1));
+    _title.text = e.title;
+    _description.text = e.description ?? '';
+    _startDate.text = _formatDateOnly(start);
+    _endDate.text = _formatDateOnly(end);
+    _startTime.text = _formatTimeFromDateTime(start);
+    _endTime.text = _formatTimeFromDateTime(end);
+    _timezone.text = zone;
+    _showTimezone = zone != 'Asia/Kolkata';
+    _isFullDay = e.isFullDay;
+    _isVirtual = e.isVirtual;
+    _location.text = e.locationText ?? '';
+    _locationSearchController.text = _location.text;
+    _locationSelected = _location.text.isNotEmpty;
+    _locationMapsUrl.text = e.locationMapsUrl ?? '';
+    _virtualUrl.text = e.virtualUrl ?? '';
+    final closes = e.registrationClosesAt;
+    final closesAtStart = closes != null && closes.difference(e.startDatetime).inMinutes.abs() < 1;
+    _registrationOpensAt.text =
+        e.registrationOpensAt == null ? '' : _formatDateTimeOnly(inZone(e.registrationOpensAt!));
+    _registrationClosesAt.text = closes == null || closesAtStart ? '' : _formatDateTimeOnly(inZone(closes));
+    _thumbnailUrl.text = e.thumbnailUrl ?? '';
+    _bannerUrl.text = e.bannerUrl ?? '';
+    _brandLogoUrl.text = e.brandLogoUrl ?? '';
+    _brandLogoDarkUrl.text = e.brandLogoDarkUrl ?? '';
+    _capacity.text = e.capacity?.toString() ?? '';
+    _maxGuests = e.maxGuests.clamp(0, 4);
+    _isFree = e.isFree ?? true;
+    _ticketPrice.text = e.ticketPrice?.toString() ?? '';
   }
 
   /// Unlinks the sheet (asks first). What it saved stays, editable again.
@@ -2317,10 +2530,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final ok = await showDialog<bool>(
       context: context,
       builder: (context) => AlertDialog(
-        title: const Text('Unlink the sheet?'),
+        title: const Text('Unlink from the sheet?'),
         content: const Text(
-          'The speakers, agenda and sponsors it saved stay on the event, and you '
-          'can edit them here again. Refresh won\'t read the sheet any more.',
+          'The event keeps everything it has now, and from then on you edit it here. '
+          'This can\'t be undone: the event can\'t be linked to a sheet again.',
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
@@ -2342,12 +2555,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       setState(() {
         _sheetUrl = null;
         _sheetReadAt = null;
-        _addedGroups.remove(_Group.sheet);
         // What the sheet saved is now the starting point for edits here.
+        _baseline = _signature();
         _baselineLists = _listsSignature();
       });
-      showNotice(context, 'Sheet unlinked. You can edit speakers, the agenda and sponsors here again.',
-          kind: NoticeKind.success);
+      showNotice(context, 'Unlinked. You edit this event here from now on.', kind: NoticeKind.success);
     } catch (error, stackTrace) {
       AppLogger.error('Event sheet: unlink failed', error, stackTrace);
       if (mounted) showNotice(context, SheetProblem.from(error).message, kind: NoticeKind.error);
@@ -3856,7 +4068,7 @@ void _showFeeDialog(int? editIndex) {
       final fromSheet = widget.fromSheet;
       if (widget.event == null && fromSheet != null) {
         try {
-          sheetRead = await repo.refreshEventSheet(saved.eventId, fromSheet.url, token);
+          sheetRead = await repo.refreshEventSheet(saved.eventId, fromSheet.url, token, confirm: true);
         } catch (error, stackTrace) {
           AppLogger.error('Event sheet: linking the imported sheet failed', error, stackTrace);
           sheetProblem = SheetProblem.from(error);
