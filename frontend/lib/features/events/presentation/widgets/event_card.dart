@@ -11,19 +11,22 @@ import '../../../../shared/format.dart';
 /// Your registration, as the card's badge shows it.
 enum EventAttendance { none, registered, paymentDue, confirmingPayment, cancelled }
 
-/// An admin action in the card's "more" menu.
+/// An action in the card's ⋯ menu (admin actions, Unregister, a QR badge
+/// that doesn't fit beside Join meeting).
 class EventCardAction {
   const EventCardAction({
     required this.label,
     required this.icon,
     required this.onSelected,
     this.destructive = false,
+    this.enabled = true,
   });
 
   final String label;
   final IconData icon;
   final VoidCallback onSelected;
   final bool destructive;
+  final bool enabled;
 }
 
 /// Look of one event's card. Every event uses the theme unless it has its
@@ -294,7 +297,7 @@ class EventCard extends StatelessWidget {
     if (isFree != null || price != null) {
       badges.add(StatusBadge(label: _priceLabel(), tone: p.primary));
     }
-    badges.add(StatusBadge(label: isVirtual ? 'Virtual' : 'Physical', tone: p.textSecondary));
+    // No Virtual / Physical chip: the header and the place line already say it.
     return badges;
   }
 
@@ -340,43 +343,54 @@ class EventCard extends StatelessWidget {
       ),
     );
 
-    final buttons = <Widget>[
+    // At most two buttons beside the note, at full size: one outlined
+    // (Join meeting if there is one, else QR badge) and View. Everything
+    // else, Unregister included, goes in the ⋯ menu.
+    final badgeInMenu = onShowBadge != null && onJoin != null;
+    final menu = <EventCardAction>[
+      if (badgeInMenu)
+        EventCardAction(icon: Icons.qr_code_2, label: 'QR badge', onSelected: onShowBadge!),
       if (onUnregister != null)
-        TextButton(
-          onPressed: unregistering ? null : onUnregister,
-          style: compact.merge(
-            TextButton.styleFrom(foregroundColor: p.textSecondary),
-          ),
-          // Disabled, not replaced, while it runs: the label stays put.
-          child: const Text('Unregister'),
+        EventCardAction(
+          icon: Icons.event_busy_outlined,
+          label: 'Unregister',
+          onSelected: onUnregister!,
+          destructive: true,
+          // Disabled, not removed, while it runs.
+          enabled: !unregistering,
         ),
+      ...adminActions,
+    ];
+
+    final buttons = <Widget>[
       if (onViewRefund != null)
         TextButton(
           onPressed: onViewRefund,
           style: compact,
           child: const Text('View refund status'),
         ),
-      if (adminActions.isNotEmpty)
+      if (menu.isNotEmpty)
         PopupMenuButton<int>(
           tooltip: 'More actions',
           icon: Icon(Icons.more_horiz, color: p.textSecondary),
-          onSelected: (i) => adminActions[i].onSelected(),
+          onSelected: (i) => menu[i].onSelected(),
           itemBuilder: (_) => [
-            for (var i = 0; i < adminActions.length; i++)
+            for (var i = 0; i < menu.length; i++)
               PopupMenuItem<int>(
                 value: i,
+                enabled: menu[i].enabled,
                 child: Row(
                   children: [
                     Icon(
-                      adminActions[i].icon,
+                      menu[i].icon,
                       size: 18,
-                      color: adminActions[i].destructive ? p.error : p.textSecondary,
+                      color: menu[i].destructive ? p.error : p.textSecondary,
                     ),
                     const SizedBox(width: 10),
                     Text(
-                      adminActions[i].label,
+                      menu[i].label,
                       style: TextStyle(
-                        color: adminActions[i].destructive ? p.error : p.textPrimary,
+                        color: menu[i].destructive ? p.error : p.textPrimary,
                       ),
                     ),
                   ],
@@ -384,19 +398,19 @@ class EventCard extends StatelessWidget {
               ),
           ],
         ),
-      if (onShowBadge != null)
-        OutlinedButton.icon(
-          onPressed: onShowBadge,
-          style: compact,
-          icon: const Icon(Icons.qr_code_2, size: 16),
-          label: const Text('QR badge'),
-        ),
       if (onJoin != null)
         OutlinedButton.icon(
           onPressed: onJoin,
           style: compact,
           icon: const Icon(Icons.videocam_outlined, size: 16),
           label: const Text('Join meeting'),
+        )
+      else if (onShowBadge != null)
+        OutlinedButton.icon(
+          onPressed: onShowBadge,
+          style: compact,
+          icon: const Icon(Icons.qr_code_2, size: 16),
+          label: const Text('QR badge'),
         ),
       FilledButton(onPressed: onView, style: compact, child: Text(viewLabel)),
     ];
