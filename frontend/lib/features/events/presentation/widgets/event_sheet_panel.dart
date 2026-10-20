@@ -64,8 +64,11 @@ class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
       var result = await repo.refreshEventSheet(widget.eventId, null, token);
       if (result.needsConfirm) {
         if (!mounted) return;
+        // Not "reading" while it waits for an answer.
+        setState(() => _busy = false);
         final ok = await confirmSheetChanges(context, result.changes);
         if (!ok || !mounted) return;
+        setState(() => _busy = true);
         result = await repo.refreshEventSheet(widget.eventId, null, token, confirm: true);
       }
       await widget.onRefreshed(result);
