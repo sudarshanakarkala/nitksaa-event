@@ -189,8 +189,13 @@ _PLATFORM_ONLY_ROUTES = [
         "title": "Test Event Title", "description": "d", "start_datetime": _FUTURE_START,
         "end_datetime": _FUTURE_END, "location_text": "Venue", "is_virtual": False, "capacity": 10,
     }, False),
-    ("events_list", "GET", "/api/v1/events", None, False),
 ]
+
+# Since #49–#52 the admin list is open to event admins, scoped to the events
+# they administer (test_event_admin_lists_only_own_events). Still refused to
+# a spoofed dev header.
+_EVENTS_LIST_ROUTE = ("events_list", "GET", "/api/v1/events", None, False)
+_NO_EVENT_ID_ROUTES = _PLATFORM_ONLY_ROUTES + [_EVENTS_LIST_ROUTE]
 
 _EVENT_SCOPED_ROUTES = [
     ("events_get", "GET", "/api/v1/events/{event_id}", None),
@@ -312,7 +317,36 @@ def test_platform_only_route_denies_event_admin(client, monkeypatch, label, meth
         _clear_bootstrap(monkeypatch)
 
 
-@pytest.mark.parametrize("label,method,path,body,has_event_id", _PLATFORM_ONLY_ROUTES, ids=_ALL_LABELS_PLATFORM_ONLY)
+def test_event_admin_lists_only_own_events(client, monkeypatch):
+    """GET /api/v1/events for an event admin: 200, their own event listed,
+    someone else's not, and every row returned is one they administer."""
+    try:
+        _as_platform_admin(monkeypatch)
+        admin_headers = _bearer(_PLATFORM_ADMIN)
+        tag = uid()
+        own_event_id = _mk_event(client, admin_headers, f"listscope-own-{tag}")
+        other_event_id = _mk_event(client, admin_headers, f"listscope-other-{tag}")
+        _grant_event_admin(client, admin_headers, own_event_id, _EVENT_ADMIN["firebase_uid"])
+        ea_headers = _bearer(_EVENT_ADMIN)
+
+        r = client.get("/api/v1/events?search=listscope&per_page=100&period=all", headers=ea_headers)
+        assert r.status_code == 200, r.text
+        ids = {e["event_id"] for e in r.json()["events"]}
+        assert own_event_id in ids, "event admin's own event missing from the list"
+        assert other_event_id not in ids, "event admin can see an event they don't administer"
+
+        r = client.get("/api/v1/events?per_page=100&period=all", headers=ea_headers)
+        assert r.status_code == 200, r.text
+        for event in r.json()["events"]:
+            check = client.get(f"/api/v1/events/{event['event_id']}", headers=ea_headers)
+            assert check.status_code == 200, (
+                f"listed event {event['event_id']} is not one this event admin administers"
+            )
+    finally:
+        _clear_bootstrap(monkeypatch)
+
+
+@pytest.mark.parametrize("label,method,path,body,has_event_id", _NO_EVENT_ID_ROUTES, ids=[r[0] for r in _NO_EVENT_ID_ROUTES])
 def test_platform_only_route_denies_spoofed_dev_header(client, label, method, path, body, has_event_id):
     headers = _bearer(_ATTENDEE)
     headers["X-Dev-User"] = "admin"
