@@ -228,7 +228,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(repo.refreshed.last.confirm, isTrue);
     expect(find.text('NITKonnect 2027'), findsOneWidget);
-    expect(find.text('Asha Rao'), findsOneWidget);
+    // In the speakers list and on her session.
+    expect(find.text('Speakers · 1'), findsOneWidget);
+    expect(find.text('Asha Rao'), findsNWidgets(2));
     expect(_key('event-sheet-warnings'), findsOneWidget);
   });
 
