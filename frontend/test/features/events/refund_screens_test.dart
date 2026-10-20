@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'support/auth_isolation_fakes.dart';
+import 'support/event_card_menu.dart';
 import 'support/registration_backend_fake.dart';
 
 const _viewRefundStatus = 'View refund status';
@@ -110,10 +111,9 @@ Future<void> _check(WidgetTester tester) async {
   await settleRequests(tester);
 }
 
-/// Presses Unregister on the card, then Unregister in the dialog.
+/// Presses Unregister in the card's ⋯ menu, then Unregister in the dialog.
 Future<void> _unregister(WidgetTester tester) async {
-  await tester.tap(find.text('Unregister'));
-  await settleRequests(tester);
+  await tapCardUnregister(tester);
   await tester.tap(
     find.descendant(
       of: find.byType(AlertDialog),
@@ -609,7 +609,7 @@ void main() {
       await _unregister(tester);
 
       expect(find.text(_viewRefundStatus), findsOneWidget);
-      expect(find.text('Unregister'), findsNothing);
+      expect(await cardUnregisterEnabled(tester), isNull);
     });
   });
 

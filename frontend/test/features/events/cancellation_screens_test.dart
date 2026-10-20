@@ -23,6 +23,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'support/auth_isolation_fakes.dart';
+import 'support/event_card_menu.dart';
 import 'support/registration_backend_fake.dart';
 
 const _cancelled = 'Your registration has been cancelled.';
@@ -162,10 +163,9 @@ Future<GoRouter> _pumpApp(
   return router;
 }
 
-/// Presses Unregister on the card, then Unregister in the dialog.
+/// Presses Unregister in the card's ⋯ menu, then Unregister in the dialog.
 Future<void> _unregister(WidgetTester tester) async {
-  await tester.tap(find.text('Unregister'));
-  await settleRequests(tester);
+  await tapCardUnregister(tester);
   await tester.tap(
     find.descendant(
       of: find.byType(AlertDialog),
@@ -175,30 +175,20 @@ Future<void> _unregister(WidgetTester tester) async {
   await settleRequests(tester);
 }
 
-/// The Unregister button on the card: a FilledButton on My Events, a
-/// TextButton on the event list.
-ButtonStyleButton _unregisterButton(WidgetTester tester) {
-  return tester.widget(
-    find.ancestor(
-      of: find.text('Unregister'),
-      matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
-    ),
-  );
-}
-
 /// The screen shows the attendee's registration as it was before the tap:
-/// still registered, with a working Unregister button, and no error page.
-void _expectStillRegistered(WidgetTester tester) {
-  expect(_unregisterButton(tester).onPressed, isNotNull);
+/// still registered, with a working Unregister in the card's ⋯ menu, and no
+/// error page.
+Future<void> _expectStillRegistered(WidgetTester tester) async {
   expect(find.text('Registered'), findsOneWidget);
   expect(find.text('Could not load registrations'), findsNothing);
   expect(find.textContaining('Exception'), findsNothing);
   expect(find.textContaining('status code'), findsNothing);
+  expect(await cardUnregisterEnabled(tester), isTrue);
 }
 
 /// The screen no longer shows an active registration.
-void _expectNotRegistered(WidgetTester tester, _Screen screen) {
-  expect(find.text('Unregister'), findsNothing);
+Future<void> _expectNotRegistered(WidgetTester tester, _Screen screen) async {
+  expect(await cardUnregisterEnabled(tester), isNull);
   expect(find.text('Registered'), findsNothing);
   switch (screen) {
     case _Screen.myEvents:
@@ -289,7 +279,7 @@ void main() {
           lines.lastIndexOf('GET /api/v1/my/registrations'),
           greaterThan(lines.indexOf(backend.cancelRequests.single.line)),
         );
-        _expectNotRegistered(tester, screen);
+        await _expectNotRegistered(tester, screen);
       });
 
       testWidgets('Test E: a paid registration is cancelled and the attendee '
@@ -314,7 +304,7 @@ void main() {
         // Until ISSUE-005 the message was the only mention of a refund. It
         // now leads to the refund status (refund_screens_test.dart).
         expect(find.text('View refund'), findsOneWidget);
-        _expectNotRegistered(tester, screen);
+        await _expectNotRegistered(tester, screen);
       });
 
       testWidgets('Tests F, J: a network failure shows the connection '
@@ -327,7 +317,7 @@ void main() {
         await _unregister(tester);
 
         expect(find.text(_noConnection), findsOneWidget);
-        _expectStillRegistered(tester);
+        await _expectStillRegistered(tester);
 
         await _unregister(tester);
 
@@ -338,7 +328,7 @@ void main() {
         expect(keys, hasLength(2));
         expect(keys.first, keys.last);
         expect(backend.refundsCreated, 1);
-        _expectNotRegistered(tester, screen);
+        await _expectNotRegistered(tester, screen);
       });
 
       testWidgets('Test G: a registration that is already cancelled on the '
@@ -356,7 +346,7 @@ void main() {
 
         expect(backend.cancelRequests, hasLength(1));
         expect(find.text(_cancelled), findsOneWidget);
-        _expectNotRegistered(tester, screen);
+        await _expectNotRegistered(tester, screen);
       });
 
       testWidgets('Test H: 409 registration_not_cancellable shows a plain '
@@ -375,7 +365,7 @@ void main() {
         expect(backend.cancelRequests, hasLength(1));
         expect(find.text(_notCancellable), findsOneWidget);
         expect(registration['status'], 'payment_verification');
-        _expectStillRegistered(tester);
+        await _expectStillRegistered(tester);
       });
 
       testWidgets('Test I: 404 registration_not_found shows a plain message', (
@@ -392,7 +382,7 @@ void main() {
         expect(backend.cancelRequests, hasLength(1));
         expect(find.text(_notFound), findsOneWidget);
         expect(backend.registrations[tokenB]!['status'], 'registered');
-        _expectStillRegistered(tester);
+        await _expectStillRegistered(tester);
       });
     });
   }

@@ -19,6 +19,7 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:go_router/go_router.dart';
 
 import 'support/auth_isolation_fakes.dart';
+import 'support/event_card_menu.dart';
 import 'support/registration_backend_fake.dart';
 
 const _title = 'Annual Alumni Meet';
@@ -113,10 +114,9 @@ Future<void> _openApp(
   await settleRequests(tester);
 }
 
-/// Presses Unregister on the card, then Unregister in the dialog.
+/// Presses Unregister in the card's ⋯ menu, then Unregister in the dialog.
 Future<void> _unregister(WidgetTester tester) async {
-  await tester.tap(find.text('Unregister'));
-  await settleRequests(tester);
+  await tapCardUnregister(tester);
   await tester.tap(
     find.descendant(
       of: find.byType(AlertDialog),
@@ -126,20 +126,10 @@ Future<void> _unregister(WidgetTester tester) async {
   await settleRequests(tester);
 }
 
-/// The Unregister button on the card.
-ButtonStyleButton _unregisterButton(WidgetTester tester) {
-  return tester.widget(
-    find.ancestor(
-      of: find.text('Unregister'),
-      matching: find.byWidgetPredicate((w) => w is ButtonStyleButton),
-    ),
-  );
-}
-
-/// The event's card is on screen, without an Unregister button.
-void _expectCardWithoutUnregister() {
+/// The event's card is on screen, without Unregister in its ⋯ menu.
+Future<void> _expectCardWithoutUnregister(WidgetTester tester) async {
   expect(find.text(_title), findsWidgets);
-  expect(find.text('Unregister'), findsNothing);
+  expect(await cardUnregisterEnabled(tester), isNull);
 }
 
 void main() {
@@ -153,7 +143,7 @@ void main() {
           status: 'registered',
         );
         await _openApp(tester, backend, screen);
-        expect(_unregisterButton(tester).onPressed, isNotNull);
+        expect(await cardUnregisterEnabled(tester), isTrue);
 
         await _unregister(tester);
 
@@ -176,7 +166,7 @@ void main() {
           status: 'registered',
         );
         await _openApp(tester, backend, screen);
-        expect(_unregisterButton(tester).onPressed, isNotNull);
+        expect(await cardUnregisterEnabled(tester), isTrue);
 
         await _unregister(tester);
 
@@ -218,7 +208,7 @@ void main() {
           backend.seedRegistration(tokenA, status: 'registered');
           await _openApp(tester, backend, screen);
 
-          _expectCardWithoutUnregister();
+          await _expectCardWithoutUnregister(tester);
           expect(find.text('Registered'), findsOneWidget);
           expect(backend.cancelRequests, isEmpty);
         });
@@ -234,7 +224,7 @@ void main() {
             await settleRequests(tester);
           }
 
-          _expectCardWithoutUnregister();
+          await _expectCardWithoutUnregister(tester);
           expect(backend.cancelRequests, isEmpty);
         });
       }
@@ -254,7 +244,7 @@ void main() {
             location: screen == _Screen.eventList ? AppRoutes.home : null,
           );
 
-          _expectCardWithoutUnregister();
+          await _expectCardWithoutUnregister(tester);
           expect(backend.cancelRequests, isEmpty);
         });
       }
@@ -278,7 +268,7 @@ void main() {
         expect(find.textContaining('registration_not_cancellable'), findsNothing);
         expect(find.textContaining('409'), findsNothing);
         expect(find.textContaining('Exception'), findsNothing);
-        expect(_unregisterButton(tester).onPressed, isNotNull);
+        expect(await cardUnregisterEnabled(tester), isTrue);
         expect(find.text('Registered'), findsOneWidget);
       });
     });
