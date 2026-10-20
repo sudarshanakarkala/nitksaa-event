@@ -137,7 +137,7 @@ class _ListPageState extends State<ListPage> {
   }
 
   bool _onBodyNotification(Notification n) {
-    if (!widget.collapseOnPhone || !PhoneChrome.isPhone(context)) return false;
+    if (!widget.collapseOnPhone || !PhoneChrome.foldsFooter(context)) return false;
     var changed = false;
     if (n is ScrollUpdateNotification) {
       changed = _chrome.onScroll(n.metrics, n.scrollDelta ?? 0);
@@ -164,9 +164,13 @@ class _ListPageState extends State<ListPage> {
     final p = context.palette;
     final width = MediaQuery.sizeOf(context).width;
     final compact = width < 600;
+    // A short window wider than a phone: the phone's compact top (no eyebrow
+    // or subtitle, a smaller title, tighter gaps), so the list gets the room.
+    final short = !compact && PhoneChrome.isShort(context);
+    final gap = short ? 8.0 : 12.0;
     final hasFilters = widget.filters != null;
-    // Wider again (or opted out): the footer back in place.
-    if (!(compact && widget.collapseOnPhone) && _chrome.footerHidden) {
+    // Wider or taller again (or opted out): the footer back in place.
+    if (!(PhoneChrome.foldsFooter(context) && widget.collapseOnPhone) && _chrome.footerHidden) {
       _chrome.showAll();
       PhoneChrome.safely(_announce);
     }
@@ -235,8 +239,8 @@ class _ListPageState extends State<ListPage> {
         padding: PageInsets.horizontal(context, constraints.maxWidth, minLeft: reservedLeft),
         child: Padding(
         padding: EdgeInsets.only(
-          top: widget.title == null ? 16 : (compact ? 20 : 28),
-          bottom: 14,
+          top: widget.title == null ? (short ? 10 : 16) : (compact ? 20 : (short ? 12 : 28)),
+          bottom: short ? 10 : 14,
         ),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -245,12 +249,13 @@ class _ListPageState extends State<ListPage> {
               Align(
                 alignment: Alignment.centerLeft,
                 child: PageHeader(
-                  eyebrow: widget.eyebrow,
+                  eyebrow: short ? null : widget.eyebrow,
                   title: widget.title!,
-                  subtitle: compact ? null : widget.subtitle,
+                  subtitle: compact || short ? null : widget.subtitle,
+                  dense: short,
                 ),
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: short ? 12 : 20),
             ],
             if (showTopRow)
               Row(
@@ -271,11 +276,11 @@ class _ListPageState extends State<ListPage> {
                 ],
               ),
             if (pickerOwnLine) ...[
-              if (showTopRow) const SizedBox(height: 12),
+              if (showTopRow) SizedBox(height: gap),
               widget.picker!,
             ],
             if (showPillRow) ...[
-              if (showTopRow || pickerOwnLine) const SizedBox(height: 12),
+              if (showTopRow || pickerOwnLine) SizedBox(height: gap),
               pillRow,
             ],
             if (widget.belowPills != null) ...[
@@ -284,7 +289,7 @@ class _ListPageState extends State<ListPage> {
             ],
             if (showCount || rowActions.isNotEmpty) ...[
               if (showTopRow || pickerOwnLine || showPillRow || widget.belowPills != null)
-                const SizedBox(height: 12),
+                SizedBox(height: gap),
               Row(
                 children: [
                   Expanded(

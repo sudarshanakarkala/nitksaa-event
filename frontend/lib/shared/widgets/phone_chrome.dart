@@ -4,7 +4,8 @@
 /// put. The site footer folds away while you scroll down a list and comes
 /// back when you scroll up, reach the top or reach the end. The footer sits
 /// below the list, so folding it never moves the cards. Only on phones
-/// ([PhoneChrome.phoneBelow]) and only for lists long enough to need it.
+/// ([PhoneChrome.phoneBelow]) and short windows ([PhoneChrome.shortBelow]),
+/// and only for lists long enough to need it.
 ///
 /// [ListPage] decides from its body's scrolling and tells [AppShell] with a
 /// [PhoneChromeNotification]. A list page that opts out (Check-in) sends
@@ -19,6 +20,15 @@ abstract final class PhoneChrome {
   static const double phoneBelow = 600;
 
   static bool isPhone(BuildContext context) => MediaQuery.sizeOf(context).width < phoneBelow;
+
+  /// Below this height (a laptop's short browser window) list pages behave
+  /// as on phones: the footer folds away and the top of the page is compact.
+  static const double shortBelow = 800;
+
+  static bool isShort(BuildContext context) => MediaQuery.sizeOf(context).height < shortBelow;
+
+  /// Whether list pages fold the footer away: phones and short windows.
+  static bool foldsFooter(BuildContext context) => isPhone(context) || isShort(context);
 
   /// Runs [fn] now, or after this frame when called during build or layout
   /// (scroll metrics can change mid-frame).

@@ -81,7 +81,8 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final access = auth.session?.access ?? AdminAccess.none;
     final tabs = AdminTab.visibleTabs(access);
     final p = context.palette;
-    final phone = PhoneChrome.isPhone(context);
+    // Phones and short laptop windows: the shorter title.
+    final phone = PhoneChrome.isPhone(context) || PhoneChrome.isShort(context);
 
     // Website AdminPage: a sticky zone (page header, then the tab row with
     // a bottom border) and the tab's content scrolling beneath it, both in

@@ -26,12 +26,14 @@ ScrollMetrics _m({required double pixels, double max = 2000}) => FixedScrollMetr
 Future<List<PhoneChromeNotification>> _showList(
   WidgetTester tester, {
   required double width,
+  double height = 800,
+  String? title,
   int rows = 60,
   bool collapse = true,
   bool countOnPhone = true,
   List<Widget>? phoneActions,
 }) async {
-  tester.view.physicalSize = Size(width, 800);
+  tester.view.physicalSize = Size(width, height);
   tester.view.devicePixelRatio = 1;
   addTearDown(tester.view.reset);
   final heard = <PhoneChromeNotification>[];
@@ -44,6 +46,8 @@ Future<List<PhoneChromeNotification>> _showList(
             return false;
           },
           child: ListPage(
+            title: title,
+            subtitle: title == null ? null : 'Reunions and meetups',
             search: const TextField(decoration: InputDecoration(hintText: 'Search events…')),
             count: const Text('44 events'),
             actions: [FilledButton(onPressed: () {}, child: const Text('Create event'))],
@@ -159,6 +163,25 @@ void main() {
     await tester.drag(find.text('Row 3'), const Offset(0, -300));
     await tester.pumpAndSettle();
     expect(heard, isEmpty);
+  });
+
+  testWidgets('a short laptop window: compact top, the footer folds away', (tester) async {
+    final heard = await _showList(tester, width: 1200, height: 500, title: 'Events');
+    expect(find.text('Events'), findsOneWidget);
+    expect(find.text('NITKSAA ALUMNI NETWORK'), findsNothing);
+    expect(find.text('Reunions and meetups'), findsNothing);
+    // Still the computer's count line and actions.
+    expect(find.text('44 events'), findsOneWidget);
+    expect(find.widgetWithText(FilledButton, 'Create event'), findsOneWidget);
+    await tester.drag(find.text('Row 3'), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(heard.last.footerHidden, isTrue);
+  });
+
+  testWidgets('a tall computer window keeps the eyebrow and subtitle', (tester) async {
+    await _showList(tester, width: 1200, height: 900, title: 'Events');
+    expect(find.text('NITKSAA ALUMNI NETWORK'), findsOneWidget);
+    expect(find.text('Reunions and meetups'), findsOneWidget);
   });
 
   group('Date line on a phone', () {
