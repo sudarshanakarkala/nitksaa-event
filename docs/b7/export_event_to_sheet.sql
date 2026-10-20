@@ -12,7 +12,7 @@ SELECT event_id, slug, title, start_datetime, status
 -- event a row belongs to. Times are in each event's own timezone.
 
 -- 1. Event tab (one row per event)
-WITH picked AS (SELECT unnest(ARRAY['nitkonnect-2026-demo', 'BREAKFAST-SLUG']) AS slug)  -- THE TWO EVENTS
+WITH picked AS (SELECT unnest(ARRAY['nitkonnect-2026-demo', 'bangalore-breakfast-nov-2026']) AS slug)  -- THE TWO EVENTS
 SELECT e.slug                                                       AS "event",
        e.title                                                      AS "Title",
        to_char(e.start_datetime AT TIME ZONE e.timezone, 'FMDD Mon YYYY')            AS "Start date",
@@ -37,7 +37,7 @@ SELECT e.slug                                                       AS "event",
   FROM events e JOIN picked USING (slug);
 
 -- 2. Sessions tab
-WITH picked AS (SELECT unnest(ARRAY['nitkonnect-2026-demo', 'BREAKFAST-SLUG']) AS slug)  -- THE TWO EVENTS
+WITH picked AS (SELECT unnest(ARRAY['nitkonnect-2026-demo', 'bangalore-breakfast-nov-2026']) AS slug)  -- THE TWO EVENTS
 SELECT e.slug                                                                   AS "event",
        to_char(s.start_datetime AT TIME ZONE e.timezone, 'FMDD Mon YYYY')      AS "Date",
        to_char(s.start_datetime AT TIME ZONE e.timezone, 'FMHH12:MI am')       AS "Start",
@@ -62,7 +62,7 @@ SELECT e.slug                                                                   
  ORDER BY e.slug, s.start_datetime, s.sort_order, s.session_id;
 
 -- 3. Speakers tab (people on the event, hosts included; organisers left out)
-WITH picked AS (SELECT unnest(ARRAY['nitkonnect-2026-demo', 'BREAKFAST-SLUG']) AS slug)  -- THE TWO EVENTS
+WITH picked AS (SELECT unnest(ARRAY['nitkonnect-2026-demo', 'bangalore-breakfast-nov-2026']) AS slug)  -- THE TWO EVENTS
 SELECT e.slug                                                                   AS "event",
        p.fullname                                                               AS "Name",
        upper(substr(lower(replace(p.role::text, '_', ' ')), 1, 1))
@@ -78,7 +78,7 @@ SELECT e.slug                                                                   
  ORDER BY e.slug, p.display_order, p.person_id;
 
 -- 4. Sponsors tab (sponsors, then partners)
-WITH picked AS (SELECT unnest(ARRAY['nitkonnect-2026-demo', 'BREAKFAST-SLUG']) AS slug)  -- THE TWO EVENTS
+WITH picked AS (SELECT unnest(ARRAY['nitkonnect-2026-demo', 'bangalore-breakfast-nov-2026']) AS slug)  -- THE TWO EVENTS
 SELECT "event", "Name", "Tier", "Label", "Logo link", "Website"
   FROM (
     SELECT e.slug AS "event", s.name AS "Name",
