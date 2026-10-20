@@ -144,6 +144,8 @@ class AppEvent {
     this.brandLogoUrl,
     this.brandLogoDarkUrl,
     this.brandAccent,
+    this.agendaSheetUrl,
+    this.agendaSheetReadAt,
     this.capacity,
     this.isFree = true,
     this.ticketPrice,
@@ -189,6 +191,12 @@ class AppEvent {
   final String? brandLogoUrl;
   final String? brandLogoDarkUrl;
   final String? brandAccent;
+
+  /// The linked Google Sheet (B7) and when it was last read. Admin API
+  /// only. While set, the sheet owns the speakers, agenda and sponsors.
+  final String? agendaSheetUrl;
+  final DateTime? agendaSheetReadAt;
+  bool get hasSheet => agendaSheetUrl != null && agendaSheetUrl!.trim().isNotEmpty;
   final int? capacity;
   /// Nullable on purpose: (1) older server payloads may omit `is_free` for
   /// events created before the column existed, and (2) Dart on the web (DDC)
@@ -247,6 +255,10 @@ class AppEvent {
       brandLogoUrl: json['brand_logo_url'] as String?,
       brandLogoDarkUrl: json['brand_logo_dark_url'] as String?,
       brandAccent: json['brand_accent'] as String?,
+      agendaSheetUrl: json['agenda_sheet_url'] as String?,
+      agendaSheetReadAt: json['agenda_sheet_read_at'] != null
+          ? DateTime.tryParse(json['agenda_sheet_read_at'] as String)?.toLocal()
+          : null,
       capacity: json['capacity'] as int?,
       isFree: json['is_free'] as bool? ?? true,
       ticketPrice: _parseTicketPrice(json['ticket_price']),
@@ -418,6 +430,7 @@ class EventPerson {
     this.bio,
     this.photoUrl,
     this.linkedinUrl,
+    this.batch,
   });
 
   final int personId;
@@ -428,6 +441,10 @@ class EventPerson {
   final String? bio;
   final String? photoUrl;
   final String? linkedinUrl;
+
+  /// NITK batch, e.g. "Electrical & Electronics, 1981" (B7: from the sheet
+  /// or the alumni directory).
+  final String? batch;
 
   String get initials {
     final parts = fullname.trim().split(RegExp(r'\s+')).where((p) => p.isNotEmpty).toList();
@@ -459,6 +476,7 @@ class EventPerson {
       bio: json['bio'] as String?,
       photoUrl: json['photo_url'] as String?,
       linkedinUrl: json['linkedin_url'] as String?,
+      batch: json['batch'] as String?,
     );
   }
 }

@@ -65,6 +65,11 @@ _DATE_FORMATS = ("%d %b %Y", "%d %B %Y", "%Y-%m-%d", "%d/%m/%Y", "%d-%m-%Y", "%d
 _SERIAL_EPOCH = date(1899, 12, 30)
 
 
+def _day_text(d: date) -> str:
+    """"21 Feb 2026"."""
+    return d.strftime("%d %b %Y").lstrip("0")
+
+
 def name_key(name: str) -> str:
     """Names match ignoring case and extra spaces."""
     return " ".join(name.split()).casefold()
@@ -640,10 +645,28 @@ def _parse_sessions(result, tabs, speakers, sponsors, partners, first_day, last_
             "presented_by": presented_by,
         })
 
+    # Dates outside the event (a copied template keeps the template's
+    # dates): move every session by the same number of days, so the sheet's
+    # first day is the event's first day. Times of day stay as written.
+    last_day = (last_moment - timedelta(minutes=1)).date() if last_moment else None
+    days = sorted({s["day"] for s in parsed})
+    if first_day and last_day and days and any(not (first_day <= d <= last_day) for d in days):
+        shift = first_day - days[0]
+        for s in parsed:
+            s["day"] = s["day"] + shift
+        for d in days:
+            moved = d + shift
+            if moved != d:
+                result.warnings.append(
+                    f"Sessions on {_day_text(d)} are shown on {_day_text(moved)}, the event's "
+                    f"{'date' if first_day == last_day else 'day ' + str((moved - first_day).days + 1)}."
+                )
+
     # A blank End runs to the next later start that day, less the gap.
     starts_by_day: Dict[date, List[int]] = {}
     for s in parsed:
         starts_by_day.setdefault(s["day"], []).append(s["start_min"])
+    outside: Dict[date, List[int]] = {}
     for s in parsed:
         start_w = wall(s["day"], s["start_min"])
         if s["end_min"] is not None:
@@ -662,15 +685,20 @@ def _parse_sessions(result, tabs, speakers, sponsors, partners, first_day, last_
                 if end_min <= s["start_min"]:
                     end_min = later[0]
                 end_w = wall(s["day"], end_min)
-            elif last_moment and last_moment.date() == s["day"] and last_moment > parse_wall(start_w):
-                end_w = last_moment.strftime("%Y-%m-%d %H:%M")
-            elif last_moment and last_moment > parse_wall(start_w) and (last_moment - parse_wall(start_w)) <= timedelta(hours=12):
-                end_w = last_moment.strftime("%Y-%m-%d %H:%M")
             else:
-                end_w = wall(s["day"], s["start_min"] + 60)
-                result.warnings.append(f"Sessions, row {s['row']}: no end time and nothing after it; set to one hour.")
-        if first_day and last_moment and not (first_day <= s["day"] <= last_moment.date()):
-            result.warnings.append(f"Sessions, row {s['row']}: {s['day'].strftime('%d %b %Y')} is outside the event's dates.")
+                # The day's last session runs until the event's end time on
+                # that day (each day of 1–2 Mar ending 18:00 ends at 18:00).
+                # A full-day event has no end time: one hour.
+                closing = last_moment.hour * 60 + last_moment.minute if last_moment else None
+                if closing and closing > s["start_min"]:
+                    end_w = wall(s["day"], closing)
+                elif last_moment is not None:
+                    end_w = wall(s["day"], s["start_min"] + 60)
+                else:
+                    end_w = wall(s["day"], s["start_min"] + 60)
+                    result.warnings.append(f"Sessions, row {s['row']}: no end time and nothing after it; set to one hour.")
+        if first_day and last_day and not (first_day <= s["day"] <= last_day):
+            outside.setdefault(s["day"], []).append(s["row"])
         result.sessions.append({
             "row": s["row"],
             "title": s["title"],
@@ -683,3 +711,10 @@ def _parse_sessions(result, tabs, speakers, sponsors, partners, first_day, last_
             "people": s["people"],
             "presented_by": s["presented_by"],
         })
+    # One line per day outside the event, not one per session.
+    for day, rows in sorted(outside.items()):
+        when = _day_text(day)
+        if len(rows) == 1:
+            result.warnings.append(f"Sessions, row {rows[0]}: {when} is outside the event's dates.")
+        else:
+            result.warnings.append(f"{len(rows)} sessions are on {when}, outside the event's dates.")

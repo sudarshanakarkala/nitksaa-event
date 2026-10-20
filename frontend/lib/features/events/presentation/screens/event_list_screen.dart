@@ -321,6 +321,14 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
               icon: const Icon(Icons.edit_note_outlined, size: 18),
               label: Text(drafts == 1 ? '1 draft' : '$drafts drafts'),
             ),
+          // Import from a Google Sheet (B7): computers only (not in phoneActions).
+          if (access.isEventCreator)
+            OutlinedButton.icon(
+              key: const ValueKey('events-import'),
+              onPressed: _adminActions.importFromSheet,
+              icon: const Icon(Icons.table_chart_outlined, size: 18),
+              label: const Text('Import'),
+            ),
           if (access.isEventCreator)
             FilledButton.icon(
               onPressed: _adminActions.create,

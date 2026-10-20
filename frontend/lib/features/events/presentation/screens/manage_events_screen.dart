@@ -20,9 +20,11 @@ import '../../../auth/services/auth_controller.dart';
 import '../../data/events_repository.dart';
 import '../../domain/event.dart';
 import '../../domain/event_link.dart';
+import '../../domain/event_sheet.dart';
 import '../../domain/event_publish_requirements.dart';
 import '../../presentation/providers/events_provider.dart';
 import '../widgets/event_card.dart';
+import '../widgets/event_sheet_panel.dart';
 import '../../domain/event_time_zone.dart';
 import '../../../../shared/widgets/notice.dart';
 
@@ -562,10 +564,10 @@ List<String> _getCommonTimezones() {
 }
 
 /// Opens the create/edit event form. Returns true when the event was saved.
-Future<bool> showEventFormDialog(BuildContext context, {AppEvent? event}) async {
+Future<bool> showEventFormDialog(BuildContext context, {AppEvent? event, SheetPreview? fromSheet}) async {
   final saved = await showDialog<bool>(
     context: context,
-    builder: (_) => _EventFormDialog(event: event),
+    builder: (_) => _EventFormDialog(event: event, fromSheet: fromSheet),
   );
   return saved == true;
 }
@@ -628,18 +630,26 @@ enum _Group {
   branding('Branding'),
   registrationDates('Registration dates'),
   guests('Guests'),
+  sheet('Google Sheet'),
   speakers('Speakers'),
   agenda('Agenda'),
   sponsors('Sponsors & partners');
 
   const _Group(this.label);
   final String label;
+
+  /// While a Google Sheet is linked (B7), these come only from the sheet.
+  bool get fromSheet => this == speakers || this == agenda || this == sponsors;
 }
 
 class _EventFormDialog extends ConsumerStatefulWidget {
-  const _EventFormDialog({this.event});
+  const _EventFormDialog({this.event, this.fromSheet});
 
   final AppEvent? event;
+
+  /// Events → Import (B7): a new event filled in from a sheet's Event tab.
+  /// Saving the draft links the sheet and reads its lists.
+  final SheetPreview? fromSheet;
 
   @override
   ConsumerState<_EventFormDialog> createState() => _EventFormDialogState();
@@ -720,6 +730,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   
   var _isSaving = false;
 
+  /// The linked Google Sheet (B7) and when it was last read. While linked,
+  /// speakers, the agenda and sponsors are read-only here: they come from
+  /// the sheet (Refresh) and Save leaves them alone.
+  String? _sheetUrl;
+  DateTime? _sheetReadAt;
+  bool get _sheetLinked => _sheetUrl != null && _sheetUrl!.trim().isNotEmpty;
+
   /// Groups added with "+" in this sitting (see [_Group]).
   final _addedGroups = <_Group>{};
 
@@ -737,7 +754,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
 
   /// The form as last saved or opened, to tell whether closing loses
   /// anything. Null until speakers, sponsors and the rest have loaded.
+  /// The lists have their own snapshot: a Refresh replaces them (saved),
+  /// and while a sheet is linked they can't change here.
   String? _baseline;
+  String? _baselineLists;
+
+  /// After a Refresh: take a new lists snapshot once they've reloaded.
+  var _rebaseLists = false;
   
   // Location search state
   final _locationSearchController = TextEditingController();
@@ -852,11 +875,68 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       };
     }).toList() ?? [];
     
+    _sheetUrl = event?.agendaSheetUrl;
+    _sheetReadAt = event?.agendaSheetReadAt;
+    final fromSheet = widget.fromSheet;
+    if (event == null && fromSheet != null) _fillFromSheet(fromSheet.event);
+
     // Any change rebuilds, so groups and the unsaved-changes check stay current.
     for (final c in _textFields) {
       c.addListener(_onFieldChanged);
     }
     _setBaselineWhenLoaded();
+  }
+
+  /// Events → Import (B7): the sheet's Event tab into the form, as the
+  /// server read it (times are "yyyy-MM-dd HH:mm" in its timezone).
+  void _fillFromSheet(Map<String, dynamic> e) {
+    String text(String key) => (e[key] as Object?)?.toString() ?? '';
+    DateTime? wall(String key) => DateTime.tryParse(text(key).replaceFirst(' ', 'T'));
+    _title.text = text('title');
+    _description.text = text('description');
+    final zone = text('timezone');
+    if (zone.isNotEmpty) {
+      _timezone.text = zone;
+      _showTimezone = zone != 'Asia/Kolkata';
+    }
+    _isFullDay = e['is_full_day'] == true;
+    final start = wall('start');
+    var end = wall('end');
+    if (start != null) {
+      _startDate.text = _formatDateOnly(start);
+      _startTime.text = _formatTimeFromDateTime(start);
+    }
+    if (end != null) {
+      // A full-day event ends at midnight after its last day; the form shows that day.
+      if (_isFullDay && start != null && end.isAfter(start)) end = end.subtract(const Duration(days: 1));
+      _endDate.text = _formatDateOnly(end);
+      _endTime.text = _formatTimeFromDateTime(end);
+    }
+    _isVirtual = e['is_virtual'] == true;
+    _location.text = text('location_text');
+    _locationSearchController.text = _location.text;
+    _locationSelected = _location.text.isNotEmpty;
+    _locationMapsUrl.text = text('location_maps_url');
+    _virtualUrl.text = text('virtual_url');
+    _capacity.text = text('capacity');
+    _maxGuests = ((e['max_guests'] as num?)?.toInt() ?? 0).clamp(0, 4);
+    _isFree = e['is_free'] != false;
+    final price = (e['ticket_price'] as num?)?.toDouble() ?? 0;
+    if (!_isFree && price > 0) {
+      final amount = price == price.roundToDouble() ? price.toInt().toString() : price.toString();
+      _ticketPrice.text = amount;
+      _fees = [
+        {'fee_name': 'Registration', 'fee_type': 'PARTICIPATION', 'fee_amount': amount},
+      ];
+    }
+    final opens = wall('registration_opens_at');
+    final closes = wall('registration_closes_at');
+    _registrationOpensAt.text = opens == null ? '' : _formatDateTimeOnly(opens);
+    _registrationClosesAt.text = closes == null ? '' : _formatDateTimeOnly(closes);
+    _thumbnailUrl.text = text('thumbnail_url');
+    _bannerUrl.text = text('banner_url');
+    _brandLogoUrl.text = text('brand_logo_url');
+    _brandLogoDarkUrl.text = text('brand_logo_dark_url');
   }
 
   List<TextEditingController> get _textFields => [
@@ -871,20 +951,31 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     if (mounted) setState(() {});
   }
 
-  /// Everything the form would save, as one string.
+  /// Everything the form would save but the lists, as one string.
   String _signature() => jsonEncode([
         for (final c in _textFields) c.text,
-        _isFullDay, _isVirtual, _maxGuests, _isFree,
-        _speakers, _sessions, _fees, _sponsors, _partners,
+        _isFullDay, _isVirtual, _maxGuests, _isFree, _fees,
       ]);
 
-  /// Takes the "nothing changed yet" snapshot once everything has loaded.
+  /// Speakers, sessions, sponsors and partners, as one string.
+  String _listsSignature() => jsonEncode([_speakers, _sessions, _sponsors, _partners]);
+
+  /// Takes the "nothing changed yet" snapshot once everything has loaded
+  /// (and the lists' again after a Refresh reloaded them).
   void _setBaselineWhenLoaded() {
-    if (_baseline != null || _detailsLoading || _orgsLoading) return;
-    _baseline = _signature();
+    if (_detailsLoading || _orgsLoading) return;
+    if (_baseline == null) {
+      _baseline = _signature();
+      _baselineLists = _listsSignature();
+    } else if (_rebaseLists) {
+      _baselineLists = _listsSignature();
+      _rebaseLists = false;
+    }
   }
 
-  bool get _hasUnsavedChanges => _baseline != null && _signature() != _baseline;
+  bool get _hasUnsavedChanges =>
+      _baseline != null &&
+      (_signature() != _baseline || (!_sheetLinked && _listsSignature() != _baselineLists));
 
   /// Cancel, ✕, Esc or a click outside: asks first if anything would be lost.
   Future<void> _close() async {
@@ -920,6 +1011,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         _Group.registrationDates => _registrationOpensAt.text.trim().isNotEmpty ||
             _registrationClosesAt.text.trim().isNotEmpty,
         _Group.guests => _maxGuests > 0,
+        _Group.sheet => _sheetLinked,
         _Group.speakers => _speakers.isNotEmpty,
         _Group.agenda => _sessions.isNotEmpty,
         _Group.sponsors => _sponsors.isNotEmpty || _partners.isNotEmpty,
@@ -928,7 +1020,16 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   bool _shows(_Group group) => _addedGroups.contains(group) || _hasData(group);
 
   /// Removes a group; if it holds data, asks first. The data goes on save.
+  /// The Google Sheet group unlinks the sheet straight away instead.
   Future<void> _removeGroup(_Group group) async {
+    if (group == _Group.sheet) {
+      if (_sheetLinked) {
+        await _unlinkSheet();
+      } else {
+        setState(() => _addedGroups.remove(group));
+      }
+      return;
+    }
     if (_hasData(group)) {
       final ok = await showDialog<bool>(
         context: context,
@@ -940,6 +1041,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
             _Group.registrationDates => 'Registration will go back to opening on '
                 'publish and closing at the start, when you save.',
             _Group.guests => 'People won\'t be able to bring guests once you save.',
+            _Group.sheet => '',
             _Group.speakers => 'All speakers will be removed from this event when you save.',
             _Group.agenda => 'All sessions will be removed from this event when you save.',
             _Group.sponsors =>
@@ -974,6 +1076,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           _registrationClosesAt.clear();
         case _Group.guests:
           _maxGuests = 0;
+        case _Group.sheet:
+          break;
         case _Group.speakers:
           _speakers.clear();
           // Sessions name their speakers; there are none now.
@@ -1076,7 +1180,11 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
           height: MediaQuery.of(context).size.height * 0.9,
           child: Scaffold(
             appBar: AppBar(
-              title: Text(isEditing ? 'Edit event' : 'Create event'),
+              title: Text(isEditing
+                  ? 'Edit event'
+                  : widget.fromSheet != null
+                      ? 'Create event from a sheet'
+                      : 'Create event'),
               leading: IconButton(
                 icon: const Icon(Icons.close),
                 tooltip: 'Close',
@@ -1097,6 +1205,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           const SizedBox(height: 32),
                           if (isEditing)
                             _buildGroups()
+                          else if (widget.fromSheet != null)
+                            Text(
+                              'From your sheet: ${widget.fromSheet!.summary.describe()}. '
+                              'They are added when you save the draft, and the sheet stays '
+                              'linked: open Edit event and press Refresh after changing it.',
+                              key: const ValueKey('event-import-summary'),
+                              style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+                            )
                           else
                             Text(
                               'After saving, open Edit event to add images, '
@@ -1326,7 +1442,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   /// added is scrolled into view.
   Widget _buildGroups() {
     final shown = _Group.values.where(_shows).toList();
-    final hidden = _Group.values.where((g) => !_shows(g)).toList();
+    // While a sheet is linked, speakers, the agenda and sponsors come from it.
+    final hidden = _Group.values
+        .where((g) => !_shows(g) && !(_sheetLinked && g.fromSheet))
+        .toList();
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1397,6 +1516,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   Widget _buildGroup(_Group group) {
     // A long list (NITKonnect's 83 speakers) starts as one line.
     final foldable = _itemCount(group) > _foldFrom;
+    // From the linked sheet (B7): shown, not changed here.
+    final locked = _sheetLinked && group.fromSheet;
     final folded = foldable && !_openGroups.contains(group);
     return Column(
       key: ValueKey('event-group-${group.name}'),
@@ -1405,6 +1526,22 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
         Row(
           children: [
             Expanded(child: _buildSectionHeader(group.label)),
+            if (locked)
+              Padding(
+                padding: const EdgeInsets.only(right: 4),
+                child: Tooltip(
+                  message: 'Change these in the Google Sheet, then press Refresh.',
+                  child: Row(
+                    key: ValueKey('event-from-sheet-${group.name}'),
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.lock_outline, size: 14, color: context.palette.textMuted),
+                      const SizedBox(width: 4),
+                      Text('From your sheet', style: TextStyle(fontSize: 12, color: context.palette.textMuted)),
+                    ],
+                  ),
+                ),
+              ),
             if (foldable)
               TextButton(
                 key: ValueKey('event-fold-${group.name}'),
@@ -1413,11 +1550,12 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                 }),
                 child: Text(folded ? 'Show' : 'Hide'),
               ),
-            TextButton(
-              key: ValueKey('event-remove-${group.name}'),
-              onPressed: () => _removeGroup(group),
-              child: const Text('Remove'),
-            ),
+            if (!locked)
+              TextButton(
+                key: ValueKey('event-remove-${group.name}'),
+                onPressed: () => _removeGroup(group),
+                child: Text(group == _Group.sheet && _sheetLinked ? 'Unlink' : 'Remove'),
+              ),
           ],
         ),
         const SizedBox(height: 12),
@@ -1481,18 +1619,25 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               ],
               onChanged: (value) => setState(() => _maxGuests = value ?? 0),
             ),
-          _Group.speakers => _buildSpeakersSection(),
-          _Group.agenda => _buildSessionsSection(),
+          _Group.sheet => EventSheetPanel(
+              eventId: widget.event!.eventId,
+              linkedUrl: _sheetLinked ? _sheetUrl : null,
+              readAt: _sheetReadAt,
+              confirmFirstLink: _confirmSheetReplaces,
+              onRefreshed: _afterSheetRefresh,
+            ),
+          _Group.speakers => _buildSpeakersSection(locked: locked),
+          _Group.agenda => _buildSessionsSection(locked: locked),
           _Group.sponsors => Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 Text('Sponsors', style: TextStyle(fontSize: 13, color: context.palette.textSecondary)),
                 const SizedBox(height: 8),
-                _buildSponsorsSection(),
+                _buildOrgSection(_sponsors, _sponsorKind, locked: locked),
                 const SizedBox(height: 20),
                 Text('Partners', style: TextStyle(fontSize: 13, color: context.palette.textSecondary)),
                 const SizedBox(height: 8),
-                _buildPartnersSection(),
+                _buildOrgSection(_partners, _partnerKind, locked: locked),
               ],
             ),
         },
@@ -1706,7 +1851,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  Widget _buildSpeakersSection() {
+  /// [locked]: from the linked sheet (B7), shown without edit buttons.
+  Widget _buildSpeakersSection({bool locked = false}) {
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -1745,15 +1891,26 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           Text(
                             [
                               if (speaker['role'] == 'MODERATOR') 'Moderator',
-                              for (final key in const ['title', 'organisation'])
+                              for (final key in const ['title', 'organisation', 'batch'])
                                 if ((speaker[key] ?? '').trim().isNotEmpty) speaker[key]!.trim(),
                             ].join(', '),
                             style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                           ),
+                          // Organisers only: never on the event page.
+                          if ([speaker['email'], speaker['phone']].any((v) => (v ?? '').trim().isNotEmpty))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 2),
+                              child: Text(
+                                [speaker['email'], speaker['phone']]
+                                    .where((v) => (v ?? '').trim().isNotEmpty)
+                                    .join(' · '),
+                                style: TextStyle(fontSize: 11, color: context.palette.textMuted),
+                              ),
+                            ),
                         ],
                       ),
                     ),
-                    Row(
+                    if (!locked) Row(
                       children: [
                         IconButton(
                           icon: const Icon(Icons.edit, size: 18),
@@ -1777,12 +1934,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               ),
             );
           }),
-        const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          onPressed: () => _showSpeakerDialog(null),
-          icon: const Icon(Icons.add),
-          label: const Text('Add Speaker'),
-        ),
+        if (!locked) ...[
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: () => _showSpeakerDialog(null),
+            icon: const Icon(Icons.add),
+            label: const Text('Add Speaker'),
+          ),
+        ],
       ],
     );
   }
@@ -1960,7 +2119,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     );
   }
 
-  Widget _buildSessionsSection() {
+  /// [locked]: from the linked sheet (B7), shown without edit buttons.
+  Widget _buildSessionsSection({bool locked = false}) {
     final p = context.palette;
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -2007,13 +2167,19 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            '${session['start_time'] ?? ''} - ${session['end_time'] ?? ''}',
+                            [
+                              '${session['start_time'] ?? ''} - ${session['end_time'] ?? ''}',
+                              // From the sheet: hall and type, so organisers can check them.
+                              if (locked)
+                                for (final key in const ['track', 'session_type'])
+                                  if ((session[key] ?? '').trim().isNotEmpty) _titleCase(session[key]!),
+                            ].join(' · '),
                             style: TextStyle(fontSize: 12, color: p.textMuted),
                           ),
                         ],
                       ),
                     ),
-                    Row(
+                    if (!locked) Row(
                       children: [
                         IconButton(
                           icon: const Icon(Icons.edit, size: 18),
@@ -2032,14 +2198,23 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               ),
             );
           }),
-        const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          onPressed: () => _showSessionDialog(null),
-          icon: const Icon(Icons.add),
-          label: const Text('Add Session'),
-        ),
+        if (!locked) ...[
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: () => _showSessionDialog(null),
+            icon: const Icon(Icons.add),
+            label: const Text('Add Session'),
+          ),
+        ],
       ],
     );
+  }
+
+  /// "PANEL" → "Panel"; "Hall A" stays.
+  static String _titleCase(String v) {
+    final t = v.trim();
+    if (t.isEmpty || t != t.toUpperCase()) return t;
+    return '${t[0]}${t.substring(1).toLowerCase()}';
   }
 
   // ── Session links (B4) ──────────────────────────────────────────────
@@ -2089,8 +2264,99 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   }
 
 
+  // ── The Google Sheet (B7) ────────────────────────────────────────────
+
+  /// Before the first link: the sheet replaces speakers, sessions and
+  /// sponsors typed here. Asks only when there are some.
+  Future<bool> _confirmSheetReplaces() async {
+    String n(int count, String one, String many) => '$count ${count == 1 ? one : many}';
+    final typed = [
+      if (_speakers.isNotEmpty) n(_speakers.length, 'speaker', 'speakers'),
+      if (_sessions.isNotEmpty) n(_sessions.length, 'session', 'sessions'),
+      if (_sponsors.length + _partners.length > 0)
+        n(_sponsors.length + _partners.length, 'sponsor or partner', 'sponsors and partners'),
+    ];
+    if (typed.isEmpty) return true;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Use the sheet instead?'),
+        content: Text(
+          'The sheet will replace the ${typed.join(', ')} here. From then on they '
+          'are changed in the sheet, and you press Refresh.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            key: const ValueKey('event-sheet-replace-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Use the sheet'),
+          ),
+        ],
+      ),
+    );
+    return ok == true;
+  }
+
+  /// A Refresh saved: show the sheet as linked and reload the lists.
+  Future<void> _afterSheetRefresh(SheetRefresh result) async {
+    final eventId = widget.event?.eventId;
+    if (eventId == null || !mounted) return;
+    setState(() {
+      _sheetUrl = result.url;
+      _sheetReadAt = result.readAt ?? DateTime.now();
+      _detailsLoading = true;
+      _orgsLoading = true;
+      _rebaseLists = true;
+    });
+    await Future.wait([_loadDetails(eventId, listsOnly: true), _loadOrgs(eventId)]);
+  }
+
+  /// Unlinks the sheet (asks first). What it saved stays, editable again.
+  Future<void> _unlinkSheet() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text('Unlink the sheet?'),
+        content: const Text(
+          'The speakers, agenda and sponsors it saved stay on the event, and you '
+          'can edit them here again. Refresh won\'t read the sheet any more.',
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
+          FilledButton(
+            key: const ValueKey('event-sheet-unlink-confirm'),
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('Unlink'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !mounted) return;
+    final token = ref.read(authControllerProvider).session?.accessToken;
+    final eventId = widget.event?.eventId;
+    if (token == null || eventId == null) return;
+    try {
+      await ref.read(eventsRepositoryProvider).unlinkEventSheet(eventId, token);
+      if (!mounted) return;
+      setState(() {
+        _sheetUrl = null;
+        _sheetReadAt = null;
+        _addedGroups.remove(_Group.sheet);
+        // What the sheet saved is now the starting point for edits here.
+        _baselineLists = _listsSignature();
+      });
+      showNotice(context, 'Sheet unlinked. You can edit speakers, the agenda and sponsors here again.',
+          kind: NoticeKind.success);
+    } catch (error, stackTrace) {
+      AppLogger.error('Event sheet: unlink failed', error, stackTrace);
+      if (mounted) showNotice(context, SheetProblem.from(error).message, kind: NoticeKind.error);
+    }
+  }
+
   /// Speakers, sessions and fee tiers as saved, with their server ids.
-  Future<void> _loadDetails(int eventId) async {
+  /// [listsOnly] (after a sheet Refresh) leaves the fees as they are here.
+  Future<void> _loadDetails(int eventId, {bool listsOnly = false}) async {
     final token = ref.read(authControllerProvider).session?.accessToken;
     if (token == null) return;
     try {
@@ -2108,6 +2374,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               'title': text(r['title']),
               'organisation': text(r['organisation']),
               'role': text(r['role']),
+              // B7: kept so a save sends them back; email and phone are
+              // organisers' only.
+              for (final key in const ['email', 'phone', 'photo_url', 'batch', 'linkedin_url', 'bio'])
+                key: text(r[key]),
             },
         ];
         List<Map<String, dynamic>> people(Map<String, dynamic> r) =>
@@ -2146,14 +2416,16 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               .where((n) => n.toLowerCase() == named.toLowerCase());
           if (named.isNotEmpty && match.isNotEmpty) session['people'] = match.first;
         }
-        _fees = [
-          for (final r in list('fees'))
-            {
-              'fee_name': text(r['name']),
-              'fee_type': text(r['fee_type']).toUpperCase(),
-              'fee_amount': text(r['amount']),
-            },
-        ];
+        if (!listsOnly) {
+          _fees = [
+            for (final r in list('fees'))
+              {
+                'fee_name': text(r['name']),
+                'fee_type': text(r['fee_type']).toUpperCase(),
+                'fee_amount': text(r['amount']),
+              },
+          ];
+        }
         // Paid events made before fees saved: show their price as one line,
         // so saving keeps it.
         final price = double.tryParse(_ticketPrice.text.trim()) ?? 0;
@@ -2216,6 +2488,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               'title': sp['title'],
               'organisation': sp['organisation'],
               if ((sp['role'] ?? '').isNotEmpty) 'role': sp['role'],
+              // Editable in the speaker pop-up; batch, LinkedIn and bio are
+              // left out, so the server keeps them (from the sheet).
+              for (final key in const ['email', 'phone', 'photo_url'])
+                if (sp.containsKey(key)) key: sp[key],
             },
         ],
         'sessions': [
@@ -2305,6 +2581,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   /// itself is saved. Returns false if any change failed.
   Future<bool> _saveOrgs(int eventId, String token) async {
     if (_orgsLoadFailed) return true; // nothing was loaded, so nothing changed
+    if (_sheetLinked) return true; // the sheet owns them (B7)
     final repo = ref.read(eventsRepositoryProvider);
     var ok = true;
     Future<void> sync(
@@ -2351,11 +2628,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     return ok;
   }
 
-  Widget _buildSponsorsSection() => _buildOrgSection(_sponsors, _sponsorKind);
-
-  Widget _buildPartnersSection() => _buildOrgSection(_partners, _partnerKind);
-
-  Widget _buildOrgSection(List<Map<String, String>> items, _OrgKind kind) {
+  /// [locked]: from the linked sheet (B7), shown without edit buttons.
+  Widget _buildOrgSection(List<Map<String, String>> items, _OrgKind kind, {bool locked = false}) {
     if (_orgsLoading) {
       return const Padding(
         padding: EdgeInsets.symmetric(vertical: 12),
@@ -2396,7 +2670,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                 padding: const EdgeInsets.all(12),
                 child: Row(
                   children: [
-                    Column(
+                    if (!locked) Column(
                       children: [
                         IconButton(
                           icon: const Icon(Icons.arrow_upward, size: 16),
@@ -2424,7 +2698,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                         ),
                       ],
                     ),
-                    const SizedBox(width: 8),
+                    if (!locked) const SizedBox(width: 8),
                     Expanded(
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
@@ -2435,7 +2709,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                           ),
                           const SizedBox(height: 2),
                           Text(
-                            _orgTypeLabel(item[kind.typeKey] ?? ''),
+                            [
+                              _orgTypeLabel(item[kind.typeKey] ?? ''),
+                              if ((item['label'] ?? '').trim().isNotEmpty) '"${item['label']!.trim()}"',
+                            ].join(' · '),
                             style: TextStyle(fontSize: 12, color: context.palette.textMuted),
                           ),
                           if ((item['logo_url'] ?? '').isNotEmpty)
@@ -2451,7 +2728,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                         ],
                       ),
                     ),
-                    Row(
+                    if (!locked) Row(
                       children: [
                         IconButton(
                           tooltip: 'Edit',
@@ -2474,12 +2751,14 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
               ),
             );
           }),
-        const SizedBox(height: 12),
-        FilledButton.tonalIcon(
-          onPressed: () => _showOrgDialog(items, kind, null),
-          icon: const Icon(Icons.add),
-          label: Text('Add ${kind.noun}'),
-        ),
+        if (!locked) ...[
+          const SizedBox(height: 12),
+          FilledButton.tonalIcon(
+            onPressed: () => _showOrgDialog(items, kind, null),
+            icon: const Icon(Icons.add),
+            label: Text('Add ${kind.noun}'),
+          ),
+        ],
       ],
     );
   }
@@ -2604,6 +2883,13 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final photoUrlCtrl = TextEditingController(
       text: editIndex != null ? _speakers[editIndex]['photo_url'] ?? '' : '',
     );
+    // Organisers only (B7): never shown on the event page.
+    final emailCtrl = TextEditingController(
+      text: editIndex != null ? _speakers[editIndex]['email'] ?? '' : '',
+    );
+    final phoneCtrl = TextEditingController(
+      text: editIndex != null ? _speakers[editIndex]['phone'] ?? '' : '',
+    );
 
     return showDialog<String>(
       context: context,
@@ -2656,6 +2942,30 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
                     ),
                   ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('speaker-email'),
+                    controller: emailCtrl,
+                    keyboardType: TextInputType.emailAddress,
+                    decoration: InputDecoration(
+                      labelText: 'Email (optional)',
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
+                  const SizedBox(height: 12),
+                  TextField(
+                    key: const ValueKey('speaker-phone'),
+                    controller: phoneCtrl,
+                    keyboardType: TextInputType.phone,
+                    decoration: InputDecoration(
+                      labelText: 'Phone (optional)',
+                      helperText: 'Email and phone are for organisers; they never show on the event page.',
+                      helperMaxLines: 2,
+                      border: OutlineInputBorder(borderRadius: BorderRadius.circular(8)),
+                      contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -2679,6 +2989,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
                       'title': titleCtrl.text.trim(),
                       'organisation': organisationCtrl.text.trim(),
                       'photo_url': photoUrlCtrl.text.trim(),
+                      'email': emailCtrl.text.trim().toLowerCase(),
+                      'phone': phoneCtrl.text.trim(),
                     };
                     if (editIndex == null) {
                       _speakers.add(speaker);
@@ -3424,8 +3736,9 @@ void _showFeeDialog(int? editIndex) {
       }
     }
 
-    // Validate all sessions fall within event timeframe
-    if (_sessions.isNotEmpty) {
+    // Validate all sessions fall within event timeframe. A linked sheet's
+    // sessions aren't saved from here (B7); its Refresh warns instead.
+    if (_sessions.isNotEmpty && !_sheetLinked) {
       for (final session in _sessions) {
         final sessionStartStr = session['start_time'] ?? '';
         final sessionEndStr = session['end_time'] ?? '';
@@ -3536,12 +3849,32 @@ void _showFeeDialog(int? editIndex) {
       // sponsors presenting it (B4), new ones included.
       final orgsSaved = await _saveOrgs(saved.eventId, token);
       final detailsSaved = await _saveDetails(saved.eventId, token);
+
+      // Events → Import (B7): link the sheet and read its lists into the new draft.
+      SheetProblem? sheetProblem;
+      SheetRefresh? sheetRead;
+      final fromSheet = widget.fromSheet;
+      if (widget.event == null && fromSheet != null) {
+        try {
+          sheetRead = await repo.refreshEventSheet(saved.eventId, fromSheet.url, token);
+        } catch (error, stackTrace) {
+          AppLogger.error('Event sheet: linking the imported sheet failed', error, stackTrace);
+          sheetProblem = SheetProblem.from(error);
+        }
+      }
+
       if (!detailsSaved && mounted) {
         showNotice(context, 'The event was saved, but its speakers, sessions or fee tiers could not be. '
               'Open the event again to check them.', kind: NoticeKind.error);
       } else if (!orgsSaved && mounted) {
         showNotice(context, 'The event was saved, but some sponsors or partners could not be. '
               'Open the event again to check them.', kind: NoticeKind.error);
+      } else if (sheetProblem != null && mounted) {
+        showNotice(context, 'The draft was saved, but the sheet couldn\'t be read: ${sheetProblem.message} '
+              'Open Edit event → Google Sheet to try again.', kind: NoticeKind.error);
+      } else if (sheetRead != null && mounted) {
+        showNotice(context, 'Draft saved, with ${sheetRead.summary.describe()} from your sheet.',
+            kind: NoticeKind.success);
       }
 
       if (mounted) Navigator.pop(context, true);
