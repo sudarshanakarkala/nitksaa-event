@@ -1640,7 +1640,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
     showDialog<void>(
       context: context,
       builder: (context) => Dialog(
-        backgroundColor: context.palette.card,
+        backgroundColor: context.palette.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
         child: Padding(
           padding: const EdgeInsets.all(24),
@@ -1713,7 +1713,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       context: context,
       builder: (context) {
         return Dialog(
-          backgroundColor: context.palette.card,
+          backgroundColor: context.palette.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
           child: Padding(
             padding: const EdgeInsets.all(24.0),
@@ -1900,7 +1900,7 @@ class _RegistrationFormDialogState extends State<_RegistrationFormDialog> {
     );
 
     return Dialog(
-      backgroundColor: p.card,
+      backgroundColor: p.surface,
       insetPadding: EdgeInsets.symmetric(horizontal: narrow ? 12 : 40, vertical: 24),
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
       child: ConstrainedBox(
