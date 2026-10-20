@@ -1642,56 +1642,59 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       builder: (context) => Dialog(
         backgroundColor: context.palette.surface,
         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-        child: Padding(
-          padding: const EdgeInsets.all(24),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              Row(
-                children: [
-                  const Expanded(
-                    child: Text(
-                      'Guest entry pass',
-                      style: TextStyle(
-                        fontFamily: AppTextStyles.serif,
-                        fontSize: 18,
-                        fontWeight: FontWeight.w600,
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 420),
+          child: Padding(
+            padding: const EdgeInsets.all(24),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Row(
+                  children: [
+                    const Expanded(
+                      child: Text(
+                        'Guest entry pass',
+                        style: TextStyle(
+                          fontFamily: AppTextStyles.serif,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w600,
+                        ),
                       ),
                     ),
-                  ),
-                  IconButton(
-                    icon: const Icon(Icons.close),
-                    onPressed: () => Navigator.pop(context),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-              Text(
-                event.title,
-                textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-              ),
-              const SizedBox(height: 8),
-              Text(
-                guest.name,
-                style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
-              ),
-              if (leader.isNotEmpty)
-                Text(
-                  'Guest of $leader',
-                  style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(context),
+                    ),
+                  ],
                 ),
-              const SizedBox(height: 16),
-              EntryPassQr(eventId: event.eventId, qrToken: guest.qrToken!),
-              if ((guest.registrationNumber ?? '').isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text(
-                  'Badge Number: ${guest.registrationNumber}',
-                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  event.title,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                 ),
+                const SizedBox(height: 8),
+                Text(
+                  guest.name,
+                  style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                ),
+                if (leader.isNotEmpty)
+                  Text(
+                    'Guest of $leader',
+                    style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+                  ),
+                const SizedBox(height: 16),
+                EntryPassQr(eventId: event.eventId, qrToken: guest.qrToken!),
+                if ((guest.registrationNumber ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 16),
+                  Text(
+                    'Badge Number: ${guest.registrationNumber}',
+                    style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                  ),
+                ],
               ],
-            ],
-          ),
+            ),
+        ),
         ),
       ),
     );
@@ -1715,70 +1718,73 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         return Dialog(
           backgroundColor: context.palette.surface,
           shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-          child: Padding(
-            padding: const EdgeInsets.all(24.0),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    const Text(
-                      'Your Event Badge',
-                      style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
-                    ),
-                    IconButton(
-                      icon: const Icon(Icons.close),
-                      onPressed: () => Navigator.pop(context),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 16),
-                Container(
-                  padding: const EdgeInsets.all(16),
-                  decoration: BoxDecoration(
-                    color: context.palette.canvas,
-                    borderRadius: BorderRadius.circular(12),
-                  ),
-                  child: Column(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 420),
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Text(
-                        event.title,
-                        style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                        textAlign: TextAlign.center,
+                      const Text(
+                        'Your Event Badge',
+                        style: TextStyle(fontFamily: AppTextStyles.serif, fontSize: 18, fontWeight: FontWeight.w600),
                       ),
-                      const SizedBox(height: 8),
-                      Text(
-                        userName,
-                        style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                      IconButton(
+                        icon: const Icon(Icons.close),
+                        onPressed: () => Navigator.pop(context),
                       ),
-                      if (email.isNotEmpty) ...[
-                        const SizedBox(height: 4),
-                        Text(
-                          email,
-                          style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
-                        ),
-                      ],
-                      const SizedBox(height: 16),
-                      if (qrToken != null && qrToken.isNotEmpty)
-                        EntryPassQr(eventId: event.eventId, qrToken: qrToken)
-                      else
-                        Text(
-                          'Your entry pass appears here once your registration is confirmed.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
-                        ),
-                      const SizedBox(height: 16),
-                      if (regNo.isNotEmpty)
-                        Text(
-                          'Badge Number: $regNo',
-                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
-                        ),
                     ],
                   ),
-                ),
-              ],
-            ),
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: context.palette.canvas,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Column(
+                      children: [
+                        Text(
+                          event.title,
+                          style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
+                          textAlign: TextAlign.center,
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          userName,
+                          style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                        ),
+                        if (email.isNotEmpty) ...[
+                          const SizedBox(height: 4),
+                          Text(
+                            email,
+                            style: TextStyle(fontSize: 12, color: context.palette.textSecondary),
+                          ),
+                        ],
+                        const SizedBox(height: 16),
+                        if (qrToken != null && qrToken.isNotEmpty)
+                          EntryPassQr(eventId: event.eventId, qrToken: qrToken)
+                        else
+                          Text(
+                            'Your entry pass appears here once your registration is confirmed.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(fontSize: 13, color: context.palette.textSecondary),
+                          ),
+                        const SizedBox(height: 16),
+                        if (regNo.isNotEmpty)
+                          Text(
+                            'Badge Number: $regNo',
+                            style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+          ),
           ),
         );
       },
