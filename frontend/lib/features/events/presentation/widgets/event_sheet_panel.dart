@@ -95,6 +95,15 @@ class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
     }
   }
 
+  Widget _refreshButton() => FilledButton.tonalIcon(
+        key: const ValueKey('event-sheet-refresh'),
+        onPressed: _busy ? null : _refresh,
+        icon: _busy
+            ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.refresh, size: 18),
+        label: Text(_busy ? 'Reading the sheet…' : _linked ? 'Refresh' : 'Link and Refresh'),
+      );
+
   @override
   Widget build(BuildContext context) {
     final p = context.palette;
@@ -104,27 +113,59 @@ class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         if (_linked) ...[
-          Row(
-            children: [
-              Icon(Icons.table_chart_outlined, size: 18, color: p.textSecondary),
-              const SizedBox(width: 8),
-              Expanded(
-                child: InkWell(
-                  onTap: () => launchUrl(Uri.parse(widget.linkedUrl!), webOnlyWindowName: '_blank'),
-                  child: Text(
-                    'Open the sheet',
-                    style: TextStyle(fontSize: 13, color: p.primary, decoration: TextDecoration.underline),
-                  ),
+          // One card: what's linked and when it was read, with its actions.
+          Container(
+            key: const ValueKey('event-sheet-linked'),
+            width: double.infinity,
+            padding: const EdgeInsets.fromLTRB(14, 12, 12, 12),
+            decoration: BoxDecoration(
+              border: Border.all(color: p.border),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Wrap(
+              alignment: WrapAlignment.spaceBetween,
+              crossAxisAlignment: WrapCrossAlignment.center,
+              spacing: 12,
+              runSpacing: 10,
+              children: [
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.table_chart_outlined, size: 22, color: p.primary),
+                    const SizedBox(width: 12),
+                    Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('Linked to a Google Sheet',
+                            style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: p.textPrimary)),
+                        const SizedBox(height: 2),
+                        Text(
+                          widget.readAt == null ? 'Not read yet' : 'Last read ${sheetReadTime(widget.readAt!)}',
+                          style: TextStyle(fontSize: 12, color: p.textSecondary),
+                        ),
+                      ],
+                    ),
+                  ],
                 ),
-              ),
-            ],
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    OutlinedButton.icon(
+                      key: const ValueKey('event-sheet-open'),
+                      onPressed: () => launchUrl(Uri.parse(widget.linkedUrl!), webOnlyWindowName: '_blank'),
+                      icon: const Icon(Icons.open_in_new, size: 16),
+                      label: const Text('Open'),
+                    ),
+                    const SizedBox(width: 8),
+                    _refreshButton(),
+                  ],
+                ),
+              ],
+            ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 8),
           Text(
-            [
-              'Speakers, the agenda and sponsors come from this sheet: change them there, then press Refresh.',
-              if (widget.readAt != null) 'Last read ${sheetReadTime(widget.readAt!)}.',
-            ].join(' '),
+            'Speakers, the agenda and sponsors come from this sheet. Change them there, then press Refresh.',
             style: TextStyle(fontSize: 12, color: p.textSecondary),
           ),
         ] else ...[
@@ -148,19 +189,14 @@ class _EventSheetPanelState extends ConsumerState<EventSheetPanel> {
             ),
           ),
         ],
-        const SizedBox(height: 16),
-        Row(
-          children: [
-            FilledButton.tonalIcon(
-              key: const ValueKey('event-sheet-refresh'),
-              onPressed: _busy ? null : _refresh,
-              icon: _busy
-                  ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
-                  : const Icon(Icons.refresh, size: 18),
-              label: Text(_busy ? 'Reading the sheet…' : _linked ? 'Refresh' : 'Link and Refresh'),
-            ),
-          ],
-        ),
+        if (!_linked) ...[
+          const SizedBox(height: 16),
+          Padding(
+            // Lined up with the steps' text, under step 3.
+            padding: const EdgeInsets.only(left: 36),
+            child: _refreshButton(),
+          ),
+        ],
         if (_problem != null) ...[
           const SizedBox(height: 12),
           SheetProblemBox(problem: _problem!),
