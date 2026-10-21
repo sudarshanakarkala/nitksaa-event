@@ -353,7 +353,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // The status pills, so the rail has every filter.
-          const FilterLabel('Status'),
+          const FilterLabel('Show'),
           const SizedBox(height: 8),
           Wrap(
             spacing: 6,

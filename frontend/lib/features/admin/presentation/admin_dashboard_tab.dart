@@ -127,7 +127,8 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
 
   /// [wide] (computers and tablets): the event picker is on the page, so
   /// the rail holds the period.
-  Widget _rail({bool wide = false}) => Column(
+  Widget _rail({bool wide = false}) => SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           if (!wide) ...[
@@ -140,6 +141,7 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
           const SizedBox(height: 8),
           _periodChips(pills: wide),
         ],
+        ),
       );
 
   @override

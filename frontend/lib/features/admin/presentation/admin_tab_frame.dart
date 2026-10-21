@@ -5,10 +5,12 @@ import '../../../shared/widgets/list_page.dart';
 /// The one layout every admin tab uses (`ADMIN_LAYOUT_DESIGN.md` §3), on
 /// [ListPage]. Each tab fills the slots it needs and leaves out the rest:
 ///
-/// 1. [search] · [toggle] (Cards/Table) · Filters icon (when [filters] is set);
-/// 2. [picker] (the event picker) · [pills], with counts;
-/// 3. [count] · [action] on the right;
-/// then the [body] (a table or cards).
+/// 1. [picker] (the event picker) · [search] · [toggle] (Cards/Table) ·
+///    Filters icon (when [filters] is set);
+/// 2. [count] · [action] on the right;
+/// then the [body] (a table or cards). Phones, and tabs without [filters]
+/// (Roles, Check-in): the [pills] (and [belowPills]) on the page too, with
+/// the picker on its own line on phones.
 ///
 /// - With no search box, the Filters icon sits at the end of row 2.
 /// - Computers and tablets: a tab with [filters] keeps every filter (its

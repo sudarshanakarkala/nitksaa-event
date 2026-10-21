@@ -147,19 +147,6 @@ class AdminContainer extends StatelessWidget {
 
   final Widget child;
 
-  /// Padding for a scroll view that fills the width (so its scrollbar sits
-  /// at the window edge, as on the website) but keeps its content in the
-  /// header's column. Website `.mgmt-content`: 28px top, 60px bottom.
-  static EdgeInsets scrollPadding(
-    BuildContext context,
-    double width, {
-    double top = 28,
-    double bottom = 60,
-  }) {
-    final h = PageInsets.horizontal(context, width);
-    return EdgeInsets.fromLTRB(h.left, top, h.right, bottom);
-  }
-
   /// Lines up with the tabs below, which keep the Filters rail's strip free
   /// on the left on computers ([AdminTabFrame]).
   @override

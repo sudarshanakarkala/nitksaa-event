@@ -6,15 +6,16 @@ import 'page_header.dart';
 import 'page_insets.dart';
 import 'phone_chrome.dart';
 
-/// List page frame (Events): a fixed toolbar (page header, search, view
-/// toggle, Filters button, quick-filter pills, count and actions) and the
-/// scrolling [body] below it, in the site header's 1520px container.
+/// List page frame (Events, My Events, the Admin tabs): a fixed toolbar and
+/// the scrolling [body] below it, in the site header's 1520px container.
 ///
-/// Improves on the website's left rail: the common filters are one-click
-/// [quickFilters] pills, and the rest open in a Filters panel that slides
-/// over the results instead of squeezing them, so the cards never move when
-/// it opens or closes. Phones get the panel as a bottom sheet
-/// ([onOpenFilters]).
+/// Computers and tablets, with [filtersInRail]: the toolbar is the page
+/// header, one row (event picker, search, view toggle, Filters button) and
+/// the count line with the actions; every filter is in the Filters rail,
+/// under the toolbar beside the list, closed on load. Computers keep the
+/// rail's strip free on the left so it opens without moving anything;
+/// tablets get it over the list. Phones: the [quickFilters] pills and
+/// [belowPills] on the page, the rest in a bottom sheet ([onOpenFilters]).
 class ListPage extends StatefulWidget {
   const ListPage({
     super.key,
@@ -76,16 +77,17 @@ class ListPage extends StatefulWidget {
   /// ([ListIconAction]), in place of [actions] on the count line.
   final List<Widget>? phoneActions;
 
-  /// A full-width line under the pills (Admin → Events: the date slider).
+  /// A full-width line under the pills (the date slider). Phones only with
+  /// [filtersInRail]: elsewhere [filters] holds it.
   final Widget? belowPills;
 
   /// A choice before the pills, such as the event picker. On phones it gets
-  /// its own full-width line above them.
+  /// its own full-width line above them; with [filtersInRail], it starts the
+  /// search row.
   final Widget? picker;
 
   /// From [railFrom], keep the rail's strip free on the left so opening it
-  /// covers nothing. Off for the Admin tabs, which line up with the "Admin"
-  /// title instead: there the rail slides over the page, as on tablets.
+  /// covers nothing. Off: the rail slides over the list, as on tablets.
   final bool reserveRail;
 
   /// Phones: the action on its own full-width line below the count (Scan at
@@ -216,7 +218,10 @@ class _ListPageState extends State<ListPage> {
     // No search box or toggle: the Filters icon goes at the end of the pills,
     // never alone on a row.
     final hasQuickFilters = widget.quickFilters.isNotEmpty && !railMode;
-    final hasPillRow = widget.picker != null || hasQuickFilters;
+    // Rail mode: the event picker joins the search row, so every page's
+    // toolbar is the same one row (and the rail starts at the same height).
+    final pickerInTopRow = railMode && widget.picker != null && widget.search != null;
+    final hasPillRow = (widget.picker != null && !pickerInTopRow) || hasQuickFilters;
     final filtersWithPills =
         filterButtons != null && widget.search == null && widget.toggle == null && hasPillRow;
     final showTopRow = widget.search != null ||
@@ -244,7 +249,7 @@ class _ListPageState extends State<ListPage> {
           );
     final pillRow = Row(
       children: [
-        if (widget.picker != null && !pickerOwnLine) ...[
+        if (widget.picker != null && !pickerOwnLine && !pickerInTopRow) ...[
           widget.picker!,
           if (pills != null) const SizedBox(width: 12),
         ],
@@ -255,7 +260,9 @@ class _ListPageState extends State<ListPage> {
         if (filtersWithPills) ...[const SizedBox(width: 8), filterButtons],
       ],
     );
-    final showPillRow = pills != null || filtersWithPills || (widget.picker != null && !pickerOwnLine);
+    final showPillRow = pills != null ||
+        filtersWithPills ||
+        (widget.picker != null && !pickerOwnLine && !pickerInTopRow);
 
     // Phones: small actions in the search row; the count only where the
     // pills don't already show it.
@@ -289,6 +296,7 @@ class _ListPageState extends State<ListPage> {
             if (showTopRow)
               Row(
                 children: [
+                  if (pickerInTopRow) ...[widget.picker!, const SizedBox(width: 12)],
                   // No search box: keep the toggle and Filters at the right
                   // end, where they sit on every other page.
                   if (widget.search != null) Expanded(child: widget.search!) else const Spacer(),
@@ -369,6 +377,11 @@ class _ListPageState extends State<ListPage> {
     if (hasFilters && !compact) {
       final overlay = !reserve;
       const panelWidth = ListPage.railWidth;
+      // Very wide windows: the content is centred, so the rail sits just
+      // left of it rather than at the window's edge.
+      final besideContent =
+          PageInsets.contentLeft(context) - ListPage.railWidth - ListPage.railGap;
+      final paneLeft = reserve && besideContent > 0 ? besideContent : 0.0;
       list = Stack(
         children: [
           Positioned.fill(child: list),
@@ -391,7 +404,7 @@ class _ListPageState extends State<ListPage> {
             curve: Curves.easeOutCubic,
             top: 0,
             bottom: 0,
-            left: panelOpen ? 0 : -(panelWidth + 12),
+            left: panelOpen ? paneLeft : -(panelWidth + 12),
             width: panelWidth,
             child: _FilterPanel(
               activeCount: widget.activeFilterCount,

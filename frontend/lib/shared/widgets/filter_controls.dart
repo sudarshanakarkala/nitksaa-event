@@ -725,6 +725,15 @@ class _FilterDateRangeState extends State<FilterDateRange> {
             child: box(_to, _toFocus, 'To', _toBad, width: null),
           ),
         ),
+        if (range != null)
+          IconButton(
+            tooltip: 'Any date',
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            color: p.textMuted,
+            icon: const Icon(Icons.close),
+            onPressed: () => widget.onChanged(null),
+          ),
       ],
     );
 
