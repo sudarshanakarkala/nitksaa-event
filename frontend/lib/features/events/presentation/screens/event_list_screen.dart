@@ -177,9 +177,11 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     ];
   }
 
-  /// Active filters, for the rail badge (search and dates not counted).
-  int _activeFilterCount(EventsState s, bool registeredOnly) => [
+  /// Active filters, for the rail badge (search not counted; dates only
+  /// where they are in the rail, not on the phone's date line).
+  int _activeFilterCount(EventsState s, bool registeredOnly, {required bool datesInRail}) => [
         _show != _Show.upcoming,
+        datesInRail && _dates != null,
         registeredOnly,
         !((s.filterModes['physical'] ?? true) && (s.filterModes['virtual'] ?? true)),
         !((s.filterRegistrationStatus['open'] ?? true) &&
@@ -191,13 +193,21 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
     ref.read(_registeredOnlyProvider.notifier).state = false;
     ref.read(eventsProvider.notifier).clearFilters();
     _searchController.clear();
-    setState(() => _show = _Show.upcoming);
+    setState(() {
+      _show = _Show.upcoming;
+      _dates = null;
+    });
   }
 
   /// The Filters rail (a bottom sheet on phones): every filter, the pills
   /// included. Reads rather than watches: the page rebuilds the rail, and
   /// the sheet rebuilds itself on each tap.
-  Widget _filterRail() {
+  ///
+  /// Computers and tablets ([counts] and [dates] given): the rail holds
+  /// everything the phone keeps on the page, so the page itself is just the
+  /// search and the cards: the type pills with their counts, then the
+  /// order and the dates.
+  Widget _filterRail({Map<_Show, int>? counts, Widget? dates}) {
     final state = ref.read(eventsProvider);
     final notifier = ref.read(eventsProvider.notifier);
     final signedIn = ref.read(authControllerProvider).isAuthenticated;
@@ -210,11 +220,19 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           const SizedBox(height: 8),
           Wrap(spacing: 6, runSpacing: 6, children: [
             for (final s in _Show.values)
-              FilterChipToggle(
-                label: s.label,
-                selected: s == _show,
-                onChanged: (_) => setState(() => _show = s),
-              ),
+              if (counts != null)
+                QuickFilterPill(
+                  label: s.label,
+                  count: counts[s],
+                  active: s == _show,
+                  onTap: () => setState(() => _show = s),
+                )
+              else
+                FilterChipToggle(
+                  label: s.label,
+                  selected: s == _show,
+                  onChanged: (_) => setState(() => _show = s),
+                ),
           ]),
           const SizedBox(height: 20),
           // Your registrations (website "Author: My Stories"), signed in only.
@@ -228,6 +246,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             ),
             const SizedBox(height: 20),
           ],
+          ?dates,
           // Mode, registration and price work like the website's chips:
           // none lit = all; lit = only those. The provider keeps "included"
           // flags (all included = no filter); _includeChips maps between the
@@ -286,12 +305,29 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
       narrowed.where(_show.matches),
       soonestFirst: _soonestFirst,
     );
+    final showCounts = state.isLoading
+        ? null
+        : {for (final s in _Show.values) s: narrowed.where(s.matches).length};
+    Widget dateLine({bool rail = false}) => EventDateLine(
+          events: state.events,
+          value: _dates,
+          onChanged: (v) => setState(() => _dates = v),
+          sortable: !table,
+          soonestFirst: _soonestFirst,
+          dateOrder: true,
+          onDateOrder: () {},
+          onFlip: () => setState(() => _soonestFirst = !_soonestFirst),
+          rail: rail,
+        );
 
-    // The same rows as Admin → Events: search, Cards/Table, Filters; the
-    // pills; the date line; the count and Create event.
+    // Computers and tablets: the header (Create event beside it), the
+    // search row and the count; every filter in the rail on the left, open
+    // on computers (website directory). Phones: as Admin → Events, with the
+    // pills and the date line on the page.
     return Scaffold(
       key: _scaffoldKey,
       body: ListPage(
+        filtersInRail: true,
         title: 'Events',
         subtitle: 'Reunions, talks and meetups of the NITK Surathkal Alumni Association.',
         search: ListSearchField(
@@ -359,7 +395,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           for (final s in _Show.values)
             QuickFilterPill(
               label: s.label,
-              count: state.isLoading ? null : narrowed.where(s.matches).length,
+              count: showCounts?[s],
               active: s == _show,
               onTap: () => setState(() => _show = s),
             ),
@@ -371,25 +407,17 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                   ref.read(_registeredOnlyProvider.notifier).state = !registeredOnly,
             ),
         ],
-        belowPills: state.events.isEmpty
-            ? null
-            : EventDateLine(
-                events: state.events,
-                value: _dates,
-                onChanged: (v) => setState(() => _dates = v),
-                sortable: !table,
-                soonestFirst: _soonestFirst,
-                dateOrder: true,
-                onDateOrder: () {},
-                onFlip: () => setState(() => _soonestFirst = !_soonestFirst),
-              ),
-        filters: (context) => _filterRail(),
+        belowPills: state.events.isEmpty ? null : dateLine(),
+        filters: (context) => _filterRail(
+          counts: showCounts ?? const {},
+          dates: state.events.isEmpty ? null : dateLine(rail: true),
+        ),
         onOpenFilters: () => showFilterSheet(
           context,
           builder: (_) => _filterRail(),
           onClear: _clearFilters,
         ),
-        activeFilterCount: _activeFilterCount(state, registeredOnly),
+        activeFilterCount: _activeFilterCount(state, registeredOnly, datesInRail: !compact),
         onClearFilters: _clearFilters,
         body: LayoutBuilder(
           builder: (context, constraints) {

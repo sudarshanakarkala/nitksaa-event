@@ -38,7 +38,20 @@ class ListPage extends StatefulWidget {
     this.collapseOnPhone = true,
     this.countOnPhone = true,
     this.phoneActions,
+    this.filtersInRail = false,
   });
+
+  /// Computers and tablets: the toolbar keeps only the header, search and
+  /// count, and every filter (the [quickFilters] and [belowPills] included)
+  /// lives in the Filters rail, which [filters] must then build in full. On
+  /// computers ([railFrom] and wider) the rail starts open, as on the
+  /// website's directory; closing it gives its strip to the list. The
+  /// [actions] move up beside the title, and short windows drop the
+  /// subtitle, so the list gets the height. Phones are unchanged.
+  final bool filtersInRail;
+
+  /// Below this height (with [filtersInRail]) the subtitle is left out.
+  static const double shortWindow = 820;
 
   /// Phones: scrolling down the list folds the site footer away; scrolling
   /// up, or reaching the top or end, brings it back ([PhoneChrome]). The
@@ -127,7 +140,9 @@ class ListPage extends StatefulWidget {
 }
 
 class _ListPageState extends State<ListPage> {
-  bool _panelOpen = false;
+  /// Null until the Filters button or the close button is used: then the
+  /// default applies (open in the rail on computers with [filtersInRail]).
+  bool? _panelOpen;
   final _chrome = PhoneChromeTracker();
 
   /// Tells the app shell whether to fold the footer away.
@@ -150,12 +165,19 @@ class _ListPageState extends State<ListPage> {
     return false;
   }
 
+  /// Whether the panel starts open: in its own rail on computers, when the
+  /// rail holds the filters.
+  bool _openByDefault(double width) =>
+      widget.filtersInRail && widget.reserveRail && width >= ListPage.railFrom;
+
+  bool _isOpen(double width) => _panelOpen ?? _openByDefault(width);
+
   void _openFilters() {
     final width = MediaQuery.sizeOf(context).width;
     if (width < ListPage.panelBreakpoint) {
       widget.onOpenFilters?.call();
     } else {
-      setState(() => _panelOpen = !_panelOpen);
+      setState(() => _panelOpen = !_isOpen(width));
     }
   }
 
@@ -171,7 +193,10 @@ class _ListPageState extends State<ListPage> {
       PhoneChrome.safely(_announce);
     }
     // The panel only exists on wider screens.
-    final panelOpen = _panelOpen && !compact && hasFilters;
+    final panelOpen = _isOpen(width) && !compact && hasFilters;
+
+    // Every filter in the rail: the toolbar is just header, search and count.
+    final railMode = widget.filtersInRail && !compact && hasFilters;
 
     final filterButtons = hasFilters
         ? _FilterIconButtons(
@@ -182,20 +207,32 @@ class _ListPageState extends State<ListPage> {
           )
         : null;
 
-    final reserve = hasFilters && widget.reserveRail && width >= ListPage.railFrom;
+    // In rail mode a closed rail gives its strip back to the list.
+    final reserve = hasFilters &&
+        widget.reserveRail &&
+        width >= ListPage.railFrom &&
+        (!railMode || panelOpen);
     final reservedLeft = reserve ? ListPage.railWidth + ListPage.railGap : 0.0;
 
     // No search box or toggle: the Filters icon goes at the end of the pills,
     // never alone on a row.
-    final hasPillRow = widget.picker != null || widget.quickFilters.isNotEmpty;
+    final hasQuickFilters = widget.quickFilters.isNotEmpty && !railMode;
+    final hasPillRow = widget.picker != null || hasQuickFilters;
     final filtersWithPills =
         filterButtons != null && widget.search == null && widget.toggle == null && hasPillRow;
     final showTopRow = widget.search != null ||
         (widget.toggle != null && !compact) ||
         (filterButtons != null && !filtersWithPills);
     final pickerOwnLine = widget.picker != null && compact;
+    final belowPills = railMode ? null : widget.belowPills;
+    // Rail mode: the actions sit beside the title, not on the count line.
+    final headerActions = railMode && widget.title != null && widget.actions.isNotEmpty;
+    final subtitle = compact ||
+            (railMode && MediaQuery.sizeOf(context).height < ListPage.shortWindow)
+        ? null
+        : widget.subtitle;
 
-    final pills = widget.quickFilters.isEmpty
+    final pills = !hasQuickFilters
         ? null
         : SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -226,7 +263,8 @@ class _ListPageState extends State<ListPage> {
     // Phones: small actions in the search row; the count only where the
     // pills don't already show it.
     final phoneActions = compact && showTopRow ? widget.phoneActions : null;
-    final rowActions = phoneActions != null ? const <Widget>[] : widget.actions;
+    final rowActions =
+        phoneActions != null || headerActions ? const <Widget>[] : widget.actions;
     final showCount = widget.count != null && (!compact || widget.countOnPhone);
     final actionsBelow = widget.wideActionOnPhone && compact && rowActions.isNotEmpty;
 
@@ -242,15 +280,24 @@ class _ListPageState extends State<ListPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (widget.title != null) ...[
-              Align(
-                alignment: Alignment.centerLeft,
-                child: PageHeader(
-                  eyebrow: widget.eyebrow,
-                  title: widget.title!,
-                  subtitle: compact ? null : widget.subtitle,
-                ),
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Expanded(
+                    child: Align(
+                      alignment: Alignment.centerLeft,
+                      child: PageHeader(
+                        eyebrow: widget.eyebrow,
+                        title: widget.title!,
+                        subtitle: subtitle,
+                      ),
+                    ),
+                  ),
+                  if (headerActions)
+                    for (final a in widget.actions) ...[const SizedBox(width: 8), a],
+                ],
               ),
-              const SizedBox(height: 20),
+              SizedBox(height: railMode ? 16 : 20),
             ],
             if (showTopRow)
               Row(
@@ -278,13 +325,13 @@ class _ListPageState extends State<ListPage> {
               if (showTopRow || pickerOwnLine) const SizedBox(height: 12),
               pillRow,
             ],
-            if (widget.belowPills != null) ...[
+            if (belowPills != null) ...[
               if (showTopRow || pickerOwnLine || showPillRow) const SizedBox(height: 8),
-              widget.belowPills!,
+              belowPills,
             ],
             if (showCount || rowActions.isNotEmpty) ...[
-              if (showTopRow || pickerOwnLine || showPillRow || widget.belowPills != null)
-                const SizedBox(height: 12),
+              if (showTopRow || pickerOwnLine || showPillRow || belowPills != null)
+                SizedBox(height: railMode && rowActions.isEmpty ? 8 : 12),
               Row(
                 children: [
                   Expanded(
