@@ -3,9 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
 import '../../../core/logger/app_logger.dart';
-import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/page_header.dart';
-import '../../../shared/widgets/page_insets.dart';
 import '../../../shared/widgets/phone_chrome.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -18,6 +16,7 @@ import 'admin_audit_tab.dart';
 import 'admin_check_in_tab.dart';
 import 'admin_dashboard_tab.dart';
 import 'admin_events_tab.dart';
+import 'admin_tab_frame.dart';
 import 'admin_payments_tab.dart';
 import 'admin_registrations_tab.dart';
 import 'roles_tab.dart';
@@ -81,41 +80,27 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
     final auth = ref.watch(authControllerProvider);
     final access = auth.session?.access ?? AdminAccess.none;
     final tabs = AdminTab.visibleTabs(access);
-    final p = context.palette;
     final phone = PhoneChrome.isPhone(context);
 
     // Website AdminPage: a sticky zone (page header, then the tab row with
-    // a bottom border) and the tab's content scrolling beneath it, both in
-    // the same 1520px container as the site header. Phones: a shorter
-    // title.
-    final header = DecoratedBox(
-      decoration: BoxDecoration(
-        border: Border(bottom: BorderSide(color: p.border)),
-      ),
-      child: AdminContainer(
-        child: Padding(
-          padding: EdgeInsets.only(top: phone ? 10 : 16, bottom: 8),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              if (phone)
-                const PageHeader(title: 'Admin', dense: true)
-              else
-                const PageHeader(eyebrow: 'NITKSAA Events', title: 'Admin'),
-              SizedBox(height: phone ? 10 : 16),
-              _AdminTabBar(tabs: tabs, selected: widget.tab),
-            ],
-          ),
-        ),
+    // a line under it) and the tab's content scrolling beneath it. Each
+    // tab's AdminTabFrame shows it, in the middle column beside the Filters
+    // rail. Phones: a shorter title.
+    final header = Padding(
+      padding: EdgeInsets.only(top: phone ? 10 : 16, bottom: 8),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          if (phone)
+            const PageHeader(title: 'Admin', dense: true)
+          else
+            const PageHeader(eyebrow: 'NITKSAA Events', title: 'Admin'),
+          SizedBox(height: phone ? 10 : 16),
+          _AdminTabBar(tabs: tabs, selected: widget.tab),
+        ],
       ),
     );
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        header,
-        Expanded(child: _content(widget.tab)),
-      ],
-    );
+    return AdminHeaderScope(header: header, child: _content(widget.tab));
   }
 
   Widget _content(AdminTab tab) {
@@ -138,28 +123,6 @@ class _AdminScreenState extends ConsumerState<AdminScreen> {
         return const AdminAuditTab();
     }
   }
-}
-
-/// The website's `.container`, lined up with the site header (content
-/// starts under the NITKSAA logo; see [PageInsets]).
-class AdminContainer extends StatelessWidget {
-  const AdminContainer({super.key, required this.child});
-
-  final Widget child;
-
-  /// Lines up with the tabs below, which keep the Filters rail's strip free
-  /// on the left on computers ([AdminTabFrame]).
-  @override
-  Widget build(BuildContext context) => LayoutBuilder(
-        builder: (context, constraints) => Padding(
-          padding: PageInsets.horizontal(
-            context,
-            constraints.maxWidth,
-            minLeft: ListPage.railStrip(context),
-          ),
-          child: SizedBox(width: double.infinity, child: child),
-        ),
-      );
 }
 
 /// Website `.adm-tab-group` of `.tab-btn`s: small bordered buttons 6px

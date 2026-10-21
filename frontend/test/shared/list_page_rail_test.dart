@@ -1,6 +1,7 @@
 // Events on computers (filtersInRail): the page is just the header, the
 // search and the count; every filter lives in the rail on the left. The
-// rail starts closed and opens in its own strip, so nothing moves. Short
+// rail starts closed and opens in its own full-height strip, so nothing
+// moves. Short
 // windows drop the subtitle. Phones keep the pills on the page.
 import 'package:event_app/shared/widgets/list_page.dart';
 import 'package:flutter/material.dart';
@@ -52,6 +53,8 @@ void main() {
     await tester.pumpAndSettle();
     expect(railLeft(), greaterThanOrEqualTo(0));
     expect(railLeft(), lessThan(search.dx));
+    // Full height, as NITiKA's rail: it starts above the search row.
+    expect(tester.getTopLeft(find.text('Rail filters')).dy, lessThan(search.dy));
     expect(tester.getTopLeft(find.byType(TextField)), search);
     expect(tester.getTopLeft(find.text('Card 0')), card);
 
