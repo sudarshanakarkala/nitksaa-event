@@ -56,9 +56,8 @@ class ListPage extends StatefulWidget {
   /// count, and every filter (the [quickFilters] and [belowPills] included)
   /// lives in the Filters rail, which [filters] must then build in full. The
   /// rail starts closed; the Filters button opens and closes it in its own
-  /// strip, so nothing moves. The [actions] move up beside the title, and
-  /// short windows drop the subtitle, so the list gets the height. Phones
-  /// are unchanged.
+  /// strip under the toolbar, so nothing moves. Short windows drop the
+  /// subtitle, so the list gets the height. Phones are unchanged.
   final bool filtersInRail;
 
   /// Below this height (with [filtersInRail]) the subtitle is left out.
@@ -225,8 +224,6 @@ class _ListPageState extends State<ListPage> {
         (filterButtons != null && !filtersWithPills);
     final pickerOwnLine = widget.picker != null && compact;
     final belowPills = railMode ? null : widget.belowPills;
-    // Rail mode: the actions sit beside the title, not on the count line.
-    final headerActions = railMode && widget.title != null && widget.actions.isNotEmpty;
     final subtitle = compact ||
             (railMode && MediaQuery.sizeOf(context).height < ListPage.shortWindow)
         ? null
@@ -263,8 +260,7 @@ class _ListPageState extends State<ListPage> {
     // Phones: small actions in the search row; the count only where the
     // pills don't already show it.
     final phoneActions = compact && showTopRow ? widget.phoneActions : null;
-    final rowActions =
-        phoneActions != null || headerActions ? const <Widget>[] : widget.actions;
+    final rowActions = phoneActions != null ? const <Widget>[] : widget.actions;
     final showCount = widget.count != null && (!compact || widget.countOnPhone);
     final actionsBelow = widget.wideActionOnPhone && compact && rowActions.isNotEmpty;
 
@@ -280,24 +276,15 @@ class _ListPageState extends State<ListPage> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             if (widget.title != null) ...[
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Expanded(
-                    child: Align(
-                      alignment: Alignment.centerLeft,
-                      child: PageHeader(
-                        eyebrow: widget.eyebrow,
-                        title: widget.title!,
-                        subtitle: subtitle,
-                      ),
-                    ),
-                  ),
-                  if (headerActions)
-                    for (final a in widget.actions) ...[const SizedBox(width: 8), a],
-                ],
+              Align(
+                alignment: Alignment.centerLeft,
+                child: PageHeader(
+                  eyebrow: widget.eyebrow,
+                  title: widget.title!,
+                  subtitle: subtitle,
+                ),
               ),
-              SizedBox(height: railMode ? 16 : 20),
+              const SizedBox(height: 20),
             ],
             if (showTopRow)
               Row(
@@ -331,7 +318,7 @@ class _ListPageState extends State<ListPage> {
             ],
             if (showCount || rowActions.isNotEmpty) ...[
               if (showTopRow || pickerOwnLine || showPillRow || belowPills != null)
-                SizedBox(height: railMode && rowActions.isEmpty ? 8 : 12),
+                const SizedBox(height: 12),
               Row(
                 children: [
                   Expanded(
@@ -363,65 +350,66 @@ class _ListPageState extends State<ListPage> {
       child: toolbar,
     );
 
-    final page = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        toolbarBox,
-        Expanded(
-          child: _ReservedLeft(
-            width: reservedLeft,
-            // Always there (it only acts on phones), so the list keeps its
-            // place when the window crosses the phone width.
-            child: NotificationListener<Notification>(
-              onNotification: _onBodyNotification,
-              child: widget.body,
-            ),
-          ),
-        ),
-      ],
+    // The list, clear of the rail's strip when one is kept.
+    Widget list = _ReservedLeft(
+      width: reservedLeft,
+      // Always there (it only acts on phones), so the list keeps its
+      // place when the window crosses the phone width.
+      child: NotificationListener<Notification>(
+        onNotification: _onBodyNotification,
+        child: widget.body,
+      ),
     );
 
-    if (!hasFilters || compact) return page;
-
-    // Desktop: the rail has its own strip on the left (kept free even when
-    // closed), so the open panel covers nothing. Tablets: no room for that,
-    // so the panel overlays the edge of the cards with a light scrim.
-    // Either way the page never moves.
-    final overlay = !reserve;
-    const panelWidth = ListPage.railWidth;
-
-    return Stack(
-      children: [
-        Positioned.fill(child: page),
-        if (overlay)
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !panelOpen,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: panelOpen ? 1 : 0,
-                child: GestureDetector(
-                  onTap: () => setState(() => _panelOpen = false),
-                  child: ColoredBox(color: p.overlay.withValues(alpha: 0.25)),
+    // The rail sits under the toolbar, beside the list, on every page (as
+    // on the website's directory), so it is in the same place everywhere.
+    // Computers: in its own strip, kept free even when closed, so opening
+    // it covers nothing. Tablets: no room for that, so it overlays the edge
+    // of the list with a light scrim. Either way nothing moves.
+    if (hasFilters && !compact) {
+      final overlay = !reserve;
+      const panelWidth = ListPage.railWidth;
+      list = Stack(
+        children: [
+          Positioned.fill(child: list),
+          if (overlay)
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !panelOpen,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: panelOpen ? 1 : 0,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _panelOpen = false),
+                    child: ColoredBox(color: p.overlay.withValues(alpha: 0.25)),
+                  ),
                 ),
               ),
             ),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            top: 0,
+            bottom: 0,
+            left: panelOpen ? 0 : -(panelWidth + 12),
+            width: panelWidth,
+            child: _FilterPanel(
+              activeCount: widget.activeFilterCount,
+              onClear: widget.onClearFilters,
+              onClose: () => setState(() => _panelOpen = false),
+              elevated: overlay,
+              child: widget.filters!(context),
+            ),
           ),
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          top: 0,
-          bottom: 0,
-          left: panelOpen ? 0 : -(panelWidth + 12),
-          width: panelWidth,
-          child: _FilterPanel(
-            activeCount: widget.activeFilterCount,
-            onClear: widget.onClearFilters,
-            onClose: () => setState(() => _panelOpen = false),
-            elevated: overlay,
-            child: widget.filters!(context),
-          ),
-        ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        toolbarBox,
+        Expanded(child: list),
       ],
     );
   }

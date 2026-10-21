@@ -235,17 +235,6 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
                 ),
           ]),
           const SizedBox(height: 20),
-          // Your registrations (website "Author: My Stories"), signed in only.
-          if (signedIn) ...[
-            const FilterLabel('My registrations'),
-            const SizedBox(height: 8),
-            FilterChipToggle(
-              label: 'Registered by me',
-              selected: ref.read(_registeredOnlyProvider),
-              onChanged: (on) => ref.read(_registeredOnlyProvider.notifier).state = on,
-            ),
-            const SizedBox(height: 20),
-          ],
           ?dates,
           // Mode, registration and price work like the website's chips:
           // none lit = all; lit = only those. The provider keeps "included"
@@ -253,7 +242,8 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
           // two.
           ..._includeChips(
             'Event mode',
-            const {'physical': 'Physical', 'virtual': 'Virtual'},
+            // The cards' words (and Admin's): In person, Online.
+            const {'physical': 'In person', 'virtual': 'Online'},
             state.filterModes,
             notifier.toggleFilterMode,
           ),
@@ -269,6 +259,18 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
             state.filterPrice,
             notifier.toggleFilterPrice,
           ),
+          // Your registrations (website "Author: My Stories"), signed in only;
+          // last, as Admin › Events' "Created by".
+          if (signedIn) ...[
+            const FilterLabel('My registrations'),
+            const SizedBox(height: 8),
+            FilterChipToggle(
+              label: 'Registered by me',
+              selected: ref.read(_registeredOnlyProvider),
+              onChanged: (on) => ref.read(_registeredOnlyProvider.notifier).state = on,
+            ),
+            const SizedBox(height: 20),
+          ],
         ],
       ),
     );
@@ -518,7 +520,7 @@ class _EventListScreenState extends ConsumerState<EventListScreen> {
         id: 'mode',
         label: 'Mode',
         kind: ColumnKind.category,
-        value: (e) => e.isVirtual ? 'Virtual' : 'Physical',
+        value: (e) => e.isVirtual ? 'Online' : 'In person',
       ),
       GridColumn(
         id: 'location',

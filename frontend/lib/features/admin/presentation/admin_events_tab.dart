@@ -521,7 +521,7 @@ class _EventsTableState extends State<_EventsTable> {
           id: 'mode',
           label: 'Mode',
           kind: ColumnKind.category,
-          value: (e) => e.isVirtual ? 'Virtual' : 'Physical',
+          value: (e) => e.isVirtual ? 'Online' : 'In person',
         ),
         GridColumn(
           id: 'capacity',
