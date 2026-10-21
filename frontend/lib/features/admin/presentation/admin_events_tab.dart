@@ -85,6 +85,9 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     super.initState();
     _search.addListener(() => setState(() {}));
     Future.microtask(_load);
+    // Any event change, here or on an event page opened from here, reloads
+    // this list (it keeps its own copy and stays open under that page).
+    ref.listenManual(eventsChangedProvider, (_, _) => _load());
     // "Create Event" links elsewhere arrive as /admin/events?new=1.
     WidgetsBinding.instance.addPostFrameCallback((_) {
       if (!mounted) return;
@@ -208,7 +211,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   late final EventAdminActions _actions = EventAdminActions(
     context: context,
     ref: ref,
-    onChanged: _load,
+    onChanged: () async {}, // eventsChangedProvider reloads this list
     isBusy: _busy.contains,
     setBusy: (id, busy) {
       if (!mounted) return;

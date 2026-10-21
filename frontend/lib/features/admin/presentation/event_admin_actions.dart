@@ -18,10 +18,16 @@ import '../data/actions_api.dart';
 import 'event_admins_dialog.dart';
 import '../../../shared/widgets/notice.dart';
 
+/// Goes up by one after any admin change to an event, wherever it was made.
+/// Lists that keep their own copy (Admin → Events, still open under the
+/// event page) reload when it changes.
+final eventsChangedProvider = StateProvider<int>((ref) => 0);
+
 /// Refreshes after any admin change to events: the public Events list,
 /// "created by me", the admin events list behind the drafts link, and the
 /// Admin badge (Actions counts).
 void refreshEventLists(WidgetRef ref) {
+  ref.read(eventsChangedProvider.notifier).state++;
   ref.read(eventsProvider.notifier).fetchEvents(isRefresh: true);
   // The tint and the drafts count follow this one list.
   ref.invalidate(myAdminEventsProvider);
