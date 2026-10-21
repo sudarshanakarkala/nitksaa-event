@@ -137,7 +137,7 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
             AdminEventPicker(options: _events, selected: _event, onChanged: _setEvent),
             const SizedBox(height: 20),
           ],
-          const FilterLabel('Period'),
+          const FilterLabel('Show'),
           const SizedBox(height: 8),
           _periodChips(pills: wide),
         ],

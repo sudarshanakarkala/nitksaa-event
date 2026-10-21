@@ -247,7 +247,7 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             if (wide) ...[
-              const FilterLabel('Category'),
+              const FilterLabel('Show'),
               const SizedBox(height: 8),
               Wrap(spacing: 6, runSpacing: 6, children: [
                 QuickFilterPill(label: 'All', active: _category == null, onTap: () => _set(() => _category = null)),
@@ -265,7 +265,7 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
               const SizedBox(height: 8),
               AdminEventPicker(options: _events, selected: _event, onChanged: (id) => _set(() => _event = id)),
               const SizedBox(height: 20),
-              _chips('Category', _categories, _category, (v) => _set(() => _category = v)),
+              _chips('Show', _categories, _category, (v) => _set(() => _category = v)),
             ],
             _chips('Who', _whoLabels, _who, (v) => _set(() => _who = v)),
           ],
