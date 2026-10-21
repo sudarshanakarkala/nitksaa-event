@@ -219,9 +219,14 @@ void main() {
           backend.seedRegistration(tokenA, status: 'registered');
           await _openApp(tester, backend, screen);
           if (screen == _Screen.eventList) {
-            // The list opens on Upcoming; an ended event is under Past.
+            // The list opens on Upcoming; an ended event is under Past, in
+            // the Filters rail on wider screens (opened, then closed again).
+            await tester.tap(find.byTooltip('Filters'));
+            await tester.pumpAndSettle();
             await tester.tap(find.widgetWithText(QuickFilterPill, 'Past'));
             await settleRequests(tester);
+            await tester.tap(find.byTooltip('Close filters'));
+            await tester.pumpAndSettle();
           }
 
           await _expectCardWithoutUnregister(tester);
