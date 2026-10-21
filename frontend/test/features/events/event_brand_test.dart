@@ -99,7 +99,7 @@ void main() {
         final images = tester.widgetList<Image>(find.byType(Image)).where((i) => i.image is NetworkImage);
         expect(images, isNotEmpty);
         for (final image in images) {
-          expect(image.webHtmlElementStrategy, WebHtmlElementStrategy.fallback);
+          expect((image.image as NetworkImage).webHtmlElementStrategy, WebHtmlElementStrategy.fallback);
         }
       }
     });
