@@ -4,7 +4,7 @@
 
 # NITKSAA Events — How to register
 
-**For:** anyone attending a NITKSAA event, alumni or not. **Site:** events.nitkalumni.in. **Updated:** 20 Oct 2026.
+**For:** anyone attending a NITKSAA event, alumni or not. **Site:** events.nitkalumni.in. **Updated:** 21 Oct 2026.
 Words in **bold** are what you see on screen.
 
 ---
@@ -14,7 +14,9 @@ Words in **bold** are what you see on screen.
 - Open **events.nitkalumni.in**. You can browse and open any event without signing in.
 - The **Events** page shows **Upcoming** events first. **Open** shows the ones taking registrations.
 - Tap **View Details** to open an event: date, time, place, price and what it's about.
-- **Dates:** tap **This week**, **This month** or **Next 90 days**; for other dates, **Pick dates** opens a slider and From – To boxes.
+- **Filters on a computer:** tap the **Filters** button (the funnel, right of the search box). The filters open on the left: **Show** (Upcoming, Open, Past, All), **Order**, **Starts** (dates), **Event mode** (In person, Online), **Registration**, **Price** and, when signed in, **Registered by me**. Tap **Filters** again, or **✕**, to close them. **Clear all** resets them. **My Events** works the same way.
+- **Dates:** in Filters, tap **This week**, **This month** or **Next 90 days**, or drag the slider or type in **From** – **To**; **✕** clears them.
+- **On a phone:** Upcoming, Open, Past and All, and the date buttons, are above the list (**Pick dates** opens the slider and From – To); the rest are under **Filters**, which you close with **✕**.
 - Got a link like **events.nitkalumni.in/e/…** (on WhatsApp, or from another site)? It opens that event directly. If it says "This event isn't available", the link may be mistyped or the event isn't open yet.
 - **Tell a friend:** on the event page, **Share** (on a phone: WhatsApp and others) or **Copy link** (on a computer).
 

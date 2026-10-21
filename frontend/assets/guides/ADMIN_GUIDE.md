@@ -4,7 +4,7 @@
 
 # NITKSAA Events — Admin guide
 
-**For:** organisers and door volunteers. **App:** events.nitkalumni.in. **Updated:** 20 Oct 2026.
+**For:** organisers and door volunteers. **App:** events.nitkalumni.in. **Updated:** 21 Oct 2026.
 Words in **bold** are what you see on screen.
 
 ---
@@ -24,7 +24,8 @@ Words in **bold** are what you see on screen.
 | Can create events, admin of none yet | All except Payments and Roles |
 | Finance only | Payments |
 
-- **On a phone:** Actions, Events, Registrations and Check-in are in the row; the rest are under **More ▾**. In Events, **Create event** is the gold **+** next to the search box (**Import** is on computers only); the count of events is in the **All** button. The date buttons are one row: **Pick dates** opens the slider and From – To. The links at the bottom slide away while you scroll down a list (not on Check-in).
+- **Filters on a computer:** each tab keeps just the search box (and the event box, where the tab has one) at the top. Everything else is under **Filters** (the funnel, right of the search), which opens on the left: first **Show** (with counts where known), then the order and dates, then the tab's other filters. Tap **Filters** again, or **✕**, to close it; **Clear all** resets it. Roles and Check-in have no Filters: their buttons stay above the list.
+- **On a phone:** Actions, Events, Registrations and Check-in are in the row; the rest are under **More ▾**. In Events, **Create event** is the gold **+** next to the search box (**Import** is on computers only); the count of events is in the **All** button. The date buttons are one row: **Pick dates** opens the slider and From – To. Other filters are under **Filters** (close it with **✕**). The links at the bottom slide away while you scroll down a list (not on Check-in).
 - **Where Admin opens:** **Actions**. On an event day (one of your events is on, or starts within 3 hours) it goes straight to **Check-in** for that event.
 
 ---
@@ -192,7 +193,7 @@ People who aren't admins of the event see "This is an entry pass" when they open
 
 Admin › **Registrations**.
 
-- Pick the event (or **All events**). Pills: **Registered**, **Cancelled**, **Check-ins**.
+- Pick the event (or **All events**) in the box left of the search. Under **Filters** › **Show** (on a phone, above the list): **Registered**, **Cancelled**, **Check-ins**; then dates and columns such as graduation era and branch.
 - Search by name, email, phone or registration number. Guests show in **Guest of**.
 - The card on top shows **Capacity**, **Registered**, **Seats left**, **Cancelled**, **Checked in**.
 - **Export CSV** downloads exactly the rows on screen (filters and search apply).
@@ -205,9 +206,9 @@ Nothing on a row can be changed here. To cancel someone's registration, see §8.
 
 **How refunds work:** when someone **unregisters** (or cancels a guest) from a paid event, the app refunds them automatically through Razorpay. Attendees see the status in the app. Unregistering is possible until the event starts.
 
-Admin › **Payments** (overall admins, Finance, and the event's admins):
+Admin › **Payments** (overall admins, Finance, and the event's admins). Pick the event in the box left of the search; the rest is under **Filters** (on a phone, the buttons are above the list):
 
-| Pill | Shows |
+| Show | Shows |
 |---|---|
 | Orders | Every payment. **Paid** (green), **Pending**; **Pending · stuck** = pending over 30 min. Tap a row for details |
 | Refunds | Every refund: **Pending**, **Processing**, **Delayed**, **Refunded**, **Needs attention** |
@@ -232,9 +233,9 @@ Admin › **Payments** (overall admins, Finance, and the event's admins):
 
 For information: **Registration closing soon**, **Nearly full** (90%+ of seats), **Refunds delayed**.
 
-**Dashboard:** registrations, cancellations and money collected (live payments only), per event or all.
+**Dashboard:** registrations, cancellations and money collected (live payments only), per event or all. Pick the event in the box at the top; the period (e.g. last 30 days) is under **Filters** › **Show**.
 
-**Audit:** who did what and when (event changes, registrations, payments, roles). Tap a row for details.
+**Audit:** who did what and when (event changes, registrations, payments, roles). Tap a row for details. Under **Filters**: **Show** (the kind of entry), **When** (dates) and **Who**.
 
 **NITiKA** (the chat icon at the top): ask in plain words, e.g. "How many people have registered for the Pune meet?" On Registrations and Check-in, "this event" means the event you've picked. Check important numbers against the Registrations tab.
 
