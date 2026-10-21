@@ -735,6 +735,10 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
   String? _sheetUrl;
   DateTime? _sheetReadAt;
 
+  /// A Refresh saved the sheet's changes while this was open: closing then
+  /// counts as saved, so the page behind reloads (new logo, banner, title…).
+  bool _sheetRefreshed = false;
+
   /// The event as saved (refreshed after a sheet Refresh), for the
   /// imported event's read-only view.
   AppEvent? _current;
@@ -996,7 +1000,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
       );
       if (discard != true || !mounted) return;
     }
-    if (mounted) Navigator.pop(context, false);
+    if (mounted) Navigator.pop(context, _sheetRefreshed);
   }
 
   bool _hasData(_Group group) => switch (group) {
@@ -1152,8 +1156,8 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
 
     return PopScope(
       // Esc, back and a click outside come here first when changes would
-      // be lost.
-      canPop: !_hasUnsavedChanges,
+      // be lost, or after a Refresh (so the close reports it as saved).
+      canPop: !_hasUnsavedChanges && !_sheetRefreshed,
       onPopInvokedWithResult: (didPop, _) {
         if (!didPop && !_isSaving) _close();
       },
@@ -2467,6 +2471,7 @@ class _EventFormDialogState extends ConsumerState<_EventFormDialog> {
     final eventId = widget.event?.eventId;
     final token = ref.read(authControllerProvider).session?.accessToken;
     if (eventId == null || token == null || !mounted) return;
+    _sheetRefreshed = true;
     try {
       final fresh = await ref.read(eventsRepositoryProvider).getAdminEvent(eventId, token);
       if (!mounted) return;

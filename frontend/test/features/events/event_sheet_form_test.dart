@@ -3,6 +3,7 @@
 // - DIY (Create event): the form as before; no way to attach a sheet.
 // - Imported (Import): Edit event is read-only, with the sheet card (Open,
 //   Refresh, Unlink). Refresh lists changes to the event before saving them.
+// - Closing after a Refresh counts as saved, so the page behind reloads.
 // - The sheet's problems are listed by tab and row.
 // - Unlink is one way: the event becomes DIY, editable here.
 // - Import: the Create form filled from the sheet; Save draft links it.
@@ -14,6 +15,7 @@ import 'package:event_app/features/events/domain/event_sheet.dart';
 import 'package:event_app/features/events/presentation/screens/manage_events_screen.dart';
 import 'package:event_app/features/events/presentation/widgets/speakers_section.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 
@@ -232,6 +234,36 @@ void main() {
     expect(find.text('Speakers · 1'), findsOneWidget);
     expect(find.text('Asha Rao'), findsNWidgets(2));
     expect(_key('event-sheet-warnings'), findsOneWidget);
+  });
+
+  testWidgets('closing after a refresh counts as saved, so the page reloads', (tester) async {
+    final repo = _SheetRepo()..eventAfterRefresh = _event(sheet: _link, title: 'NITKonnect 2027');
+    final result = await _open(tester, repo, event: _event(sheet: _link));
+
+    await tester.tap(_key('event-sheet-refresh'));
+    await tester.pumpAndSettle();
+    // Pressed directly: the "Read from your sheet" notice covers it here.
+    tester.widget<TextButton>(find.widgetWithText(TextButton, 'Close')).onPressed!();
+    await tester.pumpAndSettle();
+    expect(result, [true]);
+  });
+
+  testWidgets('Esc after a refresh also counts as saved', (tester) async {
+    final repo = _SheetRepo()..eventAfterRefresh = _event(sheet: _link);
+    final result = await _open(tester, repo, event: _event(sheet: _link));
+
+    await tester.tap(_key('event-sheet-refresh'));
+    await tester.pumpAndSettle();
+    await tester.sendKeyEvent(LogicalKeyboardKey.escape);
+    await tester.pumpAndSettle();
+    expect(result, [true]);
+  });
+
+  testWidgets('closing without a refresh saves nothing', (tester) async {
+    final result = await _open(tester, _SheetRepo(), event: _event(sheet: _link));
+    await tester.tap(find.text('Close'));
+    await tester.pumpAndSettle();
+    expect(result, [false]);
   });
 
   testWidgets('cancelling the changes saves nothing', (tester) async {
