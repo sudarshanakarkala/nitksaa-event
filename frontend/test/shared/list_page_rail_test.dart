@@ -1,7 +1,7 @@
 // Events on computers (filtersInRail): the page is just the header, the
-// search and the count; every filter lives in the rail on the left, open
-// from the start (website directory). Short windows drop the subtitle.
-// Phones keep the pills on the page.
+// search and the count; every filter lives in the rail on the left. The
+// rail starts closed and opens in its own strip, so nothing moves. Short
+// windows drop the subtitle. Phones keep the pills on the page.
 import 'package:event_app/shared/widgets/list_page.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -33,30 +33,37 @@ Future<void> _show(WidgetTester tester, {required Size size}) async {
 }
 
 void main() {
-  testWidgets('computers: filters in the open rail, not on the page', (tester) async {
+  testWidgets('computers: filters in the rail, not on the page', (tester) async {
     await _show(tester, size: const Size(1366, 900));
-    expect(find.text('Rail filters'), findsOneWidget);
     expect(find.text('Upcoming pill'), findsNothing);
     expect(find.text('Date line'), findsNothing);
     expect(find.text('Create event'), findsOneWidget);
-    // The rail is on screen, left of the search.
-    final rail = tester.getTopLeft(find.text('Rail filters'));
-    expect(rail.dx, greaterThanOrEqualTo(0));
-    expect(rail.dx, lessThan(tester.getTopLeft(find.byType(TextField)).dx));
     expect(find.text('Reunions, talks and meetups.'), findsOneWidget);
+  });
+
+  testWidgets('the rail starts closed and opens in its own strip; nothing moves', (tester) async {
+    await _show(tester, size: const Size(1366, 900));
+    double railLeft() => tester.getTopLeft(find.text('Rail filters')).dx;
+    expect(railLeft(), lessThan(0)); // off screen
+    final search = tester.getTopLeft(find.byType(TextField));
+    final card = tester.getTopLeft(find.text('Card 0'));
+
+    await tester.tap(find.byTooltip('Filters'));
+    await tester.pumpAndSettle();
+    expect(railLeft(), greaterThanOrEqualTo(0));
+    expect(railLeft(), lessThan(search.dx));
+    expect(tester.getTopLeft(find.byType(TextField)), search);
+    expect(tester.getTopLeft(find.text('Card 0')), card);
+
+    await tester.tap(find.byTooltip('Hide filters'));
+    await tester.pumpAndSettle();
+    expect(railLeft(), lessThan(0));
+    expect(tester.getTopLeft(find.text('Card 0')), card);
   });
 
   testWidgets('short windows drop the subtitle', (tester) async {
     await _show(tester, size: const Size(1366, 640));
     expect(find.text('Reunions, talks and meetups.'), findsNothing);
-  });
-
-  testWidgets('closing the rail gives its strip to the list', (tester) async {
-    await _show(tester, size: const Size(1366, 900));
-    final before = tester.getTopLeft(find.byType(TextField)).dx;
-    await tester.tap(find.byTooltip('Close filters'));
-    await tester.pumpAndSettle();
-    expect(tester.getTopLeft(find.byType(TextField)).dx, lessThan(before));
   });
 
   testWidgets('phones keep the pills and the date line on the page', (tester) async {

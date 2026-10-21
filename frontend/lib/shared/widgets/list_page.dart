@@ -43,11 +43,11 @@ class ListPage extends StatefulWidget {
 
   /// Computers and tablets: the toolbar keeps only the header, search and
   /// count, and every filter (the [quickFilters] and [belowPills] included)
-  /// lives in the Filters rail, which [filters] must then build in full. On
-  /// computers ([railFrom] and wider) the rail starts open, as on the
-  /// website's directory; closing it gives its strip to the list. The
-  /// [actions] move up beside the title, and short windows drop the
-  /// subtitle, so the list gets the height. Phones are unchanged.
+  /// lives in the Filters rail, which [filters] must then build in full. The
+  /// rail starts closed; the Filters button opens and closes it in its own
+  /// strip, so nothing moves. The [actions] move up beside the title, and
+  /// short windows drop the subtitle, so the list gets the height. Phones
+  /// are unchanged.
   final bool filtersInRail;
 
   /// Below this height (with [filtersInRail]) the subtitle is left out.
@@ -140,9 +140,7 @@ class ListPage extends StatefulWidget {
 }
 
 class _ListPageState extends State<ListPage> {
-  /// Null until the Filters button or the close button is used: then the
-  /// default applies (open in the rail on computers with [filtersInRail]).
-  bool? _panelOpen;
+  bool _panelOpen = false;
   final _chrome = PhoneChromeTracker();
 
   /// Tells the app shell whether to fold the footer away.
@@ -165,19 +163,12 @@ class _ListPageState extends State<ListPage> {
     return false;
   }
 
-  /// Whether the panel starts open: in its own rail on computers, when the
-  /// rail holds the filters.
-  bool _openByDefault(double width) =>
-      widget.filtersInRail && widget.reserveRail && width >= ListPage.railFrom;
-
-  bool _isOpen(double width) => _panelOpen ?? _openByDefault(width);
-
   void _openFilters() {
     final width = MediaQuery.sizeOf(context).width;
     if (width < ListPage.panelBreakpoint) {
       widget.onOpenFilters?.call();
     } else {
-      setState(() => _panelOpen = !_isOpen(width));
+      setState(() => _panelOpen = !_panelOpen);
     }
   }
 
@@ -193,7 +184,7 @@ class _ListPageState extends State<ListPage> {
       PhoneChrome.safely(_announce);
     }
     // The panel only exists on wider screens.
-    final panelOpen = _isOpen(width) && !compact && hasFilters;
+    final panelOpen = _panelOpen && !compact && hasFilters;
 
     // Every filter in the rail: the toolbar is just header, search and count.
     final railMode = widget.filtersInRail && !compact && hasFilters;
@@ -207,11 +198,7 @@ class _ListPageState extends State<ListPage> {
           )
         : null;
 
-    // In rail mode a closed rail gives its strip back to the list.
-    final reserve = hasFilters &&
-        widget.reserveRail &&
-        width >= ListPage.railFrom &&
-        (!railMode || panelOpen);
+    final reserve = hasFilters && widget.reserveRail && width >= ListPage.railFrom;
     final reservedLeft = reserve ? ListPage.railWidth + ListPage.railGap : 0.0;
 
     // No search box or toggle: the Filters icon goes at the end of the pills,

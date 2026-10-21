@@ -185,6 +185,15 @@ Future<void> showFilterSheet(
                         },
                         child: const Text('Clear all'),
                       ),
+                    // An explicit way out (tapping outside or dragging the
+                    // handle down are easy to miss).
+                    IconButton(
+                      tooltip: 'Close filters',
+                      iconSize: 20,
+                      color: context.palette.textMuted,
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
