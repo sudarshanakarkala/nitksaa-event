@@ -318,14 +318,15 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
       if (banner.isNotEmpty) {
         return ClipRRect(
           borderRadius: BorderRadius.circular(12),
-          child: AspectRatio(
-            aspectRatio: 4,
-            child: Image.network(
-              banner,
-              width: double.infinity,
-              fit: BoxFit.cover,
-              errorBuilder: (_, _, _) => const SizedBox.shrink(),
-            ),
+          child: Image.network(
+            banner,
+            width: double.infinity,
+            fit: BoxFit.cover,
+            webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+            // The 4:1 space only around a picture that loads; a failed one
+            // leaves no empty box.
+            frameBuilder: (_, child, _, _) => AspectRatio(aspectRatio: 4, child: child),
+            errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
         );
       }
@@ -338,6 +339,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
           child: Image.network(
             logo,
             fit: BoxFit.contain,
+            webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
             errorBuilder: (_, _, _) => const SizedBox.shrink(),
           ),
         ),
@@ -352,6 +354,7 @@ class _EventDetailScreenState extends ConsumerState<EventDetailScreen> {
         height: height,
         width: double.infinity,
         fit: BoxFit.cover,
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
         errorBuilder: (_, _, _) => const SizedBox.shrink(),
       ),
     );
