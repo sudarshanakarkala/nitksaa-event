@@ -242,7 +242,8 @@ void main() {
 
     await tester.tap(_key('event-sheet-refresh'));
     await tester.pumpAndSettle();
-    await tester.tap(find.text('Close'));
+    // Pressed directly: the "Read from your sheet" notice covers it here.
+    tester.widget<TextButton>(find.widgetWithText(TextButton, 'Close')).onPressed!();
     await tester.pumpAndSettle();
     expect(result, [true]);
   });
