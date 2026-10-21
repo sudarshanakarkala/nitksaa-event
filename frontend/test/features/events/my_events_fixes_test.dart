@@ -12,6 +12,7 @@ import 'package:event_app/features/events/data/events_repository.dart';
 import 'package:event_app/features/events/presentation/screens/my_events_screen.dart';
 import 'package:event_app/features/events/presentation/widgets/entry_pass_qr.dart';
 import 'package:event_app/routes/app_routes.dart';
+import 'package:event_app/shared/widgets/quick_filter_pill.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -82,7 +83,12 @@ void main() {
       await _openMyEvents(tester, backend);
       expect(find.text('Payment due'), findsOneWidget);
 
-      await tester.tap(find.text('Cancelled').first);
+      // On computers the pills are in the Filters rail.
+      await tester.tap(find.byTooltip('Filters'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.widgetWithText(QuickFilterPill, 'Cancelled'));
+      await tester.pumpAndSettle();
+      await tester.tap(find.byTooltip('Close filters'));
       await tester.pumpAndSettle();
       expect(find.text('Payment due'), findsNothing);
     });

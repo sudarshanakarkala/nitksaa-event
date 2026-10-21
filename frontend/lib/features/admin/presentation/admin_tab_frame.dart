@@ -11,8 +11,13 @@ import '../../../shared/widgets/list_page.dart';
 /// then the [body] (a table or cards).
 ///
 /// - With no search box, the Filters icon sits at the end of row 2.
-/// - Every tab lines up with the "Admin" title: the Filters rail slides over
-///   the page rather than keeping a strip free on the left.
+/// - Computers and tablets: a tab with [filters] keeps every filter (its
+///   [pills] and [belowPills] included) in the Filters rail, which its
+///   [filters] builds in full; tabs without one (Roles, Check-in) keep
+///   their pills. Phones are unchanged.
+/// - Computers: the whole Admin page (title and tab row included) keeps the
+///   rail's strip free on the left, so every tab lines up and the rail
+///   opens in it without moving anything.
 /// - [loading] shows a thin line under the toolbar, only while loading.
 class AdminTabFrame extends StatelessWidget {
   const AdminTabFrame({
@@ -79,7 +84,8 @@ class AdminTabFrame extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return ListPage(
-      reserveRail: false,
+      filtersInRail: true,
+      keepRailStrip: true,
       search: search,
       toggle: toggle,
       picker: picker,

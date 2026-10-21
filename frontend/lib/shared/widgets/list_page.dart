@@ -39,7 +39,18 @@ class ListPage extends StatefulWidget {
     this.countOnPhone = true,
     this.phoneActions,
     this.filtersInRail = false,
+    this.keepRailStrip = false,
   });
+
+  /// Keep the rail's strip free even on a page without filters, so pages
+  /// that share a header (the Admin tabs) all line up and nothing shifts
+  /// when moving between them.
+  final bool keepRailStrip;
+
+  /// Room kept on the left for the rail on this screen (0 below [railFrom]),
+  /// for a header above a [ListPage] that should line up with it.
+  static double railStrip(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= railFrom ? railWidth + railGap : 0;
 
   /// Computers and tablets: the toolbar keeps only the header, search and
   /// count, and every filter (the [quickFilters] and [belowPills] included)
@@ -198,7 +209,9 @@ class _ListPageState extends State<ListPage> {
           )
         : null;
 
-    final reserve = hasFilters && widget.reserveRail && width >= ListPage.railFrom;
+    final reserve = (hasFilters || widget.keepRailStrip) &&
+        widget.reserveRail &&
+        width >= ListPage.railFrom;
     final reservedLeft = reserve ? ListPage.railWidth + ListPage.railGap : 0.0;
 
     // No search box or toggle: the Filters icon goes at the end of the pills,
@@ -521,7 +534,9 @@ class _FilterPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Material(
-      color: p.card,
+      // Opaque: the card fill is see-through, and the toolbar's line
+      // showed through the open rail.
+      color: Color.alphaBlend(p.card, p.background),
       elevation: elevated ? 8 : 0,
       shadowColor: p.overlay,
       shape: Border(right: BorderSide(color: p.border)),

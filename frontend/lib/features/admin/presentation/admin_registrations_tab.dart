@@ -306,10 +306,15 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       _rail.values.where((v) => v.isNotEmpty).length +
       (_batchActive ? 1 : 0) +
       (_branch != null ? 1 : 0) +
-      (_isAll ? 0 : 1);
+      (_isAll ? 0 : 1) +
+      // The dates only where they are in the rail (not on the phone's line).
+      (_dates != null && MediaQuery.sizeOf(context).width >= ListPage.panelBreakpoint ? 1 : 0);
 
   void _clearAll() {
-    setState(_resetFilters);
+    setState(() {
+      _resetFilters();
+      _dates = null;
+    });
     if (!_isAll) _pick(_allEvents);
   }
 
@@ -489,8 +494,9 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   }
 
   /// When people registered (Cancelled: when they cancelled; Check-ins:
-  /// when they came in), on the line under the pills.
-  Widget _dateLine() {
+  /// when they came in), on the line under the pills; in the rail
+  /// ([rail]) stacked, with From – To.
+  Widget _dateLine({bool rail = false}) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     var first = today.subtract(const Duration(days: 30));
@@ -501,7 +507,8 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       if (day.isBefore(first)) first = day;
     }
     return FilterDateRange(
-      inline: true,
+      inline: !rail,
+      typed: rail,
       lookBack: true,
       label: switch (_view) {
         RegistrationView.registered => 'Registered',
@@ -673,7 +680,9 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
                   : const Icon(Icons.download_outlined, size: 18),
               label: const Text('Export CSV'),
             ),
-      filters: (context) => _filterRail(),
+      // Computers and tablets: every filter in the rail (the event picker
+      // stays on the page). Phones: the sheet, as before.
+      filters: (context) => _filterRail(wide: true),
       onOpenFilters: () => showFilterSheet(
         context,
         builder: (_) => _filterRail(),
@@ -689,7 +698,10 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
 
   /// The Filters rail: the event first, then the values of the current
   /// list's filterable columns.
-  Widget _filterRail() {
+  ///
+  /// [wide] (computers and tablets): the event picker is on the page, so
+  /// the rail starts with the list pills (with counts), then the dates.
+  Widget _filterRail({bool wide = false}) {
     final sections = <Widget>[];
     void section<T>(String id, String label, List<T> rows, GridColumn<T> column) {
       final values = distinctValues(rows, column);
@@ -752,10 +764,12 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const FilterLabel('Event'),
-          const SizedBox(height: 8),
-          AdminEventPicker(options: _eventOptions, selected: _selected, onChanged: _pick),
-          const SizedBox(height: 20),
+          if (!wide) ...[
+            const FilterLabel('Event'),
+            const SizedBox(height: 8),
+            AdminEventPicker(options: _eventOptions, selected: _selected, onChanged: _pick),
+            const SizedBox(height: 20),
+          ],
           const FilterLabel('Show'),
           const SizedBox(height: 8),
           Wrap(
@@ -763,14 +777,23 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
             runSpacing: 6,
             children: [
               for (final v in RegistrationView.values)
-                FilterChipToggle(
-                  label: v.label,
-                  selected: v == _view,
-                  onChanged: (_) => setState(() => _view = v),
-                ),
+                if (wide)
+                  QuickFilterPill(
+                    label: v.label,
+                    count: _count(v),
+                    active: v == _view,
+                    onTap: () => setState(() => _view = v),
+                  )
+                else
+                  FilterChipToggle(
+                    label: v.label,
+                    selected: v == _view,
+                    onChanged: (_) => setState(() => _view = v),
+                  ),
             ],
           ),
           const SizedBox(height: 20),
+          if (wide) _dateLine(rail: true),
           ...sections,
         ],
       ),

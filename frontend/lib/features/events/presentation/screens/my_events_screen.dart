@@ -101,9 +101,38 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     }).toList();
   }
 
-  Widget _filterRail() => Column(
+  /// The quick pills: on phones on the page, on wider screens at the top of
+  /// the Filters rail.
+  List<Widget> get _pills => [
+        QuickFilterPill(label: 'All', active: _isQuick(), onTap: () => _quick()),
+        QuickFilterPill(
+          label: 'Upcoming',
+          active: _isQuick(when: {'upcoming'}),
+          onTap: () => _quick(when: {'upcoming'}),
+        ),
+        QuickFilterPill(
+          label: 'Past',
+          active: _isQuick(when: {'past'}),
+          onTap: () => _quick(when: {'past'}),
+        ),
+        QuickFilterPill(
+          label: 'Cancelled',
+          active: _isQuick(status: {'cancelled'}),
+          onTap: () => _quick(status: {'cancelled'}),
+        ),
+      ];
+
+  /// [wide] (computers and tablets): the quick pills first, as on every
+  /// list page's rail.
+  Widget _filterRail({bool wide = false}) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
+          if (wide) ...[
+            const FilterLabel('Show'),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: _pills),
+            const SizedBox(height: 20),
+          ],
           FilterChipSection(
             label: 'When',
             options: _whenOptions,
@@ -141,24 +170,10 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
           controller: _searchController,
           hint: 'Search my events…',
         ),
-        quickFilters: [
-          QuickFilterPill(label: 'All', active: _isQuick(), onTap: () => _quick()),
-          QuickFilterPill(
-            label: 'Upcoming',
-            active: _isQuick(when: {'upcoming'}),
-            onTap: () => _quick(when: {'upcoming'}),
-          ),
-          QuickFilterPill(
-            label: 'Past',
-            active: _isQuick(when: {'past'}),
-            onTap: () => _quick(when: {'past'}),
-          ),
-          QuickFilterPill(
-            label: 'Cancelled',
-            active: _isQuick(status: {'cancelled'}),
-            onTap: () => _quick(status: {'cancelled'}),
-          ),
-        ],
+        // Computers and tablets: every filter in the rail; phones: the pills
+        // on the page and the sheet.
+        filtersInRail: true,
+        quickFilters: _pills,
         count: state.isLoading
             ? null
             : ResultCount(
@@ -167,7 +182,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                 many: 'events',
                 extra: '$activeCount registered',
               ),
-        filters: (context) => _filterRail(),
+        filters: (context) => _filterRail(wide: true),
         onOpenFilters: () =>
             showFilterSheet(context, builder: (_) => _filterRail(), onClear: _clearAll),
         activeFilterCount: _when.length + _status.length,

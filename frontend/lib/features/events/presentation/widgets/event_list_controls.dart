@@ -89,7 +89,15 @@ class EventDateLine extends StatelessWidget {
     required this.onFlip,
     this.sortable = true,
     this.rail = false,
+    this.fill,
+    this.onFill,
   });
+
+  /// Rail only: the fullness order (Admin › Events), offered under Order
+  /// when [onFill] is set. Picking one leaves date order; tapping the lit
+  /// one goes back to it.
+  final EventFill? fill;
+  final ValueChanged<EventFill?>? onFill;
 
   /// In the Filters rail: the order as its own section ("Order: Soonest
   /// first · Latest first"), then the dates stacked (presets, slider,
@@ -146,6 +154,13 @@ class EventDateLine extends StatelessWidget {
                   if (soonestFirst) onFlip();
                 },
               ),
+              if (onFill != null)
+                for (final f in EventFill.values)
+                  FilterChipToggle(
+                    label: f.label,
+                    selected: fill == f,
+                    onChanged: (_) => onFill!(fill == f ? null : f),
+                  ),
             ]),
             const SizedBox(height: 20),
           ],
