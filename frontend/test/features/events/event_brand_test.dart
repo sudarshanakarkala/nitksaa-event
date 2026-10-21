@@ -4,6 +4,7 @@
 // - The logo for the mode: the dark one on dark backgrounds.
 // - The card: a branded event without a thumbnail shows its logo, not its
 //   wide banner; other events are unchanged.
+// - Images from other sites still show (the browser's own image as a fallback).
 import 'package:event_app/features/events/domain/event.dart';
 import 'package:event_app/features/events/presentation/widgets/event_brand.dart';
 import 'package:event_app/features/events/presentation/widgets/event_card.dart';
@@ -87,6 +88,20 @@ void main() {
     testWidgets('without branding, the banner as before', (tester) async {
       await showCard(tester, _event(banner: 'banner.png'));
       expect(_networkImage('banner.png'), findsOneWidget);
+    });
+
+    testWidgets('logos and banners from other sites still show', (tester) async {
+      for (final event in [
+        _event(logo: 'https://other.site/l.png'),
+        _event(banner: 'https://other.site/banner.png'),
+      ]) {
+        await showCard(tester, event);
+        final images = tester.widgetList<Image>(find.byType(Image)).where((i) => i.image is NetworkImage);
+        expect(images, isNotEmpty);
+        for (final image in images) {
+          expect((image.image as NetworkImage).webHtmlElementStrategy, WebHtmlElementStrategy.fallback);
+        }
+      }
     });
   });
 }

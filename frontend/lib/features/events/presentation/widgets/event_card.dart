@@ -613,6 +613,7 @@ class _Banner extends StatelessWidget {
             Image.network(
               url,
               fit: BoxFit.cover,
+              webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
               errorBuilder: (_, _, _) => placeholder,
             ),
           if (start != null)
@@ -652,6 +653,7 @@ class _Placeholder extends StatelessWidget {
                 child: Image.network(
                   logoUrl!,
                   fit: BoxFit.contain,
+                  webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                   errorBuilder: (_, _, _) => const SizedBox(),
                 ),
               )

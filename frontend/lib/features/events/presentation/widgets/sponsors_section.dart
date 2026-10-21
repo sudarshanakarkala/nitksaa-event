@@ -254,6 +254,7 @@ class _SponsorCard extends StatelessWidget {
                 width: logoSize,
                 height: logoSize,
                 fit: BoxFit.contain,
+                webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
                 errorBuilder: (_, _, _) => Icon(Icons.business, size: large ? 32 : 22, color: p.primary),
               ),
             )
