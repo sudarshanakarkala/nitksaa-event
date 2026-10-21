@@ -78,16 +78,24 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
   static bool _setEquals(Set<String> a, Set<String> b) =>
       a.length == b.length && a.containsAll(b);
 
-  List<MyEventEntry> _visible(List<MyEventEntry> all) {
+  /// [all] narrowed by the search and the filters ([when] and [status]
+  /// in place of the current ones, for the pills' counts).
+  List<MyEventEntry> _visible(
+    List<MyEventEntry> all, {
+    Set<String>? when,
+    Set<String>? status,
+  }) {
+    final wantWhen = when ?? _when;
+    final wantStatus = status ?? _status;
     final now = DateTime.now();
     final query = _searchController.text.trim().toLowerCase();
     return all.where((e) {
-      if (_when.isNotEmpty && !_when.contains(e.isUpcoming(now) ? 'upcoming' : 'past')) {
+      if (wantWhen.isNotEmpty && !wantWhen.contains(e.isUpcoming(now) ? 'upcoming' : 'past')) {
         return false;
       }
-      if (_status.isNotEmpty &&
+      if (wantStatus.isNotEmpty &&
           // Unfinished payments aren't cancelled: they count as Active.
-          !_status.contains(e.registration.isCancelled ? 'cancelled' : 'registered')) {
+          !wantStatus.contains(e.registration.isCancelled ? 'cancelled' : 'registered')) {
         return false;
       }
       if (query.isEmpty) return true;
@@ -101,9 +109,36 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
     }).toList();
   }
 
-  Widget _filterRail() => Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
+  /// The quick pills, with their counts (as on Events): on phones on the
+  /// page, on wider screens at the top of the Filters rail.
+  List<Widget> _pills(List<MyEventEntry> entries) {
+    Widget pill(String label, {Set<String> when = const {}, Set<String> status = const {}}) =>
+        QuickFilterPill(
+          label: label,
+          count: _visible(entries, when: when, status: status).length,
+          active: _isQuick(when: when, status: status),
+          onTap: () => _quick(when: when, status: status),
+        );
+    return [
+      pill('All'),
+      pill('Upcoming', when: {'upcoming'}),
+      pill('Past', when: {'past'}),
+      pill('Cancelled', status: {'cancelled'}),
+    ];
+  }
+
+  /// [pills] (computers and tablets): the quick pills first, as on every
+  /// list page's rail.
+  Widget _filterRail({List<Widget>? pills}) => SingleChildScrollView(
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+          if (pills != null) ...[
+            const FilterLabel('Show'),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: pills),
+            const SizedBox(height: 20),
+          ],
           FilterChipSection(
             label: 'When',
             options: _whenOptions,
@@ -117,6 +152,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
             onChanged: (v) => _set(() => _status = v),
           ),
         ],
+        ),
       );
 
   @override
@@ -141,24 +177,10 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
           controller: _searchController,
           hint: 'Search my events…',
         ),
-        quickFilters: [
-          QuickFilterPill(label: 'All', active: _isQuick(), onTap: () => _quick()),
-          QuickFilterPill(
-            label: 'Upcoming',
-            active: _isQuick(when: {'upcoming'}),
-            onTap: () => _quick(when: {'upcoming'}),
-          ),
-          QuickFilterPill(
-            label: 'Past',
-            active: _isQuick(when: {'past'}),
-            onTap: () => _quick(when: {'past'}),
-          ),
-          QuickFilterPill(
-            label: 'Cancelled',
-            active: _isQuick(status: {'cancelled'}),
-            onTap: () => _quick(status: {'cancelled'}),
-          ),
-        ],
+        // Computers and tablets: every filter in the rail; phones: the pills
+        // on the page and the sheet.
+        filtersInRail: true,
+        quickFilters: _pills(entries),
         count: state.isLoading
             ? null
             : ResultCount(
@@ -167,7 +189,7 @@ class _MyEventsScreenState extends ConsumerState<MyEventsScreen> {
                 many: 'events',
                 extra: '$activeCount registered',
               ),
-        filters: (context) => _filterRail(),
+        filters: (context) => _filterRail(pills: _pills(entries)),
         onOpenFilters: () =>
             showFilterSheet(context, builder: (_) => _filterRail(), onClear: _clearAll),
         activeFilterCount: _when.length + _status.length,

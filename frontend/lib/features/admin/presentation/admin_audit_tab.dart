@@ -6,6 +6,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/errors/api_error_message.dart';
 import '../../../core/logger/app_logger.dart';
 import '../../../shared/widgets/filter_controls.dart';
+import '../../../shared/widgets/list_page.dart';
 import '../../../shared/widgets/quick_filter_pill.dart';
 import '../../../theme/app_palette.dart';
 import '../../../theme/app_text_styles.dart';
@@ -102,11 +103,13 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
     _debounce = Timer(const Duration(milliseconds: 400), () => _load(page: 1));
   }
 
-  Widget _dateLine() {
+  /// [rail]: stacked for the Filters rail, with From – To.
+  Widget _dateLine({bool rail = false}) {
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     return FilterDateRange(
-      inline: true,
+      inline: !rail,
+      typed: rail,
       lookBack: true,
       label: 'When',
       first: today.subtract(const Duration(days: 365)),
@@ -159,8 +162,14 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
     _load(page: 1);
   }
 
-  int get _activeFilterCount =>
-      [_category != null, _who != null, _event != adminAllEvents].where((on) => on).length;
+  /// The dates count only where they are in the rail (not on the phone's
+  /// line).
+  int get _activeFilterCount => [
+        _category != null,
+        _who != null,
+        _event != adminAllEvents,
+        _dates != null && MediaQuery.sizeOf(context).width >= ListPage.panelBreakpoint,
+      ].where((on) => on).length;
 
   void _clearAll() {
     _debounce?.cancel();
@@ -169,6 +178,7 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
       _category = null;
       _who = null;
       _event = adminAllEvents;
+      _dates = null;
     });
   }
 
@@ -206,7 +216,9 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
           QuickFilterPill(label: c.value, active: _category == c.key, onTap: () => _set(() => _category = c.key)),
       ],
       count: _loading && _rows.isEmpty ? null : ResultCount(count: _total, one: 'entry', many: 'entries'),
-      filters: (context) => _filterRail(),
+      // Computers and tablets: every filter in the rail (the event picker
+      // stays on the page). Phones: the sheet, as before.
+      filters: (context) => _filterRail(wide: true),
       onOpenFilters: () => showFilterSheet(context, builder: (_) => _filterRail(), onClear: _clearAll),
       activeFilterCount: _activeFilterCount,
       onClearFilters: _clearAll,
@@ -228,15 +240,33 @@ class _AdminAuditTabState extends ConsumerState<AdminAuditTab> {
         },
       );
 
-  Widget _filterRail() => SingleChildScrollView(
+  /// [wide] (computers and tablets): the event picker is on the page, so
+  /// the rail starts with the category pills, then the dates.
+  Widget _filterRail({bool wide = false}) => SingleChildScrollView(
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            const FilterLabel('Event'),
-            const SizedBox(height: 8),
-            AdminEventPicker(options: _events, selected: _event, onChanged: (id) => _set(() => _event = id)),
-            const SizedBox(height: 20),
-            _chips('Category', _categories, _category, (v) => _set(() => _category = v)),
+            if (wide) ...[
+              const FilterLabel('Show'),
+              const SizedBox(height: 8),
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                QuickFilterPill(label: 'All', active: _category == null, onTap: () => _set(() => _category = null)),
+                for (final c in _categories.entries)
+                  QuickFilterPill(
+                    label: c.value,
+                    active: _category == c.key,
+                    onTap: () => _set(() => _category = c.key),
+                  ),
+              ]),
+              const SizedBox(height: 20),
+              _dateLine(rail: true),
+            ] else ...[
+              const FilterLabel('Event'),
+              const SizedBox(height: 8),
+              AdminEventPicker(options: _events, selected: _event, onChanged: (id) => _set(() => _event = id)),
+              const SizedBox(height: 20),
+              _chips('Show', _categories, _category, (v) => _set(() => _category = v)),
+            ],
             _chips('Who', _whoLabels, _who, (v) => _set(() => _who = v)),
           ],
         ),

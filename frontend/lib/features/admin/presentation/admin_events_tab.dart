@@ -175,8 +175,10 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     return FilterDateRange.contains(_dates, e.startDatetime);
   }
 
+  /// Search not counted; the dates only where they are in the rail.
   int get _activeFilterCount => [
         _filter != _Filter.all,
+        _dates != null && MediaQuery.sizeOf(context).width >= ListPage.panelBreakpoint,
         _modes.isNotEmpty,
         _registration.isNotEmpty,
         _price.isNotEmpty,
@@ -190,6 +192,7 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
       _price = const {};
       _mine = false;
       _filter = _Filter.all;
+      _dates = null;
       _search.clear();
     });
   }
@@ -303,7 +306,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
             )
           : null,
       belowPills: _events.isEmpty ? null : _dateFilter(),
-      filters: (context) => _filterRail(),
+      // Computers and tablets: every filter in the rail (status with counts,
+      // order, dates, then the rest). Phones: the sheet, as before.
+      filters: (context) => _filterRail(
+        counts: {for (final f in _Filter.values) f: filtered.where((e) => _matches(e, f)).length},
+        dates: _events.isEmpty ? null : _dateFilter(rail: true),
+      ),
       onOpenFilters: () => showFilterSheet(
         context,
         builder: (_) => _filterRail(),
@@ -320,9 +328,12 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
   bool _cardsShown(bool compact) => compact || _view == _View.cards;
 
   /// The shared Events date line: Date ↑/↓, presets, slider, From – To.
-  Widget _dateFilter() {
+  Widget _dateFilter({bool rail = false}) {
     final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
     return EventDateLine(
+      rail: rail,
+      fill: _fill,
+      onFill: rail && _cardsShown(compact) ? (f) => setState(() => _fill = f) : null,
       events: _events,
       value: _dates,
       onChanged: (v) => setState(() => _dates = v),
@@ -334,27 +345,38 @@ class _AdminEventsTabState extends ConsumerState<AdminEventsTab> {
     );
   }
 
-  Widget _filterRail() {
+  /// Every filter. [counts] and [dates] on computers and tablets, where the
+  /// rail also holds the status pills (with counts), the order and dates.
+  Widget _filterRail({Map<_Filter, int>? counts, Widget? dates}) {
     return SingleChildScrollView(
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // The status pills, so the rail has every filter.
-          const FilterLabel('Status'),
+          const FilterLabel('Show'),
           const SizedBox(height: 8),
           Wrap(
             spacing: 6,
             runSpacing: 6,
             children: [
               for (final f in _Filter.values)
-                FilterChipToggle(
-                  label: f.label,
-                  selected: f == _filter,
-                  onChanged: (_) => setState(() => _filter = f),
-                ),
+                if (counts != null)
+                  QuickFilterPill(
+                    label: f.label,
+                    count: counts[f],
+                    active: f == _filter,
+                    onTap: () => setState(() => _filter = f),
+                  )
+                else
+                  FilterChipToggle(
+                    label: f.label,
+                    selected: f == _filter,
+                    onChanged: (_) => setState(() => _filter = f),
+                  ),
             ],
           ),
           const SizedBox(height: 20),
+          ?dates,
           FilterChipSection(
             label: 'Event mode',
             options: const {'in_person': 'In person', 'online': 'Online'},
@@ -499,7 +521,7 @@ class _EventsTableState extends State<_EventsTable> {
           id: 'mode',
           label: 'Mode',
           kind: ColumnKind.category,
-          value: (e) => e.isVirtual ? 'Virtual' : 'Physical',
+          value: (e) => e.isVirtual ? 'Online' : 'In person',
         ),
         GridColumn(
           id: 'capacity',

@@ -88,7 +88,21 @@ class EventDateLine extends StatelessWidget {
     required this.onDateOrder,
     required this.onFlip,
     this.sortable = true,
+    this.rail = false,
+    this.fill,
+    this.onFill,
   });
+
+  /// Rail only: the fullness order (Admin › Events), offered under Order
+  /// when [onFill] is set. Picking one leaves date order; tapping the lit
+  /// one goes back to it.
+  final EventFill? fill;
+  final ValueChanged<EventFill?>? onFill;
+
+  /// In the Filters rail: the order as its own section ("Order: Soonest
+  /// first · Latest first"), then the dates stacked (presets, slider,
+  /// From – To).
+  final bool rail;
 
   /// All the events the page could show (sets the slider's span).
   final List<AppEvent> events;
@@ -114,6 +128,53 @@ class EventDateLine extends StatelessWidget {
       final d = DateUtils.dateOnly(e.startDatetime.toLocal());
       if (d.isBefore(first)) first = d;
       if (d.isAfter(last)) last = d;
+    }
+    if (rail) {
+      return Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          if (sortable) ...[
+            const FilterLabel('Order'),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              FilterChipToggle(
+                label: 'Soonest first',
+                selected: dateOrder && soonestFirst,
+                onChanged: (_) {
+                  if (!dateOrder) onDateOrder();
+                  if (!soonestFirst) onFlip();
+                },
+              ),
+              FilterChipToggle(
+                label: 'Latest first',
+                selected: dateOrder && !soonestFirst,
+                onChanged: (_) {
+                  if (!dateOrder) onDateOrder();
+                  if (soonestFirst) onFlip();
+                },
+              ),
+              if (onFill != null)
+                for (final f in EventFill.values)
+                  FilterChipToggle(
+                    label: f.label,
+                    selected: fill == f,
+                    onChanged: (_) => onFill!(fill == f ? null : f),
+                  ),
+            ]),
+            const SizedBox(height: 20),
+          ],
+          FilterDateRange(
+            label: 'Starts',
+            typed: true,
+            first: first,
+            last: last,
+            value: value,
+            presets: eventDatePresets(now),
+            onChanged: onChanged,
+          ),
+        ],
+      );
     }
     return FilterDateRange(
       inline: true,

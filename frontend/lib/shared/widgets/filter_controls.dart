@@ -185,6 +185,15 @@ Future<void> showFilterSheet(
                         },
                         child: const Text('Clear all'),
                       ),
+                    // An explicit way out (tapping outside or dragging the
+                    // handle down are easy to miss).
+                    IconButton(
+                      tooltip: 'Close filters',
+                      iconSize: 20,
+                      color: context.palette.textMuted,
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.of(sheetContext).pop(),
+                    ),
                   ],
                 ),
                 const SizedBox(height: 8),
@@ -452,7 +461,12 @@ class FilterDateRange extends StatefulWidget {
     this.inline = false,
     this.leading,
     this.lookBack = false,
+    this.typed = false,
   });
+
+  /// Not inline (a Filters rail): From – To boxes under the slider, in
+  /// place of the range written out, as on the inline line.
+  final bool typed;
 
   /// For records in the past (Audit, Payments, Registrations): a date typed
   /// without a year means the latest one, not the next one.
@@ -641,31 +655,9 @@ class _FilterDateRangeState extends State<FilterDateRange> {
       },
     );
 
-    if (!widget.inline) {
-      return Padding(
-        padding: const EdgeInsets.only(bottom: 20),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            FilterLabel(widget.label),
-            const SizedBox(height: 8),
-            if (widget.presets.isNotEmpty) chips,
-            slider,
-            Text(
-              range == null
-                  ? 'Any date'
-                  : DateUtils.isSameDay(range.start, range.end)
-                      ? formatDate(range.start)
-                      : '${formatDate(range.start)} – ${formatDate(range.end)}',
-              style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
-            ),
-          ],
-        ),
-      );
-    }
-
-    Widget box(TextEditingController c, FocusNode f, String hint, bool bad) => SizedBox(
-          width: 118,
+    Widget box(TextEditingController c, FocusNode f, String hint, bool bad, {double? width = 118}) =>
+        SizedBox(
+          width: width,
           child: TextField(
             controller: c,
             focusNode: f,
@@ -713,6 +705,63 @@ class _FilterDateRangeState extends State<FilterDateRange> {
           ),
       ],
     );
+
+    // The rail is narrow: the boxes share its width.
+    final railBoxes = Row(
+      children: [
+        Expanded(
+          child: Tooltip(
+            message: 'Type a date, e.g. 15 Nov',
+            child: box(_from, _fromFocus, 'From', _fromBad, width: null),
+          ),
+        ),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 6),
+          child: Text('–', style: TextStyle(color: p.textMuted)),
+        ),
+        Expanded(
+          child: Tooltip(
+            message: 'Type a date, e.g. 31 Dec',
+            child: box(_to, _toFocus, 'To', _toBad, width: null),
+          ),
+        ),
+        if (range != null)
+          IconButton(
+            tooltip: 'Any date',
+            visualDensity: VisualDensity.compact,
+            iconSize: 16,
+            color: p.textMuted,
+            icon: const Icon(Icons.close),
+            onPressed: () => widget.onChanged(null),
+          ),
+      ],
+    );
+
+    if (!widget.inline) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 20),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            FilterLabel(widget.label),
+            const SizedBox(height: 8),
+            if (widget.presets.isNotEmpty) chips,
+            slider,
+            if (widget.typed)
+              railBoxes
+            else
+              Text(
+                range == null
+                    ? 'Any date'
+                    : DateUtils.isSameDay(range.start, range.end)
+                        ? formatDate(range.start)
+                        : '${formatDate(range.start)} – ${formatDate(range.end)}',
+                style: AppTextStyles.bodySmall.copyWith(color: p.textSecondary),
+              ),
+          ],
+        ),
+      );
+    }
 
     final screenWidth = MediaQuery.sizeOf(context).width;
     if (screenWidth < 600) return _phoneLine(range, slider, boxes);

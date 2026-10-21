@@ -107,30 +107,41 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
     _load();
   }
 
-  Widget _periodChips() => Wrap(
+  /// [pills]: the page's pill look (the rail on computers, like every
+  /// list page's first filter).
+  Widget _periodChips({bool pills = false}) => Wrap(
         spacing: 6,
         runSpacing: 6,
         children: [
           for (final p in DashboardPeriod.values)
-            FilterChipToggle(
-              label: p.label,
-              selected: p == _period,
-              onChanged: (_) => _setPeriod(p),
-            ),
+            if (pills)
+              QuickFilterPill(label: p.label, active: p == _period, onTap: () => _setPeriod(p))
+            else
+              FilterChipToggle(
+                label: p.label,
+                selected: p == _period,
+                onChanged: (_) => _setPeriod(p),
+              ),
         ],
       );
 
-  Widget _rail() => Column(
+  /// [wide] (computers and tablets): the event picker is on the page, so
+  /// the rail holds the period.
+  Widget _rail({bool wide = false}) => SingleChildScrollView(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const FilterLabel('Event'),
+          if (!wide) ...[
+            const FilterLabel('Event'),
+            const SizedBox(height: 8),
+            AdminEventPicker(options: _events, selected: _event, onChanged: _setEvent),
+            const SizedBox(height: 20),
+          ],
+          const FilterLabel('Show'),
           const SizedBox(height: 8),
-          AdminEventPicker(options: _events, selected: _event, onChanged: _setEvent),
-          const SizedBox(height: 20),
-          const FilterLabel('Period'),
-          const SizedBox(height: 8),
-          _periodChips(),
+          _periodChips(pills: wide),
         ],
+        ),
       );
 
   @override
@@ -152,7 +163,7 @@ class _AdminDashboardTabState extends ConsumerState<AdminDashboardTab> {
             onTap: () => _setPeriod(p),
           ),
       ],
-      filters: (context) => _rail(),
+      filters: (context) => _rail(wide: true),
       onOpenFilters: () => showFilterSheet(context, builder: (_) => _rail()),
       activeFilterCount: [_period != DashboardPeriod.days30, _event != adminAllEvents].where((on) => on).length,
       onClearFilters: () {

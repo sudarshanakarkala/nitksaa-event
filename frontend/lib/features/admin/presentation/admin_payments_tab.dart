@@ -436,7 +436,9 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
 
   /// Orders by when they were started, refunds by when they were
   /// requested. Not on Paid events (a list of events, mostly ahead).
-  Widget? _dateLine() {
+  ///
+  /// [rail]: stacked for the Filters rail, with From – To.
+  Widget? _dateLine({bool rail = false}) {
     if (_view == _View.pricing) return null;
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
@@ -447,7 +449,8 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
       if (day.isBefore(first)) first = day;
     }
     return FilterDateRange(
-      inline: true,
+      inline: !rail,
+      typed: rail,
       lookBack: true,
       label: _view == _View.orders ? 'Started' : 'Requested',
       first: first,
@@ -479,14 +482,21 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     });
   }
 
-  int get _activeFilterCount =>
-      [_event != adminAllEvents, _status.isNotEmpty, _mode.isNotEmpty].where((on) => on).length;
+  /// The dates count only where they are in the rail (not on the phone's
+  /// line).
+  int get _activeFilterCount => [
+        _event != adminAllEvents,
+        _status.isNotEmpty,
+        _mode.isNotEmpty,
+        _dates != null && MediaQuery.sizeOf(context).width >= ListPage.panelBreakpoint,
+      ].where((on) => on).length;
 
   void _clearAll() {
     setState(() {
       _event = adminAllEvents;
       _status = const {};
       _mode = const {};
+      _dates = null;
       _search.clear();
     });
   }
@@ -531,7 +541,9 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
           ),
       ],
       count: _loading && _orders.isEmpty ? null : ResultCount(count: _count(_view), one: one, many: many),
-      filters: (context) => _filterRail(options),
+      // Computers and tablets: every filter in the rail (the event picker
+      // stays on the page). Phones: the sheet, as before.
+      filters: (context) => _filterRail(options, wide: true),
       onOpenFilters: () => showFilterSheet(
         context,
         builder: (_) => _filterRail(options),
@@ -545,7 +557,9 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
     );
   }
 
-  Widget _filterRail(List<AdminEventOption> options) {
+  /// [wide] (computers and tablets): the event picker is on the page, so
+  /// the rail starts with the list pills (with counts), then the dates.
+  Widget _filterRail(List<AdminEventOption> options, {bool wide = false}) {
     final statuses = switch (_view) {
       _View.orders => _orderStatus,
       _View.refunds => _refundStatus,
@@ -555,23 +569,40 @@ class _AdminPaymentsTabState extends ConsumerState<AdminPaymentsTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const FilterLabel('Event'),
-          const SizedBox(height: 8),
-          AdminEventPicker(
-            options: options,
-            selected: _event,
-            onChanged: (id) => setState(() => _event = id),
-          ),
-          const SizedBox(height: 20),
-          FilterChipSection(
-            label: 'Show',
-            options: {for (final v in _View.values) v.name: v.label},
-            selected: {_view.name},
-            onChanged: (picked) {
-              final added = picked.difference({_view.name});
-              if (added.isNotEmpty) _setView(_View.values.byName(added.first));
-            },
-          ),
+          if (wide) ...[
+            const FilterLabel('Show'),
+            const SizedBox(height: 8),
+            Wrap(spacing: 6, runSpacing: 6, children: [
+              for (final v in _View.values)
+                QuickFilterPill(
+                  label: v.label,
+                  count: _count(v),
+                  active: v == _view,
+                  onTap: () => _setView(v),
+                ),
+            ]),
+            const SizedBox(height: 20),
+            ?_dateLine(rail: true),
+          ] else ...[
+            const FilterLabel('Event'),
+            const SizedBox(height: 8),
+            AdminEventPicker(
+              options: options,
+              selected: _event,
+              onChanged: (id) => setState(() => _event = id),
+            ),
+            const SizedBox(height: 20),
+          ],
+          if (!wide)
+            FilterChipSection(
+              label: 'Show',
+              options: {for (final v in _View.values) v.name: v.label},
+              selected: {_view.name},
+              onChanged: (picked) {
+                final added = picked.difference({_view.name});
+                if (added.isNotEmpty) _setView(_View.values.byName(added.first));
+              },
+            ),
           if (statuses.isNotEmpty)
             FilterChipSection(
               label: 'Status',

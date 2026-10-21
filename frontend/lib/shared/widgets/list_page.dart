@@ -6,15 +6,16 @@ import 'page_header.dart';
 import 'page_insets.dart';
 import 'phone_chrome.dart';
 
-/// List page frame (Events): a fixed toolbar (page header, search, view
-/// toggle, Filters button, quick-filter pills, count and actions) and the
-/// scrolling [body] below it, in the site header's 1520px container.
+/// List page frame (Events, My Events, the Admin tabs): a fixed toolbar and
+/// the scrolling [body] below it, in the site header's 1520px container.
 ///
-/// Improves on the website's left rail: the common filters are one-click
-/// [quickFilters] pills, and the rest open in a Filters panel that slides
-/// over the results instead of squeezing them, so the cards never move when
-/// it opens or closes. Phones get the panel as a bottom sheet
-/// ([onOpenFilters]).
+/// Computers and tablets, with [filtersInRail]: the toolbar is the page
+/// header, one row (event picker, search, view toggle, Filters button) and
+/// the count line with the actions; every filter is in the Filters rail,
+/// under the toolbar beside the list, closed on load. Computers keep the
+/// rail's strip free on the left so it opens without moving anything;
+/// tablets get it over the list. Phones: the [quickFilters] pills and
+/// [belowPills] on the page, the rest in a bottom sheet ([onOpenFilters]).
 class ListPage extends StatefulWidget {
   const ListPage({
     super.key,
@@ -38,7 +39,30 @@ class ListPage extends StatefulWidget {
     this.collapseOnPhone = true,
     this.countOnPhone = true,
     this.phoneActions,
+    this.filtersInRail = false,
+    this.keepRailStrip = false,
   });
+
+  /// Keep the rail's strip free even on a page without filters, so pages
+  /// that share a header (the Admin tabs) all line up and nothing shifts
+  /// when moving between them.
+  final bool keepRailStrip;
+
+  /// Room kept on the left for the rail on this screen (0 below [railFrom]),
+  /// for a header above a [ListPage] that should line up with it.
+  static double railStrip(BuildContext context) =>
+      MediaQuery.sizeOf(context).width >= railFrom ? railWidth + railGap : 0;
+
+  /// Computers and tablets: the toolbar keeps only the header, search and
+  /// count, and every filter (the [quickFilters] and [belowPills] included)
+  /// lives in the Filters rail, which [filters] must then build in full. The
+  /// rail starts closed; the Filters button opens and closes it in its own
+  /// strip under the toolbar, so nothing moves. Short windows drop the
+  /// subtitle, so the list gets the height. Phones are unchanged.
+  final bool filtersInRail;
+
+  /// Below this height (with [filtersInRail]) the subtitle is left out.
+  static const double shortWindow = 820;
 
   /// Phones: scrolling down the list folds the site footer away; scrolling
   /// up, or reaching the top or end, brings it back ([PhoneChrome]). The
@@ -53,16 +77,17 @@ class ListPage extends StatefulWidget {
   /// ([ListIconAction]), in place of [actions] on the count line.
   final List<Widget>? phoneActions;
 
-  /// A full-width line under the pills (Admin → Events: the date slider).
+  /// A full-width line under the pills (the date slider). Phones only with
+  /// [filtersInRail]: elsewhere [filters] holds it.
   final Widget? belowPills;
 
   /// A choice before the pills, such as the event picker. On phones it gets
-  /// its own full-width line above them.
+  /// its own full-width line above them; with [filtersInRail], it starts the
+  /// search row.
   final Widget? picker;
 
   /// From [railFrom], keep the rail's strip free on the left so opening it
-  /// covers nothing. Off for the Admin tabs, which line up with the "Admin"
-  /// title instead: there the rail slides over the page, as on tablets.
+  /// covers nothing. Off: the rail slides over the list, as on tablets.
   final bool reserveRail;
 
   /// Phones: the action on its own full-width line below the count (Scan at
@@ -173,6 +198,9 @@ class _ListPageState extends State<ListPage> {
     // The panel only exists on wider screens.
     final panelOpen = _panelOpen && !compact && hasFilters;
 
+    // Every filter in the rail: the toolbar is just header, search and count.
+    final railMode = widget.filtersInRail && !compact && hasFilters;
+
     final filterButtons = hasFilters
         ? _FilterIconButtons(
             count: widget.activeFilterCount,
@@ -182,20 +210,31 @@ class _ListPageState extends State<ListPage> {
           )
         : null;
 
-    final reserve = hasFilters && widget.reserveRail && width >= ListPage.railFrom;
+    final reserve = (hasFilters || widget.keepRailStrip) &&
+        widget.reserveRail &&
+        width >= ListPage.railFrom;
     final reservedLeft = reserve ? ListPage.railWidth + ListPage.railGap : 0.0;
 
     // No search box or toggle: the Filters icon goes at the end of the pills,
     // never alone on a row.
-    final hasPillRow = widget.picker != null || widget.quickFilters.isNotEmpty;
+    final hasQuickFilters = widget.quickFilters.isNotEmpty && !railMode;
+    // Rail mode: the event picker joins the search row, so every page's
+    // toolbar is the same one row (and the rail starts at the same height).
+    final pickerInTopRow = railMode && widget.picker != null && widget.search != null;
+    final hasPillRow = (widget.picker != null && !pickerInTopRow) || hasQuickFilters;
     final filtersWithPills =
         filterButtons != null && widget.search == null && widget.toggle == null && hasPillRow;
     final showTopRow = widget.search != null ||
         (widget.toggle != null && !compact) ||
         (filterButtons != null && !filtersWithPills);
     final pickerOwnLine = widget.picker != null && compact;
+    final belowPills = railMode ? null : widget.belowPills;
+    final subtitle = compact ||
+            (railMode && MediaQuery.sizeOf(context).height < ListPage.shortWindow)
+        ? null
+        : widget.subtitle;
 
-    final pills = widget.quickFilters.isEmpty
+    final pills = !hasQuickFilters
         ? null
         : SingleChildScrollView(
             scrollDirection: Axis.horizontal,
@@ -210,7 +249,7 @@ class _ListPageState extends State<ListPage> {
           );
     final pillRow = Row(
       children: [
-        if (widget.picker != null && !pickerOwnLine) ...[
+        if (widget.picker != null && !pickerOwnLine && !pickerInTopRow) ...[
           widget.picker!,
           if (pills != null) const SizedBox(width: 12),
         ],
@@ -221,7 +260,9 @@ class _ListPageState extends State<ListPage> {
         if (filtersWithPills) ...[const SizedBox(width: 8), filterButtons],
       ],
     );
-    final showPillRow = pills != null || filtersWithPills || (widget.picker != null && !pickerOwnLine);
+    final showPillRow = pills != null ||
+        filtersWithPills ||
+        (widget.picker != null && !pickerOwnLine && !pickerInTopRow);
 
     // Phones: small actions in the search row; the count only where the
     // pills don't already show it.
@@ -247,7 +288,7 @@ class _ListPageState extends State<ListPage> {
                 child: PageHeader(
                   eyebrow: widget.eyebrow,
                   title: widget.title!,
-                  subtitle: compact ? null : widget.subtitle,
+                  subtitle: subtitle,
                 ),
               ),
               const SizedBox(height: 20),
@@ -255,6 +296,7 @@ class _ListPageState extends State<ListPage> {
             if (showTopRow)
               Row(
                 children: [
+                  if (pickerInTopRow) ...[widget.picker!, const SizedBox(width: 12)],
                   // No search box: keep the toggle and Filters at the right
                   // end, where they sit on every other page.
                   if (widget.search != null) Expanded(child: widget.search!) else const Spacer(),
@@ -278,12 +320,12 @@ class _ListPageState extends State<ListPage> {
               if (showTopRow || pickerOwnLine) const SizedBox(height: 12),
               pillRow,
             ],
-            if (widget.belowPills != null) ...[
+            if (belowPills != null) ...[
               if (showTopRow || pickerOwnLine || showPillRow) const SizedBox(height: 8),
-              widget.belowPills!,
+              belowPills,
             ],
             if (showCount || rowActions.isNotEmpty) ...[
-              if (showTopRow || pickerOwnLine || showPillRow || widget.belowPills != null)
+              if (showTopRow || pickerOwnLine || showPillRow || belowPills != null)
                 const SizedBox(height: 12),
               Row(
                 children: [
@@ -316,65 +358,71 @@ class _ListPageState extends State<ListPage> {
       child: toolbar,
     );
 
-    final page = Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        toolbarBox,
-        Expanded(
-          child: _ReservedLeft(
-            width: reservedLeft,
-            // Always there (it only acts on phones), so the list keeps its
-            // place when the window crosses the phone width.
-            child: NotificationListener<Notification>(
-              onNotification: _onBodyNotification,
-              child: widget.body,
-            ),
-          ),
-        ),
-      ],
+    // The list, clear of the rail's strip when one is kept.
+    Widget list = _ReservedLeft(
+      width: reservedLeft,
+      // Always there (it only acts on phones), so the list keeps its
+      // place when the window crosses the phone width.
+      child: NotificationListener<Notification>(
+        onNotification: _onBodyNotification,
+        child: widget.body,
+      ),
     );
 
-    if (!hasFilters || compact) return page;
-
-    // Desktop: the rail has its own strip on the left (kept free even when
-    // closed), so the open panel covers nothing. Tablets: no room for that,
-    // so the panel overlays the edge of the cards with a light scrim.
-    // Either way the page never moves.
-    final overlay = !reserve;
-    const panelWidth = ListPage.railWidth;
-
-    return Stack(
-      children: [
-        Positioned.fill(child: page),
-        if (overlay)
-          Positioned.fill(
-            child: IgnorePointer(
-              ignoring: !panelOpen,
-              child: AnimatedOpacity(
-                duration: const Duration(milliseconds: 200),
-                opacity: panelOpen ? 1 : 0,
-                child: GestureDetector(
-                  onTap: () => setState(() => _panelOpen = false),
-                  child: ColoredBox(color: p.overlay.withValues(alpha: 0.25)),
+    // The rail sits under the toolbar, beside the list, on every page (as
+    // on the website's directory), so it is in the same place everywhere.
+    // Computers: in its own strip, kept free even when closed, so opening
+    // it covers nothing. Tablets: no room for that, so it overlays the edge
+    // of the list with a light scrim. Either way nothing moves.
+    if (hasFilters && !compact) {
+      final overlay = !reserve;
+      const panelWidth = ListPage.railWidth;
+      // Very wide windows: the content is centred, so the rail sits just
+      // left of it rather than at the window's edge.
+      final besideContent =
+          PageInsets.contentLeft(context) - ListPage.railWidth - ListPage.railGap;
+      final paneLeft = reserve && besideContent > 0 ? besideContent : 0.0;
+      list = Stack(
+        children: [
+          Positioned.fill(child: list),
+          if (overlay)
+            Positioned.fill(
+              child: IgnorePointer(
+                ignoring: !panelOpen,
+                child: AnimatedOpacity(
+                  duration: const Duration(milliseconds: 200),
+                  opacity: panelOpen ? 1 : 0,
+                  child: GestureDetector(
+                    onTap: () => setState(() => _panelOpen = false),
+                    child: ColoredBox(color: p.overlay.withValues(alpha: 0.25)),
+                  ),
                 ),
               ),
             ),
+          AnimatedPositioned(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            top: 0,
+            bottom: 0,
+            left: panelOpen ? paneLeft : -(panelWidth + 12),
+            width: panelWidth,
+            child: _FilterPanel(
+              activeCount: widget.activeFilterCount,
+              onClear: widget.onClearFilters,
+              onClose: () => setState(() => _panelOpen = false),
+              elevated: overlay,
+              child: widget.filters!(context),
+            ),
           ),
-        AnimatedPositioned(
-          duration: const Duration(milliseconds: 240),
-          curve: Curves.easeOutCubic,
-          top: 0,
-          bottom: 0,
-          left: panelOpen ? 0 : -(panelWidth + 12),
-          width: panelWidth,
-          child: _FilterPanel(
-            activeCount: widget.activeFilterCount,
-            onClear: widget.onClearFilters,
-            onClose: () => setState(() => _panelOpen = false),
-            elevated: overlay,
-            child: widget.filters!(context),
-          ),
-        ),
+        ],
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        toolbarBox,
+        Expanded(child: list),
       ],
     );
   }
@@ -487,7 +535,9 @@ class _FilterPanel extends StatelessWidget {
   Widget build(BuildContext context) {
     final p = context.palette;
     return Material(
-      color: p.card,
+      // Opaque: the card fill is see-through, and the toolbar's line
+      // showed through the open rail.
+      color: Color.alphaBlend(p.card, p.background),
       elevation: elevated ? 8 : 0,
       shadowColor: p.overlay,
       shape: Border(right: BorderSide(color: p.border)),
