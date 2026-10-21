@@ -617,22 +617,28 @@ class _AdminRegistrationsTabState extends ConsumerState<AdminRegistrationsTab> {
   Widget build(BuildContext context) {
     final compact = MediaQuery.sizeOf(context).width < ListPage.panelBreakpoint;
 
+    // Before the list can show: still in the frame, so the Admin title and
+    // tabs stay on screen.
     if (_eventsLoading && _events.isEmpty) {
-      return const Center(child: CircularProgressIndicator());
+      return const AdminTabFrame(body: Center(child: CircularProgressIndicator()));
     }
     if (_eventsError != null && _events.isEmpty) {
-      return StateMessage(
-        icon: Icons.error_outline,
-        title: 'Couldn\'t load your events',
-        body: _eventsError!,
-        action: TextButton(onPressed: _loadEvents, child: const Text('Try again')),
+      return AdminTabFrame(
+        body: StateMessage(
+          icon: Icons.error_outline,
+          title: 'Couldn\'t load your events',
+          body: _eventsError!,
+          action: TextButton(onPressed: _loadEvents, child: const Text('Try again')),
+        ),
       );
     }
     if (_events.isEmpty) {
-      return const StateMessage(
-        icon: Icons.event_note_outlined,
-        title: 'No events yet',
-        body: 'Registrations appear here once you\'re an admin of an event.',
+      return const AdminTabFrame(
+        body: StateMessage(
+          icon: Icons.event_note_outlined,
+          title: 'No events yet',
+          body: 'Registrations appear here once you\'re an admin of an event.',
+        ),
       );
     }
 

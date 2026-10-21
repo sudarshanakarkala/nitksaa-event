@@ -41,7 +41,13 @@ class ListPage extends StatefulWidget {
     this.phoneActions,
     this.filtersInRail = false,
     this.keepRailStrip = false,
+    this.header,
   });
+
+  /// A header above the toolbar, in its own band with a line under it
+  /// (Admin: its title and tab row), so the page around it can share the
+  /// rail's strip.
+  final Widget? header;
 
   /// Keep the rail's strip free even on a page without filters, so pages
   /// that share a header (the Admin tabs) all line up and nothing shifts
@@ -271,10 +277,7 @@ class _ListPageState extends State<ListPage> {
     final showCount = widget.count != null && (!compact || widget.countOnPhone);
     final actionsBelow = widget.wideActionOnPhone && compact && rowActions.isNotEmpty;
 
-    final toolbar = LayoutBuilder(
-      builder: (context, constraints) => Padding(
-        padding: PageInsets.horizontal(context, constraints.maxWidth, minLeft: reservedLeft),
-        child: Padding(
+    final toolbar = Padding(
         padding: EdgeInsets.only(
           top: widget.title == null ? 16 : (compact ? 20 : 28),
           bottom: 14,
@@ -349,80 +352,101 @@ class _ListPageState extends State<ListPage> {
             ],
           ],
         ),
-      ),
-    ),
     );
 
-    final toolbarBox = DecoratedBox(
-      decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
-      child: toolbar,
+    // Computers: the rail's strip on the left, the rail just left of the
+    // content (centred on very wide windows). The middle column starts
+    // where the strip ends: its lines (under the header and the toolbar)
+    // stop there, as they stop at NITiKa's rail on the right.
+    final besideContent =
+        PageInsets.contentLeft(context) - ListPage.railWidth - ListPage.railGap;
+    final paneLeft = reserve && besideContent > 0 ? besideContent : 0.0;
+    final middleLeft = reserve ? paneLeft + ListPage.railWidth : 0.0;
+
+    final top = LayoutBuilder(
+      builder: (context, constraints) {
+        // Content lined up with the site header's logo (and clear of the
+        // strip), measured from this area's left edge.
+        final insets = PageInsets.horizontal(context, constraints.maxWidth, minLeft: reservedLeft);
+        Widget section(Widget child) => DecoratedBox(
+              decoration: BoxDecoration(border: Border(bottom: BorderSide(color: p.border))),
+              child: Padding(
+                padding: EdgeInsets.only(left: insets.left - middleLeft, right: insets.right),
+                child: child,
+              ),
+            );
+        return Padding(
+          padding: EdgeInsets.only(left: middleLeft),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.stretch,
+            children: [
+              if (widget.header != null) section(widget.header!),
+              section(toolbar),
+            ],
+          ),
+        );
+      },
     );
 
-    // The list, clear of the rail's strip when one is kept.
-    Widget list = _ReservedLeft(
-      width: reservedLeft,
-      // Always there (it only acts on phones), so the list keeps its
-      // place when the window crosses the phone width.
-      child: NotificationListener<Notification>(
-        onNotification: _onBodyNotification,
-        child: widget.body,
-      ),
+    final page = Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        top,
+        Expanded(
+          child: _ReservedLeft(
+            width: reservedLeft,
+            // Always there (it only acts on phones), so the list keeps its
+            // place when the window crosses the phone width.
+            child: NotificationListener<Notification>(
+              onNotification: _onBodyNotification,
+              child: widget.body,
+            ),
+          ),
+        ),
+      ],
     );
 
-    // The rail sits under the toolbar, beside the list, on every page (as
-    // on the website's directory), so it is in the same place everywhere.
-    // Computers: in its own strip, kept free even when closed, so opening
-    // it covers nothing. Tablets: no room for that, so it overlays the edge
-    // of the list with a light scrim. Either way nothing moves.
-    if (hasFilters && !compact) {
-      final overlay = !reserve;
-      const panelWidth = ListPage.railWidth;
-      // Very wide windows: the content is centred, so the rail sits just
-      // left of it rather than at the window's edge.
-      final besideContent =
-          PageInsets.contentLeft(context) - ListPage.railWidth - ListPage.railGap;
-      final paneLeft = reserve && besideContent > 0 ? besideContent : 0.0;
-      list = Stack(
-        children: [
-          Positioned.fill(child: list),
-          if (overlay)
-            Positioned.fill(
-              child: IgnorePointer(
-                ignoring: !panelOpen,
-                child: AnimatedOpacity(
-                  duration: const Duration(milliseconds: 200),
-                  opacity: panelOpen ? 1 : 0,
-                  child: GestureDetector(
-                    onTap: () => setState(() => _panelOpen = false),
-                    child: ColoredBox(color: p.overlay.withValues(alpha: 0.25)),
-                  ),
+    if (!hasFilters || compact) return page;
+
+    // The rail runs the full height of the page, as NITiKa's does on the
+    // right, on every page. Computers: in its own strip, kept free even
+    // when closed, so opening it covers nothing. Tablets: no room for that,
+    // so it slides over the page with a light scrim. Either way nothing
+    // moves.
+    final overlay = !reserve;
+    const panelWidth = ListPage.railWidth;
+    return Stack(
+      children: [
+        Positioned.fill(child: page),
+        if (overlay)
+          Positioned.fill(
+            child: IgnorePointer(
+              ignoring: !panelOpen,
+              child: AnimatedOpacity(
+                duration: const Duration(milliseconds: 200),
+                opacity: panelOpen ? 1 : 0,
+                child: GestureDetector(
+                  onTap: () => setState(() => _panelOpen = false),
+                  child: ColoredBox(color: p.overlay.withValues(alpha: 0.25)),
                 ),
               ),
             ),
-          AnimatedPositioned(
-            duration: const Duration(milliseconds: 240),
-            curve: Curves.easeOutCubic,
-            top: 0,
-            bottom: 0,
-            left: panelOpen ? paneLeft : -(panelWidth + 12),
-            width: panelWidth,
-            child: _FilterPanel(
-              activeCount: widget.activeFilterCount,
-              onClear: widget.onClearFilters,
-              onClose: () => setState(() => _panelOpen = false),
-              elevated: overlay,
-              child: widget.filters!(context),
-            ),
           ),
-        ],
-      );
-    }
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        toolbarBox,
-        Expanded(child: list),
+        AnimatedPositioned(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          top: 0,
+          bottom: 0,
+          left: panelOpen ? paneLeft : -(panelWidth + 12),
+          width: panelWidth,
+          child: _FilterPanel(
+            activeCount: widget.activeFilterCount,
+            onClear: widget.onClearFilters,
+            onClose: () => setState(() => _panelOpen = false),
+            elevated: overlay,
+            child: widget.filters!(context),
+          ),
+        ),
       ],
     );
   }

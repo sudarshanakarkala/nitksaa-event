@@ -88,6 +88,8 @@ class AdminTabFrame extends StatelessWidget {
     return ListPage(
       filtersInRail: true,
       keepRailStrip: true,
+      // The Admin title and tab row, in the middle column beside the rail.
+      header: AdminHeaderScope.maybeOf(context),
       search: search,
       toggle: toggle,
       picker: picker,
@@ -115,4 +117,19 @@ class AdminTabFrame extends StatelessWidget {
       ),
     );
   }
+}
+
+/// The Admin page's title and tab row, handed to every tab's
+/// [AdminTabFrame] so it sits in the same middle column as the tab (the
+/// Filters rail and NITiKa run the full height beside it).
+class AdminHeaderScope extends InheritedWidget {
+  const AdminHeaderScope({super.key, required this.header, required super.child});
+
+  final Widget header;
+
+  static Widget? maybeOf(BuildContext context) =>
+      context.dependOnInheritedWidgetOfExactType<AdminHeaderScope>()?.header;
+
+  @override
+  bool updateShouldNotify(AdminHeaderScope old) => old.header != header;
 }
