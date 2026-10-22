@@ -9,7 +9,7 @@ abstract class SiteLinks {
 
   // Association website (production).
   static const String website = 'https://www.nitkalumni.in';
-  static const String websiteAbout = '$website/about';
+  static const String websiteAbout = '$website/page/About-Us.dz';
 
   static const String contactEmail = 'nitksaa.infra@gmail.com';
 }
