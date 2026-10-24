@@ -10,8 +10,8 @@ audit assertions — never a dependency-level unit test standing in for an
 actual request.
 
 Pre-migration, this whole surface trusted only an unauthenticated
-X-Dev-User header (see docs/payments/ADMIN_AUTH_UNIFICATION_SPRINT_REPORT.md
-for the concrete before/after reproduction) — every test in this file
+X-Dev-User header (see payments/ADMIN_AUTH_UNIFICATION_SPRINT_REPORT.md
+in the private docs in Drive (NITKSAA Events/docs) for the concrete before/after reproduction) — every test in this file
 encodes the POST-migration behavior; the defect itself is not re-asserted
 as passing anywhere here.
 """

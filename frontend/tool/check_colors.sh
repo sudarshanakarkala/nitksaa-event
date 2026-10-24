@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
 # Fails if a hard-coded `Color(0x…)` appears outside lib/theme/.
 # Screens read colours from the theme: context.palette.* or
-# Theme.of(context).colorScheme. See docs/ui/HANDOVER.md.
+# Theme.of(context).colorScheme. Background: ui/HANDOVER.md in
+# the private docs in Drive (NITKSAA Events/docs).
 #
 # Usage (from anywhere): bash frontend/tool/check_colors.sh
 set -euo pipefail

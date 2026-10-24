@@ -16,8 +16,8 @@ confirmed by search. This script is the thing such a scheduler should
 invoke; wiring an actual scheduler to it is an infrastructure decision for
 whichever platform this is ultimately deployed to, deliberately left to
 ops rather than invented here. See
-docs/payments/PAYMENT_OPERATIONS_SECURITY_RUNBOOK.md, section F, for the
-recommended cadence and example wiring.
+payments/PAYMENT_OPERATIONS_SECURITY_RUNBOOK.md, section F, in the private docs in Drive (NITKSAA Events/docs),
+for the recommended cadence and example wiring.
 
 Usage (from backend/):
     .venv/bin/python scripts/run_payment_lifecycle_sweep.py

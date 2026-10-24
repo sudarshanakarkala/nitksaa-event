@@ -279,7 +279,7 @@ def test_full_refund_snapshots_test_payment_mode(client):
     """Every refund created through the normal flow snapshots the mode the
     payment was actually captured under. The default here is 'test' — no
     LIVE credentials exist anywhere in this project (see
-    docs/payments/RAZORPAY_LOCAL_CREDENTIAL_CONFIGURATION_REPORT.md)."""
+    payments/RAZORPAY_LOCAL_CREDENTIAL_CONFIGURATION_REPORT.md in the private docs in Drive (NITKSAA Events/docs))."""
     eid = _mk_event(client, uuid.uuid4().hex[:8], is_free=False)
     reg, _ = _paid_registered(client, eid)
     rid = reg["registration_id"]

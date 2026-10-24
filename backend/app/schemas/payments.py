@@ -50,8 +50,8 @@ class PaymentOrderResponse(BaseModel):
     can_pay: bool
     can_retry: bool
     safe_message: str
-    # TEST/LIVE separation (never a secret) — see docs/payments/
-    # RAZORPAY_TEST_LIVE_MODE_SEPARATION_REPORT.md. real_money is derived
+    # TEST/LIVE separation (never a secret) — see payments/
+    # RAZORPAY_TEST_LIVE_MODE_SEPARATION_REPORT.md in the private docs in Drive (NITKSAA Events/docs). real_money is derived
     # (payment_mode == "live") so a client never has to reimplement the rule.
     payment_mode: str = "test"
     real_money: bool = False
