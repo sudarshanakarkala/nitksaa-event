@@ -888,6 +888,6 @@ async def diag_all_weeks(
         "note": (
             "Covers Week 5 (event-options, people, sponsors-partners, analytics) "
             "and Week 2–4 events diagnostic. Registration and attendees diagnostics "
-            "require alumni JWT / event_id — run via verify_all_weeks.py instead."
+            "require alumni JWT / event_id — covered by the backend test suite instead."
         ),
     }

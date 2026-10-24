@@ -346,8 +346,8 @@ class PaymentGateway(ABC):
         """Client-return-based verification (e.g. a gateway.js callback
         signature). Deliberately unsupported by every adapter today: this
         architecture never treats a browser/app redirect or client-supplied
-        reference as authoritative (see docs/payments — redirect security
-        principle); payment truth comes from verify_webhook +
+        reference as authoritative (see payments/ in the private docs in Drive (NITKSAA Events/docs) —
+        redirect security principle); payment truth comes from verify_webhook +
         query_payment_status only."""
         raise GatewayCapabilityNotSupportedError(self.name, GatewayCapability.VERIFY_PAYMENT)
 

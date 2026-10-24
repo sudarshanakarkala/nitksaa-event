@@ -178,7 +178,7 @@ psql -d alumni_db -c "
 > `alumni_id`, `fullname`, `email`, `phone`, `graduationyear`, `branch`, `registrationstatus`.
 > `registrationstatus` must be `'Active'` or `'Self-Verified'` for the user to be eligible.
 > All other values (including `null`, `'Pending'`) result in `alumni_not_active`.
-> See `docs/architecture/alumni_db_integration_architecture_v1.md` for full schema reference.
+> Full schema reference: `architecture/alumni_db_integration_architecture_v1.md` in the private docs in Drive (NITKSAA Events/docs).
 
 **Staging:** Point `ALUMNI_DB_URL` to the portal's staging database for realistic eligibility
 checks. Do not use the production alumni_db URL in local development.
